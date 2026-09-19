@@ -1,3 +1,5 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>골드버그 클래스룸</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Rubik:wght@400;500;700&display=swap" rel="stylesheet">
@@ -193,14 +195,45 @@
   .build-guide ul{display:flex; flex-direction:column; gap:6px; margin-top:8px; list-style:none; padding:0;}
   .build-guide li{font-size:14px;}
   .build-guide li::before{content:"✓ "; color:var(--success); font-weight:700;}
+
+  .overlay{position:fixed; inset:0; z-index:2000; background:var(--bg); display:flex; align-items:center; justify-content:center; padding:16px; overflow:auto;}
+  .overlay[hidden]{display:none;}
+  .start-card{width:min(440px,100%); background:var(--panel); border:1px solid var(--panel-border); border-radius:16px; padding:22px; box-shadow:var(--shadow);}
+  .start-card h2{font-family:'Kalam', cursive; font-size:24px; color:var(--blueprint);}
+  .start-card h3{font-size:14px; margin:16px 0 6px; color:var(--ink);}
+  .start-card label{display:block; font-size:12px; color:var(--ink-soft); font-weight:600; margin:10px 0 4px;}
+  .start-card select, .start-card input, .project-bar input{
+    width:100%; padding:10px; border:1px solid var(--panel-border); border-radius:8px;
+    background:var(--panel); color:var(--ink); font-size:14px; font-family:inherit;
+  }
+  .start-card .note{font-size:13px; color:var(--ink-soft);}
+  .start-card .err{font-size:13px; color:var(--warn); font-weight:700; margin-top:10px;}
+  .proj-list{display:flex; flex-direction:column; gap:8px;}
+  .proj-item{display:flex; align-items:center; justify-content:space-between; gap:10px; border:1px solid var(--panel-border); border-radius:10px; padding:10px 12px;}
+  .proj-item .pname{font-weight:600; font-size:14px; word-break:break-all;}
+  .proj-item .sub{font-size:12px; color:var(--ink-soft);}
+  .badge-ok{font-size:11px; background:var(--success-bg); color:var(--success); padding:2px 8px; border-radius:999px; margin-left:6px; font-weight:700; white-space:nowrap;}
+  .project-bar{display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-bottom:14px;}
+  .project-bar[hidden]{display:none;}
+  .project-bar input{flex:1; min-width:140px; max-width:300px; width:auto;}
+  .pb-student{font-size:13px; color:var(--ink-soft);}
+  .pb-save{font-size:12px; color:var(--ink-soft); margin-right:auto;}
+  button.armed{background:var(--warn-bg); border-color:var(--warn); color:var(--warn); font-weight:700;}
 </style>
 
 <div class="app">
   <header class="topbar">
-    <a href="index.html" class="level-badge" style="text-decoration:none;">← 대시보드로</a>
+    <a href="index.html" id="backLink" class="level-badge" style="text-decoration:none;">← 대시보드로</a>
     <div class="brand"><span class="brand-mark">⚙</span> 골드버그 클래스룸</div>
     <div class="level-badge">3D · 코어 구조 (판·기둥·직선길)</div>
   </header>
+
+  <div class="project-bar" id="projectBar" hidden>
+    <span class="pb-student" id="pbStudent"></span>
+    <input id="projectNameInput" maxlength="40" aria-label="프로젝트 이름" placeholder="프로젝트 이름">
+    <span class="pb-save" id="pbSave"></span>
+    <button id="submitBtn" class="primary" type="button">과제 제출하기</button>
+  </div>
 
   <div class="layout">
     <aside class="sidebar">
@@ -330,8 +363,14 @@
   </div>
 </div>
 
+<div class="overlay" id="startOverlay">
+  <div class="start-card" id="startBody"><p class="note">불러오는 중...</p></div>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="db-shim.js"></script>
 <script>
 (function(){
   // real-world scale: GRID_UNIT (20 units = 2cm pitch) is the anchor; room is ~150cm x 150cm x 150cm
@@ -1110,5 +1149,266 @@
     renderer.render(scene, camera);
   }
   animate();
+
+  // ===== 학생 확인 → 프로젝트 시작/이어하기 → 나갈 때 저장 → 과제 제출 =====
+  const SUPABASE_URL = 'https://iwxpjnwktxpscoktfpyl.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_2b9dle9I1vMrf8j9Gs7o6w_I9Q2hu9J';
+  const db = createSupabaseDb(SUPABASE_URL, SUPABASE_KEY);
+  const TODAY_STR = new Date().toISOString().slice(0, 10); // 출석부(index.html)와 같은 날짜 기준
+  const LS_STUDENT = 'ivs_student';
+
+  const startOverlay = document.getElementById('startOverlay');
+  const startBody = document.getElementById('startBody');
+  const projectBar = document.getElementById('projectBar');
+  const pbStudent = document.getElementById('pbStudent');
+  const pbSave = document.getElementById('pbSave');
+  const nameInput = document.getElementById('projectNameInput');
+  const submitBtn = document.getElementById('submitBtn');
+  const backLink = document.getElementById('backLink');
+
+  let student = null;   // { id, name, courseId }
+  let project = null;   // { id, data }
+  let lastSavedKey = '';
+
+  function esc(s){
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function round3(n){ return Math.round(n * 1000) / 1000; }
+  function clockText(){
+    const d = new Date();
+    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  }
+  function courseLabel(d){
+    return `${d.name || ''} · ${[d.school, d.section, d.day ? d.day + '요일' : ''].filter(Boolean).join(' · ')}`;
+  }
+
+  function serializeParts(){
+    return parts.map(p => ({
+      type: p.type,
+      mount: p.mount,
+      pos: [p.body.position.x, p.body.position.y, p.body.position.z].map(round3),
+      quat: [p.body.quaternion.x, p.body.quaternion.y, p.body.quaternion.z, p.body.quaternion.w].map(round3)
+    }));
+  }
+
+  function restoreParts(list){
+    stopPlay();
+    if (ball) { scene.remove(ball.mesh); world.removeBody(ball.body); ball = null; }
+    parts.slice().forEach(removePart);
+    (list || []).forEach(d => {
+      if (!PART_DEFS[d.type] || !d.pos || !d.quat) return;
+      addPart(d.type, { x: d.pos[0], y: d.pos[1], z: d.pos[2], mount: d.mount });
+      const p = parts[parts.length - 1];
+      p.body.position.set(d.pos[0], d.pos[1], d.pos[2]);
+      p.body.quaternion.set(d.quat[0], d.quat[1], d.quat[2], d.quat[3]);
+    });
+    select(null);
+    buildGuide.hidden = true;
+  }
+
+  function syncFromScene(){
+    project.data.parts = serializeParts();
+    const n = nameInput.value.trim();
+    if (n) project.data.name = n; else nameInput.value = project.data.name;
+  }
+  function projectKey(){ return JSON.stringify(project.data.parts) + '|' + project.data.name; }
+
+  // one raw PATCH path so the same code works while the page is closing (keepalive)
+  async function persist(keepalive, force){
+    if (!project) return;
+    syncFromScene();
+    const key = projectKey();
+    if (!force && key === lastSavedKey) return;
+    project.data.updatedAt = Date.now();
+    pbSave.textContent = '저장 중...';
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/ivs_projects?id=eq.${project.id}`, {
+      method: 'PATCH',
+      keepalive: !!keepalive,
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: 'Bearer ' + SUPABASE_KEY,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal'
+      },
+      body: JSON.stringify({ data: project.data })
+    });
+    if (!res.ok) { pbSave.textContent = '저장 실패'; throw new Error('save failed ' + res.status); }
+    lastSavedKey = key;
+    pbSave.textContent = '저장됨 ' + clockText();
+  }
+
+  window.addEventListener('pagehide', () => { persist(true).catch(() => {}); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') persist(true).catch(() => {});
+  });
+  backLink.addEventListener('click', async (e) => {
+    if (!project) return;
+    e.preventDefault();
+    const label = backLink.textContent;
+    backLink.textContent = '저장 중...';
+    try {
+      await persist(false);
+      location.href = backLink.getAttribute('href');
+    } catch (err) {
+      backLink.textContent = label;
+      setStatus('저장에 실패했어요. 인터넷을 확인하고 다시 눌러주세요.', 'warn');
+    }
+  });
+  nameInput.addEventListener('change', () => { persist(false).catch(() => {}); });
+
+  function refreshSubmitBtn(){
+    submitBtn.dataset.armed = '0';
+    submitBtn.classList.remove('armed');
+    submitBtn.textContent = project && project.data.submitted ? '다시 제출하기' : '과제 제출하기';
+  }
+  let submitArmTimer = null;
+  submitBtn.addEventListener('click', async () => {
+    if (!project || !student) return;
+    if (submitBtn.dataset.armed !== '1') {
+      submitBtn.dataset.armed = '1';
+      submitBtn.classList.add('armed');
+      submitBtn.textContent = '정말 제출할까요? 한 번 더 누르세요';
+      submitArmTimer = setTimeout(refreshSubmitBtn, 3500);
+      return;
+    }
+    clearTimeout(submitArmTimer);
+    submitBtn.disabled = true;
+    submitBtn.textContent = '제출 중...';
+    try {
+      const snap = await db.collection('records').where('courseId', '==', student.courseId).where('date', '==', TODAY_STR).get();
+      const existing = snap.docs.find(d => d.data().studentId === student.id);
+      const patch = { assignment: 'submitted', projectId: project.id, updatedAt: Date.now() };
+      if (existing) await db.collection('records').doc(existing.id).update(patch);
+      else await db.collection('records').add(Object.assign({ date: TODAY_STR, studentId: student.id, courseId: student.courseId }, patch));
+      project.data.submitted = true;
+      project.data.submittedAt = Date.now();
+      await persist(false, true);
+      setStatus('✅ 과제를 제출했어요!', 'success');
+    } catch (err) {
+      console.error(err);
+      setStatus('제출에 실패했어요. 잠시 뒤 다시 눌러주세요.', 'warn');
+    } finally {
+      submitBtn.disabled = false;
+      refreshSubmitBtn();
+    }
+  });
+
+  function openProject(id, data){
+    project = { id, data };
+    nameInput.value = data.name || '';
+    restoreParts(data.parts || []);
+    lastSavedKey = projectKey();
+    pbStudent.textContent = student.name + ' 학생';
+    pbSave.textContent = '';
+    projectBar.hidden = false;
+    startOverlay.hidden = true;
+    refreshSubmitBtn();
+    setStatus(data.parts && data.parts.length ? '저장된 작업을 불러왔어요. 이어서 만들어보세요.' : '부품을 배치하고 재생을 눌러보세요.', null);
+  }
+
+  async function createProject(name){
+    const now = Date.now();
+    const data = { studentId: student.id, courseId: student.courseId, name, parts: [], submitted: false, createdAt: now, updatedAt: now };
+    const ref = await db.collection('projects').add(data);
+    openProject(ref.id, data);
+  }
+
+  function rememberStudent(){
+    try { localStorage.setItem(LS_STUDENT, JSON.stringify(student)); } catch (e) {}
+  }
+  function loadRememberedStudent(){
+    try { const raw = localStorage.getItem(LS_STUDENT); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+  }
+
+  async function showStudentStep(){
+    startBody.innerHTML = `
+      <h2>골드버그 설계</h2>
+      <p class="note">먼저 내 수업과 이름을 골라주세요.</p>
+      <label for="stCourse">수업</label>
+      <select id="stCourse"><option value="">불러오는 중...</option></select>
+      <label for="stName">이름</label>
+      <select id="stName" disabled><option value="">수업을 먼저 고르세요</option></select>
+      <button id="stNext" class="primary" type="button" style="margin-top:14px; width:100%;" disabled>다음</button>`;
+    const courseSel = document.getElementById('stCourse');
+    const nameSel = document.getElementById('stName');
+    const nextBtn = document.getElementById('stNext');
+
+    const cSnap = await db.collection('courses').get();
+    const courses = cSnap.docs.map(d => ({ id: d.id, d: d.data() })).sort((a, b) => courseLabel(a.d).localeCompare(courseLabel(b.d), 'ko'));
+    courseSel.innerHTML = '<option value="">수업 선택</option>' + courses.map(c => `<option value="${esc(c.id)}">${esc(courseLabel(c.d))}</option>`).join('');
+    if (!courses.length) courseSel.innerHTML = '<option value="">등록된 수업이 없어요 (선생님께 문의)</option>';
+
+    let studentsById = {};
+    courseSel.addEventListener('change', async () => {
+      nextBtn.disabled = true;
+      nameSel.disabled = true;
+      if (!courseSel.value) { nameSel.innerHTML = '<option value="">수업을 먼저 고르세요</option>'; return; }
+      nameSel.innerHTML = '<option value="">불러오는 중...</option>';
+      const sSnap = await db.collection('students').where('courseId', '==', courseSel.value).get();
+      const list = sSnap.docs.map(d => ({ id: d.id, d: d.data() }))
+        .sort((a, b) => String(a.d.number || '').localeCompare(String(b.d.number || ''), undefined, { numeric: true }));
+      studentsById = {};
+      list.forEach(s => { studentsById[s.id] = s.d; });
+      nameSel.innerHTML = '<option value="">내 이름 선택</option>' + list.map(s => `<option value="${esc(s.id)}">${esc(s.d.number ? s.d.number + '번 ' : '')}${esc(s.d.name)}</option>`).join('');
+      if (!list.length) nameSel.innerHTML = '<option value="">이 수업에 등록된 학생이 없어요</option>';
+      nameSel.disabled = !list.length;
+    });
+    nameSel.addEventListener('change', () => { nextBtn.disabled = !nameSel.value; });
+    nextBtn.addEventListener('click', () => {
+      student = { id: nameSel.value, name: studentsById[nameSel.value].name, courseId: courseSel.value };
+      rememberStudent();
+      showProjectStep();
+    });
+  }
+
+  async function showProjectStep(){
+    startBody.innerHTML = `<h2>${esc(student.name)} 학생, 안녕하세요!</h2><p class="note">불러오는 중...</p>`;
+    let list = [];
+    let loadErr = false;
+    try {
+      const snap = await db.collection('projects').where('studentId', '==', student.id).get();
+      list = snap.docs.map(d => ({ id: d.id, data: d.data() })).sort((a, b) => (b.data.updatedAt || 0) - (a.data.updatedAt || 0));
+    } catch (e) { loadErr = true; }
+
+    startBody.innerHTML = `
+      <h2>${esc(student.name)} 학생, 안녕하세요!</h2>
+      <h3>새 프로젝트 만들기</h3>
+      <label for="newProjName">프로젝트 이름</label>
+      <input id="newProjName" maxlength="40" placeholder="프로젝트 이름을 지어주세요">
+      <button id="newProjBtn" class="primary" type="button" style="margin-top:10px; width:100%;">새 프로젝트 시작</button>
+      <h3>이어서 작업하기</h3>
+      <div class="proj-list" id="projList">${list.length ? '' : '<p class="note">아직 저장한 프로젝트가 없어요.</p>'}</div>
+      <p class="err" id="startErr" ${loadErr ? '' : 'hidden'}>${loadErr ? '프로젝트를 불러오지 못했어요. 새로고침 해주세요.' : ''}</p>
+      <button id="otherStudentBtn" class="ghost" type="button" style="margin-top:14px; width:100%;">다른 학생으로 시작</button>`;
+
+    const listEl = document.getElementById('projList');
+    list.forEach(p => {
+      const row = document.createElement('div');
+      row.className = 'proj-item';
+      const when = p.data.updatedAt ? new Date(p.data.updatedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+      row.innerHTML = `<div><div class="pname">${esc(p.data.name)}${p.data.submitted ? '<span class="badge-ok">제출함</span>' : ''}</div><div class="sub">${esc(when)} 저장 · 부품 ${(p.data.parts || []).length}개</div></div><button type="button" class="primary">이어서 작업하기</button>`;
+      row.querySelector('button').addEventListener('click', () => openProject(p.id, p.data));
+      listEl.appendChild(row);
+    });
+
+    const errEl = document.getElementById('startErr');
+    document.getElementById('newProjBtn').addEventListener('click', async () => {
+      const name = document.getElementById('newProjName').value.trim();
+      if (!name) { errEl.hidden = false; errEl.textContent = '프로젝트 이름을 먼저 적어주세요.'; return; }
+      const btn = document.getElementById('newProjBtn');
+      btn.disabled = true;
+      try { await createProject(name); }
+      catch (e) { console.error(e); btn.disabled = false; errEl.hidden = false; errEl.textContent = '프로젝트를 만들지 못했어요. 잠시 뒤 다시 눌러주세요.'; }
+    });
+    document.getElementById('otherStudentBtn').addEventListener('click', () => {
+      try { localStorage.removeItem(LS_STUDENT); } catch (e) {}
+      student = null;
+      showStudentStep();
+    });
+  }
+
+  const remembered = loadRememberedStudent();
+  if (remembered && remembered.id && remembered.courseId) { student = remembered; showProjectStep(); }
+  else showStudentStep();
 })();
 </script>

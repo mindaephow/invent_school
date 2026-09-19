@@ -9,7 +9,8 @@ function createSupabaseDb(supabaseUrl, supabaseAnonKey) {
     courses: 'ivs_courses',
     students: 'ivs_students',
     records: 'ivs_records',
-    curriculum: 'ivs_curriculum'
+    curriculum: 'ivs_curriculum',
+    projects: 'ivs_projects'
   };
 
   function wrapRow(row) {
