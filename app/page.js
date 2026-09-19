@@ -1,4 +1,4 @@
-import OpsTabs from './OpsTabs'
+import Tabs from './Tabs'
 
 export const metadata = {
   title: '발명융합과학교실',
@@ -49,13 +49,6 @@ const METHODS = [
   ['트리즈(TRIZ)의 40가지 발명원리', '수많은 특허를 분석해 정리한 창의적 문제해결 이론(러시아 알트슐러)의 핵심 도구로, 문제를 푸는 40가지 발명 원리를 배웁니다.'],
 ]
 
-const SUBJECTS = [
-  ['항공', '발명의 눈으로 만나는 항공'],
-  ['우주', '발명의 눈으로 만나는 우주'],
-  ['과학실험', '발명의 눈으로 해보는 과학실험'],
-  ['로봇과학', '발명의 눈으로 만나는 로봇과학'],
-]
-
 const ROOM_STEPS = [
   ['로그인', '선생님이 알려준 아이디와 비밀번호로 들어갑니다.'],
   ['프로젝트 만들기', '이름을 붙여 새 프로젝트를 시작하거나, 저장해 둔 작업을 이어서 합니다.'],
@@ -71,7 +64,7 @@ const FAQ = [
   ['한 반은 몇 명까지인가요?', '인원 제한은 없으며, 진행 장소나 상황에 따라 결정됩니다.'],
   ['학생이 따로 준비할 것이 있나요? 교구와 재료는 누가 제공하나요?', '준비할 것은 없습니다. 특이사항이 없는 경우 교구와 재료는 모두 선생님이 준비합니다.'],
   ['코딩이나 과학 지식이 없어도 들을 수 있나요?', '네, 수업 특성상 사전 지식이 없어도 수업이 가능합니다.'],
-  ['분기나 학기마다 어떤 과목을 어떤 순서로 배우나요?', '골드버그 장치, 항공, 우주, 과학실험, 로봇과학을 분기나 학기 진행 상황에 따라 골고루 진행합니다.'],
+  ['분기나 학기마다 어떤 과목을 어떤 순서로 배우나요?', '항공과학, 우주과학, 과학실험, 로봇과학, 발명과학을 분기나 학기 진행 상황에 따라 골고루 진행합니다.'],
   ['만든 작품은 가져갈 수 있나요?', '당일 수업에 따라 가져갈 결과물이 있기도 합니다. 다만 골드버그 장치는 부피가 커서 결과물을 분해하기 때문에 가져갈 수 없습니다.'],
   ['발표나 전시가 있나요?', '학교 일정에 따라 진행하기도 합니다.'],
   ['수업은 어떻게 신청하나요?', '방과후의 경우 학교에서 신청 안내가 나갑니다.'],
@@ -80,6 +73,103 @@ const FAQ = [
   ['결석하면 보강이 되나요?', '학교 규정에 따릅니다.'],
   ['수강료는 얼마인가요?', '수업을 진행하는 단체와 협의합니다.'],
 ]
+
+const OPS_TABS = [
+  {
+    id: 'type',
+    label: '수업 형태',
+    content: (
+      <div className="bigchips">
+        <span className="bigchip">특강형</span>
+        <span className="bigchip">방과후형</span>
+      </div>
+    ),
+  },
+  {
+    id: 'after',
+    label: '방과후 운영',
+    content: (
+      <div className="stats">
+        {[
+          ['분기제', '12회 × 4분기'],
+          ['학기제', '24회 × 2학기'],
+          ['방학', '방학특강'],
+        ].map(([label, value]) => (
+          <div className="stat" key={label}>
+            <div className="stat-label">{label}</div>
+            <div className="stat-value">{value}</div>
+          </div>
+        ))}
+      </div>
+    ),
+  },
+  {
+    id: 'place',
+    label: '진행 장소',
+    content: (
+      <div className="bigchips">
+        <span className="bigchip">방과후</span>
+        <span className="bigchip">문화센터</span>
+      </div>
+    ),
+  },
+  {
+    id: 'level',
+    label: '수업 대상',
+    content: (
+      <div className="bigchips">
+        {['초등', '중등', '고등', '대학', '기업'].map((c) => (
+          <span className="bigchip" key={c}>{c}</span>
+        ))}
+      </div>
+    ),
+  },
+]
+
+// 과목별 내용은 강사가 알려준 만큼만 채운다. desc는 아직 자세한 내용이 오기 전의 기본 한 줄.
+const SUBJECTS = [
+  { id: 'air', label: '항공과학', desc: '발명의 눈으로 만나는 항공과학' },
+  { id: 'space', label: '우주과학', desc: '발명의 눈으로 만나는 우주과학' },
+  { id: 'exp', label: '과학실험', desc: '발명의 눈으로 해보는 과학실험' },
+  { id: 'robot', label: '로봇과학', desc: '발명의 눈으로 만나는 로봇과학' },
+  {
+    id: 'invent',
+    label: '발명과학',
+    desc: '발명의 눈으로 문제를 찾고 직접 만들어보는 수업',
+    feature: {
+      title: '대표 활동 · 골드버그 장치 만들기',
+      lines: [
+        '골드버그 장치는 아주 간단한 일을 일부러 여러 단계의 연쇄 작동으로 해내는 장치입니다.',
+        '3D 설계 도구로 먼저 설계해보고, 그대로 실물로 만들어봅니다. 만들다 보면 생각대로 되지 않는 순간이 오고, 그때 고쳐보는 경험이 수업의 핵심입니다.',
+      ],
+      bullets: ['3D 공간에서 부품을 놓고 공을 굴려보기', '타공판 · 기둥 · 경첩 · ㄱ자 연결대 · 직선길', '설계한 그대로 실물로 만들어보기'],
+    },
+  },
+]
+
+const SUBJECT_TABS = SUBJECTS.map((sub) => ({
+  id: sub.id,
+  label: sub.label,
+  content: (
+    <div className="subject-panel">
+      <h3>{sub.label}</h3>
+      <p className="subject-desc">{sub.desc}</p>
+      {sub.feature && (
+        <div className="subject-feature">
+          <h4>{sub.feature.title}</h4>
+          {sub.feature.lines.map((l) => (
+            <p key={l}>{l}</p>
+          ))}
+          <ul>
+            {sub.feature.bullets.map((b) => (
+              <li key={b}>{b}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  ),
+}))
 
 const css = `
 :root{
@@ -215,20 +305,14 @@ h2{font-size:clamp(24px, 3.6vw, 32px); line-height:1.3; margin:0 0 12px; text-wr
 .method h3{margin:0 0 8px; font-size:18px; color:var(--blue);}
 .method p{margin:0; color:var(--ink-soft); font-size:14.5px;}
 
-.subjects{display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px;}
-.subject{background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:20px;}
-.subject h3{margin:0 0 4px; font-size:18px;}
-.subject p{margin:0; color:var(--ink-soft); font-size:14px;}
-.goldberg{
-  grid-column:1 / -1; background:var(--blue); color:#fff; border-color:var(--blue);
-  display:grid; grid-template-columns:1.1fr 1fr; gap:22px; align-items:center; padding:26px;
-}
-@media (max-width:760px){ .goldberg{grid-template-columns:1fr;} }
-.goldberg h3{color:#fff; font-size:24px; margin:0 0 8px;}
-.goldberg p{color:rgba(255,255,255,0.92); font-size:15.5px; margin:0 0 10px;}
-.goldberg .badge{display:inline-block; font-size:12px; font-weight:700; background:rgba(255,255,255,0.18); border-radius:999px; padding:4px 10px; margin-bottom:10px;}
-.goldberg ul{list-style:none; margin:0; padding:0; display:grid; gap:8px;}
-.goldberg li{background:rgba(255,255,255,0.14); border-radius:10px; padding:9px 12px; font-size:14.5px;}
+.tabpanel.block{display:block; padding:28px 26px;}
+.subject-panel h3{margin:0 0 6px; font-size:clamp(22px, 3.4vw, 28px);}
+.subject-desc{margin:0; color:var(--ink-soft); font-size:16px;}
+.subject-feature{margin-top:22px; padding:22px; border-radius:16px; background:var(--blue); color:#fff;}
+.subject-feature h4{margin:0 0 10px; font-size:18px; color:#fff;}
+.subject-feature p{margin:0 0 10px; color:rgba(255,255,255,0.92); font-size:15.5px;}
+.subject-feature ul{list-style:none; margin:14px 0 0; padding:0; display:grid; gap:8px;}
+.subject-feature li{background:rgba(255,255,255,0.14); border-radius:10px; padding:9px 12px; font-size:14.5px;}
 
 .tablist{display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; -webkit-overflow-scrolling:touch;}
 .tab{
@@ -411,34 +495,15 @@ export default function Home() {
         <section>
           <p className="eyebrow">수업 과목</p>
           <h2>다양한 과목으로 구성되어 있습니다</h2>
-          <div className="subjects">
-            <div className="subject goldberg">
-              <div>
-                <span className="badge">대표 수업</span>
-                <h3>골드버그 장치 만들기</h3>
-                <p>골드버그 장치는 아주 간단한 일을 일부러 여러 단계의 연쇄 작동으로 해내는 장치입니다.</p>
-                <p>3D 설계 도구로 먼저 설계해보고, 그대로 실물로 만들어봅니다. 만들다 보면 생각대로 되지 않는 순간이 오고, 그때 고쳐보는 경험이 수업의 핵심입니다.</p>
-              </div>
-              <ul>
-                <li>3D 공간에서 부품을 놓고 공을 굴려보기</li>
-                <li>타공판 · 기둥 · 경첩 · ㄱ자 연결대 · 직선길</li>
-                <li>설계한 그대로 실물로 만들어보기</li>
-              </ul>
-            </div>
-            {SUBJECTS.map(([name, desc]) => (
-              <div className="subject" key={name}>
-                <h3>{name}</h3>
-                <p>{desc}</p>
-              </div>
-            ))}
-          </div>
+          <p className="section-lead">탭을 눌러 과목별 수업을 확인해보세요.</p>
+          <Tabs items={SUBJECT_TABS} label="수업 과목" panelClass="block" />
         </section>
 
         <section id="ops">
           <p className="eyebrow">수업 운영</p>
           <h2>특강형도 방과후형도 모두 가능합니다</h2>
           <p className="section-lead">기관과 대상에 맞춰 수업을 운영할 수 있습니다. 아래 탭을 눌러 확인해보세요.</p>
-          <OpsTabs />
+          <Tabs items={OPS_TABS} label="수업 운영 안내" />
         </section>
 
         <section>
