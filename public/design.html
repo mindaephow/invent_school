@@ -210,7 +210,7 @@
   .start-card .note{font-size:13px; color:var(--ink-soft);}
   .start-card .err{font-size:13px; color:var(--warn); font-weight:700; margin-top:10px;}
   .proj-list{display:flex; flex-direction:column; gap:8px;}
-  .proj-item{display:flex; align-items:center; justify-content:space-between; gap:10px; border:1px solid var(--panel-border); border-radius:10px; padding:10px 12px;}
+  .proj-item{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; border:1px solid var(--panel-border); border-radius:10px; padding:10px 12px;}
   .proj-item .pname{font-weight:600; font-size:14px; word-break:break-all;}
   .proj-item .sub{font-size:12px; color:var(--ink-soft);}
   .badge-ok{font-size:11px; background:var(--success-bg); color:var(--success); padding:2px 8px; border-radius:999px; margin-left:6px; font-weight:700; white-space:nowrap;}
@@ -222,7 +222,7 @@
   .rv-stars button{font-size:24px; line-height:1; padding:2px 5px; background:transparent; border:none; color:var(--ink-soft); opacity:0.45;}
   .rv-stars button.on{color:#F5A623; opacity:1;}
   .rv-actions{display:flex; align-items:center; gap:10px;}
-  .fb-box{margin-top:6px; background:var(--blueprint-soft); border-radius:8px; padding:8px 10px; font-size:13px; line-height:1.5; white-space:pre-wrap;}
+  .fb-box{flex-basis:100%; margin-top:0; background:var(--blueprint-soft); border-radius:8px; padding:8px 10px; font-size:13px; line-height:1.5; white-space:pre-wrap;}
   .project-bar{display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-bottom:14px;}
   .project-bar[hidden]{display:none;}
   .project-bar input{flex:1; min-width:140px; max-width:300px; width:auto;}
@@ -1521,7 +1521,7 @@
       const row = document.createElement('div');
       row.className = 'proj-item';
       const when = p.data.updatedAt ? new Date(p.data.updatedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
-      row.innerHTML = `<div><div class="pname">${esc(p.data.name)}${p.data.submitted ? '<span class="badge-ok">제출함</span>' : ''}</div><div class="sub">${esc(when)} 저장 · 부품 ${(p.data.parts || []).length}개</div>${feedbackHtml(fbByProject[p.id])}</div><button type="button" class="primary">불러오기</button>`;
+      row.innerHTML = `<div><div class="pname">${esc(p.data.name)}${p.data.submitted ? '<span class="badge-ok">제출함</span>' : ''}</div><div class="sub">${esc(when)} 저장 · 부품 ${(p.data.parts || []).length}개</div></div><button type="button" class="primary">불러오기</button>${feedbackHtml(fbByProject[p.id])}`;
       row.querySelector('button').addEventListener('click', () => { openProject(p.id, p.data); showFeedbackStatus(fbByProject[p.id]); });
       listEl.appendChild(row);
     });
