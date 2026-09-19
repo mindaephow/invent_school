@@ -190,8 +190,8 @@
 
   async function run(payload){
     try {
-      await api(payload, await token());
-      await load();
+      const data = await api(payload, await token());
+      if (data.teachers) render(data.teachers); else await load();
     } catch (err) { alert(err.message); }
   }
 
@@ -232,11 +232,11 @@
     const btn = $('createBtn'), m = $('createMsg');
     btn.disabled = true; m.hidden = true;
     try {
-      await api({ action: 'create_teacher', name: $('cName').value, email: $('cEmail').value, phone: $('cPhone').value, password: $('cPassword').value }, await token());
+      const data = await api({ action: 'create_teacher', name: $('cName').value, email: $('cEmail').value, phone: $('cPhone').value, password: $('cPassword').value }, await token());
       $('createForm').reset();
       $('createForm').hidden = true;
       $('toggleCreate').textContent = '+ 선생님 등록';
-      await load();
+      if (data.teachers) render(data.teachers); else await load();
     } catch (err) { m.textContent = err.message; m.hidden = false; }
     finally { btn.disabled = false; }
   });

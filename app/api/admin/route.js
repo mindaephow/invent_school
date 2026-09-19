@@ -56,6 +56,32 @@ async function inBatches(items, size, fn) {
   return out
 }
 
+async function listTeachers(sb) {
+  const [rows, courses, students, users] = await Promise.all([
+    sb.from('ivs_teachers').select('id, data, approved, created_at').order('created_at', { ascending: false }),
+    sb.from('ivs_courses').select('id, teacher_id'),
+    sb.from('ivs_students').select('course_id'),
+    usersById(sb),
+  ])
+  if (rows.error) throw new Error(rows.error.message)
+  const courseOwner = {}
+  const courseCount = {}
+  ;(courses.data || []).forEach((c) => { courseOwner[c.id] = c.teacher_id; courseCount[c.teacher_id] = (courseCount[c.teacher_id] || 0) + 1 })
+  const studentCount = {}
+  ;(students.data || []).forEach((s) => { const t = courseOwner[s.course_id]; if (t) studentCount[t] = (studentCount[t] || 0) + 1 })
+  return (rows.data || []).map((r) => ({
+    id: r.id,
+    name: r.data?.name || '',
+    phone: r.data?.phone || '',
+    email: users[r.id]?.email || '',
+    isAdmin: !!users[r.id]?.isAdmin,
+    approved: r.approved === true,
+    createdAt: r.created_at,
+    courseCount: courseCount[r.id] || 0,
+    studentCount: studentCount[r.id] || 0,
+  }))
+}
+
 export async function POST(request) {
   const sb = admin()
   const who = await requireAdmin(sb, request)
@@ -65,37 +91,14 @@ export async function POST(request) {
   try { body = await request.json() } catch { return json({ error: '잘못된 요청입니다.' }, 400) }
 
   try {
-    if (body?.action === 'list') {
-      const { data: rows, error } = await sb.from('ivs_teachers').select('id, data, approved, created_at').order('created_at', { ascending: false })
-      if (error) throw new Error(error.message)
-      const { data: courses } = await sb.from('ivs_courses').select('id, teacher_id')
-      const { data: students } = await sb.from('ivs_students').select('course_id')
-      const courseOwner = {}
-      const courseCount = {}
-      ;(courses || []).forEach((c) => { courseOwner[c.id] = c.teacher_id; courseCount[c.teacher_id] = (courseCount[c.teacher_id] || 0) + 1 })
-      const studentCount = {}
-      ;(students || []).forEach((s) => { const t = courseOwner[s.course_id]; if (t) studentCount[t] = (studentCount[t] || 0) + 1 })
-      const users = await usersById(sb)
-      const teachers = (rows || []).map((r) => ({
-        id: r.id,
-        name: r.data?.name || '',
-        phone: r.data?.phone || '',
-        email: users[r.id]?.email || '',
-        isAdmin: !!users[r.id]?.isAdmin,
-        approved: r.approved === true,
-        createdAt: r.created_at,
-        courseCount: courseCount[r.id] || 0,
-        studentCount: studentCount[r.id] || 0,
-      }))
-      return json({ teachers })
-    }
+    if (body?.action === 'list') return json({ teachers: await listTeachers(sb) })
 
     if (body?.action === 'set_approved') {
       if (typeof body.teacherId !== 'string' || typeof body.approved !== 'boolean') return json({ error: '잘못된 요청입니다.' }, 400)
       const { data, error } = await sb.from('ivs_teachers').update({ approved: body.approved }).eq('id', body.teacherId).select('id').maybeSingle()
       if (error) throw new Error(error.message)
       if (!data) return json({ error: '선생님을 찾지 못했습니다.' }, 404)
-      return json({ ok: true })
+      return json({ ok: true, teachers: await listTeachers(sb) })
     }
 
     if (body?.action === 'create_teacher') {
@@ -122,29 +125,31 @@ export async function POST(request) {
         await sb.auth.admin.deleteUser(data.user.id)
         throw new Error(insErr.message)
       }
-      return json({ ok: true, teacherId: data.user.id })
+      return json({ ok: true, teacherId: data.user.id, teachers: await listTeachers(sb) })
     }
 
     if (body?.action === 'delete_teacher') {
       const teacherId = body.teacherId
       if (typeof teacherId !== 'string') return json({ error: '잘못된 요청입니다.' }, 400)
       if (teacherId === who.adminId) return json({ error: '본인 계정은 삭제할 수 없어요.' }, 400)
-      const { data: t } = await sb.from('ivs_teachers').select('id').eq('id', teacherId).maybeSingle()
+      const [{ data: t }, { data: target }, { data: courses }] = await Promise.all([
+        sb.from('ivs_teachers').select('id').eq('id', teacherId).maybeSingle(),
+        sb.auth.admin.getUserById(teacherId),
+        sb.from('ivs_courses').select('id').eq('teacher_id', teacherId),
+      ])
       if (!t) return json({ error: '선생님을 찾지 못했습니다.' }, 404)
-      const { data: target } = await sb.auth.admin.getUserById(teacherId)
       if (target?.user?.app_metadata?.role === 'admin') return json({ error: '본사 관리자 계정은 삭제할 수 없어요.' }, 400)
 
       // 학생 로그인 계정(Auth 사용자)은 DB 연쇄 삭제로 지워지지 않으므로 먼저 지운다 (프로젝트도 함께 삭제됨)
-      const { data: courses } = await sb.from('ivs_courses').select('id').eq('teacher_id', teacherId)
       const courseIds = (courses || []).map((c) => c.id)
       if (courseIds.length) {
         const { data: students } = await sb.from('ivs_students').select('user_id').in('course_id', courseIds).not('user_id', 'is', null)
-        await inBatches(students || [], 5, (s) => sb.auth.admin.deleteUser(s.user_id))
+        await inBatches(students || [], 10, (s) => sb.auth.admin.deleteUser(s.user_id))
       }
       // 선생님 계정 삭제 → 수업, 학생, 출석·과제 기록, 커리큘럼이 연쇄 삭제됨
       const { error } = await sb.auth.admin.deleteUser(teacherId)
       if (error) throw new Error(error.message)
-      return json({ ok: true })
+      return json({ ok: true, teachers: await listTeachers(sb) })
     }
 
     return json({ error: '알 수 없는 요청입니다.' }, 400)
