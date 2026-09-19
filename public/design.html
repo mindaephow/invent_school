@@ -1174,6 +1174,7 @@
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
   function round3(n){ return Math.round(n * 1000) / 1000; }
+  function round5(n){ return Math.round(n * 100000) / 100000; }
   function clockText(){
     const d = new Date();
     return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
@@ -1187,7 +1188,7 @@
       type: p.type,
       mount: p.mount,
       pos: [p.body.position.x, p.body.position.y, p.body.position.z].map(round3),
-      quat: [p.body.quaternion.x, p.body.quaternion.y, p.body.quaternion.z, p.body.quaternion.w].map(round3)
+      quat: [p.body.quaternion.x, p.body.quaternion.y, p.body.quaternion.z, p.body.quaternion.w].map(round5)
     }));
   }
 
