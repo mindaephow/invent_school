@@ -14,7 +14,7 @@
 //   - upsert_row        : 임의 테이블 행 추가·수정
 //   - delete_row        : 임의 테이블 행 삭제 (되돌릴 수 없음)
 //   - run_sql           : SQL 직접 실행 (위험 DDL 자동 차단, run_sql_query RPC 필요)
-//   - list_github_files : GitHub 저장소(mintimjang33/invent_school) 경로별 파일 목록 조회
+//   - list_github_files : GitHub 저장소(mindaephow/invent_school) 경로별 파일 목록 조회
 //   - get_github_file   : GitHub 저장소 특정 파일 내용 조회
 //
 // 필요한 환경변수 (Vercel 프로젝트 설정 > Environment Variables, 메인 사이트와 같은 프로젝트):
@@ -56,7 +56,7 @@ function getSupabase() {
   return _supabase
 }
 
-const GITHUB_REPO = 'mintimjang33/invent_school'
+const GITHUB_REPO = 'mindaephow/invent_school'
 
 const baseHandler = createMcpHandler(
   (server) => {
@@ -145,7 +145,7 @@ const baseHandler = createMcpHandler(
       'get_rows',
       {
         title: 'DB 테이블 데이터 조회',
-        description: 'get_rows — DB 테이블 데이터 조회. ivs_teachers/ivs_courses/ivs_students/ivs_records/ivs_curriculum은 모두 (id, data jsonb, created_at) 구조라 select에 data를 그대로 쓰면 된다. 필터·정렬·페이징 지원, 최대 500행.',
+        description: 'get_rows — DB 테이블 데이터 조회. ivs_teachers/ivs_courses/ivs_students/ivs_records/ivs_curriculum/ivs_projects는 (id, data jsonb, created_at)에 소유자 컬럼(teacher_id, course_id, student_id, user_id 등)이 붙은 구조라 내용은 data에 있다. ivs_students에는 login_id(학생 로그인 아이디)도 있다. 필터·정렬·페이징 지원, 최대 500행.',
         inputSchema: {
           table:   z.string().describe('테이블 이름. 예: ivs_teachers, ivs_courses, ivs_students, ivs_records, ivs_curriculum'),
           select:  z.string().optional().describe('가져올 컬럼 (쉼표 구분). 비우면 전체(*)'),
@@ -173,7 +173,7 @@ const baseHandler = createMcpHandler(
       'upsert_row',
       {
         title: 'DB 행 추가·수정',
-        description: 'upsert_row — DB 행 추가·수정. id를 포함하면 수정, 없으면 새 행 추가. ivs_* 테이블은 실제 값을 전부 data(jsonb) 필드 하나에 담는다 — 예: {"id":"...", "data":{"name":"홍길동","phone":"010-..."}}. 수정 전 get_rows로 기존 data를 먼저 확인할 것.',
+        description: 'upsert_row — DB 행 추가·수정. id를 포함하면 수정, 없으면 새 행 추가. ivs_* 테이블은 실제 값을 data(jsonb) 필드에 담는다 — 예: {"id":"...", "data":{"name":"홍길동","phone":"010-..."}}. 소유자 컬럼은 트리거가 data에서 채우거나(courseId 등) 로그인 계정 기준이라 서비스 키로 직접 넣을 땐 함께 지정해야 할 수 있다. 수정 전 get_rows로 기존 data를 먼저 확인할 것.',
         inputSchema: {
           table: z.string().describe('테이블 이름'),
           row:   z.record(z.any()).describe('추가·수정할 데이터 객체. ivs_* 테이블이면 {"id":"...", "data":{...}} 형태'),
@@ -238,7 +238,7 @@ const baseHandler = createMcpHandler(
     instructions:
       '발명학교(골드버그 출석부 + 3D 설계 도구) MCP 서버. ' +
       'Supabase DB 직접 조회·수정 도구(list_tables/get_rows/upsert_row/delete_row/run_sql — ' +
-      'ivs_teachers/ivs_courses/ivs_students/ivs_records/ivs_curriculum 테이블은 모두 (id, data jsonb, created_at) 구조), ' +
+      'ivs_teachers/courses/students/records/curriculum/projects 테이블, 내용은 data jsonb에 있고 권한용 소유자 컬럼이 붙어 있음), ' +
       'GitHub 저장소(' + GITHUB_REPO + ') 파일 확인 도구(list_github_files/get_github_file)를 제공한다. ' +
       '선생님/수업/학생/출석기록/커리큘럼 데이터를 조회·수정하거나 index.html·design.html 코드를 확인할 때 이 서버의 도구를 사용한다.',
   },

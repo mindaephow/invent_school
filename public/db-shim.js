@@ -1,9 +1,29 @@
 // Firestore-style db.collection(...).where(...).get()/.add()/.doc(id).update()/.delete()
-// backed by Supabase Postgres. Each "collection" is a table with (id uuid, data jsonb).
-// Mirrors the Claude Artifact `db` capability's API shape so the rest of the app's
-// code (written against that API) doesn't need to change.
-function createSupabaseDb(supabaseUrl, supabaseAnonKey) {
-  const client = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+// backed by Supabase Postgres. Each "collection" is a table with (id uuid, data jsonb, ...).
+// Mirrors the Claude Artifact `db` capability's API shape so the app code written against
+// that API doesn't need to change. Access control lives in the database (RLS), not here.
+//
+// Sessions are kept in sessionStorage (cleared when the tab/browser closes) so a shared
+// tablet never stays logged in as the previous person. Teacher and student pages use
+// different storageKeys so one role's login never leaks into the other's.
+function createSupabaseDb(supabaseUrl, supabaseKey, options) {
+  options = options || {};
+  let storage;
+  try { storage = window.sessionStorage; storage.getItem('x'); }
+  catch (e) {
+    const mem = {};
+    storage = { getItem: k => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = String(v); }, removeItem: k => { delete mem[k]; } };
+  }
+  const client = window.supabase.createClient(supabaseUrl, supabaseKey, {
+    auth: {
+      storage,
+      storageKey: options.storageKey || 'ivs-auth',
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: false
+    }
+  });
+
   const TABLES = {
     teachers: 'ivs_teachers',
     courses: 'ivs_courses',
@@ -13,8 +33,9 @@ function createSupabaseDb(supabaseUrl, supabaseAnonKey) {
     projects: 'ivs_projects'
   };
 
+  // row.data is the document; other columns (login_id, user_id, ...) come along as `row`
   function wrapRow(row) {
-    return { id: row.id, data: () => row.data || {} };
+    return { id: row.id, data: () => row.data || {}, row };
   }
 
   function collection(name) {
@@ -27,16 +48,15 @@ function createSupabaseDb(supabaseUrl, supabaseAnonKey) {
         return api;
       },
       async get() {
-        let q = client.from(table).select('id,data');
+        let q = client.from(table).select('*');
         filters.forEach(f => {
           const col = `data->>${f.field}`;
           const val = String(f.value);
-          if (f.op === '==') q = q.eq(col, val);
-          else if (f.op === '!=') q = q.neq(col, val);
+          if (f.op === '!=') q = q.neq(col, val);
           else q = q.eq(col, val);
         });
         const { data, error } = await q;
-        if (error) { console.error('[db] get failed', table, error); return { empty: true, docs: [] }; }
+        if (error) { console.error('[db] get failed', table, error); return { empty: true, docs: [], error }; }
         const docs = (data || []).map(wrapRow);
         return { empty: docs.length === 0, docs };
       },
@@ -64,5 +84,10 @@ function createSupabaseDb(supabaseUrl, supabaseAnonKey) {
     return api;
   }
 
-  return { collection };
+  return {
+    collection,
+    client,
+    auth: client.auth,
+    rpc: (fn, args) => client.rpc(fn, args)
+  };
 }

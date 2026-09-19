@@ -1150,12 +1150,13 @@
   }
   animate();
 
-  // ===== 학생 확인 → 프로젝트 시작/이어하기 → 나갈 때 저장 → 과제 제출 =====
-  const SUPABASE_URL = 'https://iwxpjnwktxpscoktfpyl.supabase.co';
-  const SUPABASE_KEY = 'sb_publishable_2b9dle9I1vMrf8j9Gs7o6w_I9Q2hu9J';
-  const db = createSupabaseDb(SUPABASE_URL, SUPABASE_KEY);
-  const TODAY_STR = new Date().toISOString().slice(0, 10); // 출석부(index.html)와 같은 날짜 기준
-  const LS_STUDENT = 'ivs_student';
+  // ===== 학생 로그인 → 프로젝트 시작/이어하기 → 나갈 때 저장 → 과제 제출 =====
+  const SUPABASE_URL = 'https://brfeszcyjsaprbakqsjl.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_0Nsga8WVTqBcBS6kcUytrg_UB-1FtnK';
+  const EMAIL_DOMAIN = 'students.invent-school.app';
+  const IDLE_MS = 10 * 60 * 1000; // 10분 동안 아무 조작이 없으면 저장하고 로그아웃
+  // 학생 로그인은 선생님 화면과 저장 위치를 분리하고, 탭/브라우저를 닫으면 풀리도록 sessionStorage에 둔다
+  const db = createSupabaseDb(SUPABASE_URL, SUPABASE_KEY, { storageKey: 'ivs-student-auth' });
 
   const startOverlay = document.getElementById('startOverlay');
   const startBody = document.getElementById('startBody');
@@ -1166,9 +1167,11 @@
   const submitBtn = document.getElementById('submitBtn');
   const backLink = document.getElementById('backLink');
 
-  let student = null;   // { id, name, courseId }
+  let student = null;   // { id, name }
   let project = null;   // { id, data }
   let lastSavedKey = '';
+  let accessToken = null;
+  let lastActivity = Date.now();
 
   function esc(s){
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -1178,9 +1181,6 @@
   function clockText(){
     const d = new Date();
     return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
-  }
-  function courseLabel(d){
-    return `${d.name || ''} · ${[d.school, d.section, d.day ? d.day + '요일' : ''].filter(Boolean).join(' · ')}`;
   }
 
   function serializeParts(){
@@ -1214,7 +1214,9 @@
   }
   function projectKey(){ return JSON.stringify(project.data.parts) + '|' + project.data.name; }
 
-  // one raw PATCH path so the same code works while the page is closing (keepalive)
+  db.auth.onAuthStateChange((event, session) => { accessToken = session ? session.access_token : null; });
+
+  // 화면을 닫는 중에도 보낼 수 있도록 fetch keepalive PATCH 한 가지 경로만 쓴다
   async function persist(keepalive, force){
     if (!project) return;
     syncFromScene();
@@ -1227,7 +1229,7 @@
       keepalive: !!keepalive,
       headers: {
         apikey: SUPABASE_KEY,
-        Authorization: 'Bearer ' + SUPABASE_KEY,
+        Authorization: 'Bearer ' + accessToken,
         'Content-Type': 'application/json',
         Prefer: 'return=minimal'
       },
@@ -1242,20 +1244,40 @@
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') persist(true).catch(() => {});
   });
+  nameInput.addEventListener('change', () => { persist(false).catch(() => {}); });
+
+  // 저장하고 로그아웃한 뒤 로그인 화면으로 (공용 태블릿에서 다음 학생이 이어 쓸 수 있게)
+  async function logout(message){
+    if (project) {
+      try { await persist(false); }
+      catch (err) { setStatus('저장에 실패했어요. 인터넷을 확인하고 다시 눌러주세요.', 'warn'); return false; }
+    }
+    await db.auth.signOut();
+    student = null;
+    project = null;
+    restoreParts([]);
+    projectBar.hidden = true;
+    backLink.textContent = '← 대시보드로';
+    startOverlay.hidden = false;
+    showLoginStep(message);
+    return true;
+  }
+
   backLink.addEventListener('click', async (e) => {
-    if (!project) return;
+    if (!student) return; // 로그인 전에는 그냥 선생님 화면(대시보드)으로 이동
     e.preventDefault();
     const label = backLink.textContent;
     backLink.textContent = '저장 중...';
-    try {
-      await persist(false);
-      location.href = backLink.getAttribute('href');
-    } catch (err) {
-      backLink.textContent = label;
-      setStatus('저장에 실패했어요. 인터넷을 확인하고 다시 눌러주세요.', 'warn');
-    }
+    const ok = await logout('저장하고 나왔어요.');
+    if (!ok) backLink.textContent = label;
   });
-  nameInput.addEventListener('change', () => { persist(false).catch(() => {}); });
+
+  ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(ev => {
+    window.addEventListener(ev, () => { lastActivity = Date.now(); }, { passive: true });
+  });
+  setInterval(() => {
+    if (student && Date.now() - lastActivity > IDLE_MS) logout('오래 사용하지 않아서 로그아웃했어요. 작업은 저장됐어요.');
+  }, 30000);
 
   function refreshSubmitBtn(){
     submitBtn.dataset.armed = '0';
@@ -1276,15 +1298,14 @@
     submitBtn.disabled = true;
     submitBtn.textContent = '제출 중...';
     try {
-      const snap = await db.collection('records').where('courseId', '==', student.courseId).where('date', '==', TODAY_STR).get();
-      const existing = snap.docs.find(d => d.data().studentId === student.id);
-      const patch = { assignment: 'submitted', projectId: project.id, updatedAt: Date.now() };
-      if (existing) await db.collection('records').doc(existing.id).update(patch);
-      else await db.collection('records').add(Object.assign({ date: TODAY_STR, studentId: student.id, courseId: student.courseId }, patch));
+      await persist(false);
+      // 서버 함수가 프로젝트를 제출 처리하고 선생님 출석부의 과제 칸에 "제출함"을 남긴다
+      const { error } = await db.rpc('submit_assignment', { p_project: project.id });
+      if (error) throw error;
       project.data.submitted = true;
-      project.data.submittedAt = Date.now();
-      await persist(false, true);
-      setStatus('✅ 과제를 제출했어요!', 'success');
+      lastSavedKey = '';
+      setStatus('✅ 과제를 제출했어요! 잠시 뒤 로그아웃돼요.', 'success');
+      setTimeout(() => { logout('과제를 제출했어요. 수고했어요!'); }, 2500);
     } catch (err) {
       console.error(err);
       setStatus('제출에 실패했어요. 잠시 뒤 다시 눌러주세요.', 'warn');
@@ -1302,74 +1323,81 @@
     pbStudent.textContent = student.name + ' 학생';
     pbSave.textContent = '';
     projectBar.hidden = false;
+    backLink.textContent = '← 저장하고 나가기';
     startOverlay.hidden = true;
+    lastActivity = Date.now();
     refreshSubmitBtn();
     setStatus(data.parts && data.parts.length ? '저장된 작업을 불러왔어요. 이어서 만들어보세요.' : '부품을 배치하고 재생을 눌러보세요.', null);
   }
 
   async function createProject(name){
     const now = Date.now();
-    const data = { studentId: student.id, courseId: student.courseId, name, parts: [], submitted: false, createdAt: now, updatedAt: now };
+    const data = { studentId: student.id, name, parts: [], submitted: false, createdAt: now, updatedAt: now };
     const ref = await db.collection('projects').add(data);
     openProject(ref.id, data);
   }
 
-  function rememberStudent(){
-    try { localStorage.setItem(LS_STUDENT, JSON.stringify(student)); } catch (e) {}
-  }
-  function loadRememberedStudent(){
-    try { const raw = localStorage.getItem(LS_STUDENT); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
-  }
-
-  async function showStudentStep(){
+  // ----- 로그인 화면 -----
+  function showLoginStep(message){
     startBody.innerHTML = `
       <h2>골드버그 설계</h2>
-      <p class="note">먼저 내 수업과 이름을 골라주세요.</p>
-      <label for="stCourse">수업</label>
-      <select id="stCourse"><option value="">불러오는 중...</option></select>
-      <label for="stName">이름</label>
-      <select id="stName" disabled><option value="">수업을 먼저 고르세요</option></select>
-      <button id="stNext" class="primary" type="button" style="margin-top:14px; width:100%;" disabled>다음</button>`;
-    const courseSel = document.getElementById('stCourse');
-    const nameSel = document.getElementById('stName');
-    const nextBtn = document.getElementById('stNext');
-
-    const cSnap = await db.collection('courses').get();
-    const courses = cSnap.docs.map(d => ({ id: d.id, d: d.data() })).sort((a, b) => courseLabel(a.d).localeCompare(courseLabel(b.d), 'ko'));
-    courseSel.innerHTML = '<option value="">수업 선택</option>' + courses.map(c => `<option value="${esc(c.id)}">${esc(courseLabel(c.d))}</option>`).join('');
-    if (!courses.length) courseSel.innerHTML = '<option value="">등록된 수업이 없어요 (선생님께 문의)</option>';
-
-    let studentsById = {};
-    courseSel.addEventListener('change', async () => {
-      nextBtn.disabled = true;
-      nameSel.disabled = true;
-      if (!courseSel.value) { nameSel.innerHTML = '<option value="">수업을 먼저 고르세요</option>'; return; }
-      nameSel.innerHTML = '<option value="">불러오는 중...</option>';
-      const sSnap = await db.collection('students').where('courseId', '==', courseSel.value).get();
-      const list = sSnap.docs.map(d => ({ id: d.id, d: d.data() }))
-        .sort((a, b) => String(a.d.number || '').localeCompare(String(b.d.number || ''), undefined, { numeric: true }));
-      studentsById = {};
-      list.forEach(s => { studentsById[s.id] = s.d; });
-      nameSel.innerHTML = '<option value="">내 이름 선택</option>' + list.map(s => `<option value="${esc(s.id)}">${esc(s.d.number ? s.d.number + '번 ' : '')}${esc(s.d.name)}</option>`).join('');
-      if (!list.length) nameSel.innerHTML = '<option value="">이 수업에 등록된 학생이 없어요</option>';
-      nameSel.disabled = !list.length;
+      <p class="note">선생님이 알려준 아이디와 비밀번호로 로그인하세요.</p>
+      <form id="loginForm">
+        <label for="loginId">아이디</label>
+        <input id="loginId" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+        <label for="loginPin">비밀번호 (숫자 6자리)</label>
+        <input id="loginPin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="6" required>
+        <button id="loginBtn" class="primary" type="submit" style="margin-top:14px; width:100%;">로그인</button>
+      </form>
+      <p class="${message ? 'note' : 'err'}" id="loginMsg" ${message ? '' : 'hidden'} style="margin-top:12px;">${esc(message || '')}</p>
+      <p class="note" style="margin-top:16px;"><a href="index.html">선생님 화면으로</a></p>`;
+    const form = document.getElementById('loginForm');
+    const msgEl = document.getElementById('loginMsg');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const loginId = document.getElementById('loginId').value.trim().toLowerCase();
+      const pin = document.getElementById('loginPin').value.trim();
+      const btn = document.getElementById('loginBtn');
+      btn.disabled = true;
+      msgEl.hidden = true;
+      msgEl.className = 'err';
+      try {
+        const { error } = await db.auth.signInWithPassword({ email: `${loginId}@${EMAIL_DOMAIN}`, password: pin });
+        if (error) throw error;
+        const ok = await loadStudent();
+        if (!ok) {
+          await db.auth.signOut();
+          throw new Error('not a student');
+        }
+        showProjectStep();
+      } catch (err) {
+        msgEl.hidden = false;
+        msgEl.textContent = /not a student/.test(err.message)
+          ? '학생 계정이 아니에요. 선생님은 선생님 화면을 이용해주세요.'
+          : '아이디나 비밀번호가 맞지 않아요. 다시 확인해주세요.';
+        btn.disabled = false;
+      }
     });
-    nameSel.addEventListener('change', () => { nextBtn.disabled = !nameSel.value; });
-    nextBtn.addEventListener('click', () => {
-      student = { id: nameSel.value, name: studentsById[nameSel.value].name, courseId: courseSel.value };
-      rememberStudent();
-      showProjectStep();
-    });
+    const idInput = document.getElementById('loginId');
+    if (idInput) idInput.focus();
+  }
+
+  // 로그인한 계정의 학생 정보 (권한 규칙상 본인 행만 보인다)
+  async function loadStudent(){
+    const snap = await db.collection('students').get();
+    if (!snap.docs.length) return false;
+    const s = snap.docs[0];
+    student = { id: s.id, name: s.data().name || '' };
+    return true;
   }
 
   async function showProjectStep(){
     startBody.innerHTML = `<h2>${esc(student.name)} 학생, 안녕하세요!</h2><p class="note">불러오는 중...</p>`;
     let list = [];
     let loadErr = false;
-    try {
-      const snap = await db.collection('projects').where('studentId', '==', student.id).get();
-      list = snap.docs.map(d => ({ id: d.id, data: d.data() })).sort((a, b) => (b.data.updatedAt || 0) - (a.data.updatedAt || 0));
-    } catch (e) { loadErr = true; }
+    const snap = await db.collection('projects').get();
+    if (snap.error) loadErr = true;
+    list = snap.docs.map(d => ({ id: d.id, data: d.data() })).sort((a, b) => (b.data.updatedAt || 0) - (a.data.updatedAt || 0));
 
     startBody.innerHTML = `
       <h2>${esc(student.name)} 학생, 안녕하세요!</h2>
@@ -1380,7 +1408,7 @@
       <h3>이어서 작업하기</h3>
       <div class="proj-list" id="projList">${list.length ? '' : '<p class="note">아직 저장한 프로젝트가 없어요.</p>'}</div>
       <p class="err" id="startErr" ${loadErr ? '' : 'hidden'}>${loadErr ? '프로젝트를 불러오지 못했어요. 새로고침 해주세요.' : ''}</p>
-      <button id="otherStudentBtn" class="ghost" type="button" style="margin-top:14px; width:100%;">다른 학생으로 시작</button>`;
+      <button id="logoutBtn" class="ghost" type="button" style="margin-top:14px; width:100%;">로그아웃</button>`;
 
     const listEl = document.getElementById('projList');
     list.forEach(p => {
@@ -1401,15 +1429,18 @@
       try { await createProject(name); }
       catch (e) { console.error(e); btn.disabled = false; errEl.hidden = false; errEl.textContent = '프로젝트를 만들지 못했어요. 잠시 뒤 다시 눌러주세요.'; }
     });
-    document.getElementById('otherStudentBtn').addEventListener('click', () => {
-      try { localStorage.removeItem(LS_STUDENT); } catch (e) {}
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+      await db.auth.signOut();
       student = null;
-      showStudentStep();
+      showLoginStep();
     });
   }
 
-  const remembered = loadRememberedStudent();
-  if (remembered && remembered.id && remembered.courseId) { student = remembered; showProjectStep(); }
-  else showStudentStep();
+  // 같은 탭에서 새로고침한 경우: 아직 로그인되어 있으면 바로 프로젝트 화면으로
+  (async function boot(){
+    const { data: { session } } = await db.auth.getSession();
+    if (session && await loadStudent()) { accessToken = session.access_token; showProjectStep(); }
+    else { if (session) await db.auth.signOut(); showLoginStep(); }
+  })();
 })();
 </script>
