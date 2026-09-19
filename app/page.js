@@ -3,7 +3,7 @@ import Tabs from './Tabs'
 export const metadata = {
   title: '발명융합과학교실',
   description:
-    '이론을 전달하는 수업이 아니라 직접 발명해보는 수업. 문제를 발견하는 관점과 실패를 두려워하지 않고 만들어보는 과정을 설계합니다.',
+    '이론을 전달하는 주입식 수업이 아니라, 원리를 전달하고 스스로 실습하고 느끼며 실패를 통해 문제해결방법을 찾아보는 체험형 수업입니다.',
 }
 
 const COMPARE = {
@@ -234,6 +234,7 @@ const SUBJECT_TABS = SUBJECTS.map((sub) => ({
 
 const css = `
 :root{
+  --font:'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
   --bg:#F4F7FB; --panel:#FFFFFF; --border:#DCE4F0; --ink:#202A3C; --ink-soft:#57647A;
   --blue:#2F6FED; --blue-soft:#DCE7FF; --accent:#FF6A3D; --accent-ink:#FFFFFF; --grid:#C9D6EC;
   --shadow:0 10px 28px rgba(32,42,60,0.08);
@@ -246,16 +247,17 @@ const css = `
   }
 }
 *{box-sizing:border-box;}
+button, input, summary{font-family:inherit;}
 html{scroll-behavior:smooth;}
 body{
   margin:0; background:var(--bg); color:var(--ink);
-  font-family:'Rubik', 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif; line-height:1.65;
+  font-family:var(--font); line-height:1.65;
   word-break:keep-all; overflow-wrap:break-word;
 }
 a{color:inherit;}
 .wrap{max-width:1040px; margin:0 auto; padding:0 20px;}
 .nav{display:flex; align-items:center; justify-content:space-between; gap:12px; padding:18px 0;}
-.brand{font-family:'Kalam','Rubik',cursive; font-weight:700; font-size:26px; text-decoration:none;}
+.brand{font-family:var(--font); font-weight:800; font-size:24px; letter-spacing:-0.035em; text-decoration:none; display:inline-flex; align-items:center; gap:8px;}
 .brand span{color:var(--blue);}
 .nav-actions{display:flex; gap:8px; flex-wrap:wrap;}
 .btn{
@@ -276,7 +278,7 @@ a{color:inherit;}
 .hero::after{content:""; position:absolute; inset:0; background:linear-gradient(180deg, transparent 40%, var(--panel) 100%); pointer-events:none;}
 .hero-inner{position:relative; z-index:1; max-width:560px;}
 .kicker{display:inline-block; font-size:13px; font-weight:600; color:var(--blue); background:var(--blue-soft); padding:6px 12px; border-radius:999px;}
-h1{font-size:clamp(30px, 5.4vw, 48px); line-height:1.25; margin:16px 0 14px; letter-spacing:-0.01em; text-wrap:balance;}
+h1{font-size:clamp(25px, 4.3vw, 40px); line-height:1.4; margin:16px 0 14px; letter-spacing:-0.03em; font-weight:800; word-break:keep-all; text-wrap:balance;}
 h1 em{font-style:normal; color:var(--blue);}
 .lead{font-size:clamp(16px, 2.2vw, 19px); color:var(--ink-soft); margin:0 0 26px; text-wrap:pretty;}
 .hero-cta{display:flex; gap:10px; flex-wrap:wrap;}
@@ -292,7 +294,7 @@ h1 em{font-style:normal; color:var(--blue);}
 
 section{padding:64px 0 0;}
 .eyebrow{font-size:13px; font-weight:700; color:var(--blue); letter-spacing:0.04em; margin:0 0 6px;}
-h2{font-size:clamp(24px, 3.6vw, 32px); line-height:1.3; margin:0 0 12px; text-wrap:balance;}
+h2{font-size:clamp(24px, 3.6vw, 32px); line-height:1.3; margin:0 0 12px; letter-spacing:-0.025em; font-weight:800; text-wrap:balance;}
 .section-lead{color:var(--ink-soft); margin:0 0 26px; max-width:720px;}
 
 .two{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
@@ -310,7 +312,7 @@ h2{font-size:clamp(24px, 3.6vw, 32px); line-height:1.3; margin:0 0 12px; text-wr
 }
 .letter b{
   flex:none; width:44px; height:44px; border-radius:12px; display:grid; place-items:center;
-  font-family:'Kalam',cursive; font-size:24px; background:var(--blue); color:#fff;
+  font-family:var(--font); font-weight:800; font-size:22px; background:var(--blue); color:#fff;
 }
 .letter div{font-weight:600;}
 .letter small{display:block; font-weight:400; color:var(--ink-soft); font-size:12px;}
@@ -340,7 +342,7 @@ h2{font-size:clamp(24px, 3.6vw, 32px); line-height:1.3; margin:0 0 12px; text-wr
 .step::before{
   counter-increment:step; content:counter(step);
   display:grid; place-items:center; width:32px; height:32px; border-radius:50%;
-  background:var(--blue); color:#fff; font-weight:700; margin-bottom:12px; font-family:'Kalam',cursive; font-size:18px;
+  background:var(--blue); color:#fff; font-weight:700; margin-bottom:12px; font-family:var(--font); font-size:16px;
 }
 .step h3{margin:0 0 6px; font-size:17px;}
 .step p{margin:0; color:var(--ink-soft); font-size:14.5px;}
@@ -349,7 +351,7 @@ h2{font-size:clamp(24px, 3.6vw, 32px); line-height:1.3; margin:0 0 12px; text-wr
 .sc{background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:18px; display:flex; gap:14px;}
 .sc b{
   flex:none; width:48px; height:48px; border-radius:13px; display:grid; place-items:center;
-  font-family:'Kalam',cursive; font-size:26px; background:var(--blue); color:#fff;
+  font-family:var(--font); font-weight:800; font-size:24px; background:var(--blue); color:#fff;
 }
 .sc h3{margin:0; font-size:17px;}
 .sc small{display:block; color:var(--ink-soft); font-size:12px; margin-bottom:6px;}
@@ -462,7 +464,7 @@ export default function Home() {
           <div className="hero-inner">
             <span className="kicker">발명융합과학교실 수업 소개</span>
             <h1>
-              이론을 전달하는 수업이 아니라, <em>직접 발명해보는</em> 수업입니다
+              이론을 전달하는 <em>주입식 수업</em>이 아니라, 원리를 전달하고 <em>스스로 실습하고 느끼며</em> 실패를 통해 문제해결방법을 찾아보는 <em>체험형 수업</em>입니다
             </h1>
             <p className="lead">
               발명 수업의 성패는 거창한 재료보다, 문제를 발견하는 관점과 실패를 두려워하지 않고 만들어보는 과정을 설계하는 데 달려 있습니다.
