@@ -61,6 +61,24 @@ const ROOM_STEPS = [
   ['저장하고 제출', '나갈 때 작업이 저장되고, 완성하면 과제를 제출합니다.'],
 ]
 
+const CONTACT_PHONE = '010-2704-0307'
+
+const FAQ = [
+  ['1회 수업은 몇 분인가요?', '초등학교 방과후의 경우 일주일에 한 번, 80분~100분 수업이 기본입니다.'],
+  ['특강은 보통 몇 시간, 몇 회인가요?', '수업 형태에 따라 다릅니다.'],
+  ['한 반은 몇 명까지인가요?', '인원 제한은 없으며, 진행 장소나 상황에 따라 결정됩니다.'],
+  ['학생이 따로 준비할 것이 있나요? 교구와 재료는 누가 제공하나요?', '준비할 것은 없습니다. 특이사항이 없는 경우 교구와 재료는 모두 선생님이 준비합니다.'],
+  ['코딩이나 과학 지식이 없어도 들을 수 있나요?', '네, 수업 특성상 사전 지식이 없어도 수업이 가능합니다.'],
+  ['분기나 학기마다 어떤 과목을 어떤 순서로 배우나요?', '골드버그 장치, 항공, 우주, 과학실험, 로봇과학을 분기나 학기 진행 상황에 따라 골고루 진행합니다.'],
+  ['만든 작품은 가져갈 수 있나요?', '당일 수업에 따라 가져갈 결과물이 있기도 합니다. 다만 골드버그 장치는 부피가 커서 결과물을 분해하기 때문에 가져갈 수 없습니다.'],
+  ['발표나 전시가 있나요?', '학교 일정에 따라 진행하기도 합니다.'],
+  ['수업은 어떻게 신청하나요?', '방과후의 경우 학교에서 신청 안내가 나갑니다.'],
+  ['학교, 문화센터, 기업에서 수업을 요청하려면 어떻게 하나요?', 'PHONE'],
+  ['집에서도 온라인 설계실을 쓸 수 있나요?', '수업에 참여하는 학생은 집에서도 설계가 가능합니다.'],
+  ['결석하면 보강이 되나요?', '학교 규정에 따릅니다.'],
+  ['수강료는 얼마인가요?', '수업을 진행하는 단체와 협의합니다.'],
+]
+
 const css = `
 :root{
   --bg:#F4F7FB; --panel:#FFFFFF; --border:#DCE4F0; --ink:#202A3C; --ink-soft:#57647A;
@@ -221,6 +239,22 @@ h2{font-size:clamp(24px, 3.6vw, 32px); line-height:1.3; margin:0 0 12px; text-wr
 .op dd small{font-size:14px; font-weight:500; color:var(--ink-soft); margin-left:4px;}
 .op.wide{grid-column:span 2;}
 @media (max-width:640px){ .op.wide{grid-column:auto;} }
+
+.faq{display:grid; gap:10px;}
+.faq details{background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:0 20px;}
+.faq details[open]{border-color:var(--blue); box-shadow:var(--shadow);}
+.faq summary{
+  cursor:pointer; list-style:none; position:relative; padding:18px 34px 18px 0;
+  font-weight:600; font-size:16px; line-height:1.5;
+}
+.faq summary::-webkit-details-marker{display:none;}
+.faq summary::after{content:"+"; position:absolute; right:0; top:50%; transform:translateY(-50%); font-size:24px; font-weight:400; color:var(--blue);}
+.faq details[open] summary::after{content:"–";}
+.faq summary:focus-visible{outline:2px solid var(--blue); outline-offset:4px; border-radius:6px;}
+.faq .ans{margin:0; padding:0 0 18px; color:var(--ink-soft); font-size:15.5px;}
+.faq .ans a{color:var(--blue); font-weight:700; text-decoration:none;}
+.faq .ans a:hover{text-decoration:underline;}
+footer a{color:inherit;}
 
 .cta{
   margin:72px 0 0; padding:34px 26px; border-radius:20px; text-align:center;
@@ -451,6 +485,27 @@ export default function Home() {
           </div>
         </section>
 
+        <section id="faq">
+          <p className="eyebrow">자주 묻는 질문</p>
+          <h2>궁금하신 점을 모았습니다</h2>
+          <div className="faq">
+            {FAQ.map(([q, a]) => (
+              <details key={q}>
+                <summary>{q}</summary>
+                <p className="ans">
+                  {a === 'PHONE' ? (
+                    <>
+                      <a href={'tel:' + CONTACT_PHONE.replace(/-/g, '')}>{CONTACT_PHONE}</a>로 문의해 주세요.
+                    </>
+                  ) : (
+                    a
+                  )}
+                </p>
+              </details>
+            ))}
+          </div>
+        </section>
+
         <div className="cta">
           <h2>발명융합과학교실에 들어가기</h2>
           <p>선생님이 알려준 아이디와 비밀번호로 로그인하세요.</p>
@@ -459,7 +514,12 @@ export default function Home() {
             <a className="btn big" href="/index.html">선생님 로그인</a>
           </div>
         </div>
-        <footer>발명융합과학교실</footer>
+        <footer>
+          <div>발명융합과학교실</div>
+          <div style={{ marginTop: 4 }}>
+            기관 수업 문의 <a href={'tel:' + CONTACT_PHONE.replace(/-/g, '')}>{CONTACT_PHONE}</a>
+          </div>
+        </footer>
       </div>
     </>
   )
