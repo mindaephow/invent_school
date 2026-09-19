@@ -1,11 +1,12 @@
 // app/api/mcp/route.js
 //
-// 발명학교(invent_school) MCP 서버 — teacher-dashboard(index.html)와
-// 3D 설계 도구(design.html)가 쓰는 Supabase 테이블(ivs_teachers/courses/
+// 발명학교(invent_school) MCP 서버 — teacher-dashboard(public/index.html)와
+// 3D 설계 도구(public/design.html)가 쓰는 Supabase 테이블(ivs_teachers/courses/
 // students/records/curriculum)을 향후 세션에서 직접 조회·수정할 수 있게 하는
 // 범용 CRUD 도구 + GitHub 저장소 확인 도구. 다른 사이트들의 MCP 서버(예:
-// afterschoolrollbook/attendance의 mcp/app/api/mcp/route.js)와 동일한
-// mcp-handler 패턴을 그대로 따른다.
+// minsiljang0/Fresh_Season의 app/api/mcp/route.js)와 동일하게, 메인 사이트와
+// 같은 Next.js 프로젝트·같은 Vercel 배포 안에 들어있다 (static HTML은
+// public/에 두고, Next.js가 라우팅 없이 그대로 서빙).
 //
 // 노출 툴 7개:
 //   - list_tables       : Supabase DB 테이블 목록 조회
@@ -16,8 +17,8 @@
 //   - list_github_files : GitHub 저장소(mintimjang33/invent_school) 경로별 파일 목록 조회
 //   - get_github_file   : GitHub 저장소 특정 파일 내용 조회
 //
-// 필요한 환경변수 (Vercel 프로젝트 설정 > Environment Variables, Root Directory: mcp):
-//   SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY  - index.html/design.html이 쓰는 것과 같은 프로젝트,
+// 필요한 환경변수 (Vercel 프로젝트 설정 > Environment Variables, 메인 사이트와 같은 프로젝트):
+//   SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY  - public/index.html·public/design.html이 쓰는 것과 같은 프로젝트,
 //                                                단 여기는 서버 전용 SERVICE_ROLE 키(절대 브라우저에 노출 금지)
 //   MCP_SHARED_SECRET                          - claude.ai 커넥터 등록 시 ?key= 값으로 사용
 //   GITHUB_TOKEN (선택)                        - GitHub API 호출 제한(시간당 60회)을 늘려줌, 없어도 동작함
@@ -39,7 +40,7 @@
 // $$;
 //
 // claude.ai 커넥터 등록 주소:
-//   https://<이 mcp 프로젝트의 vercel 도메인>/api/mcp?key=여기에_MCP_SHARED_SECRET_값
+//   https://invent-school.vercel.app/api/mcp?key=여기에_MCP_SHARED_SECRET_값
 
 import { createMcpHandler } from 'mcp-handler'
 import { createClient } from '@supabase/supabase-js'
