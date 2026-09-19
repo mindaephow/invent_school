@@ -65,7 +65,13 @@
   .who b{font-weight:700;}
   .who span{font-size:13px; color:var(--ink-soft); overflow-wrap:anywhere;}
   .empty{color:var(--ink-soft); font-size:14px; padding:6px 0;}
-  @media (max-width:520px){ .row{flex-direction:column; align-items:stretch;} .row button{width:100%;} }
+  .acts{display:flex; gap:8px; flex:none; align-items:center;}
+  .toolbar{display:flex; align-items:center; justify-content:space-between; gap:10px;}
+  .toolbar h3{margin:0;}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+  #createForm{margin-top:14px; padding-top:14px; border-top:1px dashed var(--border);}
+  #createForm[hidden]{display:none;}
+  @media (max-width:520px){ .row{flex-direction:column; align-items:stretch;} .acts{flex-direction:column; align-items:stretch;} .acts button{width:100%;} .grid2{grid-template-columns:1fr;} }
 </style>
 
 <div class="app">
@@ -91,6 +97,19 @@
   </section>
 
   <div id="body" hidden>
+    <section class="card">
+      <div class="toolbar"><h3 style="font-size:16px;">선생님 등록</h3><button type="button" id="toggleCreate">+ 선생님 등록</button></div>
+      <form id="createForm" class="form" hidden>
+        <div class="grid2">
+          <div><label for="cName">성함</label><input id="cName" required autocomplete="off"></div>
+          <div><label for="cPhone">전화번호</label><input id="cPhone" autocomplete="off"></div>
+        </div>
+        <div><label for="cEmail">이메일 (구글 로그인에 쓰는 이메일)</label><input id="cEmail" type="email" required autocomplete="off"></div>
+        <div><label for="cPassword">비밀번호 (6자 이상) — 구글로 로그인할 선생님은 비워두세요</label><input id="cPassword" type="text" minlength="6" autocomplete="off"></div>
+        <p class="note err" id="createMsg" hidden></p>
+        <button type="submit" class="primary" id="createBtn">등록 (바로 승인됨)</button>
+      </form>
+    </section>
     <section class="card">
       <h3 style="font-size:16px;">승인 대기<span class="count warn" id="pendingCount">0</span></h3>
       <div id="pendingList"></div>
@@ -143,13 +162,17 @@
     if (error) showMsg('Google 로그인을 시작하지 못했어요: ' + error.message);
   });
 
-  let armedId = null, armTimer = null;
   function rowHtml(t){
-    const sub = [t.email, t.phone, fmtDate(t.createdAt) && '신청 ' + fmtDate(t.createdAt)].filter(Boolean).map(esc).join(' · ');
-    const btn = t.approved
-      ? `<button class="ghost" data-revoke="${esc(t.id)}">승인 취소</button>`
-      : `<button class="primary" data-approve="${esc(t.id)}">승인</button>`;
-    return `<div class="row"><div class="who"><b>${esc(t.name || '(이름 없음)')}</b><span>${sub}</span></div>${btn}</div>`;
+    const sub = [t.email, t.phone, fmtDate(t.createdAt) && '신청 ' + fmtDate(t.createdAt), '수업 ' + t.courseCount + '개 · 학생 ' + t.studentCount + '명'].filter(Boolean).map(esc).join(' · ');
+    let acts;
+    if (t.isAdmin) acts = '<span class="count">관리자</span>';
+    else {
+      const main = t.approved
+        ? `<button class="ghost" data-revoke="${esc(t.id)}" data-armed-text="한 번 더 누르면 취소돼요">승인 취소</button>`
+        : `<button class="primary" data-approve="${esc(t.id)}">승인</button>`;
+      acts = main + `<button class="ghost" data-delete="${esc(t.id)}" data-armed-text="한 번 더 누르면 삭제돼요">삭제</button>`;
+    }
+    return `<div class="row"><div class="who"><b>${esc(t.name || '(이름 없음)')}</b><span>${sub}</span></div><div class="acts">${acts}</div></div>`;
   }
   function render(teachers){
     const pending = teachers.filter((t) => !t.approved);
@@ -165,25 +188,57 @@
     render(data.teachers);
   }
 
-  async function setApproved(id, approved){
+  async function run(payload){
     try {
-      await api({ action: 'set_approved', teacherId: id, approved }, await token());
+      await api(payload, await token());
       await load();
     } catch (err) { alert(err.message); }
   }
 
+  // 되돌릴 수 없는 버튼(승인 취소, 삭제)은 두 번 눌러야 실행 — 4초 안에 다시 누르지 않으면 원래대로
+  let armed = null, armTimer = null;
+  function disarm(){
+    clearTimeout(armTimer);
+    if (armed && armed.btn.isConnected) { armed.btn.textContent = armed.text; armed.btn.classList.remove('danger-armed'); }
+    armed = null;
+  }
   body.addEventListener('click', (e) => {
     const a = e.target.closest('[data-approve]');
-    if (a) { setApproved(a.dataset.approve, true); return; }
-    const r = e.target.closest('[data-revoke]');
-    if (!r) return;
-    const id = r.dataset.revoke;
-    if (armedId === id) { clearTimeout(armTimer); armedId = null; setApproved(id, false); return; }
-    armedId = id;
-    r.textContent = '한 번 더 누르면 취소돼요';
-    r.classList.add('danger-armed');
-    clearTimeout(armTimer);
-    armTimer = setTimeout(() => { armedId = null; r.textContent = '승인 취소'; r.classList.remove('danger-armed'); }, 4000);
+    if (a) { disarm(); run({ action: 'set_approved', teacherId: a.dataset.approve, approved: true }); return; }
+    const btn = e.target.closest('[data-revoke], [data-delete]');
+    if (!btn) return;
+    const isDelete = btn.hasAttribute('data-delete');
+    const id = isDelete ? btn.dataset.delete : btn.dataset.revoke;
+    const key = (isDelete ? 'delete:' : 'revoke:') + id;
+    if (armed && armed.key === key) {
+      disarm();
+      run(isDelete ? { action: 'delete_teacher', teacherId: id } : { action: 'set_approved', teacherId: id, approved: false });
+      return;
+    }
+    disarm();
+    armed = { key, btn, text: btn.textContent };
+    btn.textContent = btn.dataset.armedText;
+    btn.classList.add('danger-armed');
+    armTimer = setTimeout(disarm, 4000);
+  });
+
+  $('toggleCreate').addEventListener('click', () => {
+    const f = $('createForm');
+    f.hidden = !f.hidden;
+    $('toggleCreate').textContent = f.hidden ? '+ 선생님 등록' : '숨기기';
+  });
+  $('createForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = $('createBtn'), m = $('createMsg');
+    btn.disabled = true; m.hidden = true;
+    try {
+      await api({ action: 'create_teacher', name: $('cName').value, email: $('cEmail').value, phone: $('cPhone').value, password: $('cPassword').value }, await token());
+      $('createForm').reset();
+      $('createForm').hidden = true;
+      $('toggleCreate').textContent = '+ 선생님 등록';
+      await load();
+    } catch (err) { m.textContent = err.message; m.hidden = false; }
+    finally { btn.disabled = false; }
   });
 
   let currentUser = null;
