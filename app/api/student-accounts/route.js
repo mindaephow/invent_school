@@ -43,8 +43,9 @@ async function requireTeacher(sb, request) {
   if (!token) return { error: json({ error: '로그인이 필요합니다.' }, 401) }
   const { data, error } = await sb.auth.getUser(token)
   if (error || !data?.user) return { error: json({ error: '로그인이 만료되었습니다. 다시 로그인해주세요.' }, 401) }
-  const { data: t } = await sb.from('ivs_teachers').select('id').eq('id', data.user.id).maybeSingle()
+  const { data: t } = await sb.from('ivs_teachers').select('id, approved').eq('id', data.user.id).maybeSingle()
   if (!t) return { error: json({ error: '선생님 계정만 사용할 수 있습니다.' }, 403) }
+  if (t.approved !== true) return { error: json({ error: '본사 승인 후 사용할 수 있습니다.' }, 403) }
   return { teacherId: data.user.id }
 }
 

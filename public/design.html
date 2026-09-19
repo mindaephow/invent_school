@@ -1,8 +1,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>골드버그 클래스룸</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Rubik:wght@400;500;700&display=swap" rel="stylesheet">
+<title>발명융합과학교실</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css">
 <style>
   :root{
     --bg:#F4F7FB;
@@ -64,13 +64,13 @@
   *{box-sizing:border-box;}
   body{
     background:var(--bg); color:var(--ink);
-    font-family:'Rubik', system-ui, -apple-system, sans-serif;
+    font-family:'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif; word-break:keep-all;
     padding-inline:16px; padding-block:20px 32px;
   }
   h1,h2,h3{margin:0 0 8px;}
   p{margin:0 0 8px; line-height:1.5;}
   button{
-    font-family:'Rubik', system-ui, sans-serif; font-size:14px; cursor:pointer;
+    font-family:inherit; font-size:14px; cursor:pointer;
     border-radius:10px; border:1px solid var(--panel-border);
     background:var(--panel); color:var(--ink); padding:10px 12px;
   }
@@ -79,9 +79,9 @@
   button:disabled{cursor:not-allowed;}
 
   .app{max-width:1080px; margin:0 auto;}
-  .topbar{display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:8px; margin-bottom:18px;}
-  .brand{font-family:'Kalam', cursive; font-weight:700; font-size:28px;}
-  .brand-mark{color:var(--blueprint);}
+  .topbar{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; margin-bottom:18px;}
+  .brand{display:inline-flex; align-items:center; gap:10px; font-weight:800; font-size:19px; letter-spacing:-0.04em;}
+  .brand .logo{width:32px; height:32px; border-radius:10px; flex:none;}
   .level-badge{font-size:13px; font-weight:500; color:var(--ink-soft); background:var(--blueprint-soft); padding:6px 12px; border-radius:999px;}
 
   .layout{display:grid; grid-template-columns:260px 1fr; gap:20px; align-items:start;}
@@ -91,7 +91,7 @@
     background:var(--panel); border:1px solid var(--panel-border); border-radius:14px;
     padding:16px; margin-bottom:16px; box-shadow:var(--shadow);
   }
-  .sidebar h2{font-family:'Kalam', cursive; font-size:17px; color:var(--blueprint); margin-top:2px;}
+  .sidebar h2{font-weight:700; font-size:17px; color:var(--blueprint); margin-top:2px;}
   .mission p{color:var(--ink-soft); font-size:14px;}
 
   .mount-select{display:flex; gap:6px; margin-bottom:12px;}
@@ -191,7 +191,7 @@
   .status.warn{color:var(--warn); font-weight:700;}
 
   .build-guide{background:var(--success-bg); border:1px solid var(--success); border-radius:14px; padding:16px;}
-  .build-guide h3{color:var(--success); font-family:'Kalam', cursive; font-size:18px;}
+  .build-guide h3{color:var(--success); font-weight:700; font-size:18px;}
   .build-guide ul{display:flex; flex-direction:column; gap:6px; margin-top:8px; list-style:none; padding:0;}
   .build-guide li{font-size:14px;}
   .build-guide li::before{content:"✓ "; color:var(--success); font-weight:700;}
@@ -199,7 +199,7 @@
   .overlay{position:fixed; inset:0; z-index:2000; background:var(--bg); display:flex; align-items:center; justify-content:center; padding:16px; overflow:auto;}
   .overlay[hidden]{display:none;}
   .start-card{width:min(440px,100%); background:var(--panel); border:1px solid var(--panel-border); border-radius:16px; padding:22px; box-shadow:var(--shadow);}
-  .start-card h2{font-family:'Kalam', cursive; font-size:24px; color:var(--blueprint);}
+  .start-card h2{font-weight:700; font-size:24px; color:var(--blueprint);}
   .start-card h3{font-size:14px; margin:16px 0 6px; color:var(--ink);}
   .start-card label{display:block; font-size:12px; color:var(--ink-soft); font-weight:600; margin:10px 0 4px;}
   .start-card select, .start-card input, .project-bar input{
@@ -224,7 +224,7 @@
 <div class="app">
   <header class="topbar">
     <a href="/" id="backLink" class="level-badge" style="text-decoration:none;">← 처음으로</a>
-    <div class="brand"><span class="brand-mark">⚙</span> 골드버그 클래스룸</div>
+    <div class="brand"><svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="10" fill="#2D5BFF"/><path d="M6 10 L20 15" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/><path d="M12 23 L26 19" stroke="#fff" stroke-opacity="0.7" stroke-width="2.6" stroke-linecap="round"/><circle cx="9" cy="6.5" r="3" fill="#FF6A3D"/></svg>발명융합과학교실</div>
     <div class="level-badge">3D · 코어 구조 (판·기둥·직선길)</div>
   </header>
 

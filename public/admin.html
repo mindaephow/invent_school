@@ -1,0 +1,201 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>본사 관리자 · 발명융합과학교실</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="db-shim.js"></script>
+<style>
+  :root{
+    --bg:#F3F5F9; --surface:#FFFFFF; --border:#E1E5EE; --ink:#1E2433; --ink-soft:#5B6478;
+    --accent:#3452C7; --accent-soft:#E3E8FB; --accent-ink:#FFFFFF;
+    --present:#1F8F4C; --present-bg:#E4F6EA; --late:#B9740E; --late-bg:#FBF0DD;
+    --absent:#C23B3B; --absent-bg:#FBE7E7; --shadow:0 8px 24px rgba(30,36,51,0.08);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#121722; --surface:#1A2130; --border:#2A3244; --ink:#E9ECF4; --ink-soft:#9AA3BC;
+      --accent:#7D93FF; --accent-soft:#212B4A; --accent-ink:#0E1220;
+      --present:#4FCB78; --present-bg:#132A1D; --late:#E3A63C; --late-bg:#2E230E;
+      --absent:#F0716B; --absent-bg:#301717; --shadow:0 8px 24px rgba(0,0,0,0.45);
+    }
+  }
+  *{box-sizing:border-box;}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
+    word-break:keep-all; letter-spacing:-0.01em; padding-inline:16px; padding-block:18px 40px;
+  }
+  h3{margin:0 0 10px;}
+  p{margin:0 0 8px; line-height:1.5;}
+  button, input{font-family:inherit; font-size:14px;}
+  button{cursor:pointer; border-radius:9px; border:1px solid var(--border); background:var(--surface); color:var(--ink); padding:9px 14px;}
+  button:disabled{opacity:0.5; cursor:not-allowed;}
+  button.primary{background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:600;}
+  button.ghost{background:transparent;}
+  button.danger-armed{background:var(--absent-bg); border-color:var(--absent); color:var(--absent); font-weight:700;}
+  input{border:1px solid var(--border); border-radius:8px; padding:8px 10px; background:var(--surface); color:var(--ink); width:100%;}
+  input:focus, button:focus-visible{outline:2px solid var(--accent); outline-offset:1px;}
+  label{display:block; font-size:12px; color:var(--ink-soft); margin-bottom:4px; font-weight:600;}
+
+  .app{max-width:840px; margin:0 auto;}
+  .topbar{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; margin-bottom:18px;}
+  .brand{display:inline-flex; align-items:center; gap:10px; font-weight:800; font-size:19px; letter-spacing:-0.04em; color:inherit; text-decoration:none;}
+  .brand .logo{width:32px; height:32px; border-radius:10px; flex:none;}
+  .brand small{font-size:12px; font-weight:600; color:var(--accent); background:var(--accent-soft); padding:3px 9px; border-radius:999px; letter-spacing:0;}
+  .chip{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--ink-soft); background:var(--surface); border:1px solid var(--border); border-radius:999px; padding:6px 12px;}
+  .chip button{padding:3px 9px; font-size:12px;}
+  .card{background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:18px; margin-bottom:14px; box-shadow:var(--shadow);}
+  .back-link{display:inline-block; font-size:13px; color:var(--ink-soft); text-decoration:none; margin-bottom:10px;}
+  .back-link:hover{color:var(--ink);}
+  .form{display:grid; gap:10px;}
+  .note{font-size:13px; color:var(--ink-soft);}
+  .err{color:var(--absent);}
+  .count{display:inline-block; margin-left:6px; font-size:12px; font-weight:700; padding:2px 9px; border-radius:999px; background:var(--accent-soft); color:var(--accent);}
+  .count.warn{background:var(--late-bg); color:var(--late);}
+  .row{display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 0; border-top:1px solid var(--border);}
+  .row:first-of-type{border-top:none;}
+  .who{display:flex; flex-direction:column; gap:2px; min-width:0;}
+  .who b{font-weight:700;}
+  .who span{font-size:13px; color:var(--ink-soft); overflow-wrap:anywhere;}
+  .empty{color:var(--ink-soft); font-size:14px; padding:6px 0;}
+  @media (max-width:520px){ .row{flex-direction:column; align-items:stretch;} .row button{width:100%;} }
+</style>
+
+<div class="app">
+  <header class="topbar">
+    <a class="brand" href="/">
+      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="10" fill="#2D5BFF"/><path d="M6 10 L20 15" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/><path d="M12 23 L26 19" stroke="#fff" stroke-opacity="0.7" stroke-width="2.6" stroke-linecap="round"/><circle cx="9" cy="6.5" r="3" fill="#FF6A3D"/></svg>
+      발명융합과학교실 <small>본사 관리자</small>
+    </a>
+    <div class="chip" id="chip" hidden></div>
+  </header>
+
+  <section id="loginCard" class="card" style="max-width:420px; margin-inline:auto;">
+    <a class="back-link" href="/">← 처음으로</a>
+    <h3 style="font-size:16px;">본사 관리자 로그인</h3>
+    <form id="loginForm" class="form">
+      <div><label for="email">이메일</label><input id="email" type="email" required autocomplete="username"></div>
+      <div><label for="password">비밀번호</label><input id="password" type="password" required autocomplete="current-password"></div>
+      <p class="note err" id="msg" hidden></p>
+      <button type="submit" class="primary" id="loginBtn">로그인</button>
+    </form>
+  </section>
+
+  <div id="body" hidden>
+    <section class="card">
+      <h3 style="font-size:16px;">승인 대기<span class="count warn" id="pendingCount">0</span></h3>
+      <div id="pendingList"></div>
+    </section>
+    <section class="card">
+      <h3 style="font-size:16px;">승인된 선생님<span class="count" id="approvedCount">0</span></h3>
+      <div id="approvedList"></div>
+    </section>
+  </div>
+</div>
+
+<script>
+(function(){
+  const db = createSupabaseDb('https://brfeszcyjsaprbakqsjl.supabase.co', 'sb_publishable_0Nsga8WVTqBcBS6kcUytrg_UB-1FtnK', { storageKey: 'ivs-admin-auth' });
+  const $ = (id) => document.getElementById(id);
+  const loginCard = $('loginCard'), body = $('body'), chip = $('chip'), msg = $('msg'), loginBtn = $('loginBtn');
+
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function showMsg(t){ msg.textContent = t; msg.hidden = !t; }
+  function fmtDate(iso){
+    const d = new Date(iso);
+    return isNaN(d) ? '' : d.getFullYear() + '.' + String(d.getMonth() + 1).padStart(2, '0') + '.' + String(d.getDate()).padStart(2, '0');
+  }
+
+  async function api(payload, token){
+    const res = await fetch('/api/admin', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify(payload) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { const e = new Error(data.error || '요청을 처리하지 못했어요.'); e.status = res.status; throw e; }
+    return data;
+  }
+  async function token(){
+    const { data: { session } } = await db.auth.getSession();
+    return session ? session.access_token : '';
+  }
+
+  $('loginForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    loginBtn.disabled = true; showMsg('');
+    try {
+      const { error } = await db.auth.signInWithPassword({ email: $('email').value.trim(), password: $('password').value });
+      if (error) throw error;
+    } catch (err) {
+      showMsg(/invalid login/i.test(String(err.message)) ? '이메일 또는 비밀번호가 맞지 않아요.' : '로그인하지 못했어요: ' + err.message);
+    } finally { loginBtn.disabled = false; }
+  });
+
+  let armedId = null, armTimer = null;
+  function rowHtml(t){
+    const sub = [t.email, t.phone, fmtDate(t.createdAt) && '신청 ' + fmtDate(t.createdAt)].filter(Boolean).map(esc).join(' · ');
+    const btn = t.approved
+      ? `<button class="ghost" data-revoke="${esc(t.id)}">승인 취소</button>`
+      : `<button class="primary" data-approve="${esc(t.id)}">승인</button>`;
+    return `<div class="row"><div class="who"><b>${esc(t.name || '(이름 없음)')}</b><span>${sub}</span></div>${btn}</div>`;
+  }
+  function render(teachers){
+    const pending = teachers.filter((t) => !t.approved);
+    const approved = teachers.filter((t) => t.approved);
+    $('pendingCount').textContent = pending.length;
+    $('approvedCount').textContent = approved.length;
+    $('pendingList').innerHTML = pending.length ? pending.map(rowHtml).join('') : '<p class="empty">승인을 기다리는 선생님이 없어요.</p>';
+    $('approvedList').innerHTML = approved.length ? approved.map(rowHtml).join('') : '<p class="empty">아직 승인된 선생님이 없어요.</p>';
+  }
+
+  async function load(){
+    const data = await api({ action: 'list' }, await token());
+    render(data.teachers);
+  }
+
+  async function setApproved(id, approved){
+    try {
+      await api({ action: 'set_approved', teacherId: id, approved }, await token());
+      await load();
+    } catch (err) { alert(err.message); }
+  }
+
+  body.addEventListener('click', (e) => {
+    const a = e.target.closest('[data-approve]');
+    if (a) { setApproved(a.dataset.approve, true); return; }
+    const r = e.target.closest('[data-revoke]');
+    if (!r) return;
+    const id = r.dataset.revoke;
+    if (armedId === id) { clearTimeout(armTimer); armedId = null; setApproved(id, false); return; }
+    armedId = id;
+    r.textContent = '한 번 더 누르면 취소돼요';
+    r.classList.add('danger-armed');
+    clearTimeout(armTimer);
+    armTimer = setTimeout(() => { armedId = null; r.textContent = '승인 취소'; r.classList.remove('danger-armed'); }, 4000);
+  });
+
+  let currentUser = null;
+  async function applySession(session){
+    if (!session) {
+      currentUser = null;
+      body.hidden = true; chip.hidden = true; loginCard.hidden = false;
+      return;
+    }
+    if (currentUser === session.user.id) return;
+    try {
+      await load();
+    } catch (err) {
+      showMsg(err.status === 403 ? '본사 관리자 계정이 아니에요.' : err.message);
+      await db.auth.signOut();
+      return;
+    }
+    currentUser = session.user.id;
+    loginCard.hidden = true; body.hidden = false;
+    chip.hidden = false;
+    chip.innerHTML = '<b>' + esc(session.user.email) + '</b> <button class="ghost" id="logout">로그아웃</button>';
+    $('logout').addEventListener('click', () => db.auth.signOut());
+    showMsg('');
+  }
+  db.auth.onAuthStateChange((event, session) => { setTimeout(() => applySession(session), 0); });
+})();
+</script>

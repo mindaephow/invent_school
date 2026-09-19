@@ -1,6 +1,6 @@
-<title>골드버그 출석부</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<title>발명융합과학교실</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="db-shim.js"></script>
@@ -55,13 +55,13 @@
   *{box-sizing:border-box;}
   body{
     background:var(--bg); color:var(--ink);
-    font-family:'Work Sans', system-ui, -apple-system, sans-serif;
+    font-family:'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif; word-break:keep-all; letter-spacing:-0.01em;
     padding-inline:16px; padding-block:18px 40px;
   }
   h1,h2,h3{margin:0 0 6px; text-wrap:balance;}
   p{margin:0 0 8px; line-height:1.5;}
   button, input, select, textarea{
-    font-family:'Work Sans', system-ui, sans-serif; font-size:14px;
+    font-family:inherit; font-size:14px;
   }
   button{
     cursor:pointer; border-radius:9px; border:1px solid var(--border);
@@ -85,11 +85,15 @@
     display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between;
     gap:10px; margin-bottom:18px;
   }
-  .brand{font-family:'Fraunces', serif; font-weight:700; font-size:26px;}
+  .brand{display:inline-flex; align-items:center; gap:10px; font-weight:800; font-size:19px; letter-spacing:-0.04em; color:inherit; text-decoration:none;}
+  .brand .logo{width:32px; height:32px; border-radius:10px; flex:none;}
+  .back-link{display:inline-block; font-size:13px; color:var(--ink-soft); text-decoration:none; margin-bottom:10px;}
+  .back-link:hover{color:var(--ink);}
   .teacher-chip{
     display:flex; align-items:center; gap:8px; font-size:13px; color:var(--ink-soft);
     background:var(--surface); border:1px solid var(--border); border-radius:999px; padding:6px 12px;
   }
+  .teacher-chip:empty{display:none;}
   .teacher-chip b{color:var(--ink); font-weight:600;}
   .teacher-chip button{padding:3px 9px; font-size:12px;}
 
@@ -124,7 +128,7 @@
 
   .day-section{padding-block:12px; border-bottom:1px solid var(--border);}
   .day-section:last-child{border-bottom:none;}
-  .day-title{font-family:'Fraunces', serif; font-size:16px; color:var(--accent); margin-bottom:10px;}
+  .day-title{font-weight:700; font-size:16px; color:var(--accent); margin-bottom:10px;}
   .day-cards{display:flex; flex-wrap:wrap; gap:10px;}
   .day-card{
     display:flex; flex-direction:column; gap:3px; align-items:flex-start; text-align:left;
@@ -165,13 +169,14 @@
 
 <div class="app">
   <header class="topbar">
-    <a class="brand" href="/" style="color:inherit; text-decoration:none;">골드버그 출석부</a>
+    <a class="brand" href="/"><svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="10" fill="#2D5BFF"/><path d="M6 10 L20 15" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/><path d="M12 23 L26 19" stroke="#fff" stroke-opacity="0.7" stroke-width="2.6" stroke-linecap="round"/><circle cx="9" cy="6.5" r="3" fill="#FF6A3D"/></svg>발명융합과학교실</a>
     <div class="teacher-chip" id="teacherChip">
       <span>불러오는 중...</span>
     </div>
   </header>
 
   <section id="authCard" class="card" hidden style="max-width:420px; margin-inline:auto;">
+    <a class="back-link" href="/">← 처음으로</a>
     <h3 id="authTitle" style="font-size:16px;">선생님 로그인</h3>
     <form id="authForm" class="add-form" style="border-top:none; padding-top:6px;">
       <div id="authNameRow" hidden><label>성함</label><input id="authName" autocomplete="name"></div>
@@ -398,6 +403,12 @@
     const info = await ensureTeacher(session.user);
     if (!info) {
       showAuthMsg('선생님 계정이 아니에요. 학생은 설계하기 화면에서 로그인해주세요.');
+      await db.auth.signOut();
+      return;
+    }
+    const { data: appr } = await db.client.from('ivs_teachers').select('approved').eq('id', session.user.id).maybeSingle();
+    if (!appr || appr.approved !== true) {
+      showAuthMsg('가입 신청이 접수되었어요. 본사에서 승인하면 사용할 수 있어요. 승인 후 다시 로그인해주세요.');
       await db.auth.signOut();
       return;
     }

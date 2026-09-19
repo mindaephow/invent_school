@@ -194,3 +194,6 @@ begin
 end $$;
 revoke all on function public.submit_assignment(uuid) from public, anon;
 grant execute on function public.submit_assignment(uuid) to authenticated;
+
+-- ============ 6. 선생님 승인제 ============
+-- 이 파일 실행 후 approval.sql도 이어서 실행할 것 (승인 컬럼 + 승인된 선생님만 수업/커리큘럼 사용 + 관리자 지정 방법).
