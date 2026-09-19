@@ -102,7 +102,9 @@
   .teacher-chip b{color:var(--ink); font-weight:600;}
   .teacher-chip button{padding:3px 9px; font-size:12px;}
 
-  .tabs{display:flex; gap:8px; margin-bottom:16px; border-bottom:1px solid var(--border);}
+  .tabs{display:flex; gap:14px; margin-bottom:16px; border-bottom:1px solid var(--border); overflow-x:auto; scrollbar-width:none;}
+  .tabs::-webkit-scrollbar{display:none;}
+  .tabs > *{flex:none; white-space:nowrap;}
   .tab-btn{
     border:none; border-radius:0; background:transparent; padding:10px 4px;
     font-weight:600; color:var(--ink-soft); border-bottom:2px solid transparent;
@@ -203,6 +205,7 @@
     <button class="tab-btn" data-tab="attend">출석부</button>
     <button class="tab-btn" data-tab="curriculum">커리큘럼</button>
     <a class="tab-btn" href="design.html" style="text-decoration:none; cursor:pointer;">설계하기</a>
+    <a class="tab-btn" id="adminLink" href="admin.html" hidden style="text-decoration:none; cursor:pointer; margin-left:auto;">본사 관리자</a>
   </nav>
 
   <section id="tab-home">
@@ -429,6 +432,7 @@
     state.teacherName = info.name;
     authCard.hidden = true;
     appBody.hidden = false;
+    document.getElementById('adminLink').hidden = !(session.user.app_metadata && session.user.app_metadata.role === 'admin');
     renderTeacherChip();
     renderHome();
     renderManage();
