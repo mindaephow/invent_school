@@ -154,6 +154,10 @@ create policy projects_teacher_read on public.ivs_projects for select to authent
   using (exists (select 1 from public.ivs_courses c where c.id = ivs_projects.course_id and c.teacher_id = auth.uid()));
 
 -- ============ 4. 권한 (anon에는 아무것도 열지 않음. 컬럼 단위로 data만 쓰기 허용) ============
+-- 서버(service_role)는 RLS는 건너뛰지만 테이블 권한은 따로 필요함 ("새 테이블 자동 공개"를 끈 프로젝트이므로)
+grant all on public.ivs_teachers, public.ivs_courses, public.ivs_students,
+  public.ivs_records, public.ivs_curriculum, public.ivs_projects to service_role;
+
 revoke all on public.ivs_teachers, public.ivs_courses, public.ivs_students,
   public.ivs_records, public.ivs_curriculum, public.ivs_projects from anon;
 

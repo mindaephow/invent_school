@@ -223,7 +223,7 @@
 
 <div class="app">
   <header class="topbar">
-    <a href="index.html" id="backLink" class="level-badge" style="text-decoration:none;">← 대시보드로</a>
+    <a href="/" id="backLink" class="level-badge" style="text-decoration:none;">← 처음으로</a>
     <div class="brand"><span class="brand-mark">⚙</span> 골드버그 클래스룸</div>
     <div class="level-badge">3D · 코어 구조 (판·기둥·직선길)</div>
   </header>
@@ -1257,14 +1257,14 @@
     project = null;
     restoreParts([]);
     projectBar.hidden = true;
-    backLink.textContent = '← 대시보드로';
+    backLink.textContent = '← 처음으로';
     startOverlay.hidden = false;
     showLoginStep(message);
     return true;
   }
 
   backLink.addEventListener('click', async (e) => {
-    if (!student) return; // 로그인 전에는 그냥 선생님 화면(대시보드)으로 이동
+    if (!student) return; // 로그인 전에는 그냥 첫 화면으로 이동
     e.preventDefault();
     const label = backLink.textContent;
     backLink.textContent = '저장 중...';
