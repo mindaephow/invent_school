@@ -64,7 +64,7 @@ const FAQ = [
   ['한 반은 몇 명까지인가요?', '인원 제한은 없으며, 진행 장소나 상황에 따라 결정됩니다.'],
   ['학생이 따로 준비할 것이 있나요? 교구와 재료는 누가 제공하나요?', '준비할 것은 없습니다. 특이사항이 없는 경우 교구와 재료는 모두 선생님이 준비합니다.'],
   ['코딩이나 과학 지식이 없어도 들을 수 있나요?', '네, 수업 특성상 사전 지식이 없어도 수업이 가능합니다.'],
-  ['분기나 학기마다 어떤 과목을 어떤 순서로 배우나요?', '항공과학, 우주과학, 과학실험, 로봇과학, 발명과학을 분기나 학기 진행 상황에 따라 골고루 진행합니다.'],
+  ['분기나 학기마다 어떤 과목을 어떤 순서로 배우나요?', '항공과학, 우주과학, 과학실험, 로봇과학, 발명과학, 생활과학을 분기나 학기 진행 상황에 따라 골고루 진행합니다.'],
   ['만든 작품은 가져갈 수 있나요?', '당일 수업에 따라 가져갈 결과물이 있기도 합니다. 다만 골드버그 장치는 부피가 커서 결과물을 분해하기 때문에 가져갈 수 없습니다.'],
   ['발표나 전시가 있나요?', '학교 일정에 따라 진행하기도 합니다.'],
   ['수업은 어떻게 신청하나요?', '방과후의 경우 학교에서 신청 안내가 나갑니다.'],
@@ -126,16 +126,60 @@ const OPS_TABS = [
   },
 ]
 
-// 과목별 내용은 강사가 알려준 만큼만 채운다. desc는 아직 자세한 내용이 오기 전의 기본 한 줄.
+// 과목별 활동은 웹에서 조사한 일반적인 방과후 수업 내용을 바탕으로 정리한 것이다(실제 수업과 다르면 수정).
 const SUBJECTS = [
-  { id: 'air', label: '항공과학', desc: '발명의 눈으로 만나는 항공과학' },
-  { id: 'space', label: '우주과학', desc: '발명의 눈으로 만나는 우주과학' },
-  { id: 'exp', label: '과학실험', desc: '발명의 눈으로 해보는 과학실험' },
-  { id: 'robot', label: '로봇과학', desc: '발명의 눈으로 만나는 로봇과학' },
+  {
+    id: 'air',
+    label: '항공과학',
+    desc: '하늘을 나는 원리를 발명의 눈으로 만나고, 직접 만들어 날려보는 수업',
+    topics: [
+      '종이비행기를 접어 날리며 날개 모양과 각도에 따라 달라지는 비행 관찰하기',
+      '글라이더와 고무동력기를 만들어 멀리, 오래 날려보기',
+      '뜨는 힘(양력)과 앞으로 나아가는 힘(추력) 알아보기',
+      '드론을 조립해보고 기본 비행 원리 체험하기',
+    ],
+  },
+  {
+    id: 'space',
+    label: '우주과학',
+    desc: '태양계에서 우주 탐사까지, 우주를 발명의 눈으로 만나는 수업',
+    topics: [
+      '공기의 힘으로 날아가는 로켓을 만들어 발사해보기',
+      '태양계 행성의 크기와 거리를 몸으로 비교해보기',
+      '별자리와 북극성을 찾아보기',
+      '우주 탐사기지를 설계하고 누리호 모형 만들어보기',
+    ],
+  },
+  {
+    id: 'exp',
+    label: '과학실험',
+    desc: '직접 보고 만지고 실험하며 원리를 알아가는 수업',
+    topics: [
+      '풍선 로켓, 낙하산, 고무줄 자동차처럼 원리가 담긴 작품 만들어보기',
+      '병 속 회오리, 용암 램프처럼 눈으로 확인하는 실험 해보기',
+      '공기, 물질의 상태 변화, 전기와 자석, 지구와 우주 등 교과와 이어지는 주제 탐구하기',
+    ],
+  },
+  {
+    id: 'robot',
+    label: '로봇과학',
+    desc: '로봇이 움직이는 원리를 배우고 내가 생각한 로봇을 만드는 수업',
+    topics: [
+      '부품을 조립해 단계별로 다양한 로봇 만들어보기',
+      '로봇의 구조와 동작 원리 익히기',
+      '미션, 경주, 배틀로 만든 로봇 시험해보기',
+      '공구 사용법과 기초 코딩을 익히고 창작 로봇 만들어보기',
+    ],
+  },
   {
     id: 'invent',
     label: '발명과학',
     desc: '발명의 눈으로 문제를 찾고 직접 만들어보는 수업',
+    topics: [
+      'SCAMPER와 더하기·빼기 기법으로 익숙한 물건 비틀어보기',
+      '브레인스토밍과 마인드맵으로 아이디어 넓히기',
+      '트리즈의 발명원리로 문제 해결 방법 배우기',
+    ],
     feature: {
       title: '대표 활동 · 골드버그 장치 만들기',
       lines: [
@@ -144,6 +188,16 @@ const SUBJECTS = [
       ],
       bullets: ['3D 공간에서 부품을 놓고 공을 굴려보기', '타공판 · 기둥 · 경첩 · ㄱ자 연결대 · 직선길', '설계한 그대로 실물로 만들어보기'],
     },
+  },
+  {
+    id: 'life',
+    label: '생활과학',
+    desc: '우리 주변 생활 속 현상에 숨은 과학 원리를 찾아보는 수업',
+    topics: [
+      '우유에 색소와 세제를 떨어뜨려 표면장력이 달라지는 모습 관찰하기',
+      '접은 종이꽃이 물에서 펼쳐지는 모세관 현상 실험하기',
+      '물질의 성질, 전기와 자석, 빛 같은 교과 개념을 생활 속 사례로 만나기',
+    ],
   },
 ]
 
@@ -154,6 +208,13 @@ const SUBJECT_TABS = SUBJECTS.map((sub) => ({
     <div className="subject-panel">
       <h3>{sub.label}</h3>
       <p className="subject-desc">{sub.desc}</p>
+      {sub.topics && (
+        <ul className="topic-list">
+          {sub.topics.map((t) => (
+            <li key={t}>{t}</li>
+          ))}
+        </ul>
+      )}
       {sub.feature && (
         <div className="subject-feature">
           <h4>{sub.feature.title}</h4>
@@ -308,6 +369,9 @@ h2{font-size:clamp(24px, 3.6vw, 32px); line-height:1.3; margin:0 0 12px; text-wr
 .tabpanel.block{display:block; padding:28px 26px;}
 .subject-panel h3{margin:0 0 6px; font-size:clamp(22px, 3.4vw, 28px);}
 .subject-desc{margin:0; color:var(--ink-soft); font-size:16px;}
+.topic-list{list-style:none; margin:20px 0 0; padding:0; display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:10px;}
+.topic-list li{position:relative; background:var(--blue-soft); border-radius:12px; padding:13px 14px 13px 38px; font-size:15px; line-height:1.55;}
+.topic-list li::before{content:"✓"; position:absolute; left:14px; top:13px; color:var(--blue); font-weight:700;}
 .subject-feature{margin-top:22px; padding:22px; border-radius:16px; background:var(--blue); color:#fff;}
 .subject-feature h4{margin:0 0 10px; font-size:18px; color:#fff;}
 .subject-feature p{margin:0 0 10px; color:rgba(255,255,255,0.92); font-size:15.5px;}
