@@ -1157,6 +1157,9 @@
   const IDLE_MS = 10 * 60 * 1000; // 10분 동안 아무 조작이 없으면 저장하고 로그아웃
   // 학생 로그인은 선생님 화면과 저장 위치를 분리하고, 탭/브라우저를 닫으면 풀리도록 sessionStorage에 둔다
   const db = createSupabaseDb(SUPABASE_URL, SUPABASE_KEY, { storageKey: 'ivs-student-auth' });
+  // 선생님 화면에서 로그인한 상태로 들어오면 선생님 로그인 정보를 이어받아 선생님 전용 프로젝트로 저장한다
+  const tdb = createSupabaseDb(SUPABASE_URL, SUPABASE_KEY, { storageKey: 'ivs-teacher-auth' });
+  let mode = 'student'; // 'student' | 'teacher'
 
   const startOverlay = document.getElementById('startOverlay');
   const startBody = document.getElementById('startBody');
@@ -1214,7 +1217,8 @@
   }
   function projectKey(){ return JSON.stringify(project.data.parts) + '|' + project.data.name; }
 
-  db.auth.onAuthStateChange((event, session) => { accessToken = session ? session.access_token : null; });
+  db.auth.onAuthStateChange((event, session) => { if (mode === 'student') accessToken = session ? session.access_token : null; });
+  tdb.auth.onAuthStateChange((event, session) => { if (mode === 'teacher') accessToken = session ? session.access_token : null; });
 
   // 화면을 닫는 중에도 보낼 수 있도록 fetch keepalive PATCH 한 가지 경로만 쓴다
   async function persist(keepalive, force){
@@ -1224,7 +1228,8 @@
     if (!force && key === lastSavedKey) return;
     project.data.updatedAt = Date.now();
     pbSave.textContent = '저장 중...';
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/ivs_projects?id=eq.${project.id}`, {
+    const table = mode === 'teacher' ? 'ivs_teacher_projects' : 'ivs_projects';
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${project.id}`, {
       method: 'PATCH',
       keepalive: !!keepalive,
       headers: {
@@ -1252,6 +1257,7 @@
       try { await persist(false); }
       catch (err) { setStatus('저장에 실패했어요. 인터넷을 확인하고 다시 눌러주세요.', 'warn'); return false; }
     }
+    if (mode === 'teacher') { window.location.href = 'index.html'; return true; }
     await db.auth.signOut();
     student = null;
     project = null;
@@ -1276,7 +1282,7 @@
     window.addEventListener(ev, () => { lastActivity = Date.now(); }, { passive: true });
   });
   setInterval(() => {
-    if (student && Date.now() - lastActivity > IDLE_MS) logout('오래 사용하지 않아서 로그아웃했어요. 작업은 저장됐어요.');
+    if (student && mode === 'student' && Date.now() - lastActivity > IDLE_MS) logout('오래 사용하지 않아서 로그아웃했어요. 작업은 저장됐어요.');
   }, 30000);
 
   function refreshSubmitBtn(){
@@ -1286,7 +1292,7 @@
   }
   let submitArmTimer = null;
   submitBtn.addEventListener('click', async () => {
-    if (!project || !student) return;
+    if (!project || !student || mode !== 'student') return;
     if (submitBtn.dataset.armed !== '1') {
       submitBtn.dataset.armed = '1';
       submitBtn.classList.add('armed');
@@ -1320,10 +1326,11 @@
     nameInput.value = data.name || '';
     restoreParts(data.parts || []);
     lastSavedKey = projectKey();
-    pbStudent.textContent = student.name + ' 학생';
+    pbStudent.textContent = student.name + (mode === 'teacher' ? ' 선생님' : ' 학생');
+    submitBtn.hidden = mode === 'teacher';
     pbSave.textContent = '';
     projectBar.hidden = false;
-    backLink.textContent = '← 저장하고 나가기';
+    backLink.textContent = mode === 'teacher' ? '← 저장하고 선생님 화면으로' : '← 저장하고 나가기';
     startOverlay.hidden = true;
     lastActivity = Date.now();
     refreshSubmitBtn();
@@ -1332,8 +1339,10 @@
 
   async function createProject(name){
     const now = Date.now();
-    const data = { studentId: student.id, name, parts: [], submitted: false, createdAt: now, updatedAt: now };
-    const ref = await db.collection('projects').add(data);
+    const data = mode === 'teacher'
+      ? { name, parts: [], createdAt: now, updatedAt: now }
+      : { studentId: student.id, name, parts: [], submitted: false, createdAt: now, updatedAt: now };
+    const ref = await (mode === 'teacher' ? tdb : db).collection(mode === 'teacher' ? 'teacherProjects' : 'projects').add(data);
     openProject(ref.id, data);
   }
 
@@ -1392,15 +1401,16 @@
   }
 
   async function showProjectStep(){
-    startBody.innerHTML = `<h2>${esc(student.name)} 학생, 안녕하세요!</h2><p class="note">불러오는 중...</p>`;
+    const honorific = mode === 'teacher' ? '선생님' : '학생';
+    startBody.innerHTML = `<h2>${esc(student.name)} ${honorific}, 안녕하세요!</h2><p class="note">불러오는 중...</p>`;
     let list = [];
     let loadErr = false;
-    const snap = await db.collection('projects').get();
+    const snap = await (mode === 'teacher' ? tdb : db).collection(mode === 'teacher' ? 'teacherProjects' : 'projects').get();
     if (snap.error) loadErr = true;
     list = snap.docs.map(d => ({ id: d.id, data: d.data() })).sort((a, b) => (b.data.updatedAt || 0) - (a.data.updatedAt || 0));
 
     startBody.innerHTML = `
-      <h2>${esc(student.name)} 학생, 안녕하세요!</h2>
+      <h2>${esc(student.name)} ${honorific}, 안녕하세요!</h2>
       <h3>새 프로젝트 만들기</h3>
       <label for="newProjName">프로젝트 이름</label>
       <input id="newProjName" maxlength="40" placeholder="프로젝트 이름을 지어주세요">
@@ -1408,7 +1418,7 @@
       <h3>이어서 작업하기</h3>
       <div class="proj-list" id="projList">${list.length ? '' : '<p class="note">아직 저장한 프로젝트가 없어요.</p>'}</div>
       <p class="err" id="startErr" ${loadErr ? '' : 'hidden'}>${loadErr ? '프로젝트를 불러오지 못했어요. 새로고침 해주세요.' : ''}</p>
-      <button id="logoutBtn" class="ghost" type="button" style="margin-top:14px; width:100%;">로그아웃</button>`;
+      <button id="logoutBtn" class="ghost" type="button" style="margin-top:14px; width:100%;">${mode === 'teacher' ? '선생님 화면으로' : '로그아웃'}</button>`;
 
     const listEl = document.getElementById('projList');
     list.forEach(p => {
@@ -1430,37 +1440,35 @@
       catch (e) { console.error(e); btn.disabled = false; errEl.hidden = false; errEl.textContent = '프로젝트를 만들지 못했어요. 잠시 뒤 다시 눌러주세요.'; }
     });
     document.getElementById('logoutBtn').addEventListener('click', async () => {
+      if (mode === 'teacher') { window.location.href = 'index.html'; return; }
       await db.auth.signOut();
       student = null;
       showLoginStep();
     });
   }
 
-  // 선생님 화면에서 로그인한 상태로 들어오면 로그인 창 없이 도구를 바로 쓴다 (학생 프로젝트 저장은 학생 계정 전용이라 저장하지 않음)
-  function teacherLoggedIn(){
-    try {
-      const t = JSON.parse(window.sessionStorage.getItem('ivs-teacher-auth') || 'null');
-      if (!t || !t.user) return false;
-      if (t.user.app_metadata && t.user.app_metadata.role === 'student') return false;
-      return !!((t.expires_at && t.expires_at * 1000 > Date.now()) || t.refresh_token);
-    } catch (e) { return false; }
-  }
-  function startTeacherMode(){
-    startOverlay.hidden = true;
-    projectBar.hidden = true;
+  // 선생님 화면에서 로그인한 상태로 들어온 경우: 학생 로그인 없이 선생님 프로젝트 화면으로
+  async function startTeacher(){
+    const { data: { session } } = await tdb.auth.getSession();
+    if (!session) return false;
+    if (session.user.app_metadata && session.user.app_metadata.role === 'student') return false;
+    const snap = await tdb.collection('teachers').get(); // 선생님 정보가 있는 계정만 보임
+    if (!snap.docs.length) return false;
+    mode = 'teacher';
+    accessToken = session.access_token;
+    student = { id: session.user.id, name: snap.docs[0].data().name || '' };
     backLink.href = 'index.html';
     backLink.textContent = '← 선생님 화면';
-    setStatus('선생님 모드예요. 여기서 만든 작업은 저장되지 않아요. 학생 계정으로 로그인하면 저장돼요.', null);
+    showProjectStep();
+    return true;
   }
 
   // 같은 탭에서 새로고침한 경우: 아직 로그인되어 있으면 바로 프로젝트 화면으로
   (async function boot(){
     const { data: { session } } = await db.auth.getSession();
-    if (session && await loadStudent()) { accessToken = session.access_token; showProjectStep(); }
-    else {
-      if (session) await db.auth.signOut();
-      if (teacherLoggedIn()) startTeacherMode(); else showLoginStep();
-    }
+    if (session && await loadStudent()) { accessToken = session.access_token; showProjectStep(); return; }
+    if (session) await db.auth.signOut();
+    if (!(await startTeacher())) showLoginStep();
   })();
 })();
 </script>
