@@ -1,0 +1,988 @@
+<title>골드버그 출석부</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#F3F5F9;
+    --surface:#FFFFFF;
+    --border:#E1E5EE;
+    --ink:#1E2433;
+    --ink-soft:#5B6478;
+    --accent:#3452C7;
+    --accent-soft:#E3E8FB;
+    --accent-ink:#FFFFFF;
+    --present:#1F8F4C;
+    --present-bg:#E4F6EA;
+    --late:#B9740E;
+    --late-bg:#FBF0DD;
+    --absent:#C23B3B;
+    --absent-bg:#FBE7E7;
+    --missing:#9AA3B5;
+    --missing-bg:#EEF0F4;
+    --shadow:0 8px 24px rgba(30,36,51,0.08);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#121722;
+      --surface:#1A2130;
+      --border:#2A3244;
+      --ink:#E9ECF4;
+      --ink-soft:#9AA3BC;
+      --accent:#7D93FF;
+      --accent-soft:#212B4A;
+      --accent-ink:#0E1220;
+      --present:#4FCB78;
+      --present-bg:#132A1D;
+      --late:#E3A63C;
+      --late-bg:#2E230E;
+      --absent:#F0716B;
+      --absent-bg:#301717;
+      --missing:#6B7690;
+      --missing-bg:#212836;
+      --shadow:0 8px 24px rgba(0,0,0,0.45);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#121722; --surface:#1A2130; --border:#2A3244; --ink:#E9ECF4; --ink-soft:#9AA3BC;
+    --accent:#7D93FF; --accent-soft:#212B4A; --accent-ink:#0E1220;
+    --present:#4FCB78; --present-bg:#132A1D; --late:#E3A63C; --late-bg:#2E230E;
+    --absent:#F0716B; --absent-bg:#301717; --missing:#6B7690; --missing-bg:#212836;
+    --shadow:0 8px 24px rgba(0,0,0,0.45);
+  }
+  *{box-sizing:border-box;}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:'Work Sans', system-ui, -apple-system, sans-serif;
+    padding-inline:16px; padding-block:18px 40px;
+  }
+  h1,h2,h3{margin:0 0 6px; text-wrap:balance;}
+  p{margin:0 0 8px; line-height:1.5;}
+  button, input, select, textarea{
+    font-family:'Work Sans', system-ui, sans-serif; font-size:14px;
+  }
+  button{
+    cursor:pointer; border-radius:9px; border:1px solid var(--border);
+    background:var(--surface); color:var(--ink); padding:9px 14px;
+  }
+  button:hover{filter:brightness(0.98);}
+  button:disabled{opacity:0.5; cursor:not-allowed;}
+  button.primary{background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:600;}
+  button.ghost{background:transparent;}
+  button.danger-armed{background:var(--absent-bg); border-color:var(--absent); color:var(--absent); font-weight:700;}
+  input, select, textarea{
+    border:1px solid var(--border); border-radius:8px; padding:8px 10px;
+    background:var(--surface); color:var(--ink); width:100%;
+  }
+  textarea{resize:vertical; font-family:inherit;}
+  input:focus, select:focus, textarea:focus, button:focus-visible{outline:2px solid var(--accent); outline-offset:1px;}
+  label{display:block; font-size:12px; color:var(--ink-soft); margin-bottom:4px; font-weight:600;}
+
+  .app{max-width:840px; margin:0 auto;}
+  .topbar{
+    display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between;
+    gap:10px; margin-bottom:18px;
+  }
+  .brand{font-family:'Fraunces', serif; font-weight:700; font-size:26px;}
+  .teacher-chip{
+    display:flex; align-items:center; gap:8px; font-size:13px; color:var(--ink-soft);
+    background:var(--surface); border:1px solid var(--border); border-radius:999px; padding:6px 12px;
+  }
+  .teacher-chip b{color:var(--ink); font-weight:600;}
+  .teacher-chip button{padding:3px 9px; font-size:12px;}
+
+  .tabs{display:flex; gap:8px; margin-bottom:16px; border-bottom:1px solid var(--border);}
+  .tab-btn{
+    border:none; border-radius:0; background:transparent; padding:10px 4px;
+    font-weight:600; color:var(--ink-soft); border-bottom:2px solid transparent;
+  }
+  .tab-btn.active{color:var(--accent); border-bottom-color:var(--accent);}
+
+  .card{
+    background:var(--surface); border:1px solid var(--border); border-radius:14px;
+    padding:18px; margin-bottom:14px; box-shadow:var(--shadow);
+  }
+  .crumbs{display:flex; flex-wrap:wrap; align-items:center; gap:6px; font-size:13px; color:var(--ink-soft); margin-bottom:14px;}
+  .crumbs button{padding:4px 10px; font-size:13px; border-radius:999px;}
+  .crumbs button.current{background:var(--accent-soft); color:var(--accent); border-color:var(--accent-soft); font-weight:600;}
+  .crumbs .sep{color:var(--border);}
+
+  .list{display:flex; flex-direction:column; gap:8px; margin-bottom:16px;}
+  .list-empty{color:var(--ink-soft); font-size:13px; padding:14px 0;}
+  .item-row{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    border:1px solid var(--border); border-radius:10px; padding:12px 14px;
+    cursor:pointer; background:var(--surface);
+  }
+  .item-row:hover{background:var(--accent-soft);}
+  .item-main{display:flex; flex-direction:column; gap:2px;}
+  .item-title{font-weight:600;}
+  .item-sub{font-size:12px; color:var(--ink-soft);}
+  .item-row .chev{color:var(--ink-soft);}
+
+  .day-section{padding-block:12px; border-bottom:1px solid var(--border);}
+  .day-section:last-child{border-bottom:none;}
+  .day-title{font-family:'Fraunces', serif; font-size:16px; color:var(--accent); margin-bottom:10px;}
+  .day-cards{display:flex; flex-wrap:wrap; gap:10px;}
+  .day-card{
+    display:flex; flex-direction:column; gap:3px; align-items:flex-start; text-align:left;
+    border:1px solid var(--border); border-radius:10px; padding:10px 14px; min-width:140px;
+    background:var(--surface);
+  }
+  .day-card:hover{background:var(--accent-soft); border-color:var(--accent);}
+
+  .add-form{display:grid; gap:10px; grid-template-columns:1fr; border-top:1px dashed var(--border); padding-top:14px;}
+  .add-form .row2{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+  .add-form .row3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;}
+  @media (max-width:480px){ .add-form .row3{grid-template-columns:1fr 1fr;} }
+  .check-group{display:flex; flex-wrap:wrap; gap:8px;}
+  .check-chip{display:flex; align-items:center; gap:5px; border:1px solid var(--border); border-radius:8px; padding:6px 10px; font-size:13px; cursor:pointer;}
+  .check-chip input{width:auto;}
+  .check-chip.checked{background:var(--accent-soft); border-color:var(--accent); color:var(--accent); font-weight:600;}
+
+  table{width:100%; border-collapse:collapse; font-size:13px;}
+  th, td{text-align:left; padding:8px 8px; border-bottom:1px solid var(--border);}
+  th{color:var(--ink-soft); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:0.03em;}
+  td.num{font-variant-numeric:tabular-nums;}
+  .table-wrap{overflow-x:auto;}
+
+  .status-btns{display:flex; gap:4px;}
+  .status-btn{padding:5px 9px; font-size:12px; border-radius:7px;}
+  .status-btn.present.active{background:var(--present-bg); border-color:var(--present); color:var(--present); font-weight:700;}
+  .status-btn.late.active{background:var(--late-bg); border-color:var(--late); color:var(--late); font-weight:700;}
+  .status-btn.absent.active{background:var(--absent-bg); border-color:var(--absent); color:var(--absent); font-weight:700;}
+
+  .pill{display:inline-block; padding:3px 9px; border-radius:999px; font-size:12px; font-weight:600;}
+  .pill.on{background:var(--present-bg); color:var(--present);}
+  .pill.off{background:var(--missing-bg); color:var(--missing);}
+
+  .session-picker{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:14px;}
+  .note{font-size:12px; color:var(--ink-soft);}
+</style>
+
+<div class="app">
+  <header class="topbar">
+    <div class="brand">골드버그 출석부</div>
+    <div class="teacher-chip" id="teacherChip">
+      <span>불러오는 중...</span>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="home">홈</button>
+    <button class="tab-btn" data-tab="manage">수업 관리</button>
+    <button class="tab-btn" data-tab="attend">출석부</button>
+    <button class="tab-btn" data-tab="curriculum">커리큘럼</button>
+    <a class="tab-btn" href="https://claude.ai/artifact/CgpMmjVAM9qA4AJo3gm8kq" style="text-decoration:none; cursor:pointer;">설계하기</a>
+  </nav>
+
+  <section id="tab-home">
+    <div class="card">
+      <p class="list-empty" id="homeEmpty">불러오는 중...</p>
+      <div id="homeDays"></div>
+    </div>
+  </section>
+
+  <section id="tab-manage" hidden>
+    <div class="card">
+      <div class="crumbs" id="crumbs"></div>
+      <div class="list" id="listArea"></div>
+    </div>
+    <div class="card">
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button type="button" class="ghost" id="toggleAddForm" style="font-weight:600;">+ 추가하기</button>
+      </div>
+      <form class="add-form" id="addForm" hidden style="margin-top:14px; border-top:none; padding-top:0;"></form>
+    </div>
+  </section>
+
+  <section id="tab-attend" hidden>
+    <div class="card">
+      <p class="note">수업을 고르면 오늘 날짜로 학생별 출석·과제·미션을 바로 체크할 수 있습니다.</p>
+      <div class="session-picker">
+        <select id="classForAttend"></select>
+        <span class="note" id="todayLabel"></span>
+      </div>
+      <div class="table-wrap">
+        <table id="attendTable">
+          <thead>
+            <tr><th>번호</th><th>이름</th><th>출석</th><th>과제</th><th>미션(진행 상황)</th></tr>
+          </thead>
+          <tbody id="attendBody"></tbody>
+        </table>
+      </div>
+      <p class="list-empty" id="attendEmpty" hidden>수업을 먼저 선택하세요.</p>
+    </div>
+
+    <div class="card" id="studentManageCard">
+      <h3 style="font-size:15px;">학생 관리</h3>
+      <p class="note">위에서 고른 수업에 학생을 추가하거나 엑셀로 한 번에 올리세요.</p>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+        <button type="button" class="ghost" id="toggleStudentForm" style="font-weight:600;">+ 학생 추가</button>
+        <button type="button" class="ghost" id="toggleBulkUpload" style="font-weight:600;">+ 엑셀로 일괄등록</button>
+      </div>
+      <form class="add-form" id="studentAddForm" hidden style="margin-top:14px; border-top:none; padding-top:0;"></form>
+      <div id="bulkUploadArea" hidden style="margin-top:14px;">
+        <p class="note">엑셀(.xlsx) 또는 CSV 파일 첫 줄에 <b>학년, 반, 번호, 이름, 전화번호, 특이사항</b> 헤더를 넣어주세요 (이름만 필수, 순서는 상관없어요).</p>
+        <input type="file" id="bulkFileInput" accept=".xlsx,.xls,.csv" style="margin:10px 0;">
+        <div id="bulkPreview"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-curriculum" hidden>
+    <div class="card">
+      <h3 style="font-size:15px;">회차 등록</h3>
+      <form id="curriculumForm" class="session-picker" style="margin-top:10px;">
+        <select id="termForCurriculum" required></select>
+        <select id="sessionForCurriculum" required></select>
+        <button type="submit" class="primary">등록</button>
+      </form>
+    </div>
+    <div class="card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>학기·분기</th><th>회차</th><th></th></tr></thead>
+          <tbody id="curriculumList"></tbody>
+        </table>
+      </div>
+      <p class="list-empty" id="curriculumEmpty" hidden>등록된 회차가 없습니다.</p>
+    </div>
+
+    <div class="card" id="curriculumDetailCard" hidden>
+      <div class="modal-head" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+        <h3 style="font-size:15px;" id="curriculumDetailTitle">회차 상세</h3>
+        <button type="button" class="ghost" id="closeCurriculumDetail">✕</button>
+      </div>
+      <form class="add-form" id="curriculumDetailForm">
+        <div><label>제목</label><input id="cd_title"></div>
+        <div><label>목표</label><input id="cd_goal"></div>
+        <div><label>날짜</label><input id="cd_date" type="date"></div>
+        <div><label>반</label><input id="cd_classLabel"></div>
+        <div><label>시수</label><input id="cd_hours" type="number" step="0.5" min="0"></div>
+        <div><label>내용</label><textarea id="cd_content" rows="4"></textarea></div>
+        <button type="submit" class="primary">저장</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button type="button" class="ghost" id="toggleCurriculumBulk" style="font-weight:600;">+ 엑셀로 일괄등록</button>
+      </div>
+      <div id="curriculumBulkArea" hidden style="margin-top:14px;">
+        <p class="note">엑셀(.xlsx) 또는 CSV 파일 첫 줄에 <b>학기(또는 분기), 회차, 제목, 목표, 날짜, 반, 시수, 내용</b> 헤더를 넣어주세요 (학기·회차만 필수, 여러 학기·분기를 한 파일에 섞어도 됩니다. 이미 있는 회차는 내용이 덮어써집니다).</p>
+        <input type="file" id="curriculumBulkFileInput" accept=".xlsx,.xls,.csv" style="margin:10px 0;">
+        <div id="curriculumBulkPreview"></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+(async function(){
+  const db = await (window.claude && window.claude.use ? window.claude.use('db') : Promise.resolve(null));
+
+  const state = {
+    teacherId: null,
+    teacherName: null,
+    nav: [], // breadcrumb stack: {level, id, label}
+  };
+
+  function loadLocalTeacher(){
+    try {
+      const raw = localStorage.getItem('gb_teacher');
+      if (raw) return JSON.parse(raw);
+    } catch(e){}
+    return null;
+  }
+  function saveLocalTeacher(t){
+    try { localStorage.setItem('gb_teacher', JSON.stringify(t)); } catch(e){}
+  }
+
+  const teacherChip = document.getElementById('teacherChip');
+  function renderTeacherChip(){
+    if (!state.teacherId) {
+      teacherChip.innerHTML = `
+        <input id="teacherNameInput" placeholder="선생님 성함" style="width:100px;">
+        <input id="teacherPhoneInput" placeholder="전화번호" style="width:120px;">
+        <button id="teacherLoginBtn" class="primary">등록/시작</button>
+      `;
+      document.getElementById('teacherLoginBtn').addEventListener('click', registerTeacher);
+      return;
+    }
+    teacherChip.innerHTML = `<span>선생님</span> <b>${escapeHtml(state.teacherName)}</b> <button id="switchTeacherBtn" class="ghost">전환</button>`;
+    document.getElementById('switchTeacherBtn').addEventListener('click', () => {
+      state.teacherId = null; state.teacherName = null; state.nav = [];
+      saveLocalTeacher(null);
+      renderTeacherChip();
+      renderManage();
+      renderHome();
+    });
+  }
+
+  async function registerTeacher(){
+    const name = (document.getElementById('teacherNameInput').value || '').trim();
+    const phone = (document.getElementById('teacherPhoneInput').value || '').trim();
+    if (!name || !phone) { alert('성함과 전화번호를 모두 입력해주세요.'); return; }
+    if (!db) { alert('데이터 저장 기능을 불러오지 못했습니다. 새로고침해보세요.'); return; }
+    const ref = await db.collection('teachers').add({ name, phone, createdAt: Date.now() });
+    state.teacherId = ref.id;
+    state.teacherName = name;
+    saveLocalTeacher({ id: ref.id, name });
+    renderTeacherChip();
+    renderManage();
+    renderHome();
+    populateAttendClassPicker();
+  }
+
+  function escapeHtml(s){
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // native confirm() can be blocked inside this sandbox, so delete buttons arm on first
+  // click ("정말 삭제?") and only act on a second click within a few seconds.
+  function armDeleteButton(btn, onConfirm){
+    if (btn.dataset.armed === '1') {
+      clearTimeout(btn._armTimer);
+      btn.dataset.armed = '0';
+      btn.textContent = '삭제';
+      btn.classList.remove('danger-armed');
+      onConfirm();
+      return;
+    }
+    btn.dataset.armed = '1';
+    btn.textContent = '정말 삭제?';
+    btn.classList.add('danger-armed');
+    btn._armTimer = setTimeout(() => {
+      btn.dataset.armed = '0';
+      btn.textContent = '삭제';
+      btn.classList.remove('danger-armed');
+    }, 3000);
+  }
+
+  // ---------- navigation model: teacher -> courses(학교/요일/분기/반 포함) -> students ----------
+  const DAYS = ['월', '화', '수', '목', '금', '토', '일'];
+  const SECTIONS = ['A반', 'B반', 'C반', 'D반'];
+  const TERMS = ['1학기', '2학기', '1분기', '2분기', '3분기', '4분기'];
+  const LEVELS = [
+    { key: 'course', label: '수업', parentKey: 'teacher', collection: 'courses', parentField: 'teacherId', fields: [
+      {k:'name', label:'수업 이름', type:'text', required:true},
+      {k:'school', label:'학교', type:'text', required:true},
+      {k:'day', label:'요일', type:'select', options: DAYS, required:true},
+      {k:'term', label:'분기 또는 학기', type:'select', options: TERMS, required:true},
+      {k:'section', label:'반 (여러 개 선택 시 반마다 수업이 각각 생성됩니다)', type:'multiselect', options: SECTIONS, required:true}
+    ]},
+    { key: 'student', label: '학생', parentKey: 'course', collection: 'students', parentField: 'courseId', fields: [
+      {k:'grade', label:'학년', type:'text'},
+      {k:'classLabel', label:'반', type:'text'},
+      {k:'number', label:'번호', type:'text'},
+      {k:'name', label:'이름', type:'text', required:true},
+      {k:'phone', label:'전화번호', type:'text'},
+      {k:'notes', label:'특이사항', type:'textarea'}
+    ]}
+  ];
+
+  function currentLevelIndex(){ return state.nav.length; } // 0 = courses list (root), up to 4 = students list
+
+  const crumbsEl = document.getElementById('crumbs');
+  const listEl = document.getElementById('listArea');
+  const formEl = document.getElementById('addForm');
+  const toggleAddFormBtn = document.getElementById('toggleAddForm');
+  let addLabel = '+ 추가하기';
+  toggleAddFormBtn.addEventListener('click', () => {
+    formEl.hidden = !formEl.hidden;
+    toggleAddFormBtn.textContent = formEl.hidden ? addLabel : '숨기기';
+  });
+
+  // ---------- 출석부 tab: add a single student to the selected course ----------
+  const STUDENT_FIELDS = LEVELS[1].fields;
+  const studentFormEl = document.getElementById('studentAddForm');
+  const toggleStudentFormBtn = document.getElementById('toggleStudentForm');
+  toggleStudentFormBtn.addEventListener('click', () => {
+    studentFormEl.hidden = !studentFormEl.hidden;
+    toggleStudentFormBtn.textContent = studentFormEl.hidden ? '+ 학생 추가' : '숨기기';
+  });
+  function renderFieldControl(f, prefix){
+    prefix = prefix || 'sf';
+    if (f.type === 'select') {
+      return `<select id="${prefix}_${f.k}" ${f.required ? 'required' : ''}><option value="">선택</option>${f.options.map(o => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('')}</select>`;
+    }
+    if (f.type === 'textarea') return `<textarea id="${prefix}_${f.k}" rows="2" ${f.required ? 'required' : ''}></textarea>`;
+    return `<input id="${prefix}_${f.k}" ${f.required ? 'required' : ''}>`;
+  }
+  studentFormEl.innerHTML = `<h3 style="font-size:14px;">학생 추가</h3>` +
+    STUDENT_FIELDS.map(f => `<div><label>${f.label}</label>${renderFieldControl(f)}</div>`).join('') +
+    `<button type="submit" class="primary">추가</button>`;
+  studentFormEl.onsubmit = async (e) => {
+    e.preventDefault();
+    if (!db || !classForAttend.value) { alert('먼저 위에서 수업을 선택하세요.'); return; }
+    const body = { courseId: classForAttend.value, createdAt: Date.now() };
+    let ok = true;
+    STUDENT_FIELDS.forEach(f => {
+      const v = (document.getElementById('sf_' + f.k).value || '').trim();
+      if (f.required && !v) ok = false;
+      body[f.k] = v;
+    });
+    if (!ok) return;
+    await db.collection('students').add(body);
+    studentFormEl.reset();
+    studentFormEl.hidden = true;
+    toggleStudentFormBtn.textContent = '+ 학생 추가';
+    renderAttendTable();
+  };
+
+  // ---------- bulk student upload (Excel/CSV) ----------
+  const toggleBulkBtn = document.getElementById('toggleBulkUpload');
+  const bulkArea = document.getElementById('bulkUploadArea');
+  const bulkFileInput = document.getElementById('bulkFileInput');
+  const bulkPreview = document.getElementById('bulkPreview');
+  let bulkParsedRows = [];
+  let bulkCourseId = null;
+
+  toggleBulkBtn.addEventListener('click', () => {
+    bulkArea.hidden = !bulkArea.hidden;
+    toggleBulkBtn.textContent = bulkArea.hidden ? '+ 엑셀로 일괄등록' : '숨기기';
+  });
+
+  const FIELD_ALIASES = {
+    grade: ['학년'],
+    classLabel: ['반'],
+    number: ['번호', '번'],
+    name: ['이름', '성명'],
+    phone: ['전화번호', '연락처', '전화'],
+    notes: ['특이사항', '비고']
+  };
+  function rowToStudent(row){
+    const out = {};
+    Object.keys(FIELD_ALIASES).forEach(key => {
+      let v = '';
+      for (const alias of FIELD_ALIASES[key]) {
+        if (row[alias] !== undefined && row[alias] !== null && String(row[alias]).trim() !== '') { v = String(row[alias]).trim(); break; }
+      }
+      out[key] = v;
+    });
+    return out;
+  }
+
+  bulkFileInput.addEventListener('change', () => {
+    const file = bulkFileInput.files[0];
+    bulkPreview.innerHTML = '';
+    bulkParsedRows = [];
+    if (!file || typeof XLSX === 'undefined') return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      bulkParsedRows = rows.map(rowToStudent).filter(s => s.name);
+      if (bulkParsedRows.length === 0) {
+        bulkPreview.innerHTML = '<p class="note">읽을 수 있는 학생 행이 없습니다. 헤더(학년/반/번호/이름/전화번호/특이사항)와 이름 칸을 확인해주세요.</p>';
+        return;
+      }
+      bulkPreview.innerHTML = `
+        <div class="table-wrap"><table><thead><tr><th>학년</th><th>반</th><th>번호</th><th>이름</th><th>전화번호</th><th>특이사항</th></tr></thead>
+        <tbody>${bulkParsedRows.map(s => `<tr><td>${escapeHtml(s.grade)}</td><td>${escapeHtml(s.classLabel)}</td><td>${escapeHtml(s.number)}</td><td>${escapeHtml(s.name)}</td><td>${escapeHtml(s.phone)}</td><td>${escapeHtml(s.notes)}</td></tr>`).join('')}</tbody></table></div>
+        <p class="note">${bulkParsedRows.length}명 인식됨.</p>
+        <button type="button" class="primary" id="bulkConfirmBtn" style="margin-top:8px;">이 ${bulkParsedRows.length}명 등록하기</button>
+      `;
+      document.getElementById('bulkConfirmBtn').addEventListener('click', async () => {
+        if (!db || !bulkCourseId) return;
+        const btn = document.getElementById('bulkConfirmBtn');
+        btn.disabled = true;
+        btn.textContent = '등록 중...';
+        for (const s of bulkParsedRows) {
+          await db.collection('students').add(Object.assign({}, s, { courseId: bulkCourseId, createdAt: Date.now() }));
+        }
+        bulkFileInput.value = '';
+        bulkPreview.innerHTML = '';
+        bulkParsedRows = [];
+        bulkArea.hidden = true;
+        toggleBulkBtn.textContent = '+ 엑셀로 일괄등록';
+        renderAttendTable();
+      });
+    };
+    reader.readAsArrayBuffer(file);
+  });
+
+  function renderCrumbs(){
+    let html = `<button class="${state.nav.length===0?'current':''}" data-nav="-1">${escapeHtml(state.teacherName||'수업')} 홈</button>`;
+    state.nav.forEach((n, i) => {
+      html += `<span class="sep">›</span><button class="${i===state.nav.length-1?'current':''}" data-nav="${i}">${escapeHtml(n.label)}</button>`;
+    });
+    crumbsEl.innerHTML = html;
+    crumbsEl.querySelectorAll('button').forEach(b => {
+      b.addEventListener('click', () => {
+        const idx = Number(b.dataset.nav);
+        state.nav = idx < 0 ? [] : state.nav.slice(0, idx + 1);
+        renderManage();
+      });
+    });
+  }
+
+  async function renderManage(){
+    renderCrumbs();
+    listEl.innerHTML = '<p class="list-empty">불러오는 중...</p>';
+    formEl.innerHTML = '';
+    formEl.hidden = true;
+    if (!state.teacherId) {
+      listEl.innerHTML = '<p class="list-empty">먼저 위에서 선생님 성함을 등록해주세요.</p>';
+      return;
+    }
+    if (!db) {
+      listEl.innerHTML = '<p class="list-empty">데이터 저장 기능을 사용할 수 없습니다.</p>';
+      return;
+    }
+    const levelIdx = currentLevelIndex();
+    const level = LEVELS[levelIdx];
+    const parentId = levelIdx === 0 ? state.teacherId : state.nav[levelIdx - 1].id;
+
+    addLabel = `+ ${level.label} 추가`;
+    toggleAddFormBtn.textContent = addLabel;
+
+    const snap = await db.collection(level.collection).where(level.parentField, '==', parentId).get();
+    if (snap.empty) {
+      listEl.innerHTML = `<p class="list-empty">등록된 ${level.label}이(가) 없습니다. 아래 "+ ${level.label} 추가" 버튼으로 추가하세요.</p>`;
+    } else {
+      listEl.innerHTML = '';
+      snap.docs.forEach(doc => {
+        const d = doc.data();
+        const row = document.createElement('div');
+        row.className = 'item-row';
+        const sub = level.key === 'course' ? [d.school, d.section, d.day ? (d.day + '요일') : '', d.term].filter(Boolean).join(' · ')
+          : level.key === 'student' ? [d.grade, d.classLabel, d.number ? (d.number + '번') : '', d.phone].filter(Boolean).join(' · ')
+          : '';
+        row.innerHTML = `<div class="item-main"><span class="item-title">${escapeHtml(d.name)}</span>${sub ? `<span class="item-sub">${escapeHtml(sub)}</span>` : ''}</div><button type="button" class="ghost" data-del style="padding:4px 9px; font-size:12px;">삭제</button>`;
+        row.querySelector('[data-del]').addEventListener('click', (e) => {
+          e.stopPropagation();
+          armDeleteButton(e.currentTarget, async () => {
+            await db.collection(level.collection).doc(doc.id).delete();
+            renderManage();
+            populateAttendClassPicker();
+          });
+        });
+        listEl.appendChild(row);
+      });
+    }
+
+    // add-form for this level
+    const parentContext = levelIdx > 0 ? `<p class="note" style="margin-bottom:10px;">${escapeHtml(state.nav[levelIdx - 1].label)} 아래에 추가합니다</p>` : '';
+    formEl.innerHTML = `<h3 style="font-size:14px;">${level.label} 추가</h3>` + parentContext +
+      level.fields.map(f => {
+        let control;
+        if (f.type === 'select') {
+          control = `<select id="f_${f.k}" ${f.required ? 'required' : ''}><option value="">선택</option>${f.options.map(o => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('')}</select>`;
+        } else if (f.type === 'multiselect') {
+          control = `<div class="check-group" id="f_${f.k}">${f.options.map(o => `
+            <label class="check-chip"><input type="checkbox" value="${escapeHtml(o)}">${escapeHtml(o)}</label>
+          `).join('')}</div>`;
+        } else if (f.type === 'textarea') {
+          control = `<textarea id="f_${f.k}" rows="2" ${f.required ? 'required' : ''}></textarea>`;
+        } else {
+          control = `<input id="f_${f.k}" ${f.required ? 'required' : ''}>`;
+        }
+        return `<div><label>${f.label}</label>${control}</div>`;
+      }).join('') +
+      `<button type="submit" class="primary">추가</button>`;
+    formEl.querySelectorAll('.check-chip input').forEach(cb => {
+      cb.addEventListener('change', () => cb.closest('.check-chip').classList.toggle('checked', cb.checked));
+    });
+    formEl.onsubmit = async (e) => {
+      e.preventDefault();
+      const baseBody = { [level.parentField]: parentId, createdAt: Date.now() };
+      let ok = true;
+      let multiField = null, multiValues = [];
+      level.fields.forEach(f => {
+        if (f.type === 'multiselect') {
+          const checked = Array.from(document.querySelectorAll(`#f_${f.k} input:checked`)).map(cb => cb.value);
+          if (f.required && checked.length === 0) ok = false;
+          multiField = f.k;
+          multiValues = checked;
+        } else {
+          const v = (document.getElementById('f_' + f.k).value || '').trim();
+          if (f.required && !v) ok = false;
+          baseBody[f.k] = v;
+        }
+      });
+      if (!ok) return;
+      if (multiField) {
+        for (const val of multiValues) {
+          await db.collection(level.collection).add(Object.assign({}, baseBody, { [multiField]: val }));
+        }
+      } else {
+        await db.collection(level.collection).add(baseBody);
+      }
+      renderManage();
+      if (level.key === 'course' || level.key === 'student') populateAttendClassPicker();
+    };
+  }
+
+  // ---------- attendance tab ----------
+  const classForAttend = document.getElementById('classForAttend');
+  const attendBody = document.getElementById('attendBody');
+  const attendEmpty = document.getElementById('attendEmpty');
+
+  async function populateAttendClassPicker(){
+    classForAttend.innerHTML = '<option value="">수업 선택</option>';
+    if (!db || !state.teacherId) return;
+    const courseSnap = await db.collection('courses').where('teacherId', '==', state.teacherId).get();
+    courseSnap.docs.forEach(c => {
+      const d = c.data();
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = `${d.name} (${[d.school, d.section, d.day ? d.day+'요일' : ''].filter(Boolean).join(' · ')})`;
+      classForAttend.appendChild(opt);
+    });
+  }
+
+  const TODAY_STR = new Date().toISOString().slice(0, 10);
+  document.getElementById('todayLabel').textContent = `오늘(${TODAY_STR}) 출석`;
+
+  classForAttend.addEventListener('change', async () => {
+    renderAttendTable();
+    bulkCourseId = classForAttend.value;
+    bulkArea.hidden = true;
+    bulkPreview.innerHTML = '';
+    bulkFileInput.value = '';
+    bulkParsedRows = [];
+    toggleBulkBtn.textContent = '+ 엑셀로 일괄등록';
+    studentFormEl.hidden = true;
+    toggleStudentFormBtn.textContent = '+ 학생 추가';
+  });
+
+  async function openAttendanceFor(courseId){
+    document.querySelector('.tab-btn[data-tab="attend"]').click();
+    classForAttend.value = courseId;
+    bulkCourseId = courseId;
+    renderAttendTable();
+  }
+
+  async function renderAttendTable(){
+    const courseId = classForAttend.value;
+    if (!db || !courseId) {
+      attendBody.innerHTML = '';
+      attendEmpty.hidden = false;
+      return;
+    }
+    attendEmpty.hidden = true;
+    const studentsSnap = await db.collection('students').where('courseId', '==', courseId).get();
+    const recordsSnap = await db.collection('records').where('courseId', '==', courseId).where('date', '==', TODAY_STR).get();
+    const recordByStudent = {};
+    recordsSnap.docs.forEach(r => { recordByStudent[r.data().studentId] = { id: r.id, ...r.data() }; });
+
+    attendBody.innerHTML = '';
+    studentsSnap.docs
+      .sort((a,b) => (a.data().number||'').localeCompare(b.data().number||'', undefined, {numeric:true}))
+      .forEach(s => {
+      const d = s.data();
+      const rec = recordByStudent[s.id] || {};
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="num">${escapeHtml(d.number || '')}</td>
+        <td>${escapeHtml(d.name)}</td>
+        <td>
+          <div class="status-btns">
+            <button type="button" class="status-btn present ${rec.attendance==='present'?'active':''}" data-status="present">출석</button>
+            <button type="button" class="status-btn late ${rec.attendance==='late'?'active':''}" data-status="late">지각</button>
+            <button type="button" class="status-btn absent ${rec.attendance==='absent'?'active':''}" data-status="absent">결석</button>
+          </div>
+        </td>
+        <td><button type="button" class="pill ${rec.assignment==='submitted'?'on':'off'}" data-assign>${rec.assignment==='submitted'?'제출함':'미제출'}</button></td>
+        <td><input type="text" value="${escapeHtml(rec.mission || '')}" data-mission placeholder="예: Lv.2 진행중"></td>
+      `;
+      const saveRecord = async (patch) => {
+        const body = Object.assign({ date: TODAY_STR, studentId: s.id, courseId, updatedAt: Date.now() }, patch);
+        if (rec.id) await db.collection('records').doc(rec.id).update(patch);
+        else {
+          const ref = await db.collection('records').add(body);
+          rec.id = ref.id;
+        }
+      };
+      tr.querySelectorAll('[data-status]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          tr.querySelectorAll('[data-status]').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          rec.attendance = btn.dataset.status;
+          saveRecord({ attendance: btn.dataset.status });
+        });
+      });
+      const assignBtn = tr.querySelector('[data-assign]');
+      assignBtn.addEventListener('click', () => {
+        const next = rec.assignment === 'submitted' ? 'missing' : 'submitted';
+        rec.assignment = next;
+        assignBtn.textContent = next === 'submitted' ? '제출함' : '미제출';
+        assignBtn.className = 'pill ' + (next === 'submitted' ? 'on' : 'off');
+        saveRecord({ assignment: next });
+      });
+      const missionInput = tr.querySelector('[data-mission]');
+      let missionTimer = null;
+      missionInput.addEventListener('input', () => {
+        clearTimeout(missionTimer);
+        missionTimer = setTimeout(() => saveRecord({ mission: missionInput.value }), 500);
+      });
+      attendBody.appendChild(tr);
+    });
+  }
+
+  // ---------- home tab: courses grouped by day, Mon first ----------
+  const homeEmpty = document.getElementById('homeEmpty');
+  const homeDays = document.getElementById('homeDays');
+
+  async function renderHome(){
+    homeDays.innerHTML = '';
+    if (!state.teacherId) { homeEmpty.hidden = false; homeEmpty.textContent = '먼저 위에서 선생님 성함을 등록해주세요.'; return; }
+    if (!db) { homeEmpty.hidden = false; homeEmpty.textContent = '데이터 저장 기능을 사용할 수 없습니다.'; return; }
+    const snap = await db.collection('courses').where('teacherId', '==', state.teacherId).get();
+    if (snap.empty) { homeEmpty.hidden = false; homeEmpty.textContent = '등록된 수업이 없습니다. "수업 관리"에서 추가하세요.'; return; }
+    homeEmpty.hidden = true;
+    const byDay = {};
+    DAYS.forEach(d => byDay[d] = []);
+    const noDay = [];
+    snap.docs.forEach(doc => {
+      const d = doc.data();
+      (byDay[d.day] || noDay).push({ id: doc.id, ...d });
+    });
+    const sections = DAYS.map(d => [d, byDay[d]]);
+    if (noDay.length) sections.push(['요일 미지정', noDay]);
+    homeDays.innerHTML = sections.map(([day, courses]) => `
+      <div class="day-section">
+        <h3 class="day-title">${escapeHtml(day)}</h3>
+        <div class="day-cards">
+          ${courses.length ? courses.map(c => `
+            <button type="button" class="day-card" data-course-id="${c.id}" data-course-label="${escapeHtml([c.name, [c.school, c.section, c.term].filter(Boolean).join(' · ')].filter(Boolean).join(' / '))}">
+              <span class="item-title">${escapeHtml(c.name)}</span>
+              <span class="item-sub">${escapeHtml([c.school, c.section, c.term].filter(Boolean).join(' · '))}</span>
+            </button>
+          `).join('') : `<span class="note">수업 없음</span>`}
+        </div>
+      </div>
+    `).join('');
+    homeDays.querySelectorAll('.day-card').forEach(card => {
+      card.addEventListener('click', () => {
+        openAttendanceFor(card.dataset.courseId);
+      });
+    });
+  }
+
+  // ---------- curriculum tab: 학기/분기 선택 + 회차 선택 + 등록 ----------
+  const SESSION_NUMBERS = Array.from({ length: 24 }, (_, i) => String(i + 1));
+  const termForCurriculum = document.getElementById('termForCurriculum');
+  const sessionForCurriculum = document.getElementById('sessionForCurriculum');
+  const curriculumForm = document.getElementById('curriculumForm');
+  const curriculumList = document.getElementById('curriculumList');
+  const curriculumEmpty = document.getElementById('curriculumEmpty');
+
+  termForCurriculum.innerHTML = '<option value="">학기·분기</option>' + TERMS.map(t => `<option value="${t}">${t}</option>`).join('');
+  sessionForCurriculum.innerHTML = '<option value="">총 회차 수</option>' + SESSION_NUMBERS.map(n => `<option value="${n}">${n}회</option>`).join('');
+
+  curriculumForm.onsubmit = async (e) => {
+    e.preventDefault();
+    if (!db || !state.teacherId) return;
+    const term = termForCurriculum.value;
+    const totalSessions = Number(sessionForCurriculum.value) || 0;
+    if (!term || !totalSessions) { alert('학기·분기와 총 회차 수를 모두 선택하세요.'); return; }
+    const existingSnap = await db.collection('curriculum').where('teacherId', '==', state.teacherId).where('term', '==', term).get();
+    const existingSessions = new Set(existingSnap.docs.map(d => d.data().session));
+    for (let n = 1; n <= totalSessions; n++) {
+      if (existingSessions.has(n)) continue;
+      await db.collection('curriculum').add({ teacherId: state.teacherId, term, session: n, createdAt: Date.now() });
+    }
+    sessionForCurriculum.value = '';
+    renderCurriculumList();
+  };
+
+  async function renderCurriculumList(){
+    curriculumList.innerHTML = '';
+    if (!db || !state.teacherId) return;
+    const snap = await db.collection('curriculum').where('teacherId', '==', state.teacherId).get();
+    curriculumEmpty.hidden = !snap.empty;
+    if (snap.empty) return;
+    const byTerm = {};
+    snap.docs.forEach(doc => {
+      const term = doc.data().term;
+      (byTerm[term] = byTerm[term] || []).push(doc);
+    });
+    const terms = Object.keys(byTerm).sort((a, b) => TERMS.indexOf(a) - TERMS.indexOf(b));
+    terms.forEach(term => {
+      const groupTr = document.createElement('tr');
+      groupTr.innerHTML = `<td colspan="2" style="font-weight:700;">${escapeHtml(term)}</td><td><button type="button" class="ghost" data-del-term style="padding:4px 9px; font-size:12px;">이 학기·분기 전체 삭제</button></td>`;
+      groupTr.style.background = 'var(--accent-soft)';
+      groupTr.querySelector('[data-del-term]').addEventListener('click', (e) => {
+        armDeleteButton(e.currentTarget, async () => {
+          for (const doc of byTerm[term]) {
+            await db.collection('curriculum').doc(doc.id).delete();
+          }
+          renderCurriculumList();
+        });
+      });
+      curriculumList.appendChild(groupTr);
+
+      byTerm[term]
+        .slice()
+        .sort((a, b) => (a.data().session || 0) - (b.data().session || 0))
+        .forEach(doc => {
+          const d = doc.data();
+          const tr = document.createElement('tr');
+          tr.style.cursor = 'pointer';
+          tr.innerHTML = `<td></td><td class="num">${escapeHtml(d.session)}회차${d.title ? ` · ${escapeHtml(d.title)}` : ''}</td><td><button type="button" class="ghost" data-del style="padding:4px 9px; font-size:12px;">삭제</button></td>`;
+          tr.addEventListener('click', () => openCurriculumDetail(doc.id, d));
+          tr.querySelector('[data-del]').addEventListener('click', (e) => {
+            e.stopPropagation();
+            armDeleteButton(e.currentTarget, async () => {
+              await db.collection('curriculum').doc(doc.id).delete();
+              renderCurriculumList();
+            });
+          });
+          curriculumList.appendChild(tr);
+        });
+    });
+  }
+
+  // ---------- curriculum session detail: 제목/목표/날짜/반/내용 ----------
+  const curriculumDetailCard = document.getElementById('curriculumDetailCard');
+  const curriculumDetailTitle = document.getElementById('curriculumDetailTitle');
+  const curriculumDetailForm = document.getElementById('curriculumDetailForm');
+  let curriculumDetailDocId = null;
+
+  function openCurriculumDetail(docId, d){
+    curriculumDetailDocId = docId;
+    curriculumDetailTitle.textContent = `${d.term} · ${d.session}회차`;
+    document.getElementById('cd_title').value = d.title || '';
+    document.getElementById('cd_goal').value = d.goal || '';
+    document.getElementById('cd_date').value = d.date || '';
+    document.getElementById('cd_classLabel').value = d.classLabel || '';
+    document.getElementById('cd_hours').value = d.hours || '';
+    document.getElementById('cd_content').value = d.content || '';
+    curriculumDetailCard.hidden = false;
+    curriculumDetailCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+  document.getElementById('closeCurriculumDetail').addEventListener('click', () => {
+    curriculumDetailCard.hidden = true;
+    curriculumDetailDocId = null;
+  });
+  curriculumDetailForm.onsubmit = async (e) => {
+    e.preventDefault();
+    if (!db || !curriculumDetailDocId) return;
+    await db.collection('curriculum').doc(curriculumDetailDocId).update({
+      title: document.getElementById('cd_title').value.trim(),
+      goal: document.getElementById('cd_goal').value.trim(),
+      date: document.getElementById('cd_date').value,
+      classLabel: document.getElementById('cd_classLabel').value.trim(),
+      hours: Number(document.getElementById('cd_hours').value) || 0,
+      content: document.getElementById('cd_content').value.trim()
+    });
+    curriculumDetailCard.hidden = true;
+    curriculumDetailDocId = null;
+    renderCurriculumList();
+  };
+
+  // ---------- curriculum bulk upload (Excel/CSV): one row = one 회차, any 학기·분기 mixed ----------
+  const toggleCurriculumBulkBtn = document.getElementById('toggleCurriculumBulk');
+  const curriculumBulkArea = document.getElementById('curriculumBulkArea');
+  const curriculumBulkFileInput = document.getElementById('curriculumBulkFileInput');
+  const curriculumBulkPreview = document.getElementById('curriculumBulkPreview');
+  let curriculumBulkRows = [];
+
+  toggleCurriculumBulkBtn.addEventListener('click', () => {
+    curriculumBulkArea.hidden = !curriculumBulkArea.hidden;
+    toggleCurriculumBulkBtn.textContent = curriculumBulkArea.hidden ? '+ 엑셀로 일괄등록' : '숨기기';
+  });
+
+  const CURRICULUM_ALIASES = {
+    term: ['학기', '분기', '학기·분기', '학기분기'],
+    session: ['회차'],
+    title: ['제목', '주제'],
+    goal: ['목표'],
+    date: ['날짜'],
+    classLabel: ['반'],
+    hours: ['시수'],
+    content: ['내용', '수업내용']
+  };
+  function rowToCurriculum(row){
+    const out = {};
+    Object.keys(CURRICULUM_ALIASES).forEach(key => {
+      let v = '';
+      for (const alias of CURRICULUM_ALIASES[key]) {
+        if (row[alias] !== undefined && row[alias] !== null && String(row[alias]).trim() !== '') { v = String(row[alias]).trim(); break; }
+      }
+      out[key] = v;
+    });
+    return out;
+  }
+
+  curriculumBulkFileInput.addEventListener('change', () => {
+    const file = curriculumBulkFileInput.files[0];
+    curriculumBulkPreview.innerHTML = '';
+    curriculumBulkRows = [];
+    if (!file || typeof XLSX === 'undefined') return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      curriculumBulkRows = rows.map(rowToCurriculum).filter(r => r.term && r.session);
+      if (curriculumBulkRows.length === 0) {
+        curriculumBulkPreview.innerHTML = '<p class="note">읽을 수 있는 회차 행이 없습니다. 헤더와 학기·회차 칸을 확인해주세요.</p>';
+        return;
+      }
+      curriculumBulkPreview.innerHTML = `
+        <div class="table-wrap"><table><thead><tr><th>학기·분기</th><th>회차</th><th>제목</th><th>목표</th><th>날짜</th><th>반</th><th>시수</th></tr></thead>
+        <tbody>${curriculumBulkRows.map(r => `<tr><td>${escapeHtml(r.term)}</td><td>${escapeHtml(r.session)}</td><td>${escapeHtml(r.title)}</td><td>${escapeHtml(r.goal)}</td><td>${escapeHtml(r.date)}</td><td>${escapeHtml(r.classLabel)}</td><td>${escapeHtml(r.hours)}</td></tr>`).join('')}</tbody></table></div>
+        <p class="note">${curriculumBulkRows.length}개 회차 인식됨. 이미 있는 (학기·회차) 조합은 내용이 덮어써집니다.</p>
+        <button type="button" class="primary" id="curriculumBulkConfirmBtn" style="margin-top:8px;">이 ${curriculumBulkRows.length}개 등록하기</button>
+      `;
+      document.getElementById('curriculumBulkConfirmBtn').addEventListener('click', async () => {
+        if (!db || !state.teacherId) return;
+        const btn = document.getElementById('curriculumBulkConfirmBtn');
+        btn.disabled = true;
+        btn.textContent = '등록 중...';
+        const existingSnap = await db.collection('curriculum').where('teacherId', '==', state.teacherId).get();
+        const existingByKey = {};
+        existingSnap.docs.forEach(doc => { existingByKey[doc.data().term + '|' + doc.data().session] = doc.id; });
+        for (const r of curriculumBulkRows) {
+          const session = Number(r.session) || 0;
+          if (!session) continue;
+          const key = r.term + '|' + session;
+          const body = {
+            teacherId: state.teacherId, term: r.term, session,
+            title: r.title, goal: r.goal, date: r.date, classLabel: r.classLabel,
+            hours: Number(r.hours) || 0, content: r.content
+          };
+          if (existingByKey[key]) await db.collection('curriculum').doc(existingByKey[key]).update(body);
+          else await db.collection('curriculum').add(Object.assign(body, { createdAt: Date.now() }));
+        }
+        curriculumBulkFileInput.value = '';
+        curriculumBulkPreview.innerHTML = '';
+        curriculumBulkRows = [];
+        curriculumBulkArea.hidden = true;
+        toggleCurriculumBulkBtn.textContent = '+ 엑셀로 일괄등록';
+        renderCurriculumList();
+      });
+    };
+    reader.readAsArrayBuffer(file);
+  });
+
+  // ---------- tabs ----------
+  document.querySelectorAll('button.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('button.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
+      document.getElementById('tab-home').hidden = btn.dataset.tab !== 'home';
+      document.getElementById('tab-manage').hidden = btn.dataset.tab !== 'manage';
+      document.getElementById('tab-attend').hidden = btn.dataset.tab !== 'attend';
+      document.getElementById('tab-curriculum').hidden = btn.dataset.tab !== 'curriculum';
+      if (btn.dataset.tab === 'home') renderHome();
+      if (btn.dataset.tab === 'curriculum') renderCurriculumList();
+    });
+  });
+
+  // ---------- boot ----------
+  const saved = loadLocalTeacher();
+  if (saved && saved.id) {
+    state.teacherId = saved.id;
+    state.teacherName = saved.name;
+  }
+  renderTeacherChip();
+  renderHome();
+  renderManage();
+  populateAttendClassPicker();
+})();
+</script>

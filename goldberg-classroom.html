@@ -1,0 +1,1113 @@
+<title>골드버그 클래스룸</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Rubik:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F4F7FB;
+    --grid-line:#B9C8E0;
+    --panel:#FFFFFF;
+    --panel-border:#DCE4F0;
+    --ink:#202A3C;
+    --ink-soft:#57647A;
+    --accent:#FF6A3D;
+    --accent-ink:#FFFFFF;
+    --blueprint:#2F6FED;
+    --blueprint-soft:#DCE7FF;
+    --pillar:#8B93A6;
+    --success:#1F8F44;
+    --success-bg:#E4F7EA;
+    --warn:#C6501E;
+    --warn-bg:#FFF0E6;
+    --locked:#AAB4C6;
+    --shadow:0 10px 28px rgba(32,42,60,0.10);
+    --scene-bg:#E9EFF9;
+    --hinge:#7C8699;
+    --tape:#E4D9B8;
+    --bracket:#5C7A8A;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0E1626;
+      --grid-line:#3C5079;
+      --panel:#141F35;
+      --panel-border:#24314F;
+      --ink:#E8EDF5;
+      --ink-soft:#96A3BC;
+      --accent:#FF8659;
+      --accent-ink:#1A0F08;
+      --blueprint:#6FA0FF;
+      --blueprint-soft:#1C2C4D;
+      --pillar:#69728A;
+      --success:#4FCB78;
+      --success-bg:#123321;
+      --warn:#FF8659;
+      --warn-bg:#3A2013;
+      --locked:#465070;
+      --shadow:0 10px 28px rgba(0,0,0,0.45);
+      --scene-bg:#0B1220;
+      --hinge:#A9B3C9;
+      --tape:#8A7442;
+      --bracket:#7FA6B8;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0E1626; --grid-line:#3C5079; --panel:#141F35; --panel-border:#24314F;
+    --ink:#E8EDF5; --ink-soft:#96A3BC; --accent:#FF8659; --accent-ink:#1A0F08;
+    --blueprint:#6FA0FF; --blueprint-soft:#1C2C4D; --pillar:#69728A;
+    --success:#4FCB78; --success-bg:#123321; --warn:#FF8659; --warn-bg:#3A2013;
+    --locked:#465070; --shadow:0 10px 28px rgba(0,0,0,0.45); --scene-bg:#0B1220;
+    --hinge:#A9B3C9; --tape:#8A7442; --bracket:#7FA6B8;
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:'Rubik', system-ui, -apple-system, sans-serif;
+    padding-inline:16px; padding-block:20px 32px;
+  }
+  h1,h2,h3{margin:0 0 8px;}
+  p{margin:0 0 8px; line-height:1.5;}
+  button{
+    font-family:'Rubik', system-ui, sans-serif; font-size:14px; cursor:pointer;
+    border-radius:10px; border:1px solid var(--panel-border);
+    background:var(--panel); color:var(--ink); padding:10px 12px;
+  }
+  button:hover{filter:brightness(0.97);}
+  button:focus-visible{outline:2px solid var(--blueprint); outline-offset:2px;}
+  button:disabled{cursor:not-allowed;}
+
+  .app{max-width:1080px; margin:0 auto;}
+  .topbar{display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:8px; margin-bottom:18px;}
+  .brand{font-family:'Kalam', cursive; font-weight:700; font-size:28px;}
+  .brand-mark{color:var(--blueprint);}
+  .level-badge{font-size:13px; font-weight:500; color:var(--ink-soft); background:var(--blueprint-soft); padding:6px 12px; border-radius:999px;}
+
+  .layout{display:grid; grid-template-columns:260px 1fr; gap:20px; align-items:start;}
+  @media (max-width:760px){ .layout{grid-template-columns:1fr;} }
+
+  .sidebar > section{
+    background:var(--panel); border:1px solid var(--panel-border); border-radius:14px;
+    padding:16px; margin-bottom:16px; box-shadow:var(--shadow);
+  }
+  .sidebar h2{font-family:'Kalam', cursive; font-size:17px; color:var(--blueprint); margin-top:2px;}
+  .mission p{color:var(--ink-soft); font-size:14px;}
+
+  .mount-select{display:flex; gap:6px; margin-bottom:12px;}
+  .mount-btn{flex:1; padding:8px 4px; font-size:13px; text-align:center; background:var(--panel); border-color:var(--panel-border); color:var(--ink-soft);}
+  .mount-btn.active{background:var(--blueprint); border-color:var(--blueprint); color:#fff; font-weight:700;}
+
+  .part-grid{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;}
+  .part-card{text-align:center; background:var(--blueprint-soft); border-color:var(--blueprint-soft); font-weight:500; padding:8px 4px; font-size:12px; touch-action:none; user-select:none;}
+  .part-card.locked{opacity:0.55; cursor:not-allowed; background:var(--panel); position:relative;}
+  .part-card.locked::after{content:"다음 업데이트"; display:block; font-size:10px; color:var(--locked); margin-top:2px;}
+  .part-note{font-size:12px; color:var(--ink-soft); margin-bottom:0;}
+
+  .part-icon{width:100%; height:26px; border-radius:4px; margin-bottom:5px; display:block;}
+  .part-icon.panel{background-color:var(--blueprint); background-image:radial-gradient(circle, rgba(255,255,255,0.65) 1.2px, transparent 1.6px); background-size:7px 7px;}
+  .part-icon.pillar{width:9px; height:26px; margin:0 auto 5px; background:var(--pillar);}
+  .part-icon.hinge{background:var(--hinge); position:relative;}
+  .part-icon.hinge::after{content:""; position:absolute; left:50%; top:50%; width:7px; height:7px; background:var(--ink); border-radius:50%; transform:translate(-50%,-50%);}
+  .part-icon.tape{background:repeating-linear-gradient(45deg, var(--tape), var(--tape) 5px, transparent 5px, transparent 9px); border:1px dashed var(--ink-soft);}
+  .part-icon.straight{background:var(--blueprint);}
+  .part-icon.locked-icon{background:var(--locked); opacity:0.5;}
+
+  .drag-ghost{
+    position:fixed; z-index:9999; pointer-events:none; transform:translate(-50%,-120%);
+    background:var(--blueprint); color:#fff; font-size:12px; font-weight:600;
+    padding:6px 10px; border-radius:8px; box-shadow:var(--shadow); opacity:0.92;
+  }
+
+  .modal-backdrop{
+    position:fixed; inset:0; background:rgba(10,14,24,0.25);
+    z-index:900; pointer-events:none;
+  }
+  .selected-controls{
+    position:fixed; left:50%; bottom:16px; transform:translateX(-50%);
+    width:min(360px, calc(100% - 32px));
+    background:var(--panel); border:1px solid var(--blueprint);
+    border-radius:16px; padding:16px; box-shadow:var(--shadow);
+    z-index:901;
+  }
+  .selected-controls .modal-head{
+    display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;
+    cursor:grab; touch-action:none;
+  }
+  .selected-controls .modal-head:active{cursor:grabbing;}
+  .drag-handle{color:var(--ink-soft); font-size:14px; margin-right:6px; letter-spacing:1px;}
+  .selected-controls p{font-size:14px; color:var(--ink); font-weight:600; margin:0;}
+  #closeSelected{padding:4px 10px; font-size:16px; line-height:1; border-radius:8px;}
+  #selectedLabel{font-weight:600; color:var(--ink);}
+  .nudge-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:8px;}
+  .nudge-grid button{padding:8px 2px; font-size:12px;}
+  .rotate-row{display:flex; gap:6px; margin-bottom:8px;}
+  .rotate-row button{flex:1;}
+  button.danger{width:100%; color:var(--warn); border-color:var(--warn-bg); background:var(--warn-bg);}
+
+  .roadmap-note{font-size:12px; color:var(--ink-soft); line-height:1.5;}
+
+  .stage{display:flex; flex-direction:column; gap:14px;}
+  .scene-wrap{
+    position:relative; background:var(--scene-bg); border:1px solid var(--panel-border);
+    border-radius:16px; box-shadow:var(--shadow); overflow:hidden;
+    aspect-ratio:4/3; touch-action:none;
+  }
+  #sceneCanvas{position:absolute; inset:0; width:100%; height:100%; display:block;}
+  .scene-hint{
+    position:absolute; left:10px; bottom:10px; font-size:11px; color:var(--ink-soft);
+    background:var(--panel); padding:5px 10px; border-radius:999px; border:1px solid var(--panel-border);
+    pointer-events:none;
+  }
+
+  .viewcube-wrap{
+    position:absolute; top:12px; right:12px; width:56px; height:56px;
+    perspective:260px; z-index:20;
+  }
+  .viewcube{
+    position:relative; width:100%; height:100%; transform-style:preserve-3d;
+  }
+  .viewcube .face{
+    position:absolute; width:56px; height:56px;
+    background:var(--panel); border:1px solid var(--panel-border);
+    display:flex; align-items:center; justify-content:center;
+    font-size:11px; font-weight:700; color:var(--ink-soft);
+    opacity:0.95; cursor:pointer; user-select:none;
+  }
+  .viewcube .face:hover{ background:var(--blueprint-soft); color:var(--ink); }
+  .viewcube .front  { transform: translateZ(28px); }
+  .viewcube .back   { transform: rotateY(180deg) translateZ(28px); }
+  .viewcube .right  { transform: rotateY(90deg) translateZ(28px); }
+  .viewcube .left   { transform: rotateY(-90deg) translateZ(28px); }
+  .viewcube .top    { transform: rotateX(90deg) translateZ(28px); }
+  .viewcube .bottom { transform: rotateX(-90deg) translateZ(28px); }
+
+  .controls{display:flex; flex-wrap:wrap; align-items:center; gap:10px;}
+  button.primary{background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:700;}
+  button.ghost{background:transparent;}
+  button.toggle.on{background:var(--blueprint); border-color:var(--blueprint); color:#fff;}
+  .status{flex-basis:100%; font-size:14px; color:var(--ink-soft); margin:0;}
+  .status.success{color:var(--success); font-weight:700;}
+  .status.warn{color:var(--warn); font-weight:700;}
+
+  .build-guide{background:var(--success-bg); border:1px solid var(--success); border-radius:14px; padding:16px;}
+  .build-guide h3{color:var(--success); font-family:'Kalam', cursive; font-size:18px;}
+  .build-guide ul{display:flex; flex-direction:column; gap:6px; margin-top:8px; list-style:none; padding:0;}
+  .build-guide li{font-size:14px;}
+  .build-guide li::before{content:"✓ "; color:var(--success); font-weight:700;}
+</style>
+
+<div class="app">
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">⚙</span> 골드버그 클래스룸</div>
+    <div class="level-badge">3D · 코어 구조 (판·기둥·직선길)</div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <section class="mission">
+        <h2>미션</h2>
+        <p>공을 굴려서 깃발(목표)까지 도착시키세요. 판·기둥·직선길로 구조를 만들고, 화면을 드래그해서 돌려보며 확인하세요.</p>
+      </section>
+
+      <section class="palette">
+        <h2>설치 위치</h2>
+        <div class="mount-select" id="newPartMountSelect" role="group" aria-label="설치 위치 선택">
+          <button type="button" class="mount-btn active" data-mount="floor">바닥</button>
+          <button type="button" class="mount-btn" data-mount="wall">벽</button>
+          <button type="button" class="mount-btn" data-mount="ceiling">천장</button>
+        </div>
+
+        <h2>베이스 — 타공판</h2>
+        <div class="part-grid">
+          <button class="part-card" data-type="panel"><span class="part-icon panel"></span>전체(12×12)</button>
+          <button class="part-card" data-type="panelHalf"><span class="part-icon panel"></span>1/2(6×12)</button>
+          <button class="part-card" data-type="panelQuarter"><span class="part-icon panel"></span>1/4(6×6)</button>
+        </div>
+
+        <h2>베이스 — 기둥</h2>
+        <div class="mount-select" role="group" aria-label="기둥 놓는 방향">
+          <button type="button" class="mount-btn pillar-orient-btn active" data-orient="lying">눕히기</button>
+          <button type="button" class="mount-btn pillar-orient-btn" data-orient="standing">세우기</button>
+        </div>
+        <div class="part-grid">
+          <button class="part-card" data-type="pillar"><span class="part-icon pillar"></span>전체(12칸)</button>
+          <button class="part-card" data-type="pillarHalf"><span class="part-icon pillar"></span>1/2(6칸)</button>
+        </div>
+
+        <h2>연결 부품</h2>
+        <div class="part-grid">
+          <button class="part-card" data-type="hinge"><span class="part-icon hinge"></span>경첩</button>
+          <button class="part-card" data-type="lbracket"><span class="part-icon hinge"></span>ㄱ자연결대</button>
+          <button class="part-card" data-type="tape"><span class="part-icon tape"></span>종이테이프</button>
+        </div>
+
+        <h2>길</h2>
+        <div class="part-grid">
+          <button class="part-card" data-type="straight"><span class="part-icon straight"></span>직선길</button>
+          <button class="part-card locked" disabled><span class="part-icon locked-icon"></span>반원길</button>
+          <button class="part-card locked" disabled><span class="part-icon locked-icon"></span>원형길</button>
+          <button class="part-card locked" disabled><span class="part-icon locked-icon"></span>지그재그길</button>
+        </div>
+
+        <h2>기타 장치</h2>
+        <div class="part-grid">
+          <button class="part-card locked" disabled><span class="part-icon locked-icon"></span>도미노</button>
+          <button class="part-card locked" disabled><span class="part-icon locked-icon"></span>도르래</button>
+        </div>
+        <p class="part-note">부품 이미지를 눌러서 바로 놓거나, 바닥 모드에서 화면 위로 드래그해서 원하는 위치에 놓을 수 있어요. 판 치수는 아직 정확한 실측값이 없어 임시 격자예요.</p>
+      </section>
+
+      <section class="roadmap">
+        <p class="roadmap-note">골드버그 장치 수업은 유치원부터 대학생까지 난이도를 조절해서 진행할 수 있어요. 바닥·벽·천장 마운트는 실제 3D 공간에서만 말이 되기 때문에, 화면을 돌려가며 구조를 확인하는 방식으로 만들었어요.</p>
+      </section>
+    </aside>
+
+    <main class="stage">
+      <div class="scene-wrap">
+        <canvas id="sceneCanvas"></canvas>
+        <div class="scene-hint">빈 곳 드래그: 회전 · 선택한 부품 드래그: 이동 · 휠/핀치: 확대축소</div>
+        <div class="viewcube-wrap">
+          <div class="viewcube" id="viewCube">
+            <div class="face front" data-face="front">앞</div>
+            <div class="face back" data-face="back">뒤</div>
+            <div class="face left" data-face="left">좌</div>
+            <div class="face right" data-face="right">우</div>
+            <div class="face top" data-face="top">위</div>
+            <div class="face bottom" data-face="bottom">아래</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-backdrop" id="modalBackdrop" hidden></div>
+      <div class="selected-controls" id="selectedControls" hidden>
+        <div class="modal-head" id="modalHead">
+          <p><span class="drag-handle">⠿</span>선택한 부품: <span id="selectedLabel"></span></p>
+          <button id="closeSelected" class="ghost">✕</button>
+        </div>
+        <div class="mount-select" id="selectedMountSelect" role="group" aria-label="설치 위치 변경">
+          <button type="button" class="mount-btn" data-mount="floor">바닥</button>
+          <button type="button" class="mount-btn" data-mount="wall">벽</button>
+          <button type="button" class="mount-btn" data-mount="ceiling">천장</button>
+        </div>
+        <div class="nudge-grid">
+          <button id="mvLeft">◀ 좌</button>
+          <button id="mvUp">▲ 높이</button>
+          <button id="mvRight">우 ▶</button>
+          <button id="mvBack">뒤</button>
+          <button id="mvDown">▼ 높이</button>
+          <button id="mvFwd">앞</button>
+        </div>
+        <div class="rotate-row">
+          <button id="rotateLeft">↺ -15°</button>
+          <button id="rotateRight">↻ +15°</button>
+        </div>
+        <div class="rotate-row">
+          <button data-angle="0">수평 0°</button>
+          <button data-angle="90">직각 90°</button>
+          <button data-angle="180">180°</button>
+        </div>
+        <button id="connectToPanel" class="primary" hidden>🔗 타공판에 연결</button>
+        <button id="deletePart" class="danger">이 부품 삭제</button>
+      </div>
+
+      <div class="controls">
+        <button id="playBtn" class="primary">▶ 재생</button>
+        <button id="resetBtn">↺ 다시 도전</button>
+        <button id="clearBtn" class="ghost">전체 삭제</button>
+        <p id="status" class="status">부품을 배치하고 재생을 눌러보세요.</p>
+      </div>
+      <div class="build-guide" id="buildGuide" hidden>
+        <h3>이제 실제로 만들어볼까요?</h3>
+        <p>가상 설계를 그대로 실물로 옮겨서 완성해보세요.</p>
+        <ul>
+          <li>타공 베이스판 + 기둥</li>
+          <li>직선 레일</li>
+          <li>구슬</li>
+          <li>목표 지점 표시용 바구니</li>
+        </ul>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+<script>
+(function(){
+  // real-world scale: GRID_UNIT (20 units = 2cm pitch) is the anchor; room is ~150cm x 150cm x 150cm
+  const ROOM_HALF = 750, FLOOR_Y = 0, CEIL_Y = 1500, GRID_UNIT = 20;
+
+  const PART_DEFS = {
+    panel:        { label: '타공판(12×12)', w: 220, h: 10, d: 220 }, // 12x12 holes, pitch 20 (2cm) -> 11*20
+    panelHalf:    { label: '타공판(6×12)',  w: 220, h: 10, d: 100 }, // half, cut along one axis
+    panelQuarter: { label: '타공판(6×6)',   w: 100, h: 10, d: 100 }, // quartered
+    pillar:       { label: '기둥(12칸)',    w: 220, h: 10, d: 16 },  // one full row of the panel: 12 holes
+    pillarHalf:   { label: '기둥(6칸)',     w: 100, h: 10, d: 16 },  // half-length pillar: 6 holes
+    hinge:    { label: '경첩',     w: 34,  h: 10, d: 26 },
+    lbracket: { label: 'ㄱ자연결대', w: 16, h: 16, d: 16 }, // cube with a peg on all 6 faces
+    tape:     { label: '종이테이프', w: 70, h: 4,  d: 20 },
+    straight: { label: '직선길',   w: 140, h: 12, d: 26 }
+  };
+  const MOUNT_LABEL = { floor: '바닥', 'wall-left': '벽(좌)', 'wall-right': '벽(우)', ceiling: '천장' };
+
+  function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+  const sceneWrap = document.querySelector('.scene-wrap');
+  const canvas = document.getElementById('sceneCanvas');
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(45, 1, 1, 6000);
+
+  function resizeRenderer(){
+    const w = sceneWrap.clientWidth, h = sceneWrap.clientHeight;
+    if (w < 2 || h < 2) return;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+  new ResizeObserver(resizeRenderer).observe(sceneWrap);
+  resizeRenderer();
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+  const dirLight = new THREE.DirectionalLight(0xffffff, 0.7);
+  dirLight.position.set(700, 1400, 800);
+  scene.add(dirLight);
+
+  const gridColor = cssVar('--grid-line');
+  const floorGrid = new THREE.GridHelper(ROOM_HALF * 2, (ROOM_HALF * 2) / GRID_UNIT, gridColor, gridColor);
+  floorGrid.material.transparent = true;
+  floorGrid.material.opacity = 0.7;
+  scene.add(floorGrid);
+
+  const roomGeo = new THREE.BoxGeometry(ROOM_HALF * 2, CEIL_Y, ROOM_HALF * 2);
+  const roomEdges = new THREE.EdgesGeometry(roomGeo);
+  const roomLine = new THREE.LineSegments(roomEdges, new THREE.LineBasicMaterial({ color: gridColor, transparent: true, opacity: 0.35 }));
+  roomLine.position.set(0, CEIL_Y / 2, 0);
+  scene.add(roomLine);
+
+  const world = new CANNON.World();
+  world.gravity.set(0, -700, 0);
+  world.broadphase = new CANNON.NaiveBroadphase();
+  world.solver.iterations = 12;
+
+  const floorBody = new CANNON.Body({ mass: 0, shape: new CANNON.Plane() });
+  floorBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+  world.addBody(floorBody);
+
+  const SPAWN = { x: -600, y: 300, z: -600 };
+  const GOAL = { x: 600, z: 600, r: 90 };
+
+  const goalGeo = new THREE.RingGeometry(GOAL.r - 8, GOAL.r, 32);
+  const goalMat = new THREE.MeshBasicMaterial({ color: cssVar('--accent'), side: THREE.DoubleSide, transparent: true, opacity: 0.85 });
+  const goalMesh = new THREE.Mesh(goalGeo, goalMat);
+  goalMesh.rotation.x = -Math.PI / 2;
+  goalMesh.position.set(GOAL.x, 1, GOAL.z);
+  scene.add(goalMesh);
+
+  const flagGeo = new THREE.ConeGeometry(28, 56, 4);
+  const flagMat = new THREE.MeshStandardMaterial({ color: cssVar('--accent') });
+  const flagMesh = new THREE.Mesh(flagGeo, flagMat);
+  flagMesh.position.set(GOAL.x, 210, GOAL.z);
+  scene.add(flagMesh);
+  const poleGeo = new THREE.CylinderGeometry(5, 5, 180, 8);
+  const poleMesh = new THREE.Mesh(poleGeo, new THREE.MeshStandardMaterial({ color: cssVar('--ink-soft') }));
+  poleMesh.position.set(GOAL.x, 90, GOAL.z);
+  scene.add(poleMesh);
+
+  const spawnRingGeo = new THREE.RingGeometry(48, 60, 24);
+  const spawnRingMesh = new THREE.Mesh(spawnRingGeo, new THREE.MeshBasicMaterial({ color: cssVar('--ink-soft'), side: THREE.DoubleSide, transparent: true, opacity: 0.6 }));
+  spawnRingMesh.rotation.x = -Math.PI / 2;
+  spawnRingMesh.position.set(SPAWN.x, 1, SPAWN.z);
+  scene.add(spawnRingMesh);
+
+  let parts = [];
+  let ball = null;
+  let selected = null;
+  let playing = false;
+  let succeeded = false;
+  let idleFrames = 0;
+  let partCounter = 0;
+  let mountChoice = 'floor';
+
+  const selectedControls = document.getElementById('selectedControls');
+  const modalBackdrop = document.getElementById('modalBackdrop');
+  const selectedLabel = document.getElementById('selectedLabel');
+  const statusEl = document.getElementById('status');
+  const buildGuide = document.getElementById('buildGuide');
+
+  function setStatus(text, kind){
+    statusEl.textContent = text;
+    statusEl.className = 'status' + (kind ? ' ' + kind : '');
+  }
+
+  function isPanelType(type){ return type === 'panel' || type === 'panelHalf' || type === 'panelQuarter'; }
+  function isPillarType(type){ return type === 'pillar' || type === 'pillarHalf'; }
+  function isConnectorType(type){ return isPillarType(type) || type === 'hinge' || type === 'lbracket'; }
+
+  function partColor(type){
+    if (isPillarType(type)) return cssVar('--pillar');
+    if (type === 'hinge') return cssVar('--hinge');
+    if (type === 'tape') return cssVar('--tape');
+    if (type === 'lbracket') return cssVar('--bracket');
+    return cssVar('--blueprint');
+  }
+
+  // shared hole scale: GRID_UNIT world units == 64 texture px, so 1 unit == 64/GRID_UNIT px
+  const PX_PER_UNIT = 64 / GRID_UNIT;
+  // real kit: hole diameter 1cm, gap between holes 1cm -> pitch 2cm -> hole diameter is half the pitch
+  const HOLE_R_WORLD = GRID_UNIT / 4; // radius = 1/2 pitch diameter = 1/4 pitch as radius
+  const HOLE_R_PX = HOLE_R_WORLD * PX_PER_UNIT;
+  const PEG_R_WORLD = HOLE_R_WORLD * 0.8; // snug fit inside the hole
+
+  function makePerforatedTexture(baseColorHex){
+    const c = document.createElement('canvas');
+    c.width = 64; c.height = 64;
+    const tctx = c.getContext('2d');
+    tctx.fillStyle = baseColorHex;
+    tctx.fillRect(0, 0, 64, 64);
+    tctx.fillStyle = 'rgba(0,0,0,0.4)';
+    tctx.beginPath();
+    tctx.arc(32, 32, HOLE_R_PX, 0, Math.PI * 2);
+    tctx.fill();
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    return tex;
+  }
+
+  function makePanelMaterial(w, d, colorHex){
+    const tex = makePerforatedTexture(colorHex || partColor('panel'));
+    tex.repeat.set(w / GRID_UNIT, d / GRID_UNIT);
+    return new THREE.MeshStandardMaterial({ map: tex, color: 0xffffff });
+  }
+
+  function makePillarTexture(baseColorHex){
+    const c = document.createElement('canvas');
+    c.width = 64; c.height = 40;
+    const tctx = c.getContext('2d');
+    tctx.fillStyle = baseColorHex;
+    tctx.fillRect(0, 0, 64, 40);
+    tctx.fillStyle = 'rgba(0,0,0,0.4)';
+    tctx.beginPath();
+    tctx.arc(32, 20, HOLE_R_PX, 0, Math.PI * 2);
+    tctx.fill();
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    return tex;
+  }
+
+  function makePillarMaterial(w){
+    // pillar = one row of the perforated panel's holes, cut into a long strip
+    const tex = makePillarTexture(partColor('pillar'));
+    tex.repeat.set(w / GRID_UNIT, 1);
+    return new THREE.MeshStandardMaterial({ map: tex, color: 0xffffff });
+  }
+
+  let selectionOutline = null;
+  function updateSelectionOutline(){
+    if (selectionOutline) {
+      scene.remove(selectionOutline);
+      selectionOutline.geometry.dispose();
+      selectionOutline = null;
+    }
+    if (!selected) return;
+    const def = PART_DEFS[selected.type];
+    const geo = new THREE.EdgesGeometry(new THREE.BoxGeometry(def.w + 3, def.h + 3, def.d + 3));
+    selectionOutline = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: cssVar('--accent') }));
+    scene.add(selectionOutline);
+  }
+
+  function select(p){
+    selected = p;
+    selectedControls.hidden = !p;
+    modalBackdrop.hidden = !p;
+    if (p) {
+      selectedLabel.textContent = `${PART_DEFS[p.type].label} · ${MOUNT_LABEL[p.mount]}`;
+      const baseMount = p.mount.startsWith('wall') ? 'wall' : p.mount;
+      document.querySelectorAll('#selectedMountSelect .mount-btn').forEach(b => b.classList.toggle('active', b.dataset.mount === baseMount));
+      document.getElementById('connectToPanel').hidden = !isConnectorType(p.type);
+    }
+    updateSelectionOutline();
+  }
+
+  function isStanding(part){
+    const e = new CANNON.Vec3();
+    part.body.quaternion.toEuler(e);
+    return Math.abs(Math.sin(e.z)) > 0.5;
+  }
+
+  function partFootprint(part){
+    // rotation is always around Z, so a part standing near 90 deg swaps its w/d footprint for h/d
+    const def = PART_DEFS[part.type];
+    const standing = isStanding(part);
+    return standing ? { halfW: def.h / 2, halfD: def.d / 2 } : { halfW: def.w / 2, halfD: def.d / 2 };
+  }
+
+  function partVerticalHalf(part){
+    // when standing (rotated ~90deg) the box's vertical extent becomes its w, not its h
+    const def = PART_DEFS[part.type];
+    return isStanding(part) ? def.w / 2 : def.h / 2;
+  }
+
+  function computeFloorRest(part){
+    const { halfW, halfD } = partFootprint(part);
+    const myHalfV = partVerticalHalf(part);
+    let px = part.body.position.x, pz = part.body.position.z;
+    const myBottom = part.body.position.y - myHalfV;
+    let restTop = 0; // the ground plane
+    parts.forEach(other => {
+      if (other === part) return;
+      const of = partFootprint(other);
+      const ox = other.body.position.x, oz = other.body.position.z;
+      const overlap = Math.abs(px - ox) < (halfW + of.halfW) && Math.abs(pz - oz) < (halfD + of.halfD);
+      if (!overlap) return;
+      const otherTop = other.body.position.y + partVerticalHalf(other);
+      if (otherTop <= myBottom + 0.5 && otherTop > restTop) restTop = otherTop;
+    });
+    // no auto hole-snap here — "바닥" just rests the part where it already is.
+    // picking a specific hole is only done deliberately via "🔗 타공판에 연결".
+    return { x: px, y: restTop + myHalfV, z: pz };
+  }
+
+  function setPartMount(part, mountType){
+    const def = PART_DEFS[part.type];
+    let x = part.body.position.x, y = part.body.position.y, z = part.body.position.z, mount;
+    if (mountType === 'wall') {
+      const left = x <= 0;
+      mount = left ? 'wall-left' : 'wall-right';
+      x = left ? -ROOM_HALF + def.w / 2 + 2 : ROOM_HALF - def.w / 2 - 2;
+      y = Math.min(Math.max(y, def.h / 2 + 6), CEIL_Y - def.h / 2 - 6);
+    } else if (mountType === 'ceiling') {
+      mount = 'ceiling';
+      y = CEIL_Y - def.h / 2 - 2;
+    } else {
+      mount = 'floor';
+      const rest = computeFloorRest(part);
+      x = rest.x; y = rest.y; z = rest.z;
+    }
+    part.body.position.set(x, y, z);
+    part.mount = mount;
+  }
+
+  document.querySelectorAll('#selectedMountSelect .mount-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!selected) return;
+      setPartMount(selected, btn.dataset.mount);
+      select(selected);
+    });
+  });
+
+  document.querySelectorAll('#newPartMountSelect .mount-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      mountChoice = btn.dataset.mount;
+      document.querySelectorAll('#newPartMountSelect .mount-btn').forEach(b => b.classList.toggle('active', b === btn));
+    });
+  });
+
+  // --- drag a part from the sidebar palette onto the scene ---
+  let dragGhost = null;
+  let cardDrag = null; // { type, startX, startY, moved }
+
+  function moveGhost(clientX, clientY){
+    if (!dragGhost) return;
+    dragGhost.style.left = clientX + 'px';
+    dragGhost.style.top = clientY + 'px';
+  }
+
+  function computeFloorDropPoint(clientX, clientY, type){
+    const def = PART_DEFS[type];
+    const rect = canvas.getBoundingClientRect();
+    const ndc = new THREE.Vector2(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1
+    );
+    raycaster.setFromCamera(ndc, camera);
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(def.h / 2));
+    const hit = new THREE.Vector3();
+    if (!raycaster.ray.intersectPlane(plane, hit)) return null;
+    return {
+      x: Math.min(Math.max(hit.x, -ROOM_HALF + 8), ROOM_HALF - 8),
+      y: def.h / 2,
+      z: Math.min(Math.max(hit.z, -ROOM_HALF + 8), ROOM_HALF - 8),
+      mount: 'floor'
+    };
+  }
+
+  let holePick = null; // { type, panel } — optional "타공판 → 구멍" precision placement, started from the modal
+
+  let pillarStanding = false; // 눕히기(default) / 세우기 — chosen before placing a pillar
+
+  document.querySelectorAll('.pillar-orient-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      pillarStanding = btn.dataset.orient === 'standing';
+      document.querySelectorAll('.pillar-orient-btn').forEach(b => b.classList.toggle('active', b === btn));
+    });
+  });
+
+  document.querySelectorAll('.part-grid .part-card:not(.locked)').forEach(btn => {
+    const type = btn.dataset.type;
+    btn.addEventListener('pointerdown', (e) => {
+      if (playing) return;
+      cardDrag = { type: btn.dataset.type, startX: e.clientX, startY: e.clientY, moved: false };
+      dragGhost = document.createElement('div');
+      dragGhost.className = 'drag-ghost';
+      dragGhost.textContent = PART_DEFS[btn.dataset.type].label;
+      document.body.appendChild(dragGhost);
+      moveGhost(e.clientX, e.clientY);
+      e.preventDefault();
+    });
+  });
+  window.addEventListener('pointermove', (e) => {
+    if (!cardDrag) return;
+    const dx = e.clientX - cardDrag.startX, dy = e.clientY - cardDrag.startY;
+    if (Math.abs(dx) + Math.abs(dy) > 6) cardDrag.moved = true;
+    moveGhost(e.clientX, e.clientY);
+  });
+  window.addEventListener('pointerup', (e) => {
+    if (!cardDrag) return;
+    const rect = canvas.getBoundingClientRect();
+    const overCanvas = e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom;
+    if (cardDrag.moved && overCanvas && mountChoice === 'floor') {
+      const dropPos = computeFloorDropPoint(e.clientX, e.clientY, cardDrag.type);
+      addPart(cardDrag.type, dropPos);
+    } else if (!cardDrag.moved) {
+      addPart(cardDrag.type);
+    }
+    if (dragGhost) { dragGhost.remove(); dragGhost = null; }
+    cardDrag = null;
+  });
+
+  function addPart(type, forcedPos){
+    if (playing) return;
+    partCounter++;
+    const def = PART_DEFS[type];
+    let x, y, z, mount, angle = isPillarType(type) ? (pillarStanding ? Math.PI / 2 : 0) : 0.2;
+    if (forcedPos) {
+      x = forcedPos.x; y = forcedPos.y; z = forcedPos.z; mount = forcedPos.mount;
+    } else if (mountChoice === 'wall') {
+      const left = partCounter % 2 === 0;
+      mount = left ? 'wall-left' : 'wall-right';
+      x = left ? -ROOM_HALF + def.w / 2 + 5 : ROOM_HALF - def.w / 2 - 5;
+      y = 300 + (partCounter % 3) * 140;
+      z = -350 + (partCounter % 4) * 220;
+      angle = 0;
+    } else if (mountChoice === 'ceiling') {
+      mount = 'ceiling';
+      x = -350 + (partCounter % 4) * 220;
+      y = CEIL_Y - def.h / 2 - 5;
+      z = -350 + (partCounter % 4) * 220;
+    } else {
+      mount = 'floor';
+      x = -350 + (partCounter % 4) * 240;
+      y = 140 + (partCounter % 3) * 100;
+      z = -350 + (partCounter % 4) * 240;
+    }
+
+    const shape = new CANNON.Box(new CANNON.Vec3(def.w / 2, def.h / 2, def.d / 2));
+    const body = new CANNON.Body({ mass: 0, shape });
+    body.position.set(x, y, z);
+    body.quaternion.setFromEuler(0, 0, angle);
+
+    const geo = new THREE.BoxGeometry(def.w, def.h, def.d);
+    let mat;
+    if (isPanelType(type)) {
+      // holes only make sense on the flat top/bottom faces, not the thin side edges
+      const flat = new THREE.MeshStandardMaterial({ color: partColor('panel') });
+      const holed = makePanelMaterial(def.w, def.d);
+      mat = [flat, flat, holed, holed, flat, flat]; // BoxGeometry face order: +X -X +Y -Y +Z -Z
+    } else if (isPillarType(type)) {
+      const flat = new THREE.MeshStandardMaterial({ color: partColor('pillar') });
+      const holed = makePillarMaterial(def.w);
+      mat = [flat, flat, holed, holed, flat, flat];
+    } else if (type === 'hinge') {
+      const flat = new THREE.MeshStandardMaterial({ color: partColor('hinge') });
+      const holed = makePanelMaterial(def.w, def.d, partColor('hinge'));
+      mat = [flat, flat, holed, holed, flat, flat];
+    } else {
+      mat = new THREE.MeshStandardMaterial({ color: partColor(type) });
+    }
+    const mesh = new THREE.Mesh(geo, mat);
+    const pegGeo = new THREE.CylinderGeometry(PEG_R_WORLD, PEG_R_WORLD, 9, 12);
+    if (isPillarType(type)) {
+      // pegs on both ends of the long axis (w), so it plugs into a panel hole when stood up
+      const pegMat = new THREE.MeshStandardMaterial({ color: partColor('pillar') });
+      const pegTop = new THREE.Mesh(pegGeo, pegMat);
+      pegTop.rotation.z = Math.PI / 2;
+      pegTop.position.set(def.w / 2 + 3, 0, 0);
+      mesh.add(pegTop);
+      const pegBottom = new THREE.Mesh(pegGeo, pegMat);
+      pegBottom.rotation.z = Math.PI / 2;
+      pegBottom.position.set(-(def.w / 2 + 3), 0, 0);
+      mesh.add(pegBottom);
+    } else if (type === 'lbracket') {
+      // a peg on all 6 faces, so it can join two panels/pillars at any right angle
+      const pegMat = new THREE.MeshStandardMaterial({ color: partColor('lbracket') });
+      const half = def.w / 2;
+      const faces = [
+        { pos: [half + 3, 0, 0], rot: [0, 0, Math.PI / 2] },
+        { pos: [-(half + 3), 0, 0], rot: [0, 0, Math.PI / 2] },
+        { pos: [0, half + 3, 0], rot: [0, 0, 0] },
+        { pos: [0, -(half + 3), 0], rot: [0, 0, 0] },
+        { pos: [0, 0, half + 3], rot: [Math.PI / 2, 0, 0] },
+        { pos: [0, 0, -(half + 3)], rot: [Math.PI / 2, 0, 0] }
+      ];
+      faces.forEach(f => {
+        const peg = new THREE.Mesh(pegGeo, pegMat);
+        peg.position.set(f.pos[0], f.pos[1], f.pos[2]);
+        peg.rotation.set(f.rot[0], f.rot[1], f.rot[2]);
+        mesh.add(peg);
+      });
+    }
+    scene.add(mesh);
+    world.addBody(body);
+
+    const part = { type, mount, body, mesh };
+    mesh.userData.partRef = part;
+    parts.push(part);
+    select(part);
+  }
+
+  function removePart(p){
+    scene.remove(p.mesh);
+    world.removeBody(p.body);
+    parts = parts.filter(x => x !== p);
+  }
+
+  document.getElementById('deletePart').addEventListener('click', () => {
+    if (selected) { removePart(selected); select(null); }
+  });
+  document.getElementById('connectToPanel').addEventListener('click', () => {
+    if (!selected) return;
+    const hasOtherPanel = parts.some(p => isPanelType(p.type) && p !== selected);
+    if (!hasOtherPanel) { setStatus('먼저 타공판을 배치하세요.', 'warn'); return; }
+    holePick = { type: selected.type, panel: null, target: selected };
+    select(null);
+    setStatus('연결할 타공판을 탭하세요 (빈 곳 탭하면 취소)', 'warn');
+  });
+  document.getElementById('closeSelected').addEventListener('click', () => select(null));
+  modalBackdrop.addEventListener('click', () => select(null));
+
+  // let the modal be dragged out of the way so it doesn't block the 3D view
+  const modalHead = document.getElementById('modalHead');
+  let modalDrag = null;
+  modalHead.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('#closeSelected')) return;
+    const rect = selectedControls.getBoundingClientRect();
+    modalDrag = { offsetX: e.clientX - rect.left, offsetY: e.clientY - rect.top };
+    selectedControls.style.left = rect.left + 'px';
+    selectedControls.style.top = rect.top + 'px';
+    selectedControls.style.bottom = 'auto';
+    selectedControls.style.transform = 'none';
+    e.preventDefault();
+  });
+  window.addEventListener('pointermove', (e) => {
+    if (!modalDrag) return;
+    const w = selectedControls.offsetWidth, h = selectedControls.offsetHeight;
+    const nx = Math.min(Math.max(e.clientX - modalDrag.offsetX, 4), window.innerWidth - w - 4);
+    const ny = Math.min(Math.max(e.clientY - modalDrag.offsetY, 4), window.innerHeight - h - 4);
+    selectedControls.style.left = nx + 'px';
+    selectedControls.style.top = ny + 'px';
+  });
+  window.addEventListener('pointerup', () => { modalDrag = null; });
+  document.getElementById('rotateLeft').addEventListener('click', () => {
+    if (!selected) return;
+    const e = new CANNON.Vec3(); selected.body.quaternion.toEuler(e);
+    selected.body.quaternion.setFromEuler(e.x, e.y, e.z - 0.2618);
+  });
+  document.getElementById('rotateRight').addEventListener('click', () => {
+    if (!selected) return;
+    const e = new CANNON.Vec3(); selected.body.quaternion.toEuler(e);
+    selected.body.quaternion.setFromEuler(e.x, e.y, e.z + 0.2618);
+  });
+  document.querySelectorAll('#selectedControls [data-angle]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!selected) return;
+      const deg = Number(btn.dataset.angle);
+      selected.body.quaternion.setFromEuler(0, 0, deg * Math.PI / 180);
+    });
+  });
+  function nudge(dx, dy, dz){
+    if (!selected) return;
+    const p = selected.body.position;
+    let nx = Math.min(Math.max(p.x + dx, -ROOM_HALF + 8), ROOM_HALF - 8);
+    let ny = Math.min(Math.max(p.y + dy, 6), CEIL_Y - 6);
+    let nz = Math.min(Math.max(p.z + dz, -ROOM_HALF + 8), ROOM_HALF - 8);
+    selected.body.position.set(nx, ny, nz);
+  }
+  document.getElementById('mvLeft').addEventListener('click', () => nudge(-GRID_UNIT, 0, 0));
+  document.getElementById('mvRight').addEventListener('click', () => nudge(GRID_UNIT, 0, 0));
+  document.getElementById('mvUp').addEventListener('click', () => nudge(0, GRID_UNIT, 0));
+  document.getElementById('mvDown').addEventListener('click', () => nudge(0, -GRID_UNIT, 0));
+  document.getElementById('mvFwd').addEventListener('click', () => nudge(0, 0, GRID_UNIT));
+  document.getElementById('mvBack').addEventListener('click', () => nudge(0, 0, -GRID_UNIT));
+
+  document.getElementById('playBtn').addEventListener('click', () => {
+    if (ball) { scene.remove(ball.mesh); world.removeBody(ball.body); }
+    const shape = new CANNON.Sphere(9);
+    const body = new CANNON.Body({ mass: 1, shape, position: new CANNON.Vec3(SPAWN.x, SPAWN.y, SPAWN.z) });
+    body.linearDamping = 0.15;
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(9, 16, 16), new THREE.MeshStandardMaterial({ color: cssVar('--ink') }));
+    scene.add(mesh);
+    world.addBody(body);
+    ball = { body, mesh };
+    playing = true;
+    succeeded = false;
+    idleFrames = 0;
+    buildGuide.hidden = true;
+    select(null);
+    setStatus('공이 굴러가고 있어요...', null);
+  });
+
+  function stopPlay(){
+    playing = false;
+  }
+
+  document.getElementById('resetBtn').addEventListener('click', () => {
+    stopPlay();
+    if (ball) { scene.remove(ball.mesh); world.removeBody(ball.body); ball = null; }
+    succeeded = false;
+    idleFrames = 0;
+    setStatus('부품을 배치하고 재생을 눌러보세요.', null);
+  });
+
+  document.getElementById('clearBtn').addEventListener('click', () => {
+    stopPlay();
+    parts.slice().forEach(removePart);
+    if (ball) { scene.remove(ball.mesh); world.removeBody(ball.body); ball = null; }
+    succeeded = false;
+    idleFrames = 0;
+    select(null);
+    buildGuide.hidden = true;
+    setStatus('부품을 배치하고 재생을 눌러보세요.', null);
+  });
+
+  function checkGoalAndIdle(){
+    if (!ball || succeeded) return;
+    const p = ball.body.position;
+    const dx = p.x - GOAL.x, dz = p.z - GOAL.z;
+    if (Math.sqrt(dx * dx + dz * dz) < GOAL.r && p.y < 24) {
+      succeeded = true;
+      setStatus('🎉 성공! 목표 지점에 도착했어요', 'success');
+      buildGuide.hidden = false;
+      return;
+    }
+    if (p.y < -300) {
+      stopPlay();
+      setStatus('공이 바닥 밖으로 떨어졌어요. 구조를 다시 확인해보세요.', 'warn');
+      return;
+    }
+    const v = ball.body.velocity;
+    const speed = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+    if (speed < 4) idleFrames++; else idleFrames = 0;
+    if (idleFrames > 90) {
+      stopPlay();
+      setStatus('공이 멈췄어요! 구조를 조절하고 다시 도전해보세요.', 'warn');
+    }
+  }
+
+  // --- orbit camera ---
+  const target = new THREE.Vector3(0, 400, 0);
+  const orbit = { theta: Math.PI / 4, phi: 1.05, radius: 1800 };
+  function updateCamera(){
+    camera.position.set(
+      target.x + orbit.radius * Math.sin(orbit.phi) * Math.sin(orbit.theta),
+      target.y + orbit.radius * Math.cos(orbit.phi),
+      target.z + orbit.radius * Math.sin(orbit.phi) * Math.cos(orbit.theta)
+    );
+    camera.lookAt(target);
+  }
+  updateCamera();
+
+  // --- view cube: click a face to snap the camera to that side ---
+  const viewCube = document.getElementById('viewCube');
+  function updateViewCube(){
+    const thetaDeg = -(orbit.theta * 180 / Math.PI);
+    const phiDeg = (orbit.phi * 180 / Math.PI) - 90;
+    viewCube.style.transform = `rotateX(${phiDeg}deg) rotateY(${thetaDeg}deg)`;
+  }
+  document.querySelectorAll('.viewcube .face').forEach(el => {
+    el.addEventListener('click', () => {
+      const face = el.dataset.face;
+      if (face === 'top') { orbit.phi = 0.25; return; }
+      if (face === 'bottom') { orbit.phi = Math.PI - 0.25; return; }
+      const thetaByFace = { front: 0, back: Math.PI, left: -Math.PI / 2, right: Math.PI / 2 };
+      orbit.theta = thetaByFace[face];
+      orbit.phi = 1.4;
+    });
+  });
+
+  const raycaster = new THREE.Raycaster();
+  function ndcFromEvent(e){
+    const rect = canvas.getBoundingClientRect();
+    return new THREE.Vector2(
+      ((e.clientX - rect.left) / rect.width) * 2 - 1,
+      -((e.clientY - rect.top) / rect.height) * 2 + 1
+    );
+  }
+
+  function dragSelectedTo(e){
+    if (!selected || playing) return;
+    raycaster.setFromCamera(ndcFromEvent(e), camera);
+    const p = selected.body.position;
+    const onWall = selected.mount === 'wall-left' || selected.mount === 'wall-right';
+    const plane = onWall
+      ? new THREE.Plane(new THREE.Vector3(1, 0, 0), -p.x)
+      : new THREE.Plane(new THREE.Vector3(0, 1, 0), -p.y);
+    const hit = new THREE.Vector3();
+    if (!raycaster.ray.intersectPlane(plane, hit)) return;
+    if (onWall) {
+      const ny = Math.min(Math.max(hit.y, 6), CEIL_Y - 6);
+      const nz = Math.min(Math.max(hit.z, -ROOM_HALF + 8), ROOM_HALF - 8);
+      selected.body.position.set(p.x, ny, nz);
+    } else {
+      const nx = Math.min(Math.max(hit.x, -ROOM_HALF + 8), ROOM_HALF - 8);
+      const nz = Math.min(Math.max(hit.z, -ROOM_HALF + 8), ROOM_HALF - 8);
+      selected.body.position.set(nx, p.y, nz);
+    }
+  }
+
+  let pointerDown = false, lastX = 0, lastY = 0, moved = false, draggingPart = false;
+  const MIN_RADIUS = 100, MAX_RADIUS = 3500;
+  const activePointers = new Map();
+  let pinchStartDist = null, pinchStartRadius = null;
+
+  function pinchDist(){
+    const pts = Array.from(activePointers.values());
+    return Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+  }
+
+  canvas.addEventListener('pointerdown', (e) => {
+    activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (activePointers.size >= 2) {
+      pointerDown = false; draggingPart = false;
+      pinchStartDist = pinchDist();
+      pinchStartRadius = orbit.radius;
+      return;
+    }
+    pointerDown = true; moved = false;
+    lastX = e.clientX; lastY = e.clientY;
+    draggingPart = false;
+    if (selected && !playing) {
+      raycaster.setFromCamera(ndcFromEvent(e), camera);
+      draggingPart = raycaster.intersectObject(selected.mesh, false).length > 0;
+    }
+  });
+  window.addEventListener('pointermove', (e) => {
+    if (activePointers.has(e.pointerId)) activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (activePointers.size >= 2 && pinchStartDist) {
+      const scale = pinchStartDist / Math.max(pinchDist(), 1);
+      orbit.radius = Math.min(Math.max(pinchStartRadius * scale, MIN_RADIUS), MAX_RADIUS);
+      return;
+    }
+    if (!pointerDown) return;
+    const dx = e.clientX - lastX, dy = e.clientY - lastY;
+    if (Math.abs(dx) + Math.abs(dy) > 10) moved = true;
+    if (moved) {
+      if (draggingPart) {
+        dragSelectedTo(e);
+      } else {
+        orbit.theta -= dx * 0.008;
+        orbit.phi = Math.min(Math.max(orbit.phi - dy * 0.008, 0.05), Math.PI - 0.05);
+      }
+    }
+    lastX = e.clientX; lastY = e.clientY;
+  });
+  window.addEventListener('pointerup', (e) => {
+    activePointers.delete(e.pointerId);
+    if (activePointers.size < 2) pinchStartDist = null;
+    if (activePointers.size === 0) {
+      if (pointerDown && !moved && !draggingPart) handleSelectClick(e);
+      pointerDown = false;
+      draggingPart = false;
+    }
+  });
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    orbit.radius = Math.min(Math.max(orbit.radius + e.deltaY * 0.5, MIN_RADIUS), MAX_RADIUS);
+  }, { passive: false });
+
+  function placeOnHole(type, panelPart, worldPoint, existingTarget){
+    const pdef = PART_DEFS[panelPart.type];
+    const local = panelPart.mesh.worldToLocal(worldPoint.clone());
+    let lx = Math.round(local.x / GRID_UNIT) * GRID_UNIT;
+    let lz = Math.round(local.z / GRID_UNIT) * GRID_UNIT;
+    lx = Math.min(Math.max(lx, -pdef.w / 2 + HOLE_R_WORLD), pdef.w / 2 - HOLE_R_WORLD);
+    lz = Math.min(Math.max(lz, -pdef.d / 2 + HOLE_R_WORLD), pdef.d / 2 - HOLE_R_WORLD);
+    const worldPos = panelPart.mesh.localToWorld(new THREE.Vector3(lx, pdef.h / 2, lz));
+
+    let placed;
+    if (existingTarget) {
+      placed = existingTarget;
+      placed.body.position.set(worldPos.x, worldPos.y, worldPos.z);
+      placed.mount = panelPart.mount;
+    } else {
+      addPart(type, { x: worldPos.x, y: worldPos.y, z: worldPos.z, mount: panelPart.mount });
+      placed = parts[parts.length - 1];
+    }
+    const panelQuat = panelPart.mesh.quaternion;
+    if (isPillarType(placed.type)) {
+      const standQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, Math.PI / 2));
+      const worldQuat = panelQuat.clone().multiply(standQuat);
+      placed.body.quaternion.set(worldQuat.x, worldQuat.y, worldQuat.z, worldQuat.w);
+    } else {
+      placed.body.quaternion.set(panelQuat.x, panelQuat.y, panelQuat.z, panelQuat.w);
+    }
+    setStatus(`${PART_DEFS[type].label}을(를) 구멍에 꽂았어요.`, 'success');
+    select(placed);
+  }
+
+  function handleSelectClick(e){
+    raycaster.setFromCamera(ndcFromEvent(e), camera);
+
+    if (holePick) {
+      if (!holePick.panel) {
+        const panelMeshes = parts.filter(p => isPanelType(p.type) && p !== holePick.target).map(p => p.mesh);
+        const hits = raycaster.intersectObjects(panelMeshes);
+        if (hits.length) {
+          holePick.panel = hits[0].object.userData.partRef;
+          setStatus(`${PART_DEFS[holePick.type].label} 꽂을 구멍을 타공판 위에서 탭하세요`, 'warn');
+        } else {
+          holePick = null;
+          setStatus('부품을 배치하고 재생을 눌러보세요.', null);
+        }
+      } else {
+        const hits = raycaster.intersectObject(holePick.panel.mesh, false);
+        if (hits.length) placeOnHole(holePick.type, holePick.panel, hits[0].point, holePick.target);
+        holePick = null;
+      }
+      return;
+    }
+
+    const meshes = parts.map(p => p.mesh);
+    const hits = raycaster.intersectObjects(meshes);
+    if (hits.length) select(hits[0].object.userData.partRef);
+    else select(null);
+  }
+
+  function animate(){
+    requestAnimationFrame(animate);
+    if (playing) {
+      world.step(1 / 60);
+      checkGoalAndIdle();
+    }
+    parts.forEach(p => {
+      p.mesh.position.copy(p.body.position);
+      p.mesh.quaternion.copy(p.body.quaternion);
+    });
+    if (selectionOutline && selected) {
+      selectionOutline.position.copy(selected.body.position);
+      selectionOutline.quaternion.copy(selected.body.quaternion);
+    }
+    if (ball) {
+      ball.mesh.position.copy(ball.body.position);
+      ball.mesh.quaternion.copy(ball.body.quaternion);
+    }
+    updateCamera();
+    updateViewCube();
+    renderer.render(scene, camera);
+  }
+  animate();
+})();
+</script>
