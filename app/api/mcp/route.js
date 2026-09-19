@@ -46,10 +46,15 @@ import { createMcpHandler } from 'mcp-handler'
 import { createClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-)
+// Lazily created on first use (not at module load) so `next build` doesn't
+// crash when env vars aren't present at build time — only at request time.
+let _supabase = null
+function getSupabase() {
+  if (!_supabase) {
+    _supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+  }
+  return _supabase
+}
 
 const GITHUB_REPO = 'mintimjang33/invent_school'
 
@@ -118,14 +123,14 @@ const baseHandler = createMcpHandler(
         },
       },
       async ({ schema = 'public' }) => {
-        const { data: d2, error: e2 } = await supabase
+        const { data: d2, error: e2 } = await getSupabase()
           .from('information_schema.tables')
           .select('table_name')
           .eq('table_schema', schema)
           .eq('table_type', 'BASE TABLE')
           .order('table_name')
         if (e2) {
-          const { data: d3, error: e3 } = await supabase.rpc('run_sql_query', {
+          const { data: d3, error: e3 } = await getSupabase().rpc('run_sql_query', {
             sql: `SELECT table_name FROM information_schema.tables WHERE table_schema = '${schema}' AND table_type = 'BASE TABLE' ORDER BY table_name`
           })
           if (e3) return { content: [{ type: 'text', text: `❌ ${e3.message}` }], isError: true }
@@ -152,7 +157,7 @@ const baseHandler = createMcpHandler(
         },
       },
       async ({ table, select = '*', filter, order_by = 'created_at', ascending = false, limit = 50, offset = 0 }) => {
-        let q = supabase.from(table).select(select)
+        let q = getSupabase().from(table).select(select)
         if (filter) {
           for (const [col, val] of Object.entries(filter)) q = q.eq(col, val)
         }
@@ -176,7 +181,7 @@ const baseHandler = createMcpHandler(
         annotations: { destructiveHint: true },
       },
       async ({ table, row }) => {
-        const { data, error } = await supabase
+        const { data, error } = await getSupabase()
           .from(table)
           .upsert([row], { onConflict: 'id' })
           .select()
@@ -198,9 +203,9 @@ const baseHandler = createMcpHandler(
         annotations: { destructiveHint: true },
       },
       async ({ table, id }) => {
-        const { data: existing } = await supabase.from(table).select('id').eq('id', id).maybeSingle()
+        const { data: existing } = await getSupabase().from(table).select('id').eq('id', id).maybeSingle()
         if (!existing) return { content: [{ type: 'text', text: `❌ [${table}] id="${id}" 행을 찾을 수 없음` }], isError: true }
-        const { error } = await supabase.from(table).delete().eq('id', id)
+        const { error } = await getSupabase().from(table).delete().eq('id', id)
         if (error) return { content: [{ type: 'text', text: `❌ ${error.message}` }], isError: true }
         return { content: [{ type: 'text', text: `✅ [${table}] id="${id}" 삭제 완료` }] }
       }
@@ -222,7 +227,7 @@ const baseHandler = createMcpHandler(
         if (dangerous.some(kw => upper.startsWith(kw) || upper.includes('\n' + kw))) {
           return { content: [{ type: 'text', text: `⛔ 위험한 DDL/권한 쿼리는 차단됩니다: ${sql.slice(0, 80)}` }], isError: true }
         }
-        const { data, error } = await supabase.rpc('run_sql_query', { sql })
+        const { data, error } = await getSupabase().rpc('run_sql_query', { sql })
         if (error) return { content: [{ type: 'text', text: `❌ ${error.message}\n\nSQL: ${sql}` }], isError: true }
         return { content: [{ type: 'text', text: `✅ SQL 실행 완료\n${JSON.stringify(data, null, 2)}` }] }
       }
