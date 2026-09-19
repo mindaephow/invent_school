@@ -1436,11 +1436,31 @@
     });
   }
 
+  // 선생님 화면에서 로그인한 상태로 들어오면 로그인 창 없이 도구를 바로 쓴다 (학생 프로젝트 저장은 학생 계정 전용이라 저장하지 않음)
+  function teacherLoggedIn(){
+    try {
+      const t = JSON.parse(window.sessionStorage.getItem('ivs-teacher-auth') || 'null');
+      if (!t || !t.user) return false;
+      if (t.user.app_metadata && t.user.app_metadata.role === 'student') return false;
+      return !!((t.expires_at && t.expires_at * 1000 > Date.now()) || t.refresh_token);
+    } catch (e) { return false; }
+  }
+  function startTeacherMode(){
+    startOverlay.hidden = true;
+    projectBar.hidden = true;
+    backLink.href = 'index.html';
+    backLink.textContent = '← 선생님 화면';
+    setStatus('선생님 모드예요. 여기서 만든 작업은 저장되지 않아요. 학생 계정으로 로그인하면 저장돼요.', null);
+  }
+
   // 같은 탭에서 새로고침한 경우: 아직 로그인되어 있으면 바로 프로젝트 화면으로
   (async function boot(){
     const { data: { session } } = await db.auth.getSession();
     if (session && await loadStudent()) { accessToken = session.access_token; showProjectStep(); }
-    else { if (session) await db.auth.signOut(); showLoginStep(); }
+    else {
+      if (session) await db.auth.signOut();
+      if (teacherLoggedIn()) startTeacherMode(); else showLoginStep();
+    }
   })();
 })();
 </script>
