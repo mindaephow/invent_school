@@ -2,6 +2,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="db-shim.js"></script>
 <style>
   :root{
     --bg:#F3F5F9;
@@ -173,7 +175,7 @@
     <button class="tab-btn" data-tab="manage">수업 관리</button>
     <button class="tab-btn" data-tab="attend">출석부</button>
     <button class="tab-btn" data-tab="curriculum">커리큘럼</button>
-    <a class="tab-btn" href="https://claude.ai/artifact/CgpMmjVAM9qA4AJo3gm8kq" style="text-decoration:none; cursor:pointer;">설계하기</a>
+    <a class="tab-btn" href="design.html" style="text-decoration:none; cursor:pointer;">설계하기</a>
   </nav>
 
   <section id="tab-home">
@@ -280,7 +282,9 @@
 
 <script>
 (async function(){
-  const db = await (window.claude && window.claude.use ? window.claude.use('db') : Promise.resolve(null));
+  const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+  const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+  const db = createSupabaseDb(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   const state = {
     teacherId: null,
