@@ -1,4 +1,5 @@
 import Tabs from './Tabs'
+import LoginLinks from './LoginLinks'
 
 export const metadata = {
   title: '발명융합과학교실',
@@ -281,7 +282,7 @@ a{color:inherit;}
 @media (max-width:520px){ .brand{font-size:16.5px; gap:8px;} .logo{width:28px; height:28px;} .nav{gap:10px;} }
 
 .btn{
-  display:inline-flex; align-items:center; justify-content:center; text-decoration:none; font-weight:600; font-size:14px; line-height:1;
+  display:inline-flex; align-items:center; justify-content:center; text-decoration:none; font-weight:600; font-size:14px; line-height:1; white-space:nowrap;
   padding:11px 16px; border-radius:999px; border:1px solid var(--line); background:var(--panel); color:var(--ink);
   transition:background .15s ease, border-color .15s ease, transform .15s ease;
 }
@@ -510,8 +511,7 @@ export default function Home() {
             <a href="#faq">자주 묻는 질문</a>
           </nav>
           <div className="nav-actions">
-            <a className="btn" href="/design.html">학생 로그인</a>
-            <a className="btn" href="/index.html">선생님 로그인</a>
+            <LoginLinks variant="nav" />
           </div>
         </div>
       </header>
@@ -527,7 +527,7 @@ export default function Home() {
               발명 수업의 성패는 거창한 재료보다, 문제를 발견하는 관점과 실패를 두려워하지 않고 만들어보는 과정을 설계하는 데 달려 있습니다.
             </p>
             <div className="hero-cta">
-              <a className="btn primary big" href="/design.html">학생 로그인</a>
+              <LoginLinks variant="hero" />
               <a className="btn big" href="#how">수업 방식 보기</a>
             </div>
           </div>
@@ -668,8 +668,7 @@ export default function Home() {
           <h2>발명융합과학교실에 들어가기</h2>
           <p>선생님이 알려준 아이디와 비밀번호로 로그인하세요.</p>
           <div className="cta-actions">
-            <a className="btn primary big" href="/design.html">학생 로그인</a>
-            <a className="btn big" href="/index.html">선생님 로그인</a>
+            <LoginLinks variant="cta" />
           </div>
         </div>
         <footer>
