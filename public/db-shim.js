@@ -20,7 +20,7 @@ function createSupabaseDb(supabaseUrl, supabaseKey, options) {
       storageKey: options.storageKey || 'ivs-auth',
       persistSession: true,
       autoRefreshToken: true,
-      detectSessionInUrl: false
+      detectSessionInUrl: options.detectSessionInUrl === true
     }
   });
 
