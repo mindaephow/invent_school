@@ -232,6 +232,8 @@
     <span class="pb-student" id="pbStudent"></span>
     <input id="projectNameInput" maxlength="40" aria-label="프로젝트 이름" placeholder="프로젝트 이름">
     <span class="pb-save" id="pbSave"></span>
+    <button id="pbSaveBtn" type="button">저장</button>
+    <button id="pbLoadBtn" type="button">불러오기</button>
     <button id="submitBtn" class="primary" type="button">과제 제출하기</button>
   </div>
 
@@ -1168,6 +1170,8 @@
   const pbSave = document.getElementById('pbSave');
   const nameInput = document.getElementById('projectNameInput');
   const submitBtn = document.getElementById('submitBtn');
+  const pbSaveBtn = document.getElementById('pbSaveBtn');
+  const pbLoadBtn = document.getElementById('pbLoadBtn');
   const backLink = document.getElementById('backLink');
 
   let student = null;   // { id, name }
@@ -1221,7 +1225,13 @@
   tdb.auth.onAuthStateChange((event, session) => { if (mode === 'teacher') accessToken = session ? session.access_token : null; });
 
   // 화면을 닫는 중에도 보낼 수 있도록 fetch keepalive PATCH 한 가지 경로만 쓴다
-  async function persist(keepalive, force){
+  // 저장 요청이 겹쳐도 한 번에 하나씩 (새 설계가 두 번 만들어지는 것을 막는다)
+  let saveChain = Promise.resolve();
+  function persist(keepalive, force){
+    saveChain = saveChain.catch(() => {}).then(() => persistNow(keepalive, force));
+    return saveChain;
+  }
+  async function persistNow(keepalive, force){
     if (!project) return;
     syncFromScene();
     const key = projectKey();
@@ -1229,18 +1239,23 @@
     project.data.updatedAt = Date.now();
     pbSave.textContent = '저장 중...';
     const table = mode === 'teacher' ? 'ivs_teacher_projects' : 'ivs_projects';
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${project.id}`, {
-      method: 'PATCH',
+    const isNew = !project.id; // 새 설계는 처음 저장할 때 만들어진다
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}${isNew ? '' : '?id=eq.' + project.id}`, {
+      method: isNew ? 'POST' : 'PATCH',
       keepalive: !!keepalive,
       headers: {
         apikey: SUPABASE_KEY,
         Authorization: 'Bearer ' + accessToken,
         'Content-Type': 'application/json',
-        Prefer: 'return=minimal'
+        Prefer: isNew ? 'return=representation' : 'return=minimal'
       },
       body: JSON.stringify({ data: project.data })
     });
     if (!res.ok) { pbSave.textContent = '저장 실패'; throw new Error('save failed ' + res.status); }
+    if (isNew) {
+      const rows = await res.json().catch(() => null);
+      if (rows && rows[0]) project.id = rows[0].id;
+    }
     lastSavedKey = key;
     pbSave.textContent = '저장됨 ' + clockText();
   }
@@ -1304,7 +1319,7 @@
     submitBtn.disabled = true;
     submitBtn.textContent = '제출 중...';
     try {
-      await persist(false);
+      await persist(false, true);
       // 서버 함수가 프로젝트를 제출 처리하고 선생님 출석부의 과제 칸에 "제출함"을 남긴다
       const { error } = await db.rpc('submit_assignment', { p_project: project.id });
       if (error) throw error;
@@ -1335,15 +1350,6 @@
     lastActivity = Date.now();
     refreshSubmitBtn();
     setStatus(data.parts && data.parts.length ? '저장된 작업을 불러왔어요. 이어서 만들어보세요.' : '부품을 배치하고 재생을 눌러보세요.', null);
-  }
-
-  async function createProject(name){
-    const now = Date.now();
-    const data = mode === 'teacher'
-      ? { name, parts: [], createdAt: now, updatedAt: now }
-      : { studentId: student.id, name, parts: [], submitted: false, createdAt: now, updatedAt: now };
-    const ref = await (mode === 'teacher' ? tdb : db).collection(mode === 'teacher' ? 'teacherProjects' : 'projects').add(data);
-    openProject(ref.id, data);
   }
 
   // ----- 로그인 화면 -----
@@ -1378,7 +1384,7 @@
           await db.auth.signOut();
           throw new Error('not a student');
         }
-        showProjectStep();
+        openDraft();
       } catch (err) {
         msgEl.hidden = false;
         msgEl.textContent = /not a student/.test(err.message)
@@ -1400,53 +1406,6 @@
     return true;
   }
 
-  async function showProjectStep(){
-    const honorific = mode === 'teacher' ? '선생님' : '학생';
-    startBody.innerHTML = `<h2>${esc(student.name)} ${honorific}, 안녕하세요!</h2><p class="note">불러오는 중...</p>`;
-    let list = [];
-    let loadErr = false;
-    const snap = await (mode === 'teacher' ? tdb : db).collection(mode === 'teacher' ? 'teacherProjects' : 'projects').get();
-    if (snap.error) loadErr = true;
-    list = snap.docs.map(d => ({ id: d.id, data: d.data() })).sort((a, b) => (b.data.updatedAt || 0) - (a.data.updatedAt || 0));
-
-    startBody.innerHTML = `
-      <h2>${esc(student.name)} ${honorific}, 안녕하세요!</h2>
-      <h3>새 프로젝트 만들기</h3>
-      <label for="newProjName">프로젝트 이름</label>
-      <input id="newProjName" maxlength="40" placeholder="프로젝트 이름을 지어주세요">
-      <button id="newProjBtn" class="primary" type="button" style="margin-top:10px; width:100%;">새 프로젝트 시작</button>
-      <h3>이어서 작업하기</h3>
-      <div class="proj-list" id="projList">${list.length ? '' : '<p class="note">아직 저장한 프로젝트가 없어요.</p>'}</div>
-      <p class="err" id="startErr" ${loadErr ? '' : 'hidden'}>${loadErr ? '프로젝트를 불러오지 못했어요. 새로고침 해주세요.' : ''}</p>
-      <button id="logoutBtn" class="ghost" type="button" style="margin-top:14px; width:100%;">${mode === 'teacher' ? '선생님 화면으로' : '로그아웃'}</button>`;
-
-    const listEl = document.getElementById('projList');
-    list.forEach(p => {
-      const row = document.createElement('div');
-      row.className = 'proj-item';
-      const when = p.data.updatedAt ? new Date(p.data.updatedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
-      row.innerHTML = `<div><div class="pname">${esc(p.data.name)}${p.data.submitted ? '<span class="badge-ok">제출함</span>' : ''}</div><div class="sub">${esc(when)} 저장 · 부품 ${(p.data.parts || []).length}개</div></div><button type="button" class="primary">이어서 작업하기</button>`;
-      row.querySelector('button').addEventListener('click', () => openProject(p.id, p.data));
-      listEl.appendChild(row);
-    });
-
-    const errEl = document.getElementById('startErr');
-    document.getElementById('newProjBtn').addEventListener('click', async () => {
-      const name = document.getElementById('newProjName').value.trim();
-      if (!name) { errEl.hidden = false; errEl.textContent = '프로젝트 이름을 먼저 적어주세요.'; return; }
-      const btn = document.getElementById('newProjBtn');
-      btn.disabled = true;
-      try { await createProject(name); }
-      catch (e) { console.error(e); btn.disabled = false; errEl.hidden = false; errEl.textContent = '프로젝트를 만들지 못했어요. 잠시 뒤 다시 눌러주세요.'; }
-    });
-    document.getElementById('logoutBtn').addEventListener('click', async () => {
-      if (mode === 'teacher') { window.location.href = 'index.html'; return; }
-      await db.auth.signOut();
-      student = null;
-      showLoginStep();
-    });
-  }
-
   // 선생님 화면에서 로그인한 상태로 들어온 경우: 학생 로그인 없이 선생님 프로젝트 화면으로
   async function startTeacher(){
     const { data: { session } } = await tdb.auth.getSession();
@@ -1458,15 +1417,66 @@
     accessToken = session.access_token;
     student = { id: session.user.id, name: snap.docs[0].data().name || '' };
     backLink.href = 'index.html';
-    backLink.textContent = '← 선생님 화면';
-    showProjectStep();
+    openDraft();
     return true;
   }
+
+  // 로그인하면 이름 입력 없이 바로 설계 화면. 이름은 위쪽 칸에서 고치고, 이전 작업은 [불러오기]로 연다.
+  // 새 설계는 처음 저장할 때 만들어지므로, 아무것도 안 하고 나가면 빈 설계가 쌓이지 않는다.
+  function openDraft(){
+    const now = Date.now();
+    const data = mode === 'teacher'
+      ? { name: '새 설계', parts: [], createdAt: now, updatedAt: now }
+      : { studentId: student.id, name: '새 설계', parts: [], submitted: false, createdAt: now, updatedAt: now };
+    project = { id: null, data };
+    nameInput.value = data.name;
+    restoreParts([]);
+    lastSavedKey = projectKey();
+    pbStudent.textContent = student.name + (mode === 'teacher' ? ' 선생님' : ' 학생');
+    pbSave.textContent = '';
+    submitBtn.hidden = mode === 'teacher';
+    projectBar.hidden = false;
+    backLink.textContent = mode === 'teacher' ? '← 저장하고 선생님 화면으로' : '← 저장하고 나가기';
+    startOverlay.hidden = true;
+    lastActivity = Date.now();
+    refreshSubmitBtn();
+    setStatus('부품을 배치하고 재생을 눌러보세요.', null);
+  }
+
+  async function showLoadPanel(){
+    try { await persist(false); }
+    catch (err) { setStatus('저장에 실패해서 불러오기를 멈췄어요. 인터넷을 확인하고 다시 눌러주세요.', 'warn'); return; }
+    startOverlay.hidden = false;
+    startBody.innerHTML = '<h2>불러오기</h2><p class="note">불러오는 중...</p>';
+    const snap = await (mode === 'teacher' ? tdb : db).collection(mode === 'teacher' ? 'teacherProjects' : 'projects').get();
+    const list = snap.docs.map(d => ({ id: d.id, data: d.data() })).sort((a, b) => (b.data.updatedAt || 0) - (a.data.updatedAt || 0));
+    startBody.innerHTML = `
+      <h2>불러오기</h2>
+      <div class="proj-list" id="projList">${snap.error ? '<p class="err">불러오지 못했어요. 잠시 뒤 다시 눌러주세요.</p>' : list.length ? '' : '<p class="note">아직 저장한 설계가 없어요.</p>'}</div>
+      <button id="newDraftBtn" class="primary" type="button" style="margin-top:14px; width:100%;">새 설계 시작</button>
+      <button id="closeLoadBtn" class="ghost" type="button" style="margin-top:10px; width:100%;">닫기</button>`;
+    const listEl = document.getElementById('projList');
+    list.forEach(p => {
+      const row = document.createElement('div');
+      row.className = 'proj-item';
+      const when = p.data.updatedAt ? new Date(p.data.updatedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+      row.innerHTML = `<div><div class="pname">${esc(p.data.name)}${p.data.submitted ? '<span class="badge-ok">제출함</span>' : ''}</div><div class="sub">${esc(when)} 저장 · 부품 ${(p.data.parts || []).length}개</div></div><button type="button" class="primary">불러오기</button>`;
+      row.querySelector('button').addEventListener('click', () => openProject(p.id, p.data));
+      listEl.appendChild(row);
+    });
+    document.getElementById('newDraftBtn').addEventListener('click', openDraft);
+    document.getElementById('closeLoadBtn').addEventListener('click', () => { startOverlay.hidden = true; });
+  }
+  pbSaveBtn.addEventListener('click', async () => {
+    try { await persist(false, true); }
+    catch (err) { setStatus('저장에 실패했어요. 인터넷을 확인하고 다시 눌러주세요.', 'warn'); }
+  });
+  pbLoadBtn.addEventListener('click', showLoadPanel);
 
   // 같은 탭에서 새로고침한 경우: 아직 로그인되어 있으면 바로 프로젝트 화면으로
   (async function boot(){
     const { data: { session } } = await db.auth.getSession();
-    if (session && await loadStudent()) { accessToken = session.access_token; showProjectStep(); return; }
+    if (session && await loadStudent()) { accessToken = session.access_token; openDraft(); return; }
     if (session) await db.auth.signOut();
     if (!(await startTeacher())) showLoginStep();
   })();
