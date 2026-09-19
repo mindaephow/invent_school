@@ -169,6 +169,10 @@
   .pill{display:inline-block; padding:3px 9px; border-radius:999px; font-size:12px; font-weight:600;}
   .pill.on{background:var(--present-bg); color:var(--present);}
   .pill.off{background:var(--missing-bg); color:var(--missing);}
+  .pill.warn{background:var(--late-bg); color:var(--late);}
+  .design-row{display:flex; align-items:center; justify-content:space-between; gap:10px; border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin-top:8px; background:var(--surface);}
+  .btn-link{display:inline-block; flex:none; text-decoration:none; border-radius:9px; border:1px solid var(--border); padding:9px 14px; font-size:14px; color:var(--ink); background:var(--surface);}
+  .btn-link.primary{background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:600;}
 
   .session-picker{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:14px;}
   .note{font-size:12px; color:var(--ink-soft);}
@@ -238,11 +242,12 @@
       <div class="table-wrap">
         <table id="attendTable">
           <thead>
-            <tr><th>번호</th><th>이름</th><th>출석</th><th>과제</th><th>미션(진행 상황)</th></tr>
+            <tr><th>번호</th><th>이름</th><th>출석</th><th>과제</th><th>설계·평가</th><th>미션(진행 상황)</th></tr>
           </thead>
           <tbody id="attendBody"></tbody>
         </table>
       </div>
+      <div id="designsPanel" hidden style="margin-top:14px;"></div>
       <p class="list-empty" id="attendEmpty" hidden>수업을 먼저 선택하세요.</p>
     </div>
 
@@ -436,7 +441,12 @@
     renderTeacherChip();
     renderHome();
     renderManage();
-    populateAttendClassPicker();
+    await populateAttendClassPicker();
+    const back = new URLSearchParams(location.search);
+    if (back.get('tab') === 'attend' && back.get('course')) {
+      history.replaceState(null, '', location.pathname);
+      openAttendanceFor(back.get('course'));
+    }
   }
   db.auth.onAuthStateChange((event, session) => { setTimeout(() => applySession(session), 0); });
 
@@ -869,6 +879,31 @@
     renderAttendTable();
   }
 
+  const designsPanel = document.getElementById('designsPanel');
+  const stars = (n) => '\u2605'.repeat(n) + '\u2606'.repeat(5 - n);
+
+  // 학생 한 명의 설계 목록 + 평가 (확인·평가 → 설계 화면에서 열어 보고 평가·조언을 남김)
+  function showDesigns(courseId, studentName, list, fbByProject){
+    const rows = list
+      .slice()
+      .sort((a, b) => (b.submitted ? 1 : 0) - (a.submitted ? 1 : 0) || (b.updatedAt || 0) - (a.updatedAt || 0))
+      .map(p => {
+        const fb = fbByProject[p.id];
+        const when = p.updatedAt ? new Date(p.updatedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+        return `<div class="design-row">
+          <div class="item-main">
+            <div class="item-title">${escapeHtml(p.name || '(이름 없음)')} <span class="pill ${p.submitted ? 'on' : 'off'}">${p.submitted ? '제출함' : '미제출'}</span></div>
+            <div class="item-sub">${escapeHtml(when)} 저장 · 부품 ${(p.parts || []).length}개 · ${fb ? '평가 ' + stars(fb.rating || 0) : '평가 전'}</div>
+            ${fb && fb.advice ? `<div class="item-sub">조언: ${escapeHtml(fb.advice)}</div>` : ''}
+          </div>
+          <a class="btn-link primary" href="design.html?review=${encodeURIComponent(p.id)}">확인·평가</a>
+        </div>`;
+      }).join('');
+    designsPanel.innerHTML = `<h3 style="font-size:15px;">${escapeHtml(studentName)} 학생의 설계</h3>${rows || '<p class="note">아직 저장한 설계가 없어요.</p>'}`;
+    designsPanel.hidden = false;
+    designsPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
   async function renderAttendTable(){
     const courseId = classForAttend.value;
     if (!db || !courseId) {
@@ -878,8 +913,18 @@
       return;
     }
     attendEmpty.hidden = true;
+    designsPanel.hidden = true;
     const studentsSnap = await db.collection('students').where('courseId', '==', courseId).get();
     const recordsSnap = await db.collection('records').where('courseId', '==', courseId).where('date', '==', TODAY_STR).get();
+    // 내 수업 학생들의 설계와 평가 (권한 규칙상 담당 선생님만 조회 가능)
+    const [projSnap, fbSnap] = await Promise.all([db.collection('projects').get(), db.collection('feedback').get()]);
+    const fbByProject = {};
+    fbSnap.docs.forEach(f => { fbByProject[f.row.project_id] = f.data(); });
+    const projectsByStudent = {};
+    projSnap.docs.forEach(p => {
+      if (p.row.course_id !== courseId) return;
+      (projectsByStudent[p.row.student_id] = projectsByStudent[p.row.student_id] || []).push({ id: p.id, ...p.data() });
+    });
     const recordByStudent = {};
     recordsSnap.docs.forEach(r => { recordByStudent[r.data().studentId] = { id: r.id, ...r.data() }; });
 
@@ -891,6 +936,11 @@
       .forEach(s => {
       const d = s.data();
       const rec = recordByStudent[s.id] || {};
+      const mine = projectsByStudent[s.id] || [];
+      const submittedList = mine.filter(p => p.submitted);
+      const waiting = submittedList.filter(p => !fbByProject[p.id]);
+      const designLabel = !mine.length ? '없음' : `제출 ${submittedList.length}` + (waiting.length ? ` · 평가 전 ${waiting.length}` : submittedList.length ? ' · 평가 완료' : '');
+      const designCls = waiting.length ? 'warn' : submittedList.length ? 'on' : 'off';
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td class="num">${escapeHtml(d.number || '')}</td>
@@ -903,6 +953,7 @@
           </div>
         </td>
         <td><button type="button" class="pill ${rec.assignment==='submitted'?'on':'off'}" data-assign>${rec.assignment==='submitted'?'제출함':'미제출'}</button></td>
+        <td><button type="button" class="pill ${designCls}" data-designs ${mine.length ? '' : 'disabled'}>${designLabel}</button></td>
         <td><input type="text" value="${escapeHtml(rec.mission || '')}" data-mission placeholder="예: Lv.2 진행중"></td>
       `;
       const saveRecord = async (patch) => {
@@ -929,6 +980,7 @@
         assignBtn.className = 'pill ' + (next === 'submitted' ? 'on' : 'off');
         saveRecord({ assignment: next });
       });
+      tr.querySelector('[data-designs]').addEventListener('click', () => showDesigns(courseId, d.name, mine, fbByProject));
       const missionInput = tr.querySelector('[data-mission]');
       let missionTimer = null;
       missionInput.addEventListener('input', () => {

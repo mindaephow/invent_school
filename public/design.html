@@ -213,6 +213,15 @@
   .proj-item .pname{font-weight:600; font-size:14px; word-break:break-all;}
   .proj-item .sub{font-size:12px; color:var(--ink-soft);}
   .badge-ok{font-size:11px; background:var(--success-bg); color:var(--success); padding:2px 8px; border-radius:999px; margin-left:6px; font-weight:700; white-space:nowrap;}
+  .review-bar{background:var(--panel); border:1px solid var(--panel-border); border-radius:14px; padding:14px 16px; margin-bottom:14px; display:grid; gap:10px;}
+  .review-bar[hidden]{display:none;}
+  .review-bar textarea{width:100%; border:1px solid var(--panel-border); border-radius:8px; padding:8px 10px; background:var(--panel); color:var(--ink); font:inherit; font-size:14px; resize:vertical;}
+  .rv-title{font-weight:700;}
+  .rv-stars{display:flex; gap:2px;}
+  .rv-stars button{font-size:24px; line-height:1; padding:2px 5px; background:transparent; border:none; color:var(--ink-soft); opacity:0.45;}
+  .rv-stars button.on{color:#F5A623; opacity:1;}
+  .rv-actions{display:flex; align-items:center; gap:10px;}
+  .fb-box{margin-top:6px; background:var(--blueprint-soft); border-radius:8px; padding:8px 10px; font-size:13px; line-height:1.5; white-space:pre-wrap;}
   .project-bar{display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-bottom:14px;}
   .project-bar[hidden]{display:none;}
   .project-bar input{flex:1; min-width:140px; max-width:300px; width:auto;}
@@ -235,6 +244,13 @@
     <button id="pbSaveBtn" type="button">저장</button>
     <button id="pbLoadBtn" type="button">불러오기</button>
     <button id="submitBtn" class="primary" type="button">과제 제출하기</button>
+  </div>
+
+  <div class="review-bar" id="reviewBar" hidden>
+    <div><span class="rv-title" id="rvTitle"></span> <span class="pb-save" id="rvMeta"></span></div>
+    <div class="rv-stars" id="rvStars" role="group" aria-label="평가"></div>
+    <textarea id="rvAdvice" rows="3" maxlength="500" placeholder="학생에게 남길 조언을 적어주세요" aria-label="조언"></textarea>
+    <div class="rv-actions"><button id="rvSave" class="primary" type="button">평가 저장</button><span class="pb-save" id="rvMsg"></span></div>
   </div>
 
   <div class="layout">
@@ -1183,6 +1199,7 @@
   function esc(s){
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
+  const stars = (n) => '\u2605'.repeat(n) + '\u2606'.repeat(5 - n);
   function round3(n){ return Math.round(n * 1000) / 1000; }
   function round5(n){ return Math.round(n * 100000) / 100000; }
   function clockText(){
@@ -1385,6 +1402,7 @@
           throw new Error('not a student');
         }
         openDraft();
+        notifyFeedback();
       } catch (err) {
         msgEl.hidden = false;
         msgEl.textContent = /not a student/.test(err.message)
@@ -1443,6 +1461,20 @@
     setStatus('부품을 배치하고 재생을 눌러보세요.', null);
   }
 
+  function feedbackHtml(fb){
+    if (!fb) return '';
+    return `<div class="fb-box"><b>선생님 평가 ${stars(fb.rating || 0)}</b>${fb.advice ? '\n' + esc(fb.advice) : ''}</div>`;
+  }
+  function showFeedbackStatus(fb){
+    if (fb) setStatus('선생님 평가 ' + stars(fb.rating || 0) + (fb.advice ? ' · ' + fb.advice : ''), 'success');
+  }
+  // 로그인했을 때 선생님이 남긴 평가가 있으면 알려준다
+  async function notifyFeedback(){
+    if (mode !== 'student') return;
+    const snap = await db.collection('feedback').get();
+    if (snap.docs.length) setStatus('선생님이 남긴 평가가 ' + snap.docs.length + '개 있어요. [불러오기]에서 확인해 보세요.', 'success');
+  }
+
   async function showLoadPanel(){
     try { await persist(false); }
     catch (err) { setStatus('저장에 실패해서 불러오기를 멈췄어요. 인터넷을 확인하고 다시 눌러주세요.', 'warn'); return; }
@@ -1450,6 +1482,11 @@
     startBody.innerHTML = '<h2>불러오기</h2><p class="note">불러오는 중...</p>';
     const snap = await (mode === 'teacher' ? tdb : db).collection(mode === 'teacher' ? 'teacherProjects' : 'projects').get();
     const list = snap.docs.map(d => ({ id: d.id, data: d.data() })).sort((a, b) => (b.data.updatedAt || 0) - (a.data.updatedAt || 0));
+    const fbByProject = {};
+    if (mode === 'student') {
+      const fbSnap = await db.collection('feedback').get(); // 규칙상 내 과제에 달린 평가만 보인다
+      fbSnap.docs.forEach(f => { fbByProject[f.row.project_id] = f.data(); });
+    }
     startBody.innerHTML = `
       <h2>불러오기</h2>
       <div class="proj-list" id="projList">${snap.error ? '<p class="err">불러오지 못했어요. 잠시 뒤 다시 눌러주세요.</p>' : list.length ? '' : '<p class="note">아직 저장한 설계가 없어요.</p>'}</div>
@@ -1460,8 +1497,8 @@
       const row = document.createElement('div');
       row.className = 'proj-item';
       const when = p.data.updatedAt ? new Date(p.data.updatedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
-      row.innerHTML = `<div><div class="pname">${esc(p.data.name)}${p.data.submitted ? '<span class="badge-ok">제출함</span>' : ''}</div><div class="sub">${esc(when)} 저장 · 부품 ${(p.data.parts || []).length}개</div></div><button type="button" class="primary">불러오기</button>`;
-      row.querySelector('button').addEventListener('click', () => openProject(p.id, p.data));
+      row.innerHTML = `<div><div class="pname">${esc(p.data.name)}${p.data.submitted ? '<span class="badge-ok">제출함</span>' : ''}</div><div class="sub">${esc(when)} 저장 · 부품 ${(p.data.parts || []).length}개</div>${feedbackHtml(fbByProject[p.id])}</div><button type="button" class="primary">불러오기</button>`;
+      row.querySelector('button').addEventListener('click', () => { openProject(p.id, p.data); showFeedbackStatus(fbByProject[p.id]); });
       listEl.appendChild(row);
     });
     document.getElementById('newDraftBtn').addEventListener('click', openDraft);
@@ -1473,10 +1510,80 @@
   });
   pbLoadBtn.addEventListener('click', showLoadPanel);
 
+  // 선생님이 학생의 과제를 열어 보고 평가·조언을 남기는 화면 (design.html?review=<프로젝트 id>). 설계는 저장되지 않는다.
+  async function startReview(id){
+    const { data: { session } } = await tdb.auth.getSession();
+    if (!session) return false;
+    const c = tdb.client;
+    const { data: pr } = await c.from('ivs_projects').select('id, data, student_id, course_id').eq('id', id).maybeSingle();
+    if (!pr) {
+      startOverlay.hidden = false;
+      startBody.innerHTML = '<h2>과제를 열 수 없어요</h2><p class="note">내 수업 학생의 과제만 볼 수 있어요.</p><p class="note"><a href="index.html">선생님 화면으로</a></p>';
+      return true;
+    }
+    const [st, fb] = await Promise.all([
+      c.from('ivs_students').select('data').eq('id', pr.student_id).maybeSingle(),
+      c.from('ivs_feedback').select('id, data').eq('project_id', id).maybeSingle()
+    ]);
+    mode = 'review';
+    accessToken = session.access_token;
+    let rating = (fb.data && fb.data.data && fb.data.data.rating) || 0;
+    let fbId = fb.data ? fb.data.id : null;
+
+    restoreParts(pr.data.parts || []);
+    startOverlay.hidden = true;
+    projectBar.hidden = true;
+    backLink.href = 'index.html?tab=attend&course=' + encodeURIComponent(pr.course_id);
+    backLink.textContent = '← 출석부로';
+    const stName = (st.data && st.data.data && st.data.data.name) || '';
+    document.getElementById('rvTitle').textContent = stName + ' 학생 · ' + (pr.data.name || '(이름 없음)');
+    document.getElementById('rvMeta').textContent = pr.data.submitted
+      ? '제출함' + (pr.data.submittedAt ? ' · ' + new Date(pr.data.submittedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '')
+      : '아직 제출하지 않은 설계';
+    const starsEl = document.getElementById('rvStars');
+    const adviceEl = document.getElementById('rvAdvice');
+    const msgEl = document.getElementById('rvMsg');
+    adviceEl.value = (fb.data && fb.data.data && fb.data.data.advice) || '';
+    function paintStars(){
+      starsEl.innerHTML = '';
+      for (let i = 1; i <= 5; i++) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = '\u2605';
+        b.className = i <= rating ? 'on' : '';
+        b.setAttribute('aria-label', i + '점');
+        b.setAttribute('aria-pressed', i <= rating ? 'true' : 'false');
+        b.addEventListener('click', () => { rating = i; paintStars(); });
+        starsEl.appendChild(b);
+      }
+    }
+    paintStars();
+    document.getElementById('reviewBar').hidden = false;
+    setStatus('학생의 설계예요. 돌려보고 재생해 본 뒤 평가와 조언을 남겨주세요. (여기서 움직여도 학생 설계는 바뀌지 않아요)', null);
+
+    document.getElementById('rvSave').addEventListener('click', async () => {
+      const advice = adviceEl.value.trim();
+      if (!rating && !advice) { msgEl.textContent = '별점이나 조언을 적어주세요.'; return; }
+      const payload = { projectId: id, rating, advice, updatedAt: Date.now() };
+      msgEl.textContent = '저장 중...';
+      try {
+        if (fbId) await tdb.collection('feedback').doc(fbId).update(payload);
+        else fbId = (await tdb.collection('feedback').add(payload)).id;
+        msgEl.textContent = '저장됨 ' + clockText();
+      } catch (err) {
+        console.error(err);
+        msgEl.textContent = '저장에 실패했어요. 잠시 뒤 다시 눌러주세요.';
+      }
+    });
+    return true;
+  }
+
   // 같은 탭에서 새로고침한 경우: 아직 로그인되어 있으면 바로 프로젝트 화면으로
   (async function boot(){
+    const reviewId = new URLSearchParams(location.search).get('review');
+    if (reviewId && await startReview(reviewId)) return;
     const { data: { session } } = await db.auth.getSession();
-    if (session && await loadStudent()) { accessToken = session.access_token; openDraft(); return; }
+    if (session && await loadStudent()) { accessToken = session.access_token; openDraft(); notifyFeedback(); return; }
     if (session) await db.auth.signOut();
     if (!(await startTeacher())) showLoginStep();
   })();

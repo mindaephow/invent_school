@@ -31,7 +31,8 @@ function createSupabaseDb(supabaseUrl, supabaseKey, options) {
     records: 'ivs_records',
     curriculum: 'ivs_curriculum',
     projects: 'ivs_projects',
-    teacherProjects: 'ivs_teacher_projects'
+    teacherProjects: 'ivs_teacher_projects',
+    feedback: 'ivs_feedback'
   };
 
   // row.data is the document; other columns (login_id, user_id, ...) come along as `row`
