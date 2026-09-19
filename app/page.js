@@ -1,5 +1,5 @@
 export const metadata = {
-  title: '발명교실',
+  title: '발명융합과학교실',
   description:
     '이론을 전달하는 수업이 아니라 직접 발명해보는 수업. 문제를 발견하는 관점과 실패를 두려워하지 않고 만들어보는 과정을 설계합니다.',
 }
@@ -210,6 +210,18 @@ h2{font-size:clamp(24px, 3.6vw, 32px); line-height:1.3; margin:0 0 12px; text-wr
 .goldberg ul{list-style:none; margin:0; padding:0; display:grid; gap:8px;}
 .goldberg li{background:rgba(255,255,255,0.14); border-radius:10px; padding:9px 12px; font-size:14.5px;}
 
+.ops{display:grid; grid-template-columns:repeat(auto-fit, minmax(250px, 1fr)); gap:12px;}
+.op{background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:22px;}
+.op h3{margin:0 0 14px; font-size:15px; color:var(--blue); letter-spacing:0.02em;}
+.op .chips{display:flex; flex-wrap:wrap; gap:8px;}
+.op .chip{background:var(--blue-soft); color:var(--ink); border-radius:999px; padding:8px 16px; font-weight:700; font-size:16px;}
+.op dl{margin:0; display:grid; gap:12px;}
+.op dt{font-size:13px; color:var(--ink-soft); margin:0;}
+.op dd{margin:0; font-size:22px; font-weight:700; line-height:1.3;}
+.op dd small{font-size:14px; font-weight:500; color:var(--ink-soft); margin-left:4px;}
+.op.wide{grid-column:span 2;}
+@media (max-width:640px){ .op.wide{grid-column:auto;} }
+
 .cta{
   margin:72px 0 0; padding:34px 26px; border-radius:20px; text-align:center;
   background:var(--blue); color:#fff;
@@ -244,7 +256,7 @@ export default function Home() {
       <div className="wrap">
         <header className="nav">
           <a className="brand" href="/">
-            <span>⚙</span> 발명교실
+            <span>⚙</span> 발명융합과학교실
           </a>
           <nav className="nav-actions">
             <a className="btn" href="/design.html">학생 로그인</a>
@@ -254,7 +266,7 @@ export default function Home() {
 
         <div className="hero">
           <div className="hero-inner">
-            <span className="kicker">발명교실 수업 소개</span>
+            <span className="kicker">발명융합과학교실 수업 소개</span>
             <h1>
               이론을 전달하는 수업이 아니라, <em>직접 발명해보는</em> 수업입니다
             </h1>
@@ -270,14 +282,14 @@ export default function Home() {
         </div>
 
         <p className="summary">
-          결국 발명교실은 <em>다양한 경험</em>을 하면서 <em>불편함</em>을 많이많이 겪어보고, 그 <em>문제를 스스로 해결</em>해보는 수업입니다.
+          결국 발명융합과학교실은 <em>다양한 경험</em>을 하면서 <em>불편함</em>을 많이많이 겪어보고, 그 <em>문제를 스스로 해결</em>해보는 수업입니다.
         </p>
 
         <section id="how">
           <p className="eyebrow">다른 수업과 무엇이 다른가요</p>
           <h2>비슷해 보이지만, 수업을 진행하는 방식이 다릅니다</h2>
           <p className="section-lead">
-            발명교실은 다양한 과학 수업과 비슷해 보이지만, 지식을 전달하는 데서 끝나지 않습니다. 발명 수업의 성패는 거창한 재료보다 문제를 발견하는 관점과, 실패를 두려워하지 않고 만들어보는 과정을 설계하는 데 달려 있다고 생각하기 때문입니다.
+            발명융합과학교실은 다양한 과학 수업과 비슷해 보이지만, 지식을 전달하는 데서 끝나지 않습니다. 발명 수업의 성패는 거창한 재료보다 문제를 발견하는 관점과, 실패를 두려워하지 않고 만들어보는 과정을 설계하는 데 달려 있다고 생각하기 때문입니다.
           </p>
           <div className="compare">
             <div className="col">
@@ -285,7 +297,7 @@ export default function Home() {
               <ul>{COMPARE.left.map((t) => <li key={t}>{t}</li>)}</ul>
             </div>
             <div className="col hl">
-              <h3>발명교실</h3>
+              <h3>발명융합과학교실</h3>
               <ul>{COMPARE.right.map((t) => <li key={t}>{t}</li>)}</ul>
             </div>
           </div>
@@ -376,8 +388,57 @@ export default function Home() {
           </div>
         </section>
 
+        <section id="ops">
+          <p className="eyebrow">수업 운영</p>
+          <h2>특강형도 방과후형도 모두 가능합니다</h2>
+          <p className="section-lead">기관과 대상에 맞춰 수업을 운영할 수 있습니다.</p>
+          <div className="ops">
+            <div className="op">
+              <h3>수업 형태</h3>
+              <div className="chips">
+                <span className="chip">특강형</span>
+                <span className="chip">방과후형</span>
+              </div>
+            </div>
+            <div className="op wide">
+              <h3>방과후 운영</h3>
+              <dl>
+                <div>
+                  <dt>분기제</dt>
+                  <dd>12회 × 4분기</dd>
+                </div>
+                <div>
+                  <dt>학기제</dt>
+                  <dd>24회 × 2학기</dd>
+                </div>
+                <div>
+                  <dt>방학</dt>
+                  <dd>방학특강</dd>
+                </div>
+              </dl>
+            </div>
+            <div className="op">
+              <h3>진행 장소</h3>
+              <div className="chips">
+                <span className="chip">방과후</span>
+                <span className="chip">문화센터</span>
+              </div>
+            </div>
+            <div className="op wide">
+              <h3>수업 대상</h3>
+              <div className="chips">
+                <span className="chip">초등</span>
+                <span className="chip">중등</span>
+                <span className="chip">고등</span>
+                <span className="chip">대학</span>
+                <span className="chip">기업</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section>
-          <p className="eyebrow">발명교실 온라인 설계실</p>
+          <p className="eyebrow">발명융합과학교실 온라인 설계실</p>
           <h2>내 계정으로 들어가서 설계하고, 이어서 만듭니다</h2>
           <p className="section-lead">학교에서도 집에서도, 선생님이 만들어준 내 계정으로 들어가 3D 설계를 이어갈 수 있습니다.</p>
           <div className="steps">
@@ -391,14 +452,14 @@ export default function Home() {
         </section>
 
         <div className="cta">
-          <h2>발명교실에 들어가기</h2>
+          <h2>발명융합과학교실에 들어가기</h2>
           <p>선생님이 알려준 아이디와 비밀번호로 로그인하세요.</p>
           <div className="cta-actions">
             <a className="btn primary big" href="/design.html">학생 로그인</a>
             <a className="btn big" href="/index.html">선생님 로그인</a>
           </div>
         </div>
-        <footer>발명교실</footer>
+        <footer>발명융합과학교실</footer>
       </div>
     </>
   )
