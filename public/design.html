@@ -160,6 +160,9 @@
     border-radius:16px; box-shadow:var(--shadow); overflow:hidden;
     aspect-ratio:4/3; touch-action:none;
   }
+  .view-tools{position:absolute; top:10px; left:10px; display:flex; gap:6px; z-index:2;}
+  .view-tools button{padding:6px 12px; font-size:12px; font-weight:600; border-radius:999px; background:var(--panel); border:1px solid var(--panel-border); color:var(--ink);}
+  .view-tools button.on{background:var(--blueprint); border-color:var(--blueprint); color:#fff;}
   #sceneCanvas{position:absolute; inset:0; width:100%; height:100%; display:block;}
   .scene-hint{
     position:absolute; left:10px; bottom:10px; font-size:11px; color:var(--ink-soft);
@@ -348,7 +351,11 @@
       <button id="unfoldSide" class="ghost unfold-side" type="button" aria-label="부품 목록 펼치기" title="부품 목록 펼치기" hidden>☰ 부품</button>
       <div class="scene-wrap">
         <canvas id="sceneCanvas"></canvas>
-        <div class="scene-hint">빈 곳 드래그: 회전 · 선택한 부품 드래그: 이동 · 휠/핀치: 확대축소</div>
+        <div class="view-tools">
+          <button id="panToggle" type="button" aria-pressed="false" title="켜고 빈 곳을 끌면 화면이 밀려요 (마우스 오른쪽 버튼이나 손가락 두 개로도 돼요)">✋ 이동</button>
+          <button id="viewHome" type="button" title="처음 화면으로">⌂ 처음</button>
+        </div>
+        <div class="scene-hint">빈 곳 드래그: 회전 · ✋이동/오른쪽 버튼/두 손가락: 화면 밀기 · 선택한 부품 드래그: 부품 이동 · 휠/핀치: 확대축소</div>
         <div class="viewcube-wrap">
           <div class="viewcube" id="viewCube">
             <div class="face front" data-face="front">앞</div>
@@ -1141,7 +1148,36 @@
   let pointerDown = false, lastX = 0, lastY = 0, moved = false, draggingPart = false;
   const MIN_RADIUS = 100, MAX_RADIUS = 3500;
   const activePointers = new Map();
-  let pinchStartDist = null, pinchStartRadius = null;
+  let pinchStartDist = null, pinchStartRadius = null, pinchLastMid = null;
+  let panning = false;     // 이번 끌기가 회전이 아니라 화면 밀기인지
+  let panToggleOn = false; // "✋ 이동" 버튼을 켜 둔 상태
+
+  // 화면을 위아래·좌우로 밀고 당긴다: 보는 중심점(target)을 카메라 기준 좌우·상하로 옮긴다
+  function panBy(dx, dy){
+    const h = canvas.clientHeight || 1;
+    const k = 2 * orbit.radius * Math.tan(camera.fov * Math.PI / 360) / h; // 화면 1픽셀 ≈ 세계 좌표 k
+    const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+    const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
+    target.addScaledVector(right, -dx * k).addScaledVector(up, dy * k);
+    target.x = Math.min(Math.max(target.x, -ROOM_HALF), ROOM_HALF);
+    target.z = Math.min(Math.max(target.z, -ROOM_HALF), ROOM_HALF);
+    target.y = Math.min(Math.max(target.y, 0), CEIL_Y);
+  }
+  const panToggleBtn = document.getElementById('panToggle');
+  panToggleBtn.addEventListener('click', () => {
+    panToggleOn = !panToggleOn;
+    panToggleBtn.classList.toggle('on', panToggleOn);
+    panToggleBtn.setAttribute('aria-pressed', String(panToggleOn));
+  });
+  document.getElementById('viewHome').addEventListener('click', () => {
+    orbit.theta = Math.PI / 4; orbit.phi = 1.05; orbit.radius = 1800;
+    target.set(0, 400, 0);
+  });
+  canvas.addEventListener('contextmenu', (e) => e.preventDefault()); // 오른쪽 버튼 끌기를 쓰려고 메뉴는 끔
+  function pinchMid(){
+    const pts = Array.from(activePointers.values());
+    return { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+  }
 
   function pinchDist(){
     const pts = Array.from(activePointers.values());
@@ -1154,11 +1190,13 @@
       pointerDown = false; draggingPart = false;
       pinchStartDist = pinchDist();
       pinchStartRadius = orbit.radius;
+      pinchLastMid = pinchMid();
       return;
     }
     pointerDown = true; moved = false;
     lastX = e.clientX; lastY = e.clientY;
     draggingPart = false;
+    panning = e.button === 1 || e.button === 2 || e.shiftKey || panToggleOn;
     if (selected && !playing) {
       raycaster.setFromCamera(ndcFromEvent(e), camera);
       draggingPart = raycaster.intersectObject(selected.mesh, true).length > 0;
@@ -1169,6 +1207,9 @@
     if (activePointers.size >= 2 && pinchStartDist) {
       const scale = pinchStartDist / Math.max(pinchDist(), 1);
       orbit.radius = Math.min(Math.max(pinchStartRadius * scale, MIN_RADIUS), MAX_RADIUS);
+      const m = pinchMid();
+      if (pinchLastMid) panBy(m.x - pinchLastMid.x, m.y - pinchLastMid.y); // 두 손가락을 같이 끌면 화면이 밀려요
+      pinchLastMid = m;
       return;
     }
     if (!pointerDown) return;
@@ -1177,6 +1218,8 @@
     if (moved) {
       if (draggingPart) {
         dragSelectedTo(e);
+      } else if (panning) {
+        panBy(dx, dy);
       } else {
         orbit.theta -= dx * 0.008;
         orbit.phi = Math.min(Math.max(orbit.phi - dy * 0.008, 0.05), Math.PI - 0.05);
@@ -1186,9 +1229,9 @@
   });
   window.addEventListener('pointerup', (e) => {
     activePointers.delete(e.pointerId);
-    if (activePointers.size < 2) pinchStartDist = null;
+    if (activePointers.size < 2) { pinchStartDist = null; pinchLastMid = null; }
     if (activePointers.size === 0) {
-      if (pointerDown && !moved && !draggingPart) handleSelectClick(e);
+      if (pointerDown && !moved && !draggingPart && e.button !== 1 && e.button !== 2) handleSelectClick(e);
       pointerDown = false;
       draggingPart = false;
     }
