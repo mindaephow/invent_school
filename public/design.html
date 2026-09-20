@@ -191,6 +191,11 @@
 
   .controls{display:flex; flex-wrap:wrap; align-items:center; gap:10px;}
   .layout.no-side .sidebar{display:none;}
+  .side-head{position:sticky; top:0; z-index:2; background:var(--bg); padding:2px 0 10px; display:flex; align-items:center; justify-content:space-between;}
+  .side-head b{font-size:15px;}
+  .side-head button{font-size:20px; line-height:1; padding:4px 12px; font-weight:700;}
+  .unfold-side{align-self:flex-start; font-weight:600;}
+  .unfold-side[hidden]{display:none;}
   @media (min-width:761px){
     body{padding-block:12px; margin-block:0;}
     .app{height:calc(100vh - 24px); display:flex; flex-direction:column;}
@@ -273,6 +278,7 @@
 
   <div class="layout">
     <aside class="sidebar">
+      <div class="side-head"><b>부품</b><button id="foldSide" class="ghost" type="button" aria-label="부품 목록 접기" title="부품 목록 접기">«</button></div>
       <section class="mission">
         <h2>미션</h2>
         <p>공을 굴려서 깃발(목표)까지 도착시키세요. 판·기둥·직선길로 구조를 만들고, 화면을 드래그해서 돌려보며 확인하세요.</p>
@@ -339,6 +345,7 @@
     </aside>
 
     <main class="stage">
+      <button id="unfoldSide" class="ghost unfold-side" type="button" aria-label="부품 목록 펼치기" title="부품 목록 펼치기" hidden>☰ 부품</button>
       <div class="scene-wrap">
         <canvas id="sceneCanvas"></canvas>
         <div class="scene-hint">빈 곳 드래그: 회전 · 선택한 부품 드래그: 이동 · 휠/핀치: 확대축소</div>
@@ -391,7 +398,6 @@
         <button id="playBtn" class="primary">▶ 재생</button>
         <button id="resetBtn">↺ 다시 도전</button>
         <button id="clearBtn" class="ghost">전체 삭제</button>
-        <button id="toggleSidebar" class="ghost" type="button" aria-expanded="true">◀ 부품 목록 접기</button>
         <p id="status" class="status">부품을 배치하고 재생을 눌러보세요.</p>
       </div>
       <div class="build-guide" id="buildGuide" hidden>
@@ -1022,14 +1028,15 @@
 
   // 왼쪽 부품 목록 접기/펼치기 (고른 상태는 이 브라우저에만 기억)
   const layoutEl = document.querySelector('.layout');
-  const toggleSideBtn = document.getElementById('toggleSidebar');
+  const foldSideBtn = document.getElementById('foldSide');
+  const unfoldSideBtn = document.getElementById('unfoldSide');
   function setSidebarHidden(hidden){
     layoutEl.classList.toggle('no-side', hidden);
-    toggleSideBtn.textContent = hidden ? '▶ 부품 목록 펼치기' : '◀ 부품 목록 접기';
-    toggleSideBtn.setAttribute('aria-expanded', String(!hidden));
+    unfoldSideBtn.hidden = !hidden;
     try { localStorage.setItem('ivs-parts-hidden', hidden ? '1' : '0'); } catch (e) {}
   }
-  toggleSideBtn.addEventListener('click', () => setSidebarHidden(!layoutEl.classList.contains('no-side')));
+  foldSideBtn.addEventListener('click', () => setSidebarHidden(true));
+  unfoldSideBtn.addEventListener('click', () => setSidebarHidden(false));
   try { if (localStorage.getItem('ivs-parts-hidden') === '1') setSidebarHidden(true); } catch (e) {}
 
   document.getElementById('clearBtn').addEventListener('click', () => {
