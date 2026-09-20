@@ -615,12 +615,19 @@
   const HOLE_R_PX = HOLE_R_WORLD * PX_PER_UNIT;
   const PEG_R_WORLD = HOLE_R_WORLD * 0.8; // snug fit inside the hole
 
-  function makePerforatedTexture(baseColorHex){
+  function makePerforatedTexture(baseColorHex, grooves){
     const c = document.createElement('canvas');
     c.width = 64; c.height = 64;
     const tctx = c.getContext('2d');
     tctx.fillStyle = baseColorHex;
     tctx.fillRect(0, 0, 64, 64);
+    if (grooves) {
+      // 구멍 줄 사이(칸 경계)마다 가로·세로로 얕은 홈: 칸 한 변 20 중 약 4.5 폭
+      const gw = 7;
+      tctx.fillStyle = 'rgba(0,0,0,0.24)';
+      tctx.fillRect(0, 0, 64, gw); tctx.fillRect(0, 64 - gw, 64, gw);
+      tctx.fillRect(0, 0, gw, 64); tctx.fillRect(64 - gw, 0, gw, 64);
+    }
     tctx.fillStyle = 'rgba(0,0,0,0.4)';
     tctx.beginPath();
     tctx.arc(32, 32, HOLE_R_PX, 0, Math.PI * 2);
@@ -631,10 +638,36 @@
     return tex;
   }
 
-  function makePanelMaterial(w, d, colorHex){
-    const tex = makePerforatedTexture(colorHex || partColor('panel'));
+  // 높낮이 지도: 밝을수록 높다. 판 표면 = 높음, 구멍 사이 홈 = 낮음, 구멍 = 가장 낮음
+  function makeGrooveBumpTexture(){
+    const c = document.createElement('canvas');
+    c.width = 64; c.height = 64;
+    const g = c.getContext('2d');
+    g.fillStyle = '#ffffff';
+    g.fillRect(0, 0, 64, 64);
+    const gw = 7;
+    g.fillStyle = '#5a5a5a';
+    g.fillRect(0, 0, 64, gw); g.fillRect(0, 64 - gw, 64, gw);
+    g.fillRect(0, 0, gw, 64); g.fillRect(64 - gw, 0, gw, 64);
+    g.fillStyle = '#000000';
+    g.beginPath(); g.arc(32, 32, HOLE_R_PX, 0, Math.PI * 2); g.fill();
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    return tex;
+  }
+
+  function makePanelMaterial(w, d, colorHex, grooves){
+    const tex = makePerforatedTexture(colorHex || partColor('panel'), grooves);
     tex.repeat.set(w / GRID_UNIT, d / GRID_UNIT);
-    return new THREE.MeshStandardMaterial({ map: tex, color: 0xffffff });
+    const mat = new THREE.MeshStandardMaterial({ map: tex, color: 0xffffff });
+    if (grooves) {
+      const bump = makeGrooveBumpTexture();
+      bump.repeat.set(w / GRID_UNIT, d / GRID_UNIT);
+      mat.bumpMap = bump;
+      mat.bumpScale = 4;
+    }
+    return mat;
   }
 
   function makePillarTexture(baseColorHex){
@@ -924,7 +957,7 @@
     if (isPanelType(type)) {
       // holes only make sense on the flat top/bottom faces, not the thin side edges
       const flat = new THREE.MeshStandardMaterial({ color: partColor('panel') });
-      const holed = makePanelMaterial(def.w, def.d);
+      const holed = makePanelMaterial(def.w, def.d, null, true);
       mat = [flat, flat, holed, holed, flat, flat]; // BoxGeometry face order: +X -X +Y -Y +Z -Z
     } else if (isPillarType(type)) {
       const flat = new THREE.MeshStandardMaterial({ color: partColor('pillar') });
