@@ -203,16 +203,16 @@
   .part-list-body button.sel{background:var(--blueprint-soft); border-color:var(--blueprint); font-weight:700;}
   .part-list-body .dot{flex:0 0 10px; width:10px; height:10px; border-radius:50%;}
   .part-list-empty{margin:4px 6px 2px; color:var(--ink-soft); font-size:12px;}
-  .history-panel{position:absolute; right:10px; bottom:58px; z-index:2; width:210px; background:var(--panel); border:1px solid var(--panel-border); border-radius:12px; box-shadow:var(--shadow); font-size:13px;}
-  .history-head{display:flex; align-items:center; gap:4px; padding:5px 6px 5px 4px;}
-  .history-title{flex:1; display:flex; align-items:center; justify-content:space-between; padding:4px 6px; border:0; background:transparent; font-weight:700; font-size:13px; color:var(--ink); cursor:pointer; text-align:left;}
-  .history-head > button:not(.history-title){padding:3px 9px; font-size:16px; line-height:1;}
+  .history-panel{background:var(--panel); border:1px solid var(--panel-border); border-radius:12px; box-shadow:var(--shadow); font-size:13px;}
+  .history-head{display:flex; align-items:center; gap:6px; padding:6px 8px;}
+  .history-title{flex:1; display:flex; align-items:center; justify-content:space-between; padding:4px 6px; border:0; background:transparent; font-weight:700; font-size:14px; color:var(--ink); cursor:pointer; text-align:left;}
+  .history-head > button:not(.history-title){padding:5px 12px; font-size:13px;}
   .history-head > button:disabled{opacity:.35; cursor:default;}
-  .history-body{list-style:none; margin:0; padding:0 6px 6px; max-height:170px; overflow-y:auto;}
+  .history-body{list-style:none; margin:0; padding:0 10px 10px; display:flex; flex-wrap:wrap; gap:6px; max-height:104px; overflow-y:auto;}
   .history-panel.folded .history-body{display:none;}
-  .history-body li button{display:block; width:100%; text-align:left; padding:5px 8px; margin-top:3px; border-radius:8px; font-size:12.5px; background:transparent; border:1px solid transparent; color:var(--ink);}
-  .history-body li button.cur{background:var(--blueprint-soft); border-color:var(--blueprint); font-weight:700;}
-  .history-body li button.future{color:var(--ink-soft);}
+  .history-body li button{padding:5px 10px; border-radius:999px; font-size:12.5px; background:var(--panel); border:1px solid var(--panel-border); color:var(--ink);}
+  .history-body li button.cur{background:var(--blueprint); border-color:var(--blueprint); color:#fff; font-weight:700;}
+  .history-body li button.future{color:var(--ink-soft); border-style:dashed;}
   .view-tools{position:absolute; top:10px; left:10px; display:flex; gap:6px; z-index:2;}
   .view-tools button{padding:6px 12px; font-size:12px; font-weight:600; border-radius:999px; background:var(--panel); border:1px solid var(--panel-border); color:var(--ink);}
   .view-tools button.on{background:var(--blueprint); border-color:var(--blueprint); color:#fff;}
@@ -445,14 +445,6 @@
           <button type="button" class="part-list-head" id="partListHead" aria-expanded="true"><span>사용 부품 <b id="partListCount">0</b></span><span id="partListArrow">▾</span></button>
           <div class="part-list-body" id="partListBody"></div>
         </div>
-        <div class="history-panel" id="historyPanel">
-          <div class="history-head">
-            <button type="button" class="history-title" id="historyToggle" aria-expanded="true"><span>작업 기록 <b id="historyCount">0</b></span><span id="historyArrow">▾</span></button>
-            <button type="button" id="undoBtn" title="되돌리기 (Ctrl+Z)" aria-label="되돌리기">↶</button>
-            <button type="button" id="redoBtn" title="다시 (Ctrl+Y)" aria-label="다시">↷</button>
-          </div>
-          <ol class="history-body" id="historyBody"></ol>
-        </div>
         <div class="scene-hint">빈 곳 드래그: 회전 · ✋이동/오른쪽 버튼/두 손가락: 화면 밀기 · 선택한 부품 드래그: 부품 이동 · 휠/핀치: 확대축소</div>
         <div class="viewcube-wrap">
           <div class="viewcube" id="viewCube">
@@ -522,6 +514,14 @@
         <button id="resetBtn">↺ 다시 도전</button>
         <button id="clearBtn" class="ghost">전체 삭제</button>
         <p id="status" class="status">부품을 배치하고 재생을 눌러보세요.</p>
+      </div>
+      <div class="history-panel" id="historyPanel">
+        <div class="history-head">
+          <button type="button" class="history-title" id="historyToggle" aria-expanded="true"><span>작업 기록 <b id="historyCount">0</b></span><span id="historyArrow">▾</span></button>
+          <button type="button" id="undoBtn" title="되돌리기 (Ctrl+Z)" aria-label="되돌리기">↶ 되돌리기</button>
+          <button type="button" id="redoBtn" title="다시 (Ctrl+Y)" aria-label="다시">다시 ↷</button>
+        </div>
+        <ol class="history-body" id="historyBody"></ol>
       </div>
       <div class="build-guide" id="buildGuide" hidden>
         <h3>이제 실제로 만들어볼까요?</h3>
@@ -1118,7 +1118,7 @@
     document.getElementById('redoBtn').disabled = histIndex >= history.length - 1;
     const body = document.getElementById('historyBody');
     body.textContent = '';
-    for (let i = history.length - 1; i >= 0; i--) {
+    for (let i = 0; i < history.length; i++) {
       const li = document.createElement('li');
       const b = document.createElement('button');
       b.type = 'button';
@@ -1127,6 +1127,12 @@
       b.addEventListener('click', () => jumpHistory(i));
       li.appendChild(b);
       body.appendChild(li);
+    }
+    const cur = body.querySelector('button.cur');
+    if (cur) { // 지금 기록이 보이도록 이 상자 안에서만 스크롤한다
+      const r = cur.getBoundingClientRect(), br = body.getBoundingClientRect();
+      if (r.bottom > br.bottom) body.scrollTop += r.bottom - br.bottom;
+      else if (r.top < br.top) body.scrollTop -= br.top - r.top;
     }
   }
   function resetHistory(){
