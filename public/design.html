@@ -2295,7 +2295,8 @@
         flat.normalize();
         quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 0, 0), flat);
         const holePoint = panelPart.mesh.localToWorld(new THREE.Vector3(lx, pdef.h / 2, lz));
-        worldPos = holePoint.addScaledVector(outward, BASKET_PEG_TIP);
+        // 핀 끝이 판 표면에 닿기만 하는 게 아니라, 핀이 튀어나온 길이(BASKET_PEG_OUT)만큼 구멍 속으로 더 들어가야 진짜로 꽂힌 모양이 된다
+        worldPos = holePoint.addScaledVector(outward, BASKET_PEG_TIP - BASKET_PEG_OUT);
       } else {
         // 바닥·천장: 옆으로 꽂을 벽이 없으니 그냥 똑바로 세워서 얹는다
         quat = new THREE.Quaternion();
