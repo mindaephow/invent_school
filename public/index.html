@@ -77,7 +77,11 @@
     background:var(--surface); color:var(--ink); width:100%;
   }
   textarea{resize:vertical; font-family:inherit;}
-  #cd_content{min-height:440px; line-height:1.65;}
+  .cd-text{min-height:440px; line-height:1.65;}
+  .cd-text[hidden]{display:none;}
+  .lv-tabs{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px;}
+  .lv-tab{padding:7px 16px; border-radius:999px; font-weight:600; font-size:13px; color:var(--ink-soft);}
+  .lv-tab.on{background:var(--accent); border-color:var(--accent); color:var(--accent-ink);}
   input:focus, select:focus, textarea:focus, button:focus-visible{outline:2px solid var(--accent); outline-offset:1px;}
   label{display:block; font-size:12px; color:var(--ink-soft); margin-bottom:4px; font-weight:600;}
 
@@ -299,7 +303,21 @@
         <div><label>날짜</label><input id="cd_date" type="date"></div>
         <div><label>반</label><input id="cd_classLabel"></div>
         <div><label>시수</label><input id="cd_hours" type="number" step="0.5" min="0"></div>
-        <div><label>내용</label><textarea id="cd_content" rows="4"></textarea></div>
+        <div>
+          <label>내용 (수준별로 나누어 볼 수 있어요)</label>
+          <div class="lv-tabs" role="tablist" aria-label="수준별 내용">
+            <button type="button" role="tab" class="lv-tab on" data-lv="common" aria-selected="true">공통</button>
+            <button type="button" role="tab" class="lv-tab" data-lv="elemLow" aria-selected="false">초등저</button>
+            <button type="button" role="tab" class="lv-tab" data-lv="elemHigh" aria-selected="false">초등고</button>
+            <button type="button" role="tab" class="lv-tab" data-lv="middle" aria-selected="false">중등</button>
+            <button type="button" role="tab" class="lv-tab" data-lv="high" aria-selected="false">고등</button>
+          </div>
+          <textarea id="cd_content" class="cd-text" data-lv="common" rows="4"></textarea>
+          <textarea id="cd_lv_elemLow" class="cd-text" data-lv="elemLow" rows="4" hidden></textarea>
+          <textarea id="cd_lv_elemHigh" class="cd-text" data-lv="elemHigh" rows="4" hidden></textarea>
+          <textarea id="cd_lv_middle" class="cd-text" data-lv="middle" rows="4" hidden></textarea>
+          <textarea id="cd_lv_high" class="cd-text" data-lv="high" rows="4" hidden></textarea>
+        </div>
         <button type="submit" class="primary">저장</button>
       </form>
     </div>
@@ -1112,6 +1130,17 @@
   const curriculumDetailForm = document.getElementById('curriculumDetailForm');
   let curriculumDetailDocId = null;
 
+  const LEVEL_KEYS = ['elemLow', 'elemHigh', 'middle', 'high'];
+  function showLevel(lv){
+    document.querySelectorAll('.lv-tab').forEach(b => {
+      const on = b.dataset.lv === lv;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-selected', String(on));
+    });
+    document.querySelectorAll('#curriculumDetailForm .cd-text').forEach(t => { t.hidden = t.dataset.lv !== lv; });
+  }
+  document.querySelectorAll('.lv-tab').forEach(b => b.addEventListener('click', () => showLevel(b.dataset.lv)));
+
   function openCurriculumDetail(docId, d){
     curriculumDetailDocId = docId;
     curriculumDetailTitle.textContent = `${d.term} · ${d.session}회차`;
@@ -1120,7 +1149,10 @@
     document.getElementById('cd_date').value = d.date || '';
     document.getElementById('cd_classLabel').value = d.classLabel || '';
     document.getElementById('cd_hours').value = d.hours || '';
+    const lv = d.levels || {};
     document.getElementById('cd_content').value = d.content || '';
+    LEVEL_KEYS.forEach(k => { document.getElementById('cd_lv_' + k).value = lv[k] || ''; });
+    showLevel('common');
     curriculumDetailCard.hidden = false;
     curriculumDetailCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
@@ -1137,7 +1169,8 @@
       date: document.getElementById('cd_date').value,
       classLabel: document.getElementById('cd_classLabel').value.trim(),
       hours: Number(document.getElementById('cd_hours').value) || 0,
-      content: document.getElementById('cd_content').value.trim()
+      content: document.getElementById('cd_content').value.trim(),
+      levels: Object.fromEntries(LEVEL_KEYS.map(k => [k, document.getElementById('cd_lv_' + k).value.trim()]))
     });
     curriculumDetailCard.hidden = true;
     curriculumDetailDocId = null;
