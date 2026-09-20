@@ -380,9 +380,10 @@
         <div class="marker-grid">
           <button class="part-card" id="addLSet" type="button"><span class="part-icon lset"></span>ㄴ셋</button>
           <button class="part-card" id="addGSet" type="button"><span class="part-icon gset"></span>ㄱ셋</button>
-          <button class="part-card" id="addMSet" type="button"><span class="part-icon mset"></span>ㅁ셋</button>
+          <button class="part-card" id="addMSet" type="button"><span class="part-icon mset"></span>ㅁ셋 1</button>
+          <button class="part-card" id="addM2Set" type="button"><span class="part-icon mset"></span>ㅁ셋 2</button>
         </div>
-        <p class="part-note">세트는 여러 부품을 이미 조립한 채로 한 번에 놓아요. ㄴ셋: 바닥판 + ㄱ자연결대 2개 + 세운 벽판. ㄱ셋: ㄴ셋을 위아래로 뒤집은 모양(벽 위쪽에 판). ㅁ셋: 바닥판·위쪽 판·앞벽·뒷벽으로 만든 상자(옆에서 보면 네모).</p>
+        <p class="part-note">세트는 여러 부품을 이미 조립한 채로 한 번에 놓아요. ㄴ셋: 바닥판 + ㄱ자연결대 2개 + 세운 벽판. ㄱ셋: ㄴ셋을 위아래로 뒤집은 모양(벽 위쪽에 판). ㅁ셋 1: 바닥판·위쪽 판·앞벽·뒷벽으로 만든 상자(옆에서 보면 네모). ㅁ셋 2: ㅁ셋 1을 Z축으로 90° 돌린 것.</p>
         <h2>출발 · 도착 지점</h2>
         <div class="marker-grid">
           <button class="part-card" id="pickStart" type="button"><span class="part-icon pin-start"></span>출발 지점</button>
@@ -544,7 +545,7 @@
     },
     // ㅁ셋 = ㄴ셋 + ㄱ셋 + 앞벽: 바닥판·위쪽 판, 뒷벽·앞벽(판 가운데 z=-110 기준 대칭)을 ㄱ자연결대 8개로 이은 상자(옆에서 보면 네모)
     mset: {
-      label: 'ㅁ셋',
+      label: 'ㅁ셋 1',
       parts: [
         { type: 'panel', pos: [-110, 5, -110],   rot: [0, 0, 0] },   // 바닥판
         { type: 'panel', pos: [-110, 271, -110], rot: [0, 0, 0] },   // 위쪽 판
@@ -553,6 +554,15 @@
         ...[-220, 0].flatMap(z => [28, 248].flatMap(y => [-220, 0].map(x => ({ type: 'lbracket', pos: [x, y, z], rot: [0, 0, 90] }))))
       ]
     }
+  };
+  // ㅁ셋 2 = ㅁ셋 1 전체를 Z축으로 +90° 돌린 것 (조립체 가운데 x=-110, y=138 둘레). Z 회전은 마지막에 적용되므로 각 부품의 Z 각도에 90을 더하면 된다.
+  SETS.mset2 = {
+    label: 'ㅁ셋 2',
+    parts: SETS.mset.parts.map(sp => ({
+      type: sp.type,
+      pos: [-110 - (sp.pos[1] - 138), 138 + (sp.pos[0] + 110), sp.pos[2]],
+      rot: [sp.rot[0], sp.rot[1], sp.rot[2] + 90]
+    }))
   };
   const MARBLE_R = 9;
   const LBRACKET_PEG_OUT = 20, LBRACKET_PEG_IN = 2; // ㄱ자연결대 핀: 몸통 밖으로 나온 길이 2cm, 몸통 속에 박힌 길이 0.2cm
@@ -1299,6 +1309,7 @@
   document.getElementById('addLSet').addEventListener('click', () => addSet('lset'));
   document.getElementById('addGSet').addEventListener('click', () => addSet('gset'));
   document.getElementById('addMSet').addEventListener('click', () => addSet('mset'));
+  document.getElementById('addM2Set').addEventListener('click', () => addSet('mset2'));
 
   function removePart(p){
     parts.forEach(x => { if (x.joined === p) x.joined = null; });
