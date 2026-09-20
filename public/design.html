@@ -1566,11 +1566,19 @@
       const basketMat = new THREE.MeshStandardMaterial({ color: partColor('basket'), side: THREE.DoubleSide });
       const outerWall = new THREE.Mesh(new THREE.CylinderGeometry(BASKET_R_TOP, BASKET_R_BOTTOM, BASKET_H, 24, 1, true), basketMat);
       mesh.add(outerWall);
-      // 바닥은 뚫지 않는다(안쪽에서 볼록 돌기만 보이면 됨) — 바깥쪽에서 핀이 꽂히는 자리는 이 돌기 속으로 들어가는 홈(안 보임)
-      const outerBottom = new THREE.Mesh(new THREE.CircleGeometry(BASKET_R_BOTTOM, 24), basketMat);
+      // 바닥 한가운데, 안쪽까지 뚫리지 않는 깊이 5mm짜리 핀 꽂는 홈(막힌 구멍) — 바깥쪽 바닥은 그 구멍 크기만큼만 뚫어 두고, 홈 옆면·막힌 바닥을 따로 만든다
+      const BASKET_SOCKET_DEPTH = 5; // 1cm 핀이 들어갈 수 있는 깊이(0.5cm) — 바닥 두께 3 + 돌기 4 = 총 7 중 5만 쓰고 나머지 두께는 그대로 남겨 안쪽을 막아 둔다
+      const outerBottom = new THREE.Mesh(new THREE.RingGeometry(HOLE_R_WORLD, BASKET_R_BOTTOM, 24), basketMat);
       outerBottom.rotation.x = Math.PI / 2;
       outerBottom.position.y = -BASKET_H / 2;
       mesh.add(outerBottom);
+      const socketWall = new THREE.Mesh(new THREE.CylinderGeometry(HOLE_R_WORLD, HOLE_R_WORLD, BASKET_SOCKET_DEPTH, 16, 1, true), basketMat);
+      socketWall.position.y = -BASKET_H / 2 + BASKET_SOCKET_DEPTH / 2;
+      mesh.add(socketWall);
+      const socketFloor = new THREE.Mesh(new THREE.CircleGeometry(HOLE_R_WORLD, 16), basketMat);
+      socketFloor.rotation.x = -Math.PI / 2;
+      socketFloor.position.y = -BASKET_H / 2 + BASKET_SOCKET_DEPTH;
+      mesh.add(socketFloor);
       const innerWall = new THREE.Mesh(new THREE.CylinderGeometry(BASKET_R_TOP - BASKET_WALL_T, BASKET_R_BOTTOM - BASKET_WALL_T, BASKET_H - BASKET_WALL_T, 24, 1, true), basketMat);
       innerWall.position.y = BASKET_WALL_T / 2;
       mesh.add(innerWall);
@@ -1578,7 +1586,7 @@
       innerBottom.rotation.x = -Math.PI / 2;
       innerBottom.position.y = -BASKET_H / 2 + BASKET_WALL_T;
       mesh.add(innerBottom);
-      // 가운데에 지름 1.3cm 볼록 돌기(속이 찬 기둥) — 안쪽에서 보면 볼록 솟아 보인다. 아래에서 1cm 핀이 이 돌기 속으로(관통 아님) 꽂힌다는 표시.
+      // 가운데에 지름 1.3cm 볼록 돌기(속이 찬 기둥) — 안쪽에서 보면 볼록 솟아 보인다. 핀 홈이 이 돌기 속까지만 들어가고 관통하지 않는다.
       const BASKET_BOSS_R = 6.5, BASKET_BOSS_H = 4;
       const boss = new THREE.Mesh(new THREE.CylinderGeometry(BASKET_BOSS_R, BASKET_BOSS_R, BASKET_BOSS_H, 20), basketMat);
       boss.position.y = -BASKET_H / 2 + BASKET_WALL_T + BASKET_BOSS_H / 2 - 0.2;
