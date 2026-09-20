@@ -908,7 +908,7 @@
       .sort((a, b) => (b.submitted ? 1 : 0) - (a.submitted ? 1 : 0) || (b.updatedAt || 0) - (a.updatedAt || 0))
       .map(p => {
         const fb = fbByProject[p.id];
-        const when = p.updatedAt ? new Date(p.updatedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+        const when = p.updatedAt ? new Date(p.updatedAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
         return `<div class="design-row">
           <div class="item-main">
             <div class="item-title">${escapeHtml(p.name || '(이름 없음)')} <span class="pill ${p.submitted ? 'on' : 'off'}">${p.submitted ? '제출함' : '미제출'}</span></div>

@@ -403,8 +403,9 @@
         <details data-key="roads" open>
           <summary>길</summary>
         <div class="part-grid">
-          <button class="part-card" data-type="straight"><svg class="part-icon-svg" viewBox="0 0 26 26" style="height:26px" aria-hidden="true"><rect x="0.5" y="0.5" width="3" height="25" class="svg-ramp"/><rect x="22.5" y="0.5" width="3" height="25" class="svg-ramp"/><rect x="3.5" y="17.5" width="19" height="3" class="svg-ramp"/></svg>직선길</button>
-          <button class="part-card locked" disabled><span class="part-icon locked-icon"></span>반원길</button>
+          <button class="part-card" data-type="straight"><svg class="part-icon-svg" viewBox="0 0 26 26" style="height:26px" aria-hidden="true"><rect x="0.5" y="0.5" width="3" height="25" class="svg-ramp"/><rect x="22.5" y="0.5" width="3" height="25" class="svg-ramp"/><rect x="3.5" y="17.5" width="19" height="3" class="svg-ramp"/></svg>직선길(12칸)</button>
+          <button class="part-card" data-type="straightHalf"><svg class="part-icon-svg" viewBox="0 0 26 26" style="height:26px" aria-hidden="true"><rect x="0.5" y="0.5" width="3" height="25" class="svg-ramp"/><rect x="22.5" y="0.5" width="3" height="25" class="svg-ramp"/><rect x="3.5" y="17.5" width="19" height="3" class="svg-ramp"/></svg>직선길(6칸)</button>
+          <button class="part-card" data-type="halfRail"><svg class="part-icon-svg" viewBox="0 0 26 26" style="height:26px" aria-hidden="true"><path d="M2 13 A11 11 0 0 1 24 13" fill="none" class="svg-ramp" stroke-width="3"/></svg>반원길</button>
           <button class="part-card locked" disabled><span class="part-icon locked-icon"></span>원형길</button>
           <button class="part-card locked" disabled><span class="part-icon locked-icon"></span>지그재그길</button>
         </div>
@@ -613,6 +614,10 @@
   // 끼운 직선길 중심이 클립 중심에서 핀 반대쪽(벽 바깥쪽)으로 떨어진 거리: 홈 가운데(몸통 위 4 + 귀 높이의 반) + 직선길 가운데에서 끼운 레일 가운데까지
   const CLIP_JOIN_Y = PART_DEFS.clip.h / 2 + CLIP_EAR_H / 2 + (PART_DEFS.straight.d / 2 - RAMP_RAIL_T / 2);
   const MOUNT_LABEL = { floor: '바닥', 'wall-left': '벽(좌)', 'wall-right': '벽(우)', ceiling: '천장' };
+  // 반원길: 반지름 60(지름 120=기둥 6칸), 직선길과 같은 단면(레일 폭 26, 높이 26). 화면에 보이는 모양은 링·원통 도형에 시작각 0~180˚만 줘서 매끈한 곡선으로 만들고(원레일을 통째로 만들어 절반만 쓰는 것과 같음), 물리(구슬 충돌)만 12개 직선 조각으로 근사한다.
+  // 지름 양 끝(원점 기준 x=±60)에 클립처럼 아래로 향한 핀이 있어 타공판 구멍에 꽂는다 — 두 개를 마주 놓으면 가운데(반지름 60 안쪽)가 뚫려 구슬이 빠질 자리가 된다.
+  const HALFRAIL_R = 60, HALFRAIL_SEGMENTS = 12, HALFRAIL_PEG_OUT = 10, HALFRAIL_PEG_IN = 2;
+  const HALFRAIL_LIFT = -(RAMP_FLOOR_Y - RAMP_FLOOR_T / 2); // 바닥판 아랫면이 타공판 윗면에 닿도록 몸통(원점)을 띄우는 높이
 
   function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
 
@@ -743,7 +748,9 @@
 
   function isPanelType(type){ return type === 'panel' || type === 'panelHalf' || type === 'panelQuarter'; }
   function isPillarType(type){ return type === 'pillar' || type === 'pillarHalf'; }
-  function isConnectorType(type){ return isPillarType(type) || type === 'hinge' || type === 'lbracket' || type === 'clip' || type === 'pin'; }
+  function isStraightType(type){ return type === 'straight' || type === 'straightHalf'; }
+  const BOTTOM_TINT = 0xcfcfcf; // 타공판·기둥·직선길 아랫면에 씌우는 살짝 어두운 색조(윗면과 구분용)
+  function isConnectorType(type){ return isPillarType(type) || type === 'hinge' || type === 'lbracket' || type === 'clip' || type === 'pin' || type === 'halfRail'; }
   // 부품마다 크기가 다른 것(핀 길이)까지 반영한 치수
   function defOf(p){ const d = PART_DEFS[p.type]; return (p.type === 'pin' && p.len) ? Object.assign({}, d, { h: p.len }) : d; }
 
@@ -754,7 +761,7 @@
     if (type === 'lbracket') return cssVar('--bracket');
     if (type === 'clip') return cssVar('--clip');
     if (type === 'pin') return cssVar('--pin');
-    if (type === 'straight') return cssVar('--straight');
+    if (isStraightType(type) || type === 'halfRail') return cssVar('--straight');
     if (type === 'marble') return '#4FB3E8';
     return cssVar('--blueprint');
   }
@@ -995,7 +1002,7 @@
   })();
 
   // ----- 사용 부품 목록: 화면 구석에 놓은 부품을 이름과 번호로 보여 주고, 누르면 그 부품이 선택된다
-  const PART_SHORT = { panel: '타공판 대', panelHalf: '타공판 1/2', panelQuarter: '타공판 1/4', pillar: '기둥', pillarHalf: '기둥 1/2', hinge: '경첩', lbracket: 'ㄱ자연결대', tape: '종이테이프', clip: '클립', pin: '핀', straight: '직선길', marble: '구슬' };
+  const PART_SHORT = { panel: '타공판 대', panelHalf: '타공판 1/2', panelQuarter: '타공판 1/4', pillar: '기둥', pillarHalf: '기둥 1/2', hinge: '경첩', lbracket: 'ㄱ자연결대', tape: '종이테이프', clip: '클립', pin: '핀', straight: '직선길', straightHalf: '직선길 1/2', halfRail: '반원길', marble: '구슬' };
   const partListEl = document.getElementById('partList'), partListBody = document.getElementById('partListBody');
   function setPartListFolded(folded){
     partListEl.classList.toggle('folded', folded);
@@ -1300,7 +1307,7 @@
       const baseMount = p.mount.startsWith('wall') ? 'wall' : p.mount;
       document.querySelectorAll('#selectedMountSelect .mount-btn').forEach(b => b.classList.toggle('active', b.dataset.mount === baseMount));
       document.getElementById('connectToPanel').hidden = !isConnectorType(p.type);
-      document.getElementById('joinToClip').hidden = p.type !== 'straight';
+      document.getElementById('joinToClip').hidden = !isStraightType(p.type);
       document.getElementById('pinBlock').hidden = p.type !== 'pin';
       // 출발·도착 지점은 위치만 옮긴다 (회전·설치 위치 변경·삭제 없음, 기본 위치로 되돌리기 있음)
       const mk = !!p.isMarker;
@@ -1496,11 +1503,27 @@
     }
 
     const shape = type === 'marble' ? new CANNON.Sphere(MARBLE_R) : new CANNON.Box(new CANNON.Vec3(def.w / 2, def.h / 2, def.d / 2));
-    const body = new CANNON.Body({ mass: 0, shape: type === 'straight' ? undefined : shape });
-    if (type === 'straight') {
+    const body = new CANNON.Body({ mass: 0, shape: (isStraightType(type) || type === 'halfRail') ? undefined : shape });
+    if (isStraightType(type)) {
       // H 모양 단면 그대로: 아래쪽 바닥 판 + 양옆 레일 (구슬은 두 레일 사이 바닥 위를 구른다)
       body.addShape(new CANNON.Box(new CANNON.Vec3(def.w / 2, RAMP_FLOOR_T / 2, def.d / 2)), new CANNON.Vec3(0, RAMP_FLOOR_Y, 0));
       [-1, 1].forEach(sg => body.addShape(new CANNON.Box(new CANNON.Vec3(def.w / 2, def.h / 2, RAMP_RAIL_T / 2)), new CANNON.Vec3(0, 0, sg * (def.d / 2 - RAMP_RAIL_T / 2))));
+    }
+    if (type === 'halfRail') {
+      // 반원을 짧은 직선 조각(H 단면) 12개로 근사한 물리 모양. 조각마다 위치·각도가 달라 곡선을 따라간다.
+      // 각 조각 기준 길이 방향은 원의 접선, 레일 좌우 방향은 원의 반지름 방향(중심에서 바깥쪽).
+      const railMag = def.d / 2 - RAMP_RAIL_T / 2;
+      for (let i = 0; i < HALFRAIL_SEGMENTS; i++) {
+        const th = (i + 0.5) * Math.PI / HALFRAIL_SEGMENTS;
+        const segLen = 2 * HALFRAIL_R * Math.sin(Math.PI / HALFRAIL_SEGMENTS / 2) + 1; // 이웃 조각과 겹치도록 1만큼 여유
+        const cx = HALFRAIL_R * Math.cos(th), cz = HALFRAIL_R * Math.sin(th);
+        const segQ = new CANNON.Quaternion().setFromAxisAngle(new CANNON.Vec3(0, 1, 0), -(th + Math.PI / 2));
+        body.addShape(new CANNON.Box(new CANNON.Vec3(segLen / 2, RAMP_FLOOR_T / 2, def.d / 2)), new CANNON.Vec3(cx, RAMP_FLOOR_Y, cz), segQ);
+        [-1, 1].forEach(sg => {
+          const rx = cx + sg * railMag * Math.cos(th), rz = cz + sg * railMag * Math.sin(th);
+          body.addShape(new CANNON.Box(new CANNON.Vec3(segLen / 2, def.h / 2, RAMP_RAIL_T / 2)), new CANNON.Vec3(rx, 0, rz), segQ);
+        });
+      }
     }
     if (type === 'marble') body.collisionResponse = false; // 놓아 둔 표시일 뿐이라 다른 부품이나 공과 부딪히지 않는다
     body.position.set(x, y, z);
@@ -1512,13 +1535,17 @@
     let mat;
     if (isPanelType(type)) {
       // holes only make sense on the flat top/bottom faces, not the thin side edges
+      // 구슬이 구르는 홈(요철)은 실제로 윗면에만 있고 아랫면은 매끈하다 — 아랫면은 홈 없이 살짝 어둡게만 칠해서 구분한다
       const flat = new THREE.MeshStandardMaterial({ color: partColor('panel') });
       const holed = makePanelMaterial(def.w, def.d, null, true);
-      mat = [flat, flat, holed, holed, flat, flat]; // BoxGeometry face order: +X -X +Y -Y +Z -Z
+      const holedBottom = makePanelMaterial(def.w, def.d, null, false);
+      holedBottom.color.set(BOTTOM_TINT);
+      mat = [flat, flat, holed, holedBottom, flat, flat]; // BoxGeometry face order: +X -X +Y -Y +Z -Z
     } else if (isPillarType(type)) {
       const flat = new THREE.MeshStandardMaterial({ color: partColor('pillar') });
       const holed = makePillarMaterial(def.w);
-      mat = [flat, flat, holed, holed, flat, flat];
+      const holedBottom = new THREE.MeshStandardMaterial({ map: holed.map, color: BOTTOM_TINT });
+      mat = [flat, flat, holed, holedBottom, flat, flat];
     } else if (type === 'hinge') {
       const flat = new THREE.MeshStandardMaterial({ color: partColor('hinge') });
       const holed = makePanelMaterial(def.w, def.d, partColor('hinge'));
@@ -1527,16 +1554,54 @@
       mat = new THREE.MeshStandardMaterial({ color: partColor(type) });
     }
     let mesh;
-    if (type === 'straight') {
+    if (isStraightType(type)) {
       mesh = new THREE.Group();
       const rampMat = new THREE.MeshStandardMaterial({ color: partColor('straight') });
-      const floor = new THREE.Mesh(new THREE.BoxGeometry(def.w, RAMP_FLOOR_T, def.d), rampMat);
+      const rampMatBottom = new THREE.MeshStandardMaterial({ color: new THREE.Color(partColor('straight')).multiplyScalar(0.82) });
+      // 바닥판 아랫면을 살짝 어둡게(윗면과 구분용). 옆면은 그대로 rampMat.
+      const floor = new THREE.Mesh(new THREE.BoxGeometry(def.w, RAMP_FLOOR_T, def.d), [rampMat, rampMat, rampMat, rampMatBottom, rampMat, rampMat]);
       floor.position.y = RAMP_FLOOR_Y;
       mesh.add(floor);
       [-1, 1].forEach(sg => {
         const rail = new THREE.Mesh(new THREE.BoxGeometry(def.w, def.h, RAMP_RAIL_T), rampMat);
         rail.position.z = sg * (def.d / 2 - RAMP_RAIL_T / 2);
         mesh.add(rail);
+      });
+      // 길 양 끝, 레일 사이 바닥에 구슬을 세워 둘 수 있는 작은 자리 표시(어둡게 칠한 작은 원 — 구슬보다 뚜렷이 작아야 "빠질 것처럼" 안 보인다)
+      const MARBLE_DOT_R = 1; // 지름 2mm짜리 작은 표시 (1 unit = 1mm)
+      const dotMat = new THREE.MeshBasicMaterial({ color: 0x000000, opacity: 0.35, transparent: true });
+      [-1, 1].forEach(sg => {
+        const dot = new THREE.Mesh(new THREE.CircleGeometry(MARBLE_DOT_R, 20), dotMat);
+        dot.rotation.x = -Math.PI / 2;
+        dot.position.set(sg * (def.w / 2 - MARBLE_R - 2), RAMP_FLOOR_Y + RAMP_FLOOR_T / 2 + 0.3, 0);
+        mesh.add(dot);
+      });
+    } else if (type === 'halfRail') {
+      // 원레일을 통째로 만들고 절반(180˚)만 쓰는 방식 — 링·원통 도형에 시작각·각도범위를 주면 곡선이 매끈하게 나온다.
+      mesh = new THREE.Group();
+      const railMat = new THREE.MeshStandardMaterial({ color: partColor('straight') });
+      const railMatBottom = new THREE.MeshStandardMaterial({ color: new THREE.Color(partColor('straight')).multiplyScalar(0.82), side: THREE.DoubleSide });
+      const floorGeo = new THREE.RingGeometry(HALFRAIL_R - def.d / 2, HALFRAIL_R + def.d / 2, 32, 1, 0, Math.PI);
+      const floorTop = new THREE.Mesh(floorGeo, railMat);
+      floorTop.rotation.x = -Math.PI / 2;
+      floorTop.position.y = RAMP_FLOOR_Y + RAMP_FLOOR_T / 2;
+      mesh.add(floorTop);
+      const floorBottom = new THREE.Mesh(floorGeo, railMatBottom);
+      floorBottom.rotation.x = Math.PI / 2;
+      floorBottom.position.y = RAMP_FLOOR_Y - RAMP_FLOOR_T / 2;
+      mesh.add(floorBottom);
+      [-1, 1].forEach(sg => {
+        const rWall = HALFRAIL_R + sg * (def.d / 2 - RAMP_RAIL_T / 2);
+        const wall = new THREE.Mesh(new THREE.CylinderGeometry(rWall, rWall, def.h, 32, 1, true, 0, Math.PI), railMat);
+        mesh.add(wall);
+      });
+      // 길 양 끝, 레일 사이 바닥에 구슬을 세워 둘 수 있는 작은 자리 표시
+      const hrDotMat = new THREE.MeshBasicMaterial({ color: 0x000000, opacity: 0.35, transparent: true });
+      [0, Math.PI].forEach(th => {
+        const dot = new THREE.Mesh(new THREE.CircleGeometry(1, 20), hrDotMat);
+        dot.rotation.x = -Math.PI / 2;
+        dot.position.set(HALFRAIL_R * Math.cos(th), RAMP_FLOOR_Y + RAMP_FLOOR_T / 2 + 0.3, HALFRAIL_R * Math.sin(th));
+        mesh.add(dot);
       });
     } else {
       mesh = new THREE.Mesh(geo, mat);
@@ -1601,6 +1666,15 @@
         cap.position.set(0, def.h / 2 + CLIP_EAR_H + CLIP_CAP_T / 2, s * (capW / 2 - capSide / 2));
         mesh.add(cap);
       });
+    } else if (type === 'halfRail') {
+      // 지름 양 끝(반원의 두 시작점)에 클립과 같은 방식의 핀 — 타공판 구멍에 꽂는다
+      const hrPegMat = new THREE.MeshStandardMaterial({ color: partColor('straight') });
+      const hrFloorBottomY = RAMP_FLOOR_Y - RAMP_FLOOR_T / 2;
+      [0, Math.PI].forEach(th => {
+        const peg = new THREE.Mesh(new THREE.CylinderGeometry(HOLE_R_WORLD, HOLE_R_WORLD, HALFRAIL_PEG_OUT + HALFRAIL_PEG_IN, 16), hrPegMat);
+        peg.position.set(HALFRAIL_R * Math.cos(th), hrFloorBottomY - (HALFRAIL_PEG_OUT - HALFRAIL_PEG_IN) / 2, HALFRAIL_R * Math.sin(th));
+        mesh.add(peg);
+      });
     }
     scene.add(mesh);
     world.addBody(body);
@@ -1612,8 +1686,10 @@
     select(part);
   }
 
-  // 클립에 끼운 직선길은 클립을 옮기거나 돌리면 같이 움직인다. 직선길을 직접 움직이면 클립에서 빠진다.
+  // 클립에 끼운 직선길은 클립을 옮기거나 돌리면 같이 움직인다. 직선길을 직접 옮기면 클립에서 빠진다.
+  // 직선길을 직접 돌리는(기울이는) 것은 예외 — 클립도 같이 기울어져야 관절처럼 보이므로 unjoin하지 않고 클립 쪽을 대신 돌린다(setRotAxis 참고).
   const CLIP_TO_RAMP = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2); // 직선길의 길이는 클립 가로 방향, 폭 방향은 클립 위쪽(벽 바깥쪽). 벽에 붙인 클립에서는 길의 홈(레일이 솟은 쪽)이 위를 본다
+  const RAMP_TO_CLIP = new THREE.Quaternion(-CLIP_TO_RAMP.x, -CLIP_TO_RAMP.y, -CLIP_TO_RAMP.z, CLIP_TO_RAMP.w); // CLIP_TO_RAMP의 역회전(단위 쿼터니언이라 켤레로 계산)
   function applyJoins(){
     parts.forEach(r => {
       const c = r.joined;
@@ -1634,7 +1710,7 @@
   let joinPick = null; // 클립에 끼울 직선길을 골라 둔 상태
 
   document.getElementById('joinToClip').addEventListener('click', () => {
-    if (!selected || selected.type !== 'straight') return;
+    if (!selected || !isStraightType(selected.type)) return;
     if (!parts.some(p => p.type === 'clip')) { setStatus('먼저 클립을 배치하세요.', 'warn'); return; }
     joinPick = selected;
     select(null);
@@ -1735,10 +1811,20 @@
   }
   function setRotAxis(axis, deg){
     if (!selected || selected.isMarker || !axis || !isFinite(deg)) return;
-    unjoin(selected);
     const r = Object.assign({}, getRot(selected));
     r[axis] = round3d(normDeg(deg));
     const q = quatFromRot(r);
+    if (isStraightType(selected.type) && selected.joined) {
+      // 클립에 끼운 직선길을 돌리면, 직선길이 그 각도가 되도록 클립을 대신 돌린다 — 관절처럼 같이 기울어짐
+      const clip = selected.joined;
+      const cq = q.clone().multiply(RAMP_TO_CLIP);
+      clip.body.quaternion.set(cq.x, cq.y, cq.z, cq.w);
+      applyJoins();
+      selected.rot = r;
+      refreshAxisPanel();
+      return;
+    }
+    unjoin(selected);
     selected.body.quaternion.set(q.x, q.y, q.z, q.w);
     selected.rot = r;
     refreshAxisPanel();
@@ -1756,6 +1842,7 @@
       const v = getRot(selected)[activeAxis];
       document.getElementById('angleLine').innerHTML = AX + '축 지금 각도: <b>' + fmtNum(v) + '°</b>';
       document.querySelectorAll('#rotPanel [data-angle-val]').forEach(b => b.classList.toggle('on', Math.abs(Number(b.dataset.angleVal) - v) < 0.05));
+      if (document.activeElement !== angleInput) angleInput.value = fmtNum(v); // 마우스 드래그·방향키로 바뀐 각도도 직접입력 칸에 반영
     } else {
       const v = selected.body.position[activeAxis] / 10;
       document.getElementById('posLine').innerHTML = AX + ' 위치: <b>' + fmtNum(v) + ' cm</b>';
@@ -1935,6 +2022,8 @@
 
   // 고른 축(직선)에서 마우스 광선과 가장 가까운 점의 위치(직선 위 거리)
   let dragAxis = null;
+  let dragRotateState = null; // 돌리기 모드에서 부품을 직접 끌어 기울일 때: 시작 시점의 마우스 y좌표·각도
+  const ROTATE_DRAG_SENS = 0.3; // 픽셀당 각도(°) — 아래로 끌면 각도가 줄어들고 위로 끌면 늘어난다
   function axisParam(e, P, a){
     raycaster.setFromCamera(ndcFromEvent(e), camera);
     const o = raycaster.ray.origin, d = raycaster.ray.direction;
@@ -1957,6 +2046,11 @@
 
   function dragSelectedTo(e){
     if (!selected || playing) return;
+    if (dragRotateState) {
+      const dy = e.clientY - dragRotateState.y0;
+      setRotAxis(activeAxis, dragRotateState.r0 - dy * ROTATE_DRAG_SENS);
+      return;
+    }
     unjoin(selected);
     if (dragAxis) {
       const t = axisParam(e, dragAxis.P0, dragAxis.a);
@@ -2037,14 +2131,19 @@
     draggingPart = false;
     panning = e.button === 1 || e.button === 2 || e.shiftKey || panToggleOn;
     dragAxis = null;
+    dragRotateState = null;
     if (selected && !playing) {
       raycaster.setFromCamera(ndcFromEvent(e), camera);
       draggingPart = selected.isGroup ? selected.members.some(m => raycaster.intersectObject(m.mesh, true).length > 0) : raycaster.intersectObject(selected.mesh, true).length > 0;
-      if (draggingPart && activeAxis && axisMode === 'move' && !selected.isMarker) {
-        const P0 = new THREE.Vector3().copy(selected.body.position);
-        const a = AXIS_DIR[activeAxis];
-        const t0 = axisParam(e, P0, a);
-        if (t0 !== null) dragAxis = { P0, a, t0 };
+      if (draggingPart && activeAxis && !selected.isMarker) {
+        if (axisMode === 'move') {
+          const P0 = new THREE.Vector3().copy(selected.body.position);
+          const a = AXIS_DIR[activeAxis];
+          const t0 = axisParam(e, P0, a);
+          if (t0 !== null) dragAxis = { P0, a, t0 };
+        } else if (axisMode === 'rotate') {
+          dragRotateState = { y0: e.clientY, r0: getRot(selected)[activeAxis] };
+        }
       }
     }
   });
@@ -2081,12 +2180,13 @@
       pointerDown = false;
       draggingPart = false;
       dragAxis = null;
+      dragRotateState = null;
     }
   });
 
-  // 축을 골랐을 때 방향키로 그 축 방향으로 움직인다 (기본 2cm, Shift를 누르면 1mm)
+  // 축을 골랐을 때 방향키로 그 축 방향으로 움직인다(이동 모드, 기본 2cm·Shift 1mm) 또는 기울인다(돌리기 모드, 기본 5°·Shift 1°)
   window.addEventListener('keydown', (e) => {
-    if (!selected || selected.isMarker || !activeAxis || axisMode !== 'move' || playing) return;
+    if (!selected || selected.isMarker || !activeAxis || playing) return;
     const tag = (e.target && e.target.tagName) || '';
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
     let dir = 0;
@@ -2094,6 +2194,11 @@
     else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') dir = -1;
     else return;
     e.preventDefault();
+    if (axisMode === 'rotate') {
+      const step = dir * (e.shiftKey ? 1 : 5);
+      setRotAxis(activeAxis, getRot(selected)[activeAxis] + step);
+      return;
+    }
     unjoin(selected);
     const step = dir * (e.shiftKey ? 1 : GRID_UNIT);
     const a = AXIS_DIR[activeAxis];
@@ -2134,13 +2239,13 @@
     const lx = holeSnap(local.x, pdef.w);
     const lz = holeSnap(local.z, pdef.d);
     const pinLen = type === 'pin' ? ((existingTarget && existingTarget.len) || PIN_DEFAULT_LEN) : 0;
-    const lift = type === 'pin' ? pinLen / 2 - PIN_IN : ((type === 'clip' || type === 'lbracket') ? PART_DEFS[type].h / 2 : 0); // 클립·ㄱ자연결대는 판 위에 얹히고 핀만 구멍에 들어간다. 핀은 한쪽 끝 1cm만 구멍 속에 들어가고 나머지는 판 위로 선다
+    const lift = type === 'pin' ? pinLen / 2 - PIN_IN : ((type === 'clip' || type === 'lbracket') ? PART_DEFS[type].h / 2 : (type === 'halfRail' ? HALFRAIL_LIFT : 0)); // 클립·ㄱ자연결대·반원길은 판 위에 얹히고 핀만 구멍에 들어간다. 핀은 한쪽 끝 1cm만 구멍 속에 들어가고 나머지는 판 위로 선다
     const worldPos = panelPart.mesh.localToWorld(new THREE.Vector3(lx, pdef.h / 2 + lift, lz));
-    if (type === 'lbracket' || type === 'clip' || type === 'pin') {
+    if (type === 'lbracket' || type === 'clip' || type === 'pin' || type === 'halfRail') {
       // 아래로 꽂은 핀 끝이 바닥을 뚫고 내려가면 안 되므로, 핀 끝이 바닥에 닿는 높이까지만 들어가고 나머지는 위로 뜬다
       const n = new THREE.Vector3(0, 1, 0).applyQuaternion(panelPart.mesh.quaternion);
       if (n.y > 0.01) {
-        const tipY = worldPos.y - (type === 'pin' ? pinLen / 2 : PART_DEFS[type].h / 2 + (type === 'clip' ? CLIP_PEG_OUT : LBRACKET_PEG_OUT)) * n.y;
+        const tipY = worldPos.y - (type === 'pin' ? pinLen / 2 : type === 'halfRail' ? HALFRAIL_LIFT + HALFRAIL_PEG_OUT : PART_DEFS[type].h / 2 + (type === 'clip' ? CLIP_PEG_OUT : LBRACKET_PEG_OUT)) * n.y;
         if (tipY < 0) worldPos.addScaledVector(n, -tipY / n.y);
       }
     }
@@ -2616,7 +2721,7 @@
     list.forEach(p => {
       const row = document.createElement('div');
       row.className = 'proj-item';
-      const when = p.data.updatedAt ? new Date(p.data.updatedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+      const when = p.data.updatedAt ? new Date(p.data.updatedAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
       row.innerHTML = `<div><div class="pname">${esc(p.data.name)}${p.data.submitted ? '<span class="badge-ok">제출함</span>' : ''}</div><div class="sub">${esc(when)} 저장 · 부품 ${(p.data.parts || []).length}개</div></div><button type="button" class="primary">불러오기</button>${feedbackHtml(fbByProject[p.id])}`;
       row.querySelector('button').addEventListener('click', () => { openProject(p.id, p.data); showFeedbackStatus(fbByProject[p.id]); });
       listEl.appendChild(row);
@@ -2658,7 +2763,7 @@
     const stName = (st.data && st.data.data && st.data.data.name) || '';
     document.getElementById('rvTitle').textContent = stName + ' 학생 · ' + (pr.data.name || '(이름 없음)');
     document.getElementById('rvMeta').textContent = pr.data.submitted
-      ? '제출함' + (pr.data.submittedAt ? ' · ' + new Date(pr.data.submittedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '')
+      ? '제출함' + (pr.data.submittedAt ? ' · ' + new Date(pr.data.submittedAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '')
       : '아직 제출하지 않은 설계';
     const starsEl = document.getElementById('rvStars');
     const adviceEl = document.getElementById('rvAdvice');
