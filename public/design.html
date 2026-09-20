@@ -181,6 +181,7 @@
   .nudge-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:8px;}
   .nudge-grid button{padding:8px 2px; font-size:12px;}
   .rotate-row{display:flex; gap:6px; margin-bottom:8px;}
+  .rotate-row[hidden]{display:none;}
   .rotate-row button{flex:1;}
   .axis-row{align-items:stretch;}
   .axis-row button{padding:8px 0; font-size:13px;}
@@ -533,6 +534,10 @@
         <button id="resetBtn">↺ 다시 도전</button>
         <button id="clearBtn" class="ghost">전체 삭제</button>
         <p id="status" class="status">부품을 배치하고 재생을 눌러보세요.</p>
+        <div class="rotate-row" id="holeCoordRow" hidden>
+          <input id="holeCoordInput" type="text" placeholder="예: A1" maxlength="4" aria-label="구멍 위치 직접 입력(예: A1)">
+          <button type="button" id="holeCoordApply">이 위치에 꽂기</button>
+        </div>
       </div>
       <div class="history-panel" id="historyPanel">
         <div class="history-head">
@@ -1752,9 +1757,35 @@
     const hasOtherPanel = parts.some(p => isPanelType(p.type) && p !== selected);
     if (!hasOtherPanel) { setStatus('먼저 타공판을 배치하세요.', 'warn'); return; }
     holePick = { type: selected.type, panel: null, target: selected };
+    document.getElementById('holeCoordRow').hidden = true;
     select(null);
     setStatus('연결할 타공판을 탭하세요 (빈 곳 탭하면 취소)', 'warn');
   });
+  function applyHoleCoord(){
+    if (!holePick || !holePick.panel) return;
+    const raw = document.getElementById('holeCoordInput').value.trim();
+    const m = raw.match(/^([A-Za-z])\s*(\d{1,2})$/);
+    if (!m) { setStatus('위치를 "A1"처럼 줄 문자 + 칸 번호로 입력해주세요.', 'warn'); return; }
+    const panelPart = holePick.panel;
+    const pdef = PART_DEFS[panelPart.type];
+    const rowIdx = m[1].toUpperCase().charCodeAt(0) - 65; // A=0, B=1, ...
+    const colIdx = Number(m[2]) - 1; // 1번 칸 = 0
+    const rows = holeCount(pdef.d), cols = holeCount(pdef.w);
+    if (rowIdx < 0 || rowIdx >= rows || colIdx < 0 || colIdx >= cols) {
+      setStatus(`이 타공판은 A~${String.fromCharCode(65 + rows - 1)}, 1~${cols} 칸까지 있어요.`, 'warn');
+      return;
+    }
+    const lx = firstHoleAt(pdef.w) + colIdx * GRID_UNIT;
+    const lz = firstHoleAt(pdef.d) + rowIdx * GRID_UNIT;
+    const worldPoint = panelPart.mesh.localToWorld(new THREE.Vector3(lx, pdef.h / 2, lz));
+    placeOnHole(holePick.type, panelPart, worldPoint, holePick.target);
+    updatePanelLabels();
+    document.getElementById('holeCoordRow').hidden = true;
+    document.getElementById('holeCoordInput').value = '';
+    holePick = null;
+  }
+  document.getElementById('holeCoordApply').addEventListener('click', applyHoleCoord);
+  document.getElementById('holeCoordInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') applyHoleCoord(); });
   document.getElementById('closeSelected').addEventListener('click', () => select(null));
   modalBackdrop.addEventListener('click', () => select(null));
 
@@ -2330,7 +2361,8 @@
         if (hits.length) {
           holePick.panel = hits[0].object.userData.partRef;
           updatePanelLabels(holePick.panel);
-          setStatus(`${PART_DEFS[holePick.type].label} 꽂을 구멍을 타공판 위에서 탭하세요`, 'warn');
+          document.getElementById('holeCoordRow').hidden = false;
+          setStatus(`${PART_DEFS[holePick.type].label} 꽂을 구멍을 타공판 위에서 탭하세요 (또는 아래에 A1처럼 입력)`, 'warn');
         } else {
           holePick = null;
           setStatus('부품을 배치하고 재생을 눌러보세요.', null);
@@ -2339,6 +2371,7 @@
         const hits = raycaster.intersectObject(holePick.panel.mesh, false);
         if (hits.length) placeOnHole(holePick.type, holePick.panel, hits[0].point, holePick.target);
         updatePanelLabels();
+        document.getElementById('holeCoordRow').hidden = true;
         holePick = null;
       }
       return;
