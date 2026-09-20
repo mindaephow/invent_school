@@ -159,6 +159,11 @@
   .nudge-grid button{padding:8px 2px; font-size:12px;}
   .rotate-row{display:flex; gap:6px; margin-bottom:8px;}
   .rotate-row button{flex:1;}
+  .axis-row{align-items:stretch;}
+  .axis-row button{padding:8px 0; font-size:13px;}
+  .axis-tag{flex:0 0 30px; display:flex; align-items:center; justify-content:center; border-radius:8px; color:#fff; font-weight:800; font-size:14px;}
+  .ax-x{background:#E5484D;} .ax-y{background:#30A46C;} .ax-z{background:#3E63DD;}
+  .rot-hint{margin:0 0 8px; font-size:12px; color:var(--ink-soft); line-height:1.4;}
   button.danger{width:100%; color:var(--warn); border-color:var(--warn-bg); background:var(--warn-bg);}
 
   .roadmap-note{font-size:12px; color:var(--ink-soft); line-height:1.5;}
@@ -405,10 +410,10 @@
           <button id="mvDown">▼ 높이</button>
           <button id="mvFwd">앞</button>
         </div>
-        <div class="rotate-row">
-          <button id="rotateLeft">↺ -15°</button>
-          <button id="rotateRight">↻ +15°</button>
-        </div>
+        <div class="rotate-row axis-row"><span class="axis-tag ax-x">X</span><button data-axis="x" data-deg="-90">-90°</button><button data-axis="x" data-deg="-15">-15°</button><button data-axis="x" data-deg="15">+15°</button><button data-axis="x" data-deg="90">+90°</button></div>
+        <div class="rotate-row axis-row"><span class="axis-tag ax-y">Y</span><button data-axis="y" data-deg="-90">-90°</button><button data-axis="y" data-deg="-15">-15°</button><button data-axis="y" data-deg="15">+15°</button><button data-axis="y" data-deg="90">+90°</button></div>
+        <div class="rotate-row axis-row"><span class="axis-tag ax-z">Z</span><button data-axis="z" data-deg="-90">-90°</button><button data-axis="z" data-deg="-15">-15°</button><button data-axis="z" data-deg="15">+15°</button><button data-axis="z" data-deg="90">+90°</button></div>
+        <p class="rot-hint">화면의 색 화살표가 돌리는 축이에요 (X 빨강 · Y 초록 · Z 파랑). +는 화살표 끝에서 볼 때 시계 반대 방향으로 돌아요.</p>
         <div class="rotate-row">
           <button data-angle="0">수평 0°</button>
           <button data-angle="90">직각 90°</button>
@@ -754,6 +759,59 @@
     panelLabels = g;
   }
 
+  // 선택한 부품 위에 돌리는 축을 색 화살표로 보여 준다 (X 빨강 · Y 초록 · Z 파랑, 세계 기준 고정)
+  let axisGizmo = null;
+  function makeAxisLabel(text, color){
+    const c = document.createElement('canvas');
+    c.width = 64; c.height = 64;
+    const g = c.getContext('2d');
+    g.font = '800 46px sans-serif';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.lineWidth = 8; g.strokeStyle = '#ffffff';
+    g.strokeText(text, 32, 34);
+    g.fillStyle = color;
+    g.fillText(text, 32, 34);
+    const m = new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthTest: false });
+    const s = new THREE.Sprite(m);
+    s.scale.set(38, 38, 1);
+    s.renderOrder = 21;
+    return s;
+  }
+  function updateAxisGizmo(){
+    if (axisGizmo) {
+      scene.remove(axisGizmo);
+      axisGizmo.traverse(o => {
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); }
+      });
+      axisGizmo = null;
+    }
+    if (!selected || selected.isMarker) return;
+    const def = PART_DEFS[selected.type];
+    const len = Math.max(def.w, def.h, def.d) / 2 + 50;
+    const g = new THREE.Group();
+    [['X', '#E5484D', 0xE5484D, new THREE.Vector3(1, 0, 0), { z: -Math.PI / 2 }],
+     ['Y', '#30A46C', 0x30A46C, new THREE.Vector3(0, 1, 0), {}],
+     ['Z', '#3E63DD', 0x3E63DD, new THREE.Vector3(0, 0, 1), { x: Math.PI / 2 }]].forEach(([name, css, hex, dir, rot]) => {
+      const mat = new THREE.MeshBasicMaterial({ color: hex, transparent: true, depthTest: false });
+      const arrow = new THREE.Group();
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, len, 8), mat);
+      shaft.position.y = len / 2;
+      const head = new THREE.Mesh(new THREE.ConeGeometry(7, 22, 14), mat);
+      head.position.y = len + 8;
+      shaft.renderOrder = 20; head.renderOrder = 20;
+      arrow.add(shaft); arrow.add(head);
+      arrow.rotation.set(rot.x || 0, 0, rot.z || 0);
+      g.add(arrow);
+      const label = makeAxisLabel(name, css);
+      label.position.copy(dir).multiplyScalar(len + 38);
+      g.add(label);
+    });
+    g.position.copy(selected.body.position);
+    scene.add(g);
+    axisGizmo = g;
+  }
+
   function select(p){
     selected = p;
     selectedControls.hidden = !p;
@@ -773,25 +831,29 @@
     }
     updateSelectionOutline();
     updatePanelLabels();
+    updateAxisGizmo();
   }
 
-  function isStanding(part){
-    const e = new CANNON.Vec3();
-    part.body.quaternion.toEuler(e);
-    return Math.abs(Math.sin(e.z)) > 0.5;
+  // 회전한 부품이 가로(x)·높이(y)·세로(z)로 차지하는 절반 크기
+  function rotatedHalfExtents(part){
+    const def = PART_DEFS[part.type];
+    const q = part.body.quaternion;
+    const e = new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion(q.x, q.y, q.z, q.w)).elements;
+    const hw = def.w / 2, hh = def.h / 2, hd = def.d / 2;
+    return {
+      x: Math.abs(e[0]) * hw + Math.abs(e[4]) * hh + Math.abs(e[8]) * hd,
+      y: Math.abs(e[1]) * hw + Math.abs(e[5]) * hh + Math.abs(e[9]) * hd,
+      z: Math.abs(e[2]) * hw + Math.abs(e[6]) * hh + Math.abs(e[10]) * hd
+    };
   }
 
   function partFootprint(part){
-    // rotation is always around Z, so a part standing near 90 deg swaps its w/d footprint for h/d
-    const def = PART_DEFS[part.type];
-    const standing = isStanding(part);
-    return standing ? { halfW: def.h / 2, halfD: def.d / 2 } : { halfW: def.w / 2, halfD: def.d / 2 };
+    const h = rotatedHalfExtents(part);
+    return { halfW: h.x, halfD: h.z };
   }
 
   function partVerticalHalf(part){
-    // when standing (rotated ~90deg) the box's vertical extent becomes its w, not its h
-    const def = PART_DEFS[part.type];
-    return isStanding(part) ? def.w / 2 : def.h / 2;
+    return rotatedHalfExtents(part).y;
   }
 
   function computeFloorRest(part){
@@ -1104,18 +1166,20 @@
     selectedControls.style.top = ny + 'px';
   });
   window.addEventListener('pointerup', () => { modalDrag = null; });
-  // 세로축(Z) 둘레로 15°씩 돌린다. 오일러 각으로 되읽으면 90°를 넘을 때 방향이 뒤집히므로 회전을 곱해서 더한다.
-  function rotateSelectedBy(rad){
+  // 세계 축(X·Y·Z) 둘레로 돌린다. 오일러 각으로 되읽으면 90°를 넘을 때 방향이 뒤집히므로 회전을 곱해서 더한다.
+  const AXIS_VEC = { x: new CANNON.Vec3(1, 0, 0), y: new CANNON.Vec3(0, 1, 0), z: new CANNON.Vec3(0, 0, 1) };
+  function rotateSelectedBy(axis, rad){
     if (!selected) return;
     unjoin(selected);
     const dq = new CANNON.Quaternion();
-    dq.setFromAxisAngle(new CANNON.Vec3(0, 0, 1), rad);
+    dq.setFromAxisAngle(AXIS_VEC[axis], rad);
     const nq = dq.mult(selected.body.quaternion);
     nq.normalize();
     selected.body.quaternion.set(nq.x, nq.y, nq.z, nq.w);
   }
-  document.getElementById('rotateLeft').addEventListener('click', () => rotateSelectedBy(-0.2618));
-  document.getElementById('rotateRight').addEventListener('click', () => rotateSelectedBy(0.2618));
+  document.querySelectorAll('#selectedControls [data-axis]').forEach(btn => {
+    btn.addEventListener('click', () => rotateSelectedBy(btn.dataset.axis, Number(btn.dataset.deg) * Math.PI / 180));
+  });
   document.querySelectorAll('#selectedControls [data-angle]').forEach(btn => {
     btn.addEventListener('click', () => {
       if (!selected) return;
@@ -1506,6 +1570,7 @@
       selectionOutline.position.copy(selected.body.position);
       selectionOutline.quaternion.copy(selected.body.quaternion);
     }
+    if (axisGizmo && selected) axisGizmo.position.copy(selected.body.position);
     balls.forEach(b => {
       b.mesh.position.copy(b.body.position);
       b.mesh.quaternion.copy(b.body.quaternion);
