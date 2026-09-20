@@ -883,14 +883,15 @@
     m.renderOrder = 10;
     return m;
   }
-  function updatePanelLabels(){
+  function updatePanelLabels(forcePanel){
     if (panelLabels) {
       panelLabels.parent.remove(panelLabels);
       panelLabels.children.forEach(m => { m.material.map.dispose(); m.material.dispose(); m.geometry.dispose(); });
       panelLabels = null;
     }
-    if (!selected || !isPanelType(selected.type)) return;
-    const def = PART_DEFS[selected.type];
+    const target = forcePanel || ((selected && isPanelType(selected.type)) ? selected : null);
+    if (!target) return;
+    const def = PART_DEFS[target.type];
     const cols = holeCount(def.w), rows = holeCount(def.d);
     const g = new THREE.Group();
     const y = def.h / 2 + 1;
@@ -904,7 +905,7 @@
       m.position.set(-def.w / 2 - GRID_UNIT * 0.8, y, firstHoleAt(def.d) + j * GRID_UNIT);
       g.add(m);
     }
-    selected.mesh.add(g);
+    target.mesh.add(g);
     panelLabels = g;
   }
 
@@ -2232,7 +2233,7 @@
     const lx = holeSnap(local.x, pdef.w);
     const lz = holeSnap(local.z, pdef.d);
     const pinLen = type === 'pin' ? ((existingTarget && existingTarget.len) || PIN_DEFAULT_LEN) : 0;
-    const lift = type === 'pin' ? pinLen / 2 - PIN_IN : ((type === 'clip' || type === 'lbracket') ? PART_DEFS[type].h / 2 : (type === 'basket' ? BASKET_H / 2 + BASKET_PEG_OUT : 0)); // 클립·ㄱ자연결대·바구니는 판 위에 얹히고 핀만 구멍에 들어간다. 핀은 한쪽 끝 1cm만 구멍 속에 들어가고 나머지는 판 위로 선다
+    const lift = type === 'pin' ? pinLen / 2 - PIN_IN : ((type === 'clip' || type === 'lbracket' || type === 'basket') ? PART_DEFS[type].h / 2 : 0); // 클립·ㄱ자연결대·바구니는 판 위에 얹히고 핀만 구멍에 들어간다. 핀은 한쪽 끝 1cm만 구멍 속에 들어가고 나머지는 판 위로 선다
     const worldPos = panelPart.mesh.localToWorld(new THREE.Vector3(lx, pdef.h / 2 + lift, lz));
     if (type === 'lbracket' || type === 'clip' || type === 'pin' || type === 'basket') {
       // 아래로 꽂은 핀 끝이 바닥을 뚫고 내려가면 안 되므로, 핀 끝이 바닥에 닿는 높이까지만 들어가고 나머지는 위로 뜬다
@@ -2290,6 +2291,7 @@
         const hits = raycaster.intersectObjects(panelMeshes);
         if (hits.length) {
           holePick.panel = hits[0].object.userData.partRef;
+          updatePanelLabels(holePick.panel);
           setStatus(`${PART_DEFS[holePick.type].label} 꽂을 구멍을 타공판 위에서 탭하세요`, 'warn');
         } else {
           holePick = null;
@@ -2298,6 +2300,7 @@
       } else {
         const hits = raycaster.intersectObject(holePick.panel.mesh, false);
         if (hits.length) placeOnHole(holePick.type, holePick.panel, hits[0].point, holePick.target);
+        updatePanelLabels();
         holePick = null;
       }
       return;
