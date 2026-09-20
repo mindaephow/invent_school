@@ -123,6 +123,7 @@
   .part-icon.hinge::after{content:""; position:absolute; left:50%; top:50%; width:7px; height:7px; background:var(--ink); border-radius:50%; transform:translate(-50%,-50%);}
   .part-icon.tape{background:repeating-linear-gradient(45deg, var(--tape), var(--tape) 5px, transparent 5px, transparent 9px); border:1px dashed var(--ink-soft);}
   .part-icon.straight{background:var(--blueprint);}
+  .part-icon.gset{width:26px; height:26px; margin:0 auto 5px; background:none; border-right:7px solid var(--blueprint); border-top:7px solid var(--blueprint); border-radius:0;}
   .part-icon.lset{width:26px; height:26px; margin:0 auto 5px; background:none; border-left:7px solid var(--blueprint); border-bottom:7px solid var(--blueprint); border-radius:0;}
   .part-icon.clip{width:26px; margin:0 auto 5px; background:linear-gradient(90deg, var(--clip) 0 22%, transparent 22% 78%, var(--clip) 78% 100%), linear-gradient(var(--clip), var(--clip)) bottom/100% 30% no-repeat; border-radius:3px;}
   .part-icon.pin-start{width:26px; margin:0 auto 5px; border-radius:50%; border:3px solid var(--ink-soft); background:transparent;}
@@ -377,8 +378,9 @@
         <h2>세트</h2>
         <div class="marker-grid">
           <button class="part-card" id="addLSet" type="button"><span class="part-icon lset"></span>ㄴ셋</button>
+          <button class="part-card" id="addGSet" type="button"><span class="part-icon gset"></span>ㄱ셋</button>
         </div>
-        <p class="part-note">세트는 여러 부품을 이미 조립한 채로 한 번에 놓아요. ㄴ셋: 바닥판 + ㄱ자연결대 2개 + 세운 벽판.</p>
+        <p class="part-note">세트는 여러 부품을 이미 조립한 채로 한 번에 놓아요. ㄴ셋: 바닥판 + ㄱ자연결대 2개 + 세운 벽판. ㄱ셋: ㄴ셋을 위아래로 뒤집은 모양(벽 위쪽에 판).</p>
         <h2>출발 · 도착 지점</h2>
         <div class="marker-grid">
           <button class="part-card" id="pickStart" type="button"><span class="part-icon pin-start"></span>출발 지점</button>
@@ -526,6 +528,16 @@
         { type: 'lbracket', pos: [-220, 28, -220],  rot: [0, 0, 90] },  // A1
         { type: 'lbracket', pos: [0, 28, -220],     rot: [0, 0, 90] },  // A12
         { type: 'panel',    pos: [-110, 138, -233], rot: [90, 0, 0] }   // 세운 벽판
+      ]
+    },
+    // ㄱ셋 = ㄴ셋을 위아래로 뒤집은 모양: 같은 벽판, 판·연결대는 벽 높이(가운데 138)를 기준으로 뒤집은 높이(276 - y)
+    gset: {
+      label: 'ㄱ셋',
+      parts: [
+        { type: 'panel',    pos: [-110, 271, -110],  rot: [0, 0, 0] },   // 위쪽 판
+        { type: 'lbracket', pos: [-220, 248, -220],  rot: [0, 0, 90] },  // A1
+        { type: 'lbracket', pos: [0, 248, -220],     rot: [0, 0, 90] },  // A12
+        { type: 'panel',    pos: [-110, 138, -233],  rot: [90, 0, 0] }   // 세운 벽판
       ]
     }
   };
@@ -1272,6 +1284,7 @@
     setStatus(set.label + '을(를) 놓았어요. 부품 ' + set.parts.length + '개가 조립된 채로 들어왔어요.', 'success');
   }
   document.getElementById('addLSet').addEventListener('click', () => addSet('lset'));
+  document.getElementById('addGSet').addEventListener('click', () => addSet('gset'));
 
   function removePart(p){
     parts.forEach(x => { if (x.joined === p) x.joined = null; });
