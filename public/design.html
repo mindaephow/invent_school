@@ -383,9 +383,10 @@
           <button class="part-card" id="addGSet" type="button"><span class="part-icon gset"></span>ㄱ셋</button>
           <button class="part-card" id="addMSet" type="button"><span class="part-icon mset"></span>ㅁ셋 1</button>
           <button class="part-card" id="addM2Set" type="button"><span class="part-icon mset"></span>ㅁ셋 2</button>
-          <button class="part-card" id="addDSet" type="button"><span class="part-icon dset"></span>ㄷ셋</button>
+          <button class="part-card" id="addDSet" type="button"><span class="part-icon dset"></span>ㄷ셋 1</button>
+          <button class="part-card" id="addD2Set" type="button"><span class="part-icon dset"></span>ㄷ셋 2</button>
         </div>
-        <p class="part-note">세트는 여러 부품을 이미 조립한 채로 한 번에 놓아요. ㄴ셋: 바닥판 + ㄱ자연결대 2개 + 세운 벽판. ㄱ셋: ㄴ셋을 위아래로 뒤집은 모양(벽 위쪽에 판). ㅁ셋 1: 바닥판·위쪽 판·앞벽·뒷벽으로 만든 상자(옆에서 보면 네모). ㅁ셋 2: ㅁ셋 1을 Z축으로 90° 돌린 것. ㄷ셋: 바닥판과 위쪽 판이 뒷벽 하나에 이어진 모양(ㅁ셋 1에서 앞벽을 뺀 것).</p>
+        <p class="part-note">세트는 여러 부품을 이미 조립한 채로 한 번에 놓아요. ㄴ셋: 바닥판 + ㄱ자연결대 2개 + 세운 벽판. ㄱ셋: ㄴ셋을 위아래로 뒤집은 모양(벽 위쪽에 판). ㅁ셋 1: 바닥판·위쪽 판·앞벽·뒷벽으로 만든 상자(옆에서 보면 네모). ㅁ셋 2: ㅁ셋 1을 Z축으로 90° 돌린 것. ㄷ셋 1: 바닥판과 위쪽 판이 뒷벽 하나에 이어진 모양(ㅁ셋 1에서 앞벽을 뺀 것). ㄷ셋 2: ㄷ셋 1을 X축으로 90° 돌린 것.</p>
         <h2>출발 · 도착 지점</h2>
         <div class="marker-grid">
           <button class="part-card" id="pickStart" type="button"><span class="part-icon pin-start"></span>출발 지점</button>
@@ -559,8 +560,22 @@
   };
   // ㄷ셋 = ㅁ셋 1에서 앞벽과 앞쪽 연결대 4개를 뺀 것: 바닥판·위쪽 판이 뒷벽 하나에 이어진 모양(옆에서 보면 ㄷ)
   SETS.dset = {
-    label: 'ㄷ셋',
+    label: 'ㄷ셋 1',
     parts: SETS.mset.parts.filter(sp => !(sp.type === 'lbracket' && sp.pos[2] === 0) && !(sp.type === 'panel' && sp.pos[2] === 13))
+  };
+  // ㄷ셋 2 = ㄷ셋 1 전체를 X축으로 +90° 돌린 것 (조립체 가운데 y=138, z=-110 둘레): 뒷벽이 지붕이 되고 바닥판·위쪽 판이 앞뒤 벽으로 선다.
+  // 각도는 회전을 합성해 구한 값(X→Y→Z 순서): 눕힌 판 [0,0,0]→[90,0,0], 세운 벽 [90,0,0]→[180,0,0], 연결대 [0,0,90]→[0,-90,90]
+  SETS.dset2 = {
+    label: 'ㄷ셋 2',
+    parts: [
+      { type: 'panel',    pos: [-110, 138, -243], rot: [90, 0, 0] },   // 앞뒤 벽 (뒤)
+      { type: 'panel',    pos: [-110, 138, 23],   rot: [90, 0, 0] },   // 앞뒤 벽 (앞)
+      { type: 'panel',    pos: [-110, 261, -110], rot: [180, 0, 0] },  // 지붕
+      { type: 'lbracket', pos: [-220, 248, -220], rot: [0, -90, 90] },
+      { type: 'lbracket', pos: [0, 248, -220],    rot: [0, -90, 90] },
+      { type: 'lbracket', pos: [-220, 248, 0],    rot: [0, -90, 90] },
+      { type: 'lbracket', pos: [0, 248, 0],       rot: [0, -90, 90] }
+    ]
   };
   // ㅁ셋 2 = ㅁ셋 1 전체를 Z축으로 +90° 돌린 것 (조립체 가운데 x=-110, y=138 둘레). Z 회전은 마지막에 적용되므로 각 부품의 Z 각도에 90을 더하면 된다.
   SETS.mset2 = {
@@ -1318,6 +1333,7 @@
   document.getElementById('addMSet').addEventListener('click', () => addSet('mset'));
   document.getElementById('addM2Set').addEventListener('click', () => addSet('mset2'));
   document.getElementById('addDSet').addEventListener('click', () => addSet('dset'));
+  document.getElementById('addD2Set').addEventListener('click', () => addSet('dset2'));
 
   function removePart(p){
     parts.forEach(x => { if (x.joined === p) x.joined = null; });
