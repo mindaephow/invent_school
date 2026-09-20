@@ -1577,9 +1577,9 @@
       innerBottom.rotation.x = -Math.PI / 2;
       innerBottom.position.y = -BASKET_H / 2 + BASKET_WALL_T;
       mesh.add(innerBottom);
-      const rim = new THREE.Mesh(new THREE.RingGeometry(BASKET_R_TOP - BASKET_WALL_T, BASKET_R_TOP, 24), basketMat);
+      const rim = new THREE.Mesh(new THREE.RingGeometry(BASKET_R_TOP - BASKET_WALL_T - 0.5, BASKET_R_TOP + 0.5, 24), basketMat);
       rim.rotation.x = -Math.PI / 2;
-      rim.position.y = BASKET_H / 2;
+      rim.position.y = BASKET_H / 2 + 0.15; // 벽 끝과 딱 맞닿는 높이에 두면 겹친 면끼리 깜빡이는(z-fighting) 틈처럼 보여서 살짝 띄우고, 반지름도 안팎으로 살짝 넓혀 겹치게 한다
       mesh.add(rim);
       // 손잡이 대신 양옆에 핀(길이 1cm) — 컵 중간 높이, 바깥벽에서 옆으로 튀어나온다
       const pegMat2 = new THREE.MeshStandardMaterial({ color: partColor('basket') });
