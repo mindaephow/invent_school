@@ -202,7 +202,11 @@
   .part-list-body button{display:flex; align-items:center; gap:7px; width:100%; text-align:left; padding:6px 8px; margin-top:3px; border-radius:8px; font-size:13px; background:transparent; border:1px solid transparent; color:var(--ink);}
   .part-list-body button.sel{background:var(--blueprint-soft); border-color:var(--blueprint); font-weight:700;}
   .part-list-body .dot{flex:0 0 10px; width:10px; height:10px; border-radius:50%;}
-  .part-list-body button.set-head{font-weight:700; background:var(--blueprint-soft); border-color:var(--panel-border);}
+  .set-row{display:flex; gap:4px; margin-top:3px;}
+  .part-list-body .set-row button{margin-top:0;}
+  .part-list-body button.set-caret{flex:0 0 28px; width:28px; justify-content:center; padding:6px 0; background:var(--blueprint-soft);}
+  .part-list-body button.set-head{flex:1; font-weight:700; background:var(--blueprint-soft); border-color:var(--panel-border);}
+  .part-list-body button.set-head.sel{background:var(--blueprint); border-color:var(--blueprint); color:#fff;}
   .part-list-body button.set-head.has-sel{border-color:var(--blueprint);}
   .part-list-body button.child{margin-left:14px; width:calc(100% - 14px);}
   .part-list-sub{margin:8px 6px 2px; font-size:11.5px; color:var(--ink-soft); font-weight:700;}
@@ -505,6 +509,7 @@
         </div>
         <button id="connectToPanel" class="primary" hidden>🔗 타공판에 연결</button>
         <button id="joinToClip" class="primary" hidden>🔗 클립에 끼우기</button>
+        <button id="selectWholeSet" class="primary" type="button" hidden>세트 전체 선택</button>
         <button id="deletePart" class="danger">이 부품 삭제</button>
         <button id="resetMarker" class="ghost" type="button" hidden>기본 위치로 되돌리기</button>
       </div>
@@ -1085,13 +1090,25 @@
     Array.from(setGroups.values()).sort((x, y) => x.id - y.id).forEach(g => {
       seen[g.label] = (seen[g.label] || 0) + 1;
       const folded = foldedSets.has(g.id);
+      const selHere = selected && selected.isGroup && selected.set.id === g.id;
+      const row = document.createElement('div');
+      row.className = 'set-row';
+      const caret = document.createElement('button');
+      caret.type = 'button';
+      caret.className = 'set-caret';
+      caret.setAttribute('aria-expanded', String(!folded));
+      caret.setAttribute('aria-label', '세트 접고 펴기');
+      caret.textContent = folded ? '▸' : '▾';
+      caret.addEventListener('click', () => { if (foldedSets.has(g.id)) foldedSets.delete(g.id); else foldedSets.add(g.id); refreshPartList(); });
       const head = document.createElement('button');
       head.type = 'button';
-      head.className = 'set-head' + (g.list.includes(selected) ? ' has-sel' : '');
-      head.setAttribute('aria-expanded', String(!folded));
-      head.textContent = (folded ? '▸ ' : '▾ ') + g.label + (seen[g.label] > 1 ? ' (' + seen[g.label] + ')' : '') + ' · ' + g.list.length;
-      head.addEventListener('click', () => { if (foldedSets.has(g.id)) foldedSets.delete(g.id); else foldedSets.add(g.id); refreshPartList(); });
-      partListBody.appendChild(head);
+      head.className = 'set-head' + (selHere ? ' sel' : (g.list.includes(selected) ? ' has-sel' : ''));
+      head.title = '누르면 세트 전체를 한꺼번에 골라요';
+      head.textContent = g.label + (seen[g.label] > 1 ? ' (' + seen[g.label] + ')' : '') + ' · ' + g.list.length;
+      head.addEventListener('click', () => { if (!playing) selectSet(g.id); });
+      row.appendChild(caret);
+      row.appendChild(head);
+      partListBody.appendChild(row);
       if (!folded) items(g.list, true);
     });
     if (loose.length) {
@@ -1144,7 +1161,7 @@
       if (moved.length && turned.length) return nm + ' 이동·돌리기';
       return nm + (moved.length ? ' 이동' : ' 돌리기');
     }
-    if (ids.length > 1) return ids.length + '개 부품 수정';
+    if (ids.length > 1) return ids.length + '개 부품 ' + (moved.length && turned.length ? '이동·돌리기' : (turned.length ? '돌리기' : '이동'));
     return '부품 끼우기·수정';
   }
   function renderHistory(){
@@ -1221,6 +1238,52 @@
   document.getElementById('historyToggle').addEventListener('click', () => setHistoryFolded(!document.getElementById('historyPanel').classList.contains('folded')));
   try { if (localStorage.getItem('ivs-history-folded') === '1') setHistoryFolded(true); } catch (e) {}
 
+  // ----- 세트 전체 선택: 세트의 부품 전부를 하나처럼 옮기고 돌린다.
+  // 고른 세트를 대신하는 가짜 부품(body.position / body.quaternion 에 값을 넣으면 세트의 모든 부품이 같이 움직인다)을 만들어서
+  // 기존의 이동·돌리기·방향키·끌기 코드가 그대로 동작하게 한다. 돌리기 각도는 세트를 고른 순간을 0°로 본다.
+  function selectSet(id){
+    if (playing) return;
+    const members = parts.filter(m => m.set && m.set.id === id);
+    if (!members.length) return;
+    const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+    members.forEach(m => {
+      const h = rotatedHalfExtents(m), c = m.body.position;
+      [['x', 0], ['y', 1], ['z', 2]].forEach(([k, i]) => { lo[i] = Math.min(lo[i], c[k] - h[k]); hi[i] = Math.max(hi[i], c[k] + h[k]); });
+    });
+    PART_DEFS.group = { label: members[0].set.label + ' 전체', w: hi[0] - lo[0], h: hi[1] - lo[1], d: hi[2] - lo[2] };
+    const proxy = { isGroup: true, type: 'group', mount: 'floor', set: members[0].set, members, joined: null, rot: { x: 0, y: 0, z: 0 } };
+    proxy.body = {
+      position: {
+        x: (lo[0] + hi[0]) / 2, y: (lo[1] + hi[1]) / 2, z: (lo[2] + hi[2]) / 2,
+        set(x, y, z){
+          const dx = x - this.x, dy = y - this.y, dz = z - this.z;
+          members.forEach(m => m.body.position.set(m.body.position.x + dx, m.body.position.y + dy, m.body.position.z + dz));
+          this.x = x; this.y = y; this.z = z;
+        }
+      },
+      quaternion: {
+        x: 0, y: 0, z: 0, w: 1,
+        set(x, y, z, w){
+          const nq = new THREE.Quaternion(x, y, z, w).normalize();
+          const oq = new THREE.Quaternion(this.x, this.y, this.z, this.w);
+          const dq = nq.clone().multiply(oq.clone().conjugate()); // 지금 각도에서 새 각도로 가는 회전
+          const c = proxy.body.position, center = new THREE.Vector3(c.x, c.y, c.z);
+          members.forEach(m => {
+            const v = new THREE.Vector3(m.body.position.x, m.body.position.y, m.body.position.z).sub(center).applyQuaternion(dq).add(center);
+            m.body.position.set(v.x, v.y, v.z);
+            const mq = new THREE.Quaternion(m.body.quaternion.x, m.body.quaternion.y, m.body.quaternion.z, m.body.quaternion.w).premultiply(dq);
+            m.body.quaternion.set(mq.x, mq.y, mq.z, mq.w);
+            m.rot = null;
+          });
+          this.x = nq.x; this.y = nq.y; this.z = nq.z; this.w = nq.w;
+        }
+      }
+    };
+    select(proxy);
+    setStatus(members[0].set.label + ' 전체를 골랐어요. 이동과 돌리기가 부품 ' + members.length + '개에 함께 적용돼요.', 'warn');
+  }
+  document.getElementById('selectWholeSet').addEventListener('click', () => { if (selected && selected.set) selectSet(selected.set.id); });
+
   function select(p){
     if (p !== selected) activeAxis = null;
     syncAxisButtons();
@@ -1228,7 +1291,7 @@
     selectedControls.hidden = !p;
     modalBackdrop.hidden = !p;
     if (p) {
-      selectedLabel.textContent = `${PART_DEFS[p.type].label} · ${MOUNT_LABEL[p.mount]}`;
+      selectedLabel.textContent = p.isGroup ? `${p.set.label} 전체 · 부품 ${p.members.length}개` : `${PART_DEFS[p.type].label} · ${MOUNT_LABEL[p.mount]}`;
       const baseMount = p.mount.startsWith('wall') ? 'wall' : p.mount;
       document.querySelectorAll('#selectedMountSelect .mount-btn').forEach(b => b.classList.toggle('active', b.dataset.mount === baseMount));
       document.getElementById('connectToPanel').hidden = !isConnectorType(p.type);
@@ -1236,7 +1299,10 @@
       // 출발·도착 지점은 위치만 옮긴다 (회전·설치 위치 변경·삭제 없음, 기본 위치로 되돌리기 있음)
       const mk = !!p.isMarker;
       document.querySelectorAll('#selectedControls .rotate-row, #selectedMountSelect, #axisBlock').forEach(el => { el.style.display = mk ? 'none' : ''; });
+      if (p.isGroup) document.getElementById('selectedMountSelect').style.display = 'none';
       document.getElementById('deletePart').hidden = mk;
+      document.getElementById('deletePart').textContent = p.isGroup ? '이 세트 삭제' : '이 부품 삭제';
+      document.getElementById('selectWholeSet').hidden = !p.set || !!p.isGroup;
       document.getElementById('resetMarker').hidden = !mk;
       if (p.type === 'start' && parts.some(x => x.type === 'marble')) setStatus('구슬을 놓았을 때는 구슬 자리에서 출발해요. 이 출발 지점은 구슬이 없을 때 쓰여요.', 'warn');
     }
@@ -1565,6 +1631,7 @@
   }
 
   document.getElementById('deletePart').addEventListener('click', () => {
+    if (selected && selected.isGroup) { selected.members.slice().forEach(removePart); select(null); return; }
     if (selected && !selected.isMarker) { removePart(selected); select(null); }
   });
   document.getElementById('resetMarker').addEventListener('click', () => {
@@ -1929,7 +1996,7 @@
     dragAxis = null;
     if (selected && !playing) {
       raycaster.setFromCamera(ndcFromEvent(e), camera);
-      draggingPart = raycaster.intersectObject(selected.mesh, true).length > 0;
+      draggingPart = selected.isGroup ? selected.members.some(m => raycaster.intersectObject(m.mesh, true).length > 0) : raycaster.intersectObject(selected.mesh, true).length > 0;
       if (draggingPart && activeAxis && axisMode === 'move' && !selected.isMarker) {
         const P0 = new THREE.Vector3().copy(selected.body.position);
         const a = AXIS_DIR[activeAxis];
