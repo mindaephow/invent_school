@@ -1491,8 +1491,7 @@
     }
     if (type === 'basket') {
       // 바닥판 + 벽을 여러 조각으로 둘러싼 그릇 모양 — 구슬이 실제로 안으로 들어가 부딪히고, 느리면 멈추고 빠르면 벽을 넘어 튕겨나갈 수 있다
-      const floorR = BASKET_R_BOTTOM - BASKET_WALL_T;
-      body.addShape(new CANNON.Cylinder(floorR, floorR, BASKET_WALL_T, 16), new CANNON.Vec3(0, -BASKET_H / 2 + BASKET_WALL_T / 2, 0));
+      body.addShape(new CANNON.Box(new CANNON.Vec3(BASKET_R_TOP, BASKET_WALL_T / 2, BASKET_R_TOP)), new CANNON.Vec3(0, -BASKET_H / 2 + BASKET_WALL_T / 2, 0)); // 원기둥(Cylinder)은 이 물리엔진 버전에서 축이 옆으로 누워 바닥이 안 막힌다 — 축 방향이 헷갈릴 일 없는 사각 판으로 만든다
       const wallR = (BASKET_R_TOP + BASKET_R_BOTTOM) / 2 - BASKET_WALL_T / 2;
       const N = 16;
       const segLen = (2 * Math.PI * wallR / N) * 1.05;
