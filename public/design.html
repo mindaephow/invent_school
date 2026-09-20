@@ -1613,7 +1613,7 @@
   }
 
   // 클립에 끼운 직선길은 클립을 옮기거나 돌리면 같이 움직인다. 직선길을 직접 움직이면 클립에서 빠진다.
-  const CLIP_TO_RAMP = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2); // 직선길의 길이는 클립 가로 방향, 폭 방향은 클립 위쪽(벽 바깥쪽)
+  const CLIP_TO_RAMP = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2); // 직선길의 길이는 클립 가로 방향, 폭 방향은 클립 위쪽(벽 바깥쪽). 벽에 붙인 클립에서는 길의 홈(레일이 솟은 쪽)이 위를 본다
   function applyJoins(){
     parts.forEach(r => {
       const c = r.joined;
