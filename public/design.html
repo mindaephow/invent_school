@@ -900,9 +900,12 @@
       partListBody.appendChild(empty);
       return;
     }
+    // 같은 종류끼리 모아서 (왼쪽 부품 목록 순서), 종류 안에서는 놓은 순서대로 번호를 붙인다
     const count = {};
-    parts.forEach(part => {
-      count[part.type] = (count[part.type] || 0) + 1;
+    const numbered = parts.map(part => ({ part, n: (count[part.type] = (count[part.type] || 0) + 1) }));
+    const order = Object.keys(PART_SHORT);
+    numbered.sort((a, b) => (order.indexOf(a.part.type) - order.indexOf(b.part.type)) || (a.n - b.n));
+    numbered.forEach(({ part, n }) => {
       const b = document.createElement('button');
       b.type = 'button';
       if (part === selected) b.className = 'sel';
@@ -910,7 +913,7 @@
       dot.className = 'dot';
       dot.style.background = partColor(part.type);
       b.appendChild(dot);
-      b.appendChild(document.createTextNode((PART_SHORT[part.type] || PART_DEFS[part.type].label) + ' ' + count[part.type]));
+      b.appendChild(document.createTextNode((PART_SHORT[part.type] || PART_DEFS[part.type].label) + ' ' + n));
       b.addEventListener('click', () => { if (!playing) select(part); });
       partListBody.appendChild(b);
     });
