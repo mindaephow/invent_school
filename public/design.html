@@ -123,6 +123,7 @@
   .part-icon.hinge::after{content:""; position:absolute; left:50%; top:50%; width:7px; height:7px; background:var(--ink); border-radius:50%; transform:translate(-50%,-50%);}
   .part-icon.tape{background:repeating-linear-gradient(45deg, var(--tape), var(--tape) 5px, transparent 5px, transparent 9px); border:1px dashed var(--ink-soft);}
   .part-icon.straight{background:var(--blueprint);}
+  .part-icon.lset{width:26px; height:26px; margin:0 auto 5px; background:none; border-left:7px solid var(--blueprint); border-bottom:7px solid var(--blueprint); border-radius:0;}
   .part-icon.clip{width:26px; margin:0 auto 5px; background:linear-gradient(90deg, var(--clip) 0 22%, transparent 22% 78%, var(--clip) 78% 100%), linear-gradient(var(--clip), var(--clip)) bottom/100% 30% no-repeat; border-radius:3px;}
   .part-icon.pin-start{width:26px; margin:0 auto 5px; border-radius:50%; border:3px solid var(--ink-soft); background:transparent;}
   .part-icon.pin-goal{width:22px; margin:0 auto 5px; background:var(--accent); clip-path:polygon(0 0, 100% 50%, 0 100%);}
@@ -373,6 +374,11 @@
           <button class="part-card locked" disabled><span class="part-icon locked-icon"></span>도미노</button>
           <button class="part-card locked" disabled><span class="part-icon locked-icon"></span>도르래</button>
         </div>
+        <h2>세트</h2>
+        <div class="marker-grid">
+          <button class="part-card" id="addLSet" type="button"><span class="part-icon lset"></span>ㄴ셋</button>
+        </div>
+        <p class="part-note">세트는 여러 부품을 이미 조립한 채로 한 번에 놓아요. ㄴ셋: 바닥판 + ㄱ자연결대 2개 + 세운 벽판.</p>
         <h2>출발 · 도착 지점</h2>
         <div class="marker-grid">
           <button class="part-card" id="pickStart" type="button"><span class="part-icon pin-start"></span>출발 지점</button>
@@ -510,6 +516,18 @@
     marble:   { label: '구슬',     w: 18,  h: 18, d: 18 }, // 재생하면 이 자리에서 굴러가기 시작하는 구슬
     start:    { label: '출발 지점', w: 40,  h: 40, d: 40 },  // 구슬이 없을 때 공이 시작하는 자리 (옮길 수 있음)
     goal:     { label: '도착 지점', w: 190, h: 14, d: 190 }  // 목표 깃발 (옮길 수 있음)
+  };
+  // 세트: 여러 부품을 조립한 채로 한 번에 놓는다. 위치(x,y,z 단위 mm)와 각도(X·Y·Z °)는 저장해 둔 그대로.
+  const SETS = {
+    lset: {
+      label: 'ㄴ셋',
+      parts: [
+        { type: 'panel',    pos: [-110, 5, -110],   rot: [0, 0, 0] },   // 바닥판
+        { type: 'lbracket', pos: [-220, 28, -220],  rot: [0, 0, 90] },  // A1
+        { type: 'lbracket', pos: [0, 28, -220],     rot: [0, 0, 90] },  // A12
+        { type: 'panel',    pos: [-110, 138, -233], rot: [90, 0, 0] }   // 세운 벽판
+      ]
+    }
   };
   const MARBLE_R = 9;
   const LBRACKET_PEG_OUT = 20, LBRACKET_PEG_IN = 2; // ㄱ자연결대 핀: 몸통 밖으로 나온 길이 2cm, 몸통 속에 박힌 길이 0.2cm
@@ -1238,6 +1256,22 @@
     select(null);
     setStatus('직선길을 끼울 클립을 탭하세요 (빈 곳 탭하면 취소)', 'warn');
   });
+
+  function addSet(key){
+    const set = SETS[key];
+    if (playing || !set) return;
+    set.parts.forEach(sp => {
+      addPart(sp.type, { x: sp.pos[0], y: sp.pos[1], z: sp.pos[2], mount: 'floor' });
+      const p = parts[parts.length - 1];
+      p.body.position.set(sp.pos[0], sp.pos[1], sp.pos[2]);
+      p.rot = { x: sp.rot[0], y: sp.rot[1], z: sp.rot[2] };
+      const q = quatFromRot(p.rot);
+      p.body.quaternion.set(q.x, q.y, q.z, q.w);
+    });
+    select(null);
+    setStatus(set.label + '을(를) 놓았어요. 부품 ' + set.parts.length + '개가 조립된 채로 들어왔어요.', 'success');
+  }
+  document.getElementById('addLSet').addEventListener('click', () => addSet('lset'));
 
   function removePart(p){
     parts.forEach(x => { if (x.joined === p) x.joined = null; });
