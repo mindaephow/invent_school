@@ -400,7 +400,7 @@
         <details data-key="roads" open>
           <summary>길</summary>
         <div class="part-grid">
-          <button class="part-card" data-type="straight"><svg class="part-icon-svg" viewBox="0 0 26 12" style="height:26px" aria-hidden="true"><rect x="0.5" y="0.5" width="3" height="11" class="svg-ramp"/><rect x="22.5" y="0.5" width="3" height="11" class="svg-ramp"/><rect x="3.5" y="7.5" width="19" height="3" class="svg-ramp"/></svg>직선길</button>
+          <button class="part-card" data-type="straight"><svg class="part-icon-svg" viewBox="0 0 26 26" style="height:26px" aria-hidden="true"><rect x="0.5" y="0.5" width="3" height="25" class="svg-ramp"/><rect x="22.5" y="0.5" width="3" height="25" class="svg-ramp"/><rect x="3.5" y="20.5" width="19" height="3" class="svg-ramp"/></svg>직선길</button>
           <button class="part-card locked" disabled><span class="part-icon locked-icon"></span>반원길</button>
           <button class="part-card locked" disabled><span class="part-icon locked-icon"></span>원형길</button>
           <button class="part-card locked" disabled><span class="part-icon locked-icon"></span>지그재그길</button>
@@ -571,7 +571,7 @@
     lbracket: { label: 'ㄱ자연결대', w: 16, h: 16, d: 16 }, // cube with a peg on all 6 faces
     tape:     { label: '종이테이프', w: 70, h: 4,  d: 20 },
     clip:     { label: '클립',     w: 20,  h: 8,  d: 34 }, // 아래쪽 핀은 타공판 구멍에, 위쪽 두 귀 사이에는 직선길 끝을 끼운다
-    straight: { label: '직선길',   w: 140, h: 12, d: 26 },
+    straight: { label: '직선길',   w: 140, h: 26, d: 26 }, // h = 레일 높이(클립 홈 안쪽 높이와 같다), d = 폭
     marble:   { label: '구슬',     w: 18,  h: 18, d: 18 }, // 재생하면 이 자리에서 굴러가기 시작하는 구슬
     start:    { label: '출발 지점', w: 40,  h: 40, d: 40 },  // 구슬이 없을 때 공이 시작하는 자리 (옮길 수 있음)
     goal:     { label: '도착 지점', w: 190, h: 14, d: 190 }  // 목표 깃발 (옮길 수 있음)
@@ -665,7 +665,8 @@
   const CLIP_EAR_H = 8; // 클립 귀 높이 0.8cm (전에는 2.4cm였는데 3분의 2를 줄였다)
   const CLIP_PEG_OUT = 10, CLIP_PEG_IN = 2; // 클립 핀: 굵기 1cm(구멍 지름), 몸통 밖으로 나온 길이 1cm(판 두께와 같아서 판 뒷면과 딱 맞는다)
   // 직선길 단면은 H 모양: 양옆 레일(두께 3, 높이 12)과 아래쪽으로 치우친 바닥 판(두께 3). 레일 한쪽이 클립 홈에 끼워지고 나머지는 벽에서 바깥으로 뻗는다.
-  const RAMP_RAIL_T = 3, RAMP_FLOOR_T = 3, RAMP_FLOOR_Y = -2.5;
+  const RAMP_RAIL_T = 3, RAMP_FLOOR_T = 3;
+  const RAMP_FLOOR_Y = -PART_DEFS.straight.h / 2 + 2 + RAMP_FLOOR_T / 2; // 바닥 판은 레일 아래끝에서 0.2cm 위 (H의 가운데 막대가 아래로 치우친 모양)
   // 끼운 직선길 중심이 클립 중심에서 핀 반대쪽(벽 바깥쪽)으로 떨어진 거리: 홈 가운데(몸통 위 4 + 귀 높이의 반) + 직선길 가운데에서 끼운 레일 가운데까지
   const CLIP_JOIN_Y = PART_DEFS.clip.h / 2 + CLIP_EAR_H / 2 + (PART_DEFS.straight.d / 2 - RAMP_RAIL_T / 2);
   const MOUNT_LABEL = { floor: '바닥', 'wall-left': '벽(좌)', 'wall-right': '벽(우)', ceiling: '천장' };
@@ -1591,11 +1592,11 @@
       mesh.add(clipPeg);
       [-1, 1].forEach(s => {
         const ear = new THREE.Mesh(new THREE.BoxGeometry(def.w, CLIP_EAR_H, 4), clipMat);
-        ear.position.set(0, def.h / 2 + CLIP_EAR_H / 2, s * (PART_DEFS.straight.d / 2 + 2));
+        ear.position.set(0, def.h / 2 + CLIP_EAR_H / 2, s * (PART_DEFS.straight.h / 2 + 2));
         mesh.add(ear);
       });
       // 귀 위를 덮는 판: 옆에서(터널 방향으로) 볼 때 위쪽 판의 가운데를 뚫어서, 양쪽 귀에서 안쪽으로 뻗은 두 조각만 남긴다.
-      const capW = PART_DEFS.straight.d + 8;   // 두 귀 바깥 폭
+      const capW = PART_DEFS.straight.h + 8;   // 두 귀 바깥 폭
       const capSide = capW / 4;                // 귀에서 안쪽으로 남기는 조각 폭 (가운데 절반은 뚫림)
       [-1, 1].forEach(s => {
         const cap = new THREE.Mesh(new THREE.BoxGeometry(def.w, 4, capSide), clipMat);
