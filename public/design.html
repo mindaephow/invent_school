@@ -15,7 +15,8 @@
     --accent-ink:#FFFFFF;
     --blueprint:#2F6FED;
     --blueprint-soft:#DCE7FF;
-    --pillar:#8B93A6;
+    --pillar:#8C8F96;
+    --straight:#FFFFFF;
     --success:#1F8F44;
     --success-bg:#E4F7EA;
     --warn:#C6501E;
@@ -26,7 +27,7 @@
     --hinge:#7C8699;
     --tape:#E4D9B8;
     --bracket:#5C7A8A;
-    --clip:#E08A2E;
+    --clip:#F2C200;
   }
   @media (prefers-color-scheme: dark){
     :root:not([data-theme="light"]){
@@ -40,7 +41,8 @@
       --accent-ink:#1A0F08;
       --blueprint:#6FA0FF;
       --blueprint-soft:#1C2C4D;
-      --pillar:#69728A;
+      --pillar:#8A8E96;
+      --straight:#F1F3F8;
       --success:#4FCB78;
       --success-bg:#123321;
       --warn:#FF8659;
@@ -51,16 +53,16 @@
       --hinge:#A9B3C9;
       --tape:#8A7442;
       --bracket:#7FA6B8;
-      --clip:#F0A85A;
+      --clip:#FFD84A;
     }
   }
   :root[data-theme="dark"]{
     --bg:#0E1626; --grid-line:#3C5079; --panel:#141F35; --panel-border:#24314F;
     --ink:#E8EDF5; --ink-soft:#96A3BC; --accent:#FF8659; --accent-ink:#1A0F08;
-    --blueprint:#6FA0FF; --blueprint-soft:#1C2C4D; --pillar:#69728A;
+    --blueprint:#6FA0FF; --blueprint-soft:#1C2C4D; --pillar:#8A8E96; --straight:#F1F3F8;
     --success:#4FCB78; --success-bg:#123321; --warn:#FF8659; --warn-bg:#3A2013;
     --locked:#465070; --shadow:0 10px 28px rgba(0,0,0,0.45); --scene-bg:#0B1220;
-    --hinge:#A9B3C9; --tape:#8A7442; --bracket:#7FA6B8; --clip:#F0A85A;
+    --hinge:#A9B3C9; --tape:#8A7442; --bracket:#7FA6B8; --clip:#FFD84A;
   }
 
   *{box-sizing:border-box;}
@@ -130,7 +132,7 @@
   .part-icon.hinge{background:var(--hinge); position:relative;}
   .part-icon.hinge::after{content:""; position:absolute; left:50%; top:50%; width:7px; height:7px; background:var(--ink); border-radius:50%; transform:translate(-50%,-50%);}
   .part-icon.tape{background:repeating-linear-gradient(45deg, var(--tape), var(--tape) 5px, transparent 5px, transparent 9px); border:1px dashed var(--ink-soft);}
-  .part-icon.straight{background:var(--blueprint);}
+  .part-icon.straight{background:var(--straight); border:1px solid var(--locked);}
   .part-icon.gset{width:26px; height:26px; margin:0 auto 5px; background:none; border-right:7px solid var(--blueprint); border-top:7px solid var(--blueprint); border-radius:0;}
   .part-icon.mset{width:26px; height:26px; margin:0 auto 5px; background:none; border:7px solid var(--blueprint); border-radius:0;}
   .part-icon.dset{width:26px; height:26px; margin:0 auto 5px; background:none; border:7px solid var(--blueprint); border-right:0; border-radius:0;}
@@ -559,8 +561,8 @@
     panel:        { label: '타공판(12×12)', w: 250, h: 10, d: 250 }, // 구멍 12×12개(지름 10, 간격 20) + 사이사이·테두리 홈(폭 10) 13줄 = 한 변 25cm
     panelHalf:    { label: '타공판(6×12)',  w: 250, h: 10, d: 130 }, // half, cut along one axis
     panelQuarter: { label: '타공판(6×6)',   w: 130, h: 10, d: 130 }, // quartered
-    pillar:       { label: '기둥(12칸)',    w: 240, h: 10, d: 16 },  // one full row of the panel: 12 holes
-    pillarHalf:   { label: '기둥(6칸)',     w: 120, h: 10, d: 16 },  // half-length pillar: 6 holes
+    pillar:       { label: '기둥(12칸)',    w: 240, h: 10, d: 20 },  // one full row of the panel: 12 holes
+    pillarHalf:   { label: '기둥(6칸)',     w: 120, h: 10, d: 20 },  // half-length pillar: 6 holes
     hinge:    { label: '경첩',     w: 34,  h: 10, d: 26 },
     lbracket: { label: 'ㄱ자연결대', w: 16, h: 16, d: 16 }, // cube with a peg on all 6 faces
     tape:     { label: '종이테이프', w: 70, h: 4,  d: 20 },
@@ -801,6 +803,7 @@
     if (type === 'tape') return cssVar('--tape');
     if (type === 'lbracket') return cssVar('--bracket');
     if (type === 'clip') return cssVar('--clip');
+    if (type === 'straight') return cssVar('--straight');
     if (type === 'marble') return '#4FB3E8';
     return cssVar('--blueprint');
   }
@@ -868,13 +871,13 @@
 
   function makePillarTexture(baseColorHex){
     const c = document.createElement('canvas');
-    c.width = 64; c.height = 40;
+    c.width = 64; c.height = 64;
     const tctx = c.getContext('2d');
     tctx.fillStyle = baseColorHex;
-    tctx.fillRect(0, 0, 64, 40);
+    tctx.fillRect(0, 0, 64, 64);
     tctx.fillStyle = 'rgba(0,0,0,0.4)';
     tctx.beginPath();
-    tctx.arc(32, 20, HOLE_R_PX, 0, Math.PI * 2);
+    tctx.arc(32, 32, HOLE_R_PX, 0, Math.PI * 2);
     tctx.fill();
     const tex = new THREE.CanvasTexture(c);
     tex.wrapS = THREE.RepeatWrapping;
