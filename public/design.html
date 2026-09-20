@@ -1410,6 +1410,12 @@
     dragGhost.style.top = clientY + 'px';
   }
 
+  // 바닥에 그냥 놓았을 때 중심 높이: 몸통 밑면이 바닥에 닿고, 아래로 나온 핀(클립)은 바닥을 넘지 않는다
+  function restY(type){
+    const def = PART_DEFS[type];
+    return def.h / 2 + (type === 'clip' ? CLIP_PEG_OUT : 0);
+  }
+
   function computeFloorDropPoint(clientX, clientY, type){
     const def = PART_DEFS[type];
     const rect = canvas.getBoundingClientRect();
@@ -1418,12 +1424,12 @@
       -((clientY - rect.top) / rect.height) * 2 + 1
     );
     raycaster.setFromCamera(ndc, camera);
-    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(def.h / 2));
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -restY(type));
     const hit = new THREE.Vector3();
     if (!raycaster.ray.intersectPlane(plane, hit)) return null;
     return {
       x: Math.min(Math.max(hit.x, -ROOM_HALF + 8), ROOM_HALF - 8),
-      y: def.h / 2,
+      y: restY(type),
       z: Math.min(Math.max(hit.z, -ROOM_HALF + 8), ROOM_HALF - 8),
       mount: 'floor'
     };
@@ -1486,7 +1492,7 @@
     } else {
       mount = 'floor';
       x = -350 + (partCounter % 4) * 240;
-      y = 140 + (partCounter % 3) * 100;
+      y = restY(type);
       z = -350 + (partCounter % 4) * 240;
     }
 
