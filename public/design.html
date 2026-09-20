@@ -1560,11 +1560,12 @@
         ear.position.set(0, def.h / 2 + CLIP_EAR_H / 2, s * (PART_DEFS.straight.d / 2 + 2));
         mesh.add(ear);
       });
-      // 두 귀 위를 잇는 덮개: 옆에서 보면 네모난 구멍(터널)이 된다. 덮개 가운데(가로의 절반)는 뚫어서 앞뒤 끝 두 조각만 남긴다.
-      const capEnd = def.w / 4;
+      // 귀 위를 덮는 판: 옆에서(터널 방향으로) 볼 때 위쪽 판의 가운데를 뚫어서, 양쪽 귀에서 안쪽으로 뻗은 두 조각만 남긴다.
+      const capW = PART_DEFS.straight.d + 8;   // 두 귀 바깥 폭
+      const capSide = capW / 4;                // 귀에서 안쪽으로 남기는 조각 폭 (가운데 절반은 뚫림)
       [-1, 1].forEach(s => {
-        const cap = new THREE.Mesh(new THREE.BoxGeometry(capEnd, 4, PART_DEFS.straight.d + 8), clipMat);
-        cap.position.set(s * (def.w / 2 - capEnd / 2), def.h / 2 + CLIP_EAR_H + 2, 0);
+        const cap = new THREE.Mesh(new THREE.BoxGeometry(def.w, 4, capSide), clipMat);
+        cap.position.set(0, def.h / 2 + CLIP_EAR_H + 2, s * (capW / 2 - capSide / 2));
         mesh.add(cap);
       });
     }
