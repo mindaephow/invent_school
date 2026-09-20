@@ -1583,7 +1583,7 @@
       mesh.add(rim);
       // 손잡이 대신 양옆에 핀(길이 1cm) — 컵 중간 높이, 바깥벽에서 옆으로 튀어나온다
       const pegMat2 = new THREE.MeshStandardMaterial({ color: partColor('basket') });
-      const BASKET_PEG_EMBED = BASKET_WALL_T; // 핀 끝을 컵 벽 두께(3mm)만큼만 밀어 넣는다 — 그 이상 넣으면 안쪽 면을 뚫고 튀어나와 보인다
+      const BASKET_PEG_EMBED = BASKET_WALL_T - 1; // 핀 끝을 벽 두께보다 살짝 덜 밀어 넣는다 — 벽 두께랑 똑같이 넣으면 안쪽 면에 핀 단면이 딱 닿아서 이음매가 비쳐 보인다
       [-1, 1].forEach(sg => {
         const peg = new THREE.Mesh(new THREE.CylinderGeometry(HOLE_R_WORLD, HOLE_R_WORLD, BASKET_PEG_OUT + BASKET_PEG_EMBED, 16), pegMat2);
         peg.rotation.z = Math.PI / 2;
