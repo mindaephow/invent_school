@@ -306,6 +306,7 @@
   .proj-item .pname{font-weight:600; font-size:14px; word-break:break-all;}
   .proj-item .sub{font-size:12px; color:var(--ink-soft);}
   .badge-ok{font-size:11px; background:var(--success-bg); color:var(--success); padding:2px 8px; border-radius:999px; margin-left:6px; font-weight:700; white-space:nowrap;}
+  .del-btn.confirm{color:var(--warn); border-color:var(--warn-bg); background:var(--warn-bg);}
   .review-bar{background:var(--panel); border:1px solid var(--panel-border); border-radius:14px; padding:14px 16px; margin-bottom:14px; display:grid; gap:10px;}
   .review-bar[hidden]{display:none;}
   .review-bar textarea{width:100%; border:1px solid var(--panel-border); border-radius:8px; padding:8px 10px; background:var(--panel); color:var(--ink); font:inherit; font-size:14px; resize:vertical;}
@@ -431,17 +432,6 @@
         </details>
       </section>
 
-      <section class="side-group palette">
-        <details data-key="markers" open>
-          <summary>출발 · 도착 지점</summary>
-        <div class="marker-grid">
-          <button class="part-card" id="pickStart" type="button"><span class="part-icon pin-start"></span>출발 지점</button>
-          <button class="part-card" id="pickGoal" type="button"><span class="part-icon pin-goal"></span>도착 지점</button>
-        </div>
-        <p class="part-note">누르면 출발 지점(회색 원)이나 도착 지점(깃발)을 골라 옮길 수 있어요. 기본 자리는 그대로 두고, 필요할 때만 옮기면 돼요. 구슬을 놓으면 구슬 자리에서 출발해요.</p>
-        </details>
-      </section>
-
       <section class="roadmap">
         <p class="roadmap-note">골드버그 장치 수업은 유치원부터 대학생까지 난이도를 조절해서 진행할 수 있어요. 바닥·벽·천장 마운트는 실제 3D 공간에서만 말이 되기 때문에, 화면을 돌려가며 구조를 확인하는 방식으로 만들었어요.</p>
       </section>
@@ -531,8 +521,8 @@
         <button id="connectToPanel" class="primary" hidden>🔗 타공판에 연결</button>
         <button id="joinToClip" class="primary" hidden>🔗 클립에 끼우기</button>
         <button id="selectWholeSet" class="primary" type="button" hidden>세트 전체 선택</button>
+        <button id="setGoalPart" class="primary" type="button">🏁 도착 지점으로 정하기</button>
         <button id="deletePart" class="danger">이 부품 삭제</button>
-        <button id="resetMarker" class="ghost" type="button" hidden>기본 위치로 되돌리기</button>
       </div>
 
       <div class="controls">
@@ -610,6 +600,9 @@
   const PIN_DEFAULT_LEN = 40, PIN_MIN_LEN = 10, PIN_MAX_LEN = 300, PIN_IN = 10; // 핀 길이 1~30cm, 한쪽 끝 1cm는 타공판 두께만큼 구멍 속에 들어간다
   const CLIP_PEG_OUT = 10, CLIP_PEG_IN = 2; // 클립 핀: 굵기 1cm(구멍 지름), 몸통 밖으로 나온 길이 1cm(판 두께와 같아서 판 뒷면과 딱 맞는다)
   const BASKET_R_TOP = 25, BASKET_R_BOTTOM = 20, BASKET_H = 30, BASKET_WALL_T = 3, BASKET_PEG_OUT = 10, BASKET_PEG_IN = 2, BASKET_PEG_GAP = 20; // 물컵 모양: 윗지름 5cm·아랫지름 4cm·높이 3cm·재질 두께 3mm. 핀은 클립과 같은 굵기·길이, 양옆 핀 간격 20(=2cm, 구멍 한 칸)
+  const BASKET_PEG_EMBED = BASKET_WALL_T - 1; // 핀 끝이 벽 두께 속으로 들어가는 길이
+  const BASKET_PEG_CX = (BASKET_R_TOP + BASKET_R_BOTTOM) / 2 + BASKET_PEG_OUT / 2 - BASKET_PEG_EMBED / 2; // 핀 중심의 옆으로 튀어나온 거리
+  const BASKET_PEG_TIP = BASKET_PEG_CX + (BASKET_PEG_OUT + BASKET_PEG_EMBED) / 2; // 핀의 가장 바깥쪽 끝까지 거리 — 이 끝이 실제로 타공판 구멍에 꽂힌다
   // 직선길 단면은 H 모양: 양옆 레일(두께 3, 높이 12)과 아래쪽으로 치우친 바닥 판(두께 3). 레일 한쪽이 클립 홈에 끼워지고 나머지는 벽에서 바깥으로 뻗는다.
   const RAMP_RAIL_T = 3, RAMP_FLOOR_T = 3;
   const RAMP_FLOOR_Y = -7; // H의 가운데 막대: 레일 가운데보다 0.7cm 아래로 치우친 자리 (클립 아래쪽 팔이 벽을 물어도 막대와 겹치지 않는다)
@@ -665,61 +658,8 @@
   floorBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
   world.addBody(floorBody);
 
-  // 출발·도착 지점: 기본 자리에서 시작하고, 부품처럼 골라서 옮길 수 있다(옮긴 자리는 설계와 함께 저장).
-  const DEFAULT_START = { x: -600, y: 300, z: -600 };
-  const DEFAULT_GOAL = { x: 600, z: 600 };
-  const GOAL_R = 90;
-
-  const goalGroup = new THREE.Group();
-  const goalMesh = new THREE.Mesh(
-    new THREE.RingGeometry(GOAL_R - 8, GOAL_R, 32),
-    new THREE.MeshBasicMaterial({ color: cssVar('--accent'), side: THREE.DoubleSide, transparent: true, opacity: 0.85 })
-  );
-  goalMesh.rotation.x = -Math.PI / 2;
-  goalMesh.position.set(0, 1, 0);
-  goalGroup.add(goalMesh);
-  const flagMesh = new THREE.Mesh(new THREE.ConeGeometry(28, 56, 4), new THREE.MeshStandardMaterial({ color: cssVar('--accent') }));
-  flagMesh.position.set(0, 210, 0);
-  goalGroup.add(flagMesh);
-  const poleMesh = new THREE.Mesh(new THREE.CylinderGeometry(5, 5, 180, 8), new THREE.MeshStandardMaterial({ color: cssVar('--ink-soft') }));
-  poleMesh.position.set(0, 90, 0);
-  goalGroup.add(poleMesh);
-  scene.add(goalGroup);
-
-  const startMarkerMesh = new THREE.Mesh(new THREE.SphereGeometry(16, 16, 16), new THREE.MeshStandardMaterial({ color: cssVar('--ink-soft'), transparent: true, opacity: 0.8 }));
-  scene.add(startMarkerMesh);
-  const spawnRingMesh = new THREE.Mesh(new THREE.RingGeometry(48, 60, 24), new THREE.MeshBasicMaterial({ color: cssVar('--ink-soft'), side: THREE.DoubleSide, transparent: true, opacity: 0.6 }));
-  spawnRingMesh.rotation.x = -Math.PI / 2;
-  scene.add(spawnRingMesh);
-
-  // 출발/도착을 부품처럼 선택·이동하기 위한 가짜 부품 (물리 세계에는 넣지 않고, 설계의 parts 목록에도 넣지 않는다)
-  const startPart = { type: 'start', mount: 'floor', isMarker: true, mesh: startMarkerMesh,
-    body: { position: new CANNON.Vec3(DEFAULT_START.x, DEFAULT_START.y, DEFAULT_START.z), quaternion: new CANNON.Quaternion() } };
-  const goalPart = { type: 'goal', mount: 'floor', isMarker: true, mesh: goalGroup,
-    body: { position: new CANNON.Vec3(DEFAULT_GOAL.x, 8, DEFAULT_GOAL.z), quaternion: new CANNON.Quaternion() } };
-  startMarkerMesh.userData.partRef = startPart;
-  goalGroup.userData.partRef = goalPart;
-  const markerMeshes = [startMarkerMesh, goalGroup];
-
-  function syncMarkers(){
-    const st = startPart.body.position, g = goalPart.body.position;
-    startMarkerMesh.position.set(st.x, st.y, st.z);
-    spawnRingMesh.position.set(st.x, 1, st.z);
-    goalGroup.position.set(g.x, 0, g.z);
-  }
-  function resetStart(){ startPart.body.position.set(DEFAULT_START.x, DEFAULT_START.y, DEFAULT_START.z); }
-  function resetGoal(){ goalPart.body.position.set(DEFAULT_GOAL.x, 8, DEFAULT_GOAL.z); }
-  function serializeMarkers(){
-    const st = startPart.body.position, g = goalPart.body.position;
-    return { start: [st.x, st.y, st.z].map(v => Math.round(v * 1000) / 1000), goal: [g.x, g.z].map(v => Math.round(v * 1000) / 1000) };
-  }
-  // 저장된 자리가 없는 옛 설계는 기본 자리로
-  function applyMarkers(d){
-    resetStart(); resetGoal();
-    if (d && Array.isArray(d.start) && d.start.length === 3) startPart.body.position.set(d.start[0], d.start[1], d.start[2]);
-    if (d && Array.isArray(d.goal) && d.goal.length === 2) goalPart.body.position.set(d.goal[0], 8, d.goal[1]);
-  }
-  syncMarkers();
+  // 도착 지점: 따로 놓는 깃발이 아니라, 이미 배치한 부품 하나를 "도착 지점"으로 지정한다(구슬이 멈춰서 그 부품 자리에 있으면 성공).
+  let goalTargetPart = null;
 
   let parts = [];
   let balls = []; // 재생 중인 공/구슬 { body, mesh, marble?, idle, done }
@@ -1094,16 +1034,18 @@
   let history = [];   // { label, snap:{parts, markers}, key, t }
   let histIndex = -1;
   let histSuppressUntil = 0;
-  function takeSnapshot(){ return { parts: serializeParts(), markers: serializeMarkers() }; }
+  function takeSnapshot(){ return { parts: serializeParts() }; }
   function snapKey(snap){ return JSON.stringify(snap); }
   function partNamesOf(list){
     const cnt = {};
     return list.map(p => { cnt[p.type] = (cnt[p.type] || 0) + 1; return (PART_SHORT[p.type] || p.type) + ' ' + cnt[p.type]; });
   }
   function describeChange(prev, cur){
-    const pm = prev.markers, cm = cur.markers;
-    if (pm && JSON.stringify(pm.start) !== JSON.stringify(cm.start)) return '출발 지점 옮기기';
-    if (pm && JSON.stringify(pm.goal) !== JSON.stringify(cm.goal)) return '도착 지점 옮기기';
+    const pa = prev.parts, ca = cur.parts;
+    if (pa.length === ca.length) {
+      const goalChanged = ca.findIndex((p, i) => !!p.goal !== !!pa[i].goal);
+      if (goalChanged !== -1) return ca[goalChanged].goal ? '도착 지점 정하기' : '도착 지점 해제';
+    }
     const a = prev.parts, b = cur.parts, names = partNamesOf(b);
     if (b.length > a.length) {
       const k = b.length - a.length;
@@ -1318,8 +1260,9 @@
       document.getElementById('deletePart').hidden = mk;
       document.getElementById('deletePart').textContent = p.isGroup ? '이 세트 삭제' : '이 부품 삭제';
       document.getElementById('selectWholeSet').hidden = !p.set || !!p.isGroup;
-      document.getElementById('resetMarker').hidden = !mk;
-      if (p.type === 'start' && parts.some(x => x.type === 'marble')) setStatus('구슬을 놓았을 때는 구슬 자리에서 출발해요. 이 출발 지점은 구슬이 없을 때 쓰여요.', 'warn');
+      const goalBtn = document.getElementById('setGoalPart');
+      goalBtn.hidden = !!p.isGroup || mk;
+      goalBtn.textContent = p.isGoal ? '✅ 도착 지점 해제하기' : '🏁 도착 지점으로 정하기';
     }
     updateSelectionOutline();
     updatePanelLabels();
@@ -1597,13 +1540,12 @@
       rim.rotation.x = -Math.PI / 2;
       rim.position.y = BASKET_H / 2 + 0.15; // 벽 끝과 딱 맞닿는 높이에 두면 겹친 면끼리 깜빡이는(z-fighting) 틈처럼 보여서 살짝 띄우고, 반지름도 안팎으로 살짝 넓혀 겹치게 한다
       mesh.add(rim);
-      // 손잡이 대신 양옆에 핀(길이 1cm) — 컵 중간 높이, 바깥벽에서 옆으로 튀어나온다
+      // 손잡이 대신 양옆에 핀(길이 1cm) — 컵 중간 높이, 바깥벽에서 옆으로 튀어나온다. 이 핀 끝이 실제로 타공판 구멍에 꽂힌다
       const pegMat2 = new THREE.MeshStandardMaterial({ color: partColor('basket') });
-      const BASKET_PEG_EMBED = BASKET_WALL_T - 1; // 핀 끝을 벽 두께보다 살짝 덜 밀어 넣는다 — 벽 두께랑 똑같이 넣으면 안쪽 면에 핀 단면이 딱 닿아서 이음매가 비쳐 보인다
       [-1, 1].forEach(sg => {
         const peg = new THREE.Mesh(new THREE.CylinderGeometry(HOLE_R_WORLD, HOLE_R_WORLD, BASKET_PEG_OUT + BASKET_PEG_EMBED, 16), pegMat2);
         peg.rotation.z = Math.PI / 2;
-        peg.position.set(sg * ((BASKET_R_TOP + BASKET_R_BOTTOM) / 2 + BASKET_PEG_OUT / 2 - BASKET_PEG_EMBED / 2), 0, 0);
+        peg.position.set(sg * BASKET_PEG_CX, 0, 0);
         mesh.add(peg);
       });
     } else {
@@ -1738,6 +1680,7 @@
 
   function removePart(p){
     parts.forEach(x => { if (x.joined === p) x.joined = null; });
+    if (goalTargetPart === p) goalTargetPart = null;
     scene.remove(p.mesh);
     world.removeBody(p.body);
     parts = parts.filter(x => x !== p);
@@ -1747,12 +1690,20 @@
     if (selected && selected.isGroup) { selected.members.slice().forEach(removePart); select(null); return; }
     if (selected && !selected.isMarker) { removePart(selected); select(null); }
   });
-  document.getElementById('resetMarker').addEventListener('click', () => {
-    if (!selected || !selected.isMarker) return;
-    if (selected.type === 'start') resetStart(); else resetGoal();
+  document.getElementById('setGoalPart').addEventListener('click', () => {
+    if (!selected || selected.isGroup || selected.isMarker) return;
+    if (selected.isGoal) {
+      selected.isGoal = false;
+      goalTargetPart = null;
+      setStatus('도착 지점 지정을 해제했어요.', null);
+    } else {
+      if (goalTargetPart) goalTargetPart.isGoal = false;
+      selected.isGoal = true;
+      goalTargetPart = selected;
+      setStatus(`${PART_DEFS[selected.type].label}을(를) 도착 지점으로 정했어요. 구슬이 여기서 멈추면 성공이에요.`, 'success');
+    }
+    select(selected);
   });
-  document.getElementById('pickStart').addEventListener('click', () => { if (!playing) select(startPart); });
-  document.getElementById('pickGoal').addEventListener('click', () => { if (!playing) select(goalPart); });
   document.getElementById('connectToPanel').addEventListener('click', () => {
     if (!selected) return;
     const hasOtherPanel = parts.some(p => isPanelType(p.type) && p !== selected);
@@ -1890,26 +1841,24 @@
   }
 
   document.getElementById('playBtn').addEventListener('click', () => {
-    clearBalls();
-    // 놓아 둔 구슬이 있으면 그 자리에서, 없으면 예전처럼 정해진 출발 자리에서 공이 굴러간다
     const marbles = parts.filter(p => p.type === 'marble');
-    const starts = marbles.length
-      ? marbles.map(m => ({ x: m.body.position.x, y: m.body.position.y, z: m.body.position.z, marble: m }))
-      : [{ x: startPart.body.position.x, y: startPart.body.position.y, z: startPart.body.position.z, marble: null }];
-    starts.forEach(st => {
+    if (!marbles.length) { setStatus('구슬을 먼저 놓아주세요.', 'warn'); return; }
+    clearBalls();
+    marbles.forEach(m => {
+      const st = m.body.position;
       const body = new CANNON.Body({ mass: 1, shape: new CANNON.Sphere(MARBLE_R), position: new CANNON.Vec3(st.x, st.y, st.z) });
       body.linearDamping = 0.15;
-      const mesh = new THREE.Mesh(new THREE.SphereGeometry(MARBLE_R, 16, 16), new THREE.MeshStandardMaterial({ color: st.marble ? partColor('marble') : cssVar('--ink') }));
+      const mesh = new THREE.Mesh(new THREE.SphereGeometry(MARBLE_R, 16, 16), new THREE.MeshStandardMaterial({ color: partColor('marble') }));
       scene.add(mesh);
       world.addBody(body);
-      if (st.marble) st.marble.mesh.visible = false;
-      balls.push({ body, mesh, marble: st.marble, idle: 0, done: null });
+      m.mesh.visible = false;
+      balls.push({ body, mesh, marble: m, idle: 0, done: null });
     });
     playing = true;
     succeeded = false;
     buildGuide.hidden = true;
     select(null);
-    setStatus((marbles.length ? '구슬이' : '공이') + ' 굴러가고 있어요...', null);
+    setStatus('구슬이 굴러가고 있어요...', null);
   });
 
   function stopPlay(){
@@ -1946,31 +1895,42 @@
     setStatus('부품을 배치하고 재생을 눌러보세요.', null);
   });
 
+  // 구슬이 도착 지점으로 정한 부품의 발밑 범위 안에 있는지(수평 거리·높이) 확인한다
+  function isBallAtGoal(p){
+    if (!goalTargetPart) return false;
+    const gp = goalTargetPart.body.position;
+    const def = PART_DEFS[goalTargetPart.type];
+    const r = Math.max(def.w, def.d) / 2 + MARBLE_R;
+    const dx = p.x - gp.x, dz = p.z - gp.z;
+    return Math.sqrt(dx * dx + dz * dz) < r && Math.abs(p.y - gp.y) < def.h + MARBLE_R * 2;
+  }
   function checkGoalAndIdle(){
     if (!balls.length || succeeded) return;
-    const noun = balls.some(b => b.marble) ? '구슬' : '공';
     let active = 0;
     for (const b of balls) {
       if (b.done) continue;
       const p = b.body.position;
-      const dx = p.x - goalPart.body.position.x, dz = p.z - goalPart.body.position.z;
-      if (Math.sqrt(dx * dx + dz * dz) < GOAL_R && p.y < 24) {
-        succeeded = true;
-        setStatus('🎉 성공! 목표 지점에 도착했어요', 'success');
-        buildGuide.hidden = false;
-        return;
-      }
       if (p.y < -300) { b.done = 'fell'; continue; }
       const v = b.body.velocity;
       const speed = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
       if (speed < 4) b.idle++; else b.idle = 0;
-      if (b.idle > 90) { b.done = 'stopped'; continue; }
+      if (b.idle > 90) {
+        // 구슬이 멈췄을 때, 그 자리가 도착 지점 안이면 성공
+        if (isBallAtGoal(p)) {
+          succeeded = true;
+          setStatus('🎉 성공! 목표 지점에 도착했어요', 'success');
+          buildGuide.hidden = false;
+          return;
+        }
+        b.done = 'stopped';
+        continue;
+      }
       active++;
     }
     if (active === 0) {
       stopPlay();
-      if (balls.every(b => b.done === 'fell')) setStatus(noun + '이 바닥 밖으로 떨어졌어요. 구조를 다시 확인해보세요.', 'warn');
-      else setStatus(noun + '이 멈췄어요! 구조를 조절하고 다시 도전해보세요.', 'warn');
+      if (balls.every(b => b.done === 'fell')) setStatus('구슬이 바닥 밖으로 떨어졌어요. 구조를 다시 확인해보세요.', 'warn');
+      else setStatus('구슬이 멈췄어요! 구조를 조절하고 다시 도전해보세요.', 'warn');
     }
   }
 
@@ -2202,7 +2162,7 @@
   // 마우스가 가리키는 곳(부품 위, 없으면 바닥)을 화면에서 그 자리에 둔 채로 확대·축소한다
   function pointUnderCursor(e){
     raycaster.setFromCamera(ndcFromEvent(e), camera);
-    const hits = raycaster.intersectObjects(parts.map(p => p.mesh).concat(markerMeshes), true);
+    const hits = raycaster.intersectObjects(parts.map(p => p.mesh), true);
     if (hits.length) return hits[0].point.clone();
     const floorHit = new THREE.Vector3();
     if (raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), floorHit) && floorHit.distanceTo(camera.position) < MAX_RADIUS) return floorHit;
@@ -2232,15 +2192,41 @@
     };
     const lx = holeSnap(local.x, pdef.w);
     const lz = holeSnap(local.z, pdef.d);
+    const panelQuat = panelPart.mesh.quaternion;
     const pinLen = type === 'pin' ? ((existingTarget && existingTarget.len) || PIN_DEFAULT_LEN) : 0;
-    const lift = type === 'pin' ? pinLen / 2 - PIN_IN : ((type === 'clip' || type === 'lbracket' || type === 'basket') ? PART_DEFS[type].h / 2 : 0); // 클립·ㄱ자연결대·바구니는 판 위에 얹히고 핀만 구멍에 들어간다. 핀은 한쪽 끝 1cm만 구멍 속에 들어가고 나머지는 판 위로 선다
-    const worldPos = panelPart.mesh.localToWorld(new THREE.Vector3(lx, pdef.h / 2 + lift, lz));
-    if (type === 'lbracket' || type === 'clip' || type === 'pin' || type === 'basket') {
-      // 아래로 꽂은 핀 끝이 바닥을 뚫고 내려가면 안 되므로, 핀 끝이 바닥에 닿는 높이까지만 들어가고 나머지는 위로 뜬다
-      const n = new THREE.Vector3(0, 1, 0).applyQuaternion(panelPart.mesh.quaternion);
-      if (n.y > 0.01) {
-        const tipY = worldPos.y - (type === 'pin' ? pinLen / 2 : type === 'basket' ? BASKET_H / 2 + BASKET_PEG_OUT : PART_DEFS[type].h / 2 + (type === 'clip' ? CLIP_PEG_OUT : LBRACKET_PEG_OUT)) * n.y;
-        if (tipY < 0) worldPos.addScaledVector(n, -tipY / n.y);
+
+    let worldPos, quat;
+    if (type === 'basket') {
+      // 바구니는 항상 똑바로 서 있고, 옆으로 튀어나온 핀의 끝이 실제로 이 구멍에 꽂힌다.
+      const outward = new THREE.Vector3(0, 1, 0).applyQuaternion(panelQuat); // 판이 바라보는 방향(세계 기준)
+      const flat = new THREE.Vector3(outward.x, 0, outward.z);
+      if (flat.lengthSq() > 0.5) {
+        // 벽(수직 타공판): 핀이 판 쪽을 향하도록 돌리고, 핀 끝이 정확히 구멍 위치에 오도록 바구니 중심을 벽 바깥으로 띄운다
+        flat.normalize();
+        quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 0, 0), flat);
+        const holePoint = panelPart.mesh.localToWorld(new THREE.Vector3(lx, pdef.h / 2, lz));
+        worldPos = holePoint.addScaledVector(outward, BASKET_PEG_TIP);
+      } else {
+        // 바닥·천장: 옆으로 꽂을 벽이 없으니 그냥 똑바로 세워서 얹는다
+        quat = new THREE.Quaternion();
+        worldPos = panelPart.mesh.localToWorld(new THREE.Vector3(lx, pdef.h / 2 + BASKET_H / 2, lz));
+      }
+    } else {
+      const lift = type === 'pin' ? pinLen / 2 - PIN_IN : ((type === 'clip' || type === 'lbracket') ? PART_DEFS[type].h / 2 : 0); // 클립·ㄱ자연결대는 판 위에 얹히고 핀만 구멍에 들어간다. 핀은 한쪽 끝 1cm만 구멍 속에 들어가고 나머지는 판 위로 선다
+      worldPos = panelPart.mesh.localToWorld(new THREE.Vector3(lx, pdef.h / 2 + lift, lz));
+      if (type === 'lbracket' || type === 'clip' || type === 'pin') {
+        // 아래로 꽂은 핀 끝이 바닥을 뚫고 내려가면 안 되므로, 핀 끝이 바닥에 닿는 높이까지만 들어가고 나머지는 위로 뜬다
+        const n = new THREE.Vector3(0, 1, 0).applyQuaternion(panelQuat);
+        if (n.y > 0.01) {
+          const tipY = worldPos.y - (type === 'pin' ? pinLen / 2 : PART_DEFS[type].h / 2 + (type === 'clip' ? CLIP_PEG_OUT : LBRACKET_PEG_OUT)) * n.y;
+          if (tipY < 0) worldPos.addScaledVector(n, -tipY / n.y);
+        }
+      }
+      if (isPillarType(type)) {
+        const standQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, Math.PI / 2));
+        quat = panelQuat.clone().multiply(standQuat);
+      } else {
+        quat = panelQuat;
       }
     }
 
@@ -2253,14 +2239,7 @@
       addPart(type, { x: worldPos.x, y: worldPos.y, z: worldPos.z, mount: panelPart.mount, len: pinLen });
       placed = parts[parts.length - 1];
     }
-    const panelQuat = panelPart.mesh.quaternion;
-    if (isPillarType(placed.type)) {
-      const standQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, Math.PI / 2));
-      const worldQuat = panelQuat.clone().multiply(standQuat);
-      placed.body.quaternion.set(worldQuat.x, worldQuat.y, worldQuat.z, worldQuat.w);
-    } else {
-      placed.body.quaternion.set(panelQuat.x, panelQuat.y, panelQuat.z, panelQuat.w);
-    }
+    placed.body.quaternion.set(quat.x, quat.y, quat.z, quat.w);
     setStatus(`${PART_DEFS[type].label}을(를) 구멍에 꽂았어요.`, 'success');
     select(placed);
   }
@@ -2306,10 +2285,10 @@
       return;
     }
 
-    const meshes = parts.map(p => p.mesh).concat(markerMeshes);
+    const meshes = parts.map(p => p.mesh);
     const hits = raycaster.intersectObjects(meshes, true);
     let hitObj = hits.length ? hits[0].object : null;
-    while (hitObj && !hitObj.userData.partRef) hitObj = hitObj.parent; // 도착 지점은 깃발·기둥·원이 묶인 그룹
+    while (hitObj && !hitObj.userData.partRef) hitObj = hitObj.parent; // 기둥처럼 여러 메시가 묶인 그룹 대응
     select(hitObj ? hitObj.userData.partRef : null);
   }
 
@@ -2334,7 +2313,6 @@
       b.mesh.position.copy(b.body.position);
       b.mesh.quaternion.copy(b.body.quaternion);
     });
-    syncMarkers();
     updateCamera();
     updateViewCube();
     renderer.render(scene, camera);
@@ -2392,6 +2370,7 @@
       if (p.joined) o.join = parts.indexOf(p.joined);
       if (p.set) o.set = [p.set.id, p.set.label];
       if (p.type === 'pin') o.len = p.len;
+      if (p.isGoal) o.goal = true;
       const rr = getRot(p);
       o.rot = [rr.x, rr.y, rr.z];
       return o;
@@ -2403,6 +2382,7 @@
     stopPlay();
     clearBalls();
     parts.slice().forEach(removePart);
+    goalTargetPart = null;
     const made = [];
     (list || []).forEach((d, i) => {
       if (!PART_DEFS[d.type] || !d.pos || !d.quat) return;
@@ -2412,12 +2392,12 @@
       p.body.quaternion.set(d.quat[0], d.quat[1], d.quat[2], d.quat[3]);
       if (Array.isArray(d.rot) && d.rot.length === 3) p.rot = { x: d.rot[0], y: d.rot[1], z: d.rot[2] };
       if (Array.isArray(d.set) && d.set.length === 2) { p.set = { id: d.set[0], label: d.set[1] }; setCounter = Math.max(setCounter, d.set[0]); }
+      if (d.goal) { p.isGoal = true; goalTargetPart = p; }
       made[i] = p;
     });
     (list || []).forEach((d, i) => {
       if (made[i] && Number.isInteger(d.join) && made[d.join] && made[d.join].type === 'clip') made[i].joined = made[d.join];
     });
-    applyMarkers(data);
     select(null);
     buildGuide.hidden = true;
     if (!keepHistory) resetHistory();
@@ -2425,11 +2405,10 @@
 
   function syncFromScene(){
     project.data.parts = serializeParts();
-    Object.assign(project.data, serializeMarkers());
     const n = nameInput.value.trim();
     if (n) project.data.name = n; else nameInput.value = project.data.name;
   }
-  function projectKey(){ return JSON.stringify(project.data.parts) + '|' + project.data.name + '|' + JSON.stringify(serializeMarkers()); }
+  function projectKey(){ return JSON.stringify(project.data.parts) + '|' + project.data.name; }
 
   db.auth.onAuthStateChange((event, session) => { if (mode === 'student') accessToken = session ? session.access_token : null; });
   tdb.auth.onAuthStateChange((event, session) => { if (mode === 'teacher') accessToken = session ? session.access_token : null; });
@@ -2718,8 +2697,26 @@
       const row = document.createElement('div');
       row.className = 'proj-item';
       const when = p.data.updatedAt ? new Date(p.data.updatedAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
-      row.innerHTML = `<div><div class="pname">${esc(p.data.name)}${p.data.submitted ? '<span class="badge-ok">제출함</span>' : ''}</div><div class="sub">${esc(when)} 저장 · 부품 ${(p.data.parts || []).length}개</div></div><button type="button" class="primary">불러오기</button>${feedbackHtml(fbByProject[p.id])}`;
-      row.querySelector('button').addEventListener('click', () => { openProject(p.id, p.data); showFeedbackStatus(fbByProject[p.id]); });
+      row.innerHTML = `<div><div class="pname">${esc(p.data.name)}${p.data.submitted ? '<span class="badge-ok">제출함</span>' : ''}</div><div class="sub">${esc(when)} 저장 · 부품 ${(p.data.parts || []).length}개</div></div><button type="button" class="primary">불러오기</button><button type="button" class="ghost del-btn">삭제</button>${feedbackHtml(fbByProject[p.id])}`;
+      row.querySelector('.primary').addEventListener('click', () => { openProject(p.id, p.data); showFeedbackStatus(fbByProject[p.id]); });
+      row.querySelector('.del-btn').addEventListener('click', async (e) => {
+        const btn = e.currentTarget;
+        if (!btn.classList.contains('confirm')) {
+          btn.classList.add('confirm');
+          btn.textContent = '정말 삭제할까요?';
+          return;
+        }
+        btn.disabled = true;
+        try {
+          await (mode === 'teacher' ? tdb : db).collection(mode === 'teacher' ? 'teacherProjects' : 'projects').doc(p.id).delete();
+          row.remove();
+        } catch (err) {
+          btn.disabled = false;
+          btn.classList.remove('confirm');
+          btn.textContent = '삭제';
+          setStatus('삭제에 실패했어요. 인터넷을 확인하고 다시 시도해주세요.', 'warn');
+        }
+      });
       listEl.appendChild(row);
     });
     document.getElementById('newDraftBtn').addEventListener('click', openDraft);
