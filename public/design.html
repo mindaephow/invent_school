@@ -1448,11 +1448,25 @@
     }
 
     const shape = type === 'marble' ? new CANNON.Sphere(MARBLE_R) : new CANNON.Box(new CANNON.Vec3(def.w / 2, def.h / 2, def.d / 2));
-    const body = new CANNON.Body({ mass: 0, shape: isStraightType(type) ? undefined : shape });
+    const body = new CANNON.Body({ mass: 0, shape: (isStraightType(type) || type === 'basket') ? undefined : shape });
     if (isStraightType(type)) {
       // H 모양 단면 그대로: 아래쪽 바닥 판 + 양옆 레일 (구슬은 두 레일 사이 바닥 위를 구른다)
       body.addShape(new CANNON.Box(new CANNON.Vec3(def.w / 2, RAMP_FLOOR_T / 2, def.d / 2)), new CANNON.Vec3(0, RAMP_FLOOR_Y, 0));
       [-1, 1].forEach(sg => body.addShape(new CANNON.Box(new CANNON.Vec3(def.w / 2, def.h / 2, RAMP_RAIL_T / 2)), new CANNON.Vec3(0, 0, sg * (def.d / 2 - RAMP_RAIL_T / 2))));
+    }
+    if (type === 'basket') {
+      // 바닥판 + 벽을 여러 조각으로 둘러싼 그릇 모양 — 구슬이 실제로 안으로 들어가 부딪히고, 느리면 멈추고 빠르면 벽을 넘어 튕겨나갈 수 있다
+      const floorR = BASKET_R_BOTTOM - BASKET_WALL_T;
+      body.addShape(new CANNON.Cylinder(floorR, floorR, BASKET_WALL_T, 16), new CANNON.Vec3(0, -BASKET_H / 2 + BASKET_WALL_T / 2, 0));
+      const wallR = (BASKET_R_TOP + BASKET_R_BOTTOM) / 2 - BASKET_WALL_T / 2;
+      const N = 16;
+      const segLen = (2 * Math.PI * wallR / N) * 1.05;
+      for (let i = 0; i < N; i++) {
+        const ang = (i / N) * Math.PI * 2;
+        const segQuat = new CANNON.Quaternion();
+        segQuat.setFromEuler(0, -ang, 0);
+        body.addShape(new CANNON.Box(new CANNON.Vec3(segLen / 2, BASKET_H / 2, BASKET_WALL_T / 2)), new CANNON.Vec3(wallR * Math.sin(ang), 0, wallR * Math.cos(ang)), segQuat);
+      }
     }
     if (type === 'marble') body.collisionResponse = false; // 놓아 둔 표시일 뿐이라 다른 부품이나 공과 부딪히지 않는다
     body.position.set(x, y, z);
