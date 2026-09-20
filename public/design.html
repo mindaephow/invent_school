@@ -392,6 +392,7 @@
         <h2>기타 장치</h2>
         <div class="part-grid">
           <button class="part-card" data-type="marble"><span class="part-icon marble"></span>구슬</button>
+          <button class="part-card" data-type="basket"><svg class="part-icon-svg" viewBox="0 0 26 26" style="height:22px" aria-hidden="true"><path d="M4 11 A9 9 0 0 0 22 11" fill="none" class="svg-ramp" stroke-width="3"/><line x1="1" y1="11" x2="4" y2="11" class="svg-ramp" stroke-width="3"/><line x1="22" y1="11" x2="25" y2="11" class="svg-ramp" stroke-width="3"/></svg>바구니</button>
           <button class="part-card locked" disabled><span class="part-icon locked-icon"></span>도미노</button>
           <button class="part-card locked" disabled><span class="part-icon locked-icon"></span>도르래</button>
         </div>
@@ -405,7 +406,7 @@
         <div class="part-grid">
           <button class="part-card" data-type="straight"><svg class="part-icon-svg" viewBox="0 0 26 26" style="height:26px" aria-hidden="true"><rect x="0.5" y="0.5" width="3" height="25" class="svg-ramp"/><rect x="22.5" y="0.5" width="3" height="25" class="svg-ramp"/><rect x="3.5" y="17.5" width="19" height="3" class="svg-ramp"/></svg>직선길(12칸)</button>
           <button class="part-card" data-type="straightHalf"><svg class="part-icon-svg" viewBox="0 0 26 26" style="height:26px" aria-hidden="true"><rect x="0.5" y="0.5" width="3" height="25" class="svg-ramp"/><rect x="22.5" y="0.5" width="3" height="25" class="svg-ramp"/><rect x="3.5" y="17.5" width="19" height="3" class="svg-ramp"/></svg>직선길(6칸)</button>
-          <button class="part-card" data-type="halfRail"><svg class="part-icon-svg" viewBox="0 0 26 26" style="height:26px" aria-hidden="true"><path d="M2 13 A11 11 0 0 1 24 13" fill="none" class="svg-ramp" stroke-width="3"/></svg>반원길</button>
+          <button class="part-card locked" disabled><span class="part-icon locked-icon"></span>반원길</button>
           <button class="part-card locked" disabled><span class="part-icon locked-icon"></span>원형길</button>
           <button class="part-card locked" disabled><span class="part-icon locked-icon"></span>지그재그길</button>
         </div>
@@ -608,6 +609,7 @@
   const CLIP_EAR_H = 3.4; // 클립 홈 두께: 직선길 레일 두께 3에 여유 0.4만 둔다 (전에는 8이라 헐렁했다)
   const PIN_DEFAULT_LEN = 40, PIN_MIN_LEN = 10, PIN_MAX_LEN = 300, PIN_IN = 10; // 핀 길이 1~30cm, 한쪽 끝 1cm는 타공판 두께만큼 구멍 속에 들어간다
   const CLIP_PEG_OUT = 10, CLIP_PEG_IN = 2; // 클립 핀: 굵기 1cm(구멍 지름), 몸통 밖으로 나온 길이 1cm(판 두께와 같아서 판 뒷면과 딱 맞는다)
+  const BASKET_R_TOP = 25, BASKET_R_BOTTOM = 20, BASKET_H = 30, BASKET_WALL_T = 3, BASKET_PEG_OUT = 10, BASKET_PEG_IN = 2, BASKET_PEG_GAP = 20; // 물컵 모양: 윗지름 5cm·아랫지름 4cm·높이 3cm·재질 두께 3mm. 핀은 클립과 같은 굵기·길이, 양옆 핀 간격 20(=2cm, 구멍 한 칸)
   // 직선길 단면은 H 모양: 양옆 레일(두께 3, 높이 12)과 아래쪽으로 치우친 바닥 판(두께 3). 레일 한쪽이 클립 홈에 끼워지고 나머지는 벽에서 바깥으로 뻗는다.
   const RAMP_RAIL_T = 3, RAMP_FLOOR_T = 3;
   const RAMP_FLOOR_Y = -7; // H의 가운데 막대: 레일 가운데보다 0.7cm 아래로 치우친 자리 (클립 아래쪽 팔이 벽을 물어도 막대와 겹치지 않는다)
@@ -616,8 +618,6 @@
   const MOUNT_LABEL = { floor: '바닥', 'wall-left': '벽(좌)', 'wall-right': '벽(우)', ceiling: '천장' };
   // 반원길: 반지름 60(지름 120=기둥 6칸), 직선길과 같은 단면(레일 폭 26, 높이 26). 화면에 보이는 모양은 링·원통 도형에 시작각 0~180˚만 줘서 매끈한 곡선으로 만들고(원레일을 통째로 만들어 절반만 쓰는 것과 같음), 물리(구슬 충돌)만 12개 직선 조각으로 근사한다.
   // 지름 양 끝(원점 기준 x=±60)에 클립처럼 아래로 향한 핀이 있어 타공판 구멍에 꽂는다 — 두 개를 마주 놓으면 가운데(반지름 60 안쪽)가 뚫려 구슬이 빠질 자리가 된다.
-  const HALFRAIL_R = 60, HALFRAIL_SEGMENTS = 12, HALFRAIL_PEG_OUT = 10, HALFRAIL_PEG_IN = 2;
-  const HALFRAIL_LIFT = -(RAMP_FLOOR_Y - RAMP_FLOOR_T / 2); // 바닥판 아랫면이 타공판 윗면에 닿도록 몸통(원점)을 띄우는 높이
 
   function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
 
@@ -750,7 +750,7 @@
   function isPillarType(type){ return type === 'pillar' || type === 'pillarHalf'; }
   function isStraightType(type){ return type === 'straight' || type === 'straightHalf'; }
   const BOTTOM_TINT = 0xcfcfcf; // 타공판·기둥·직선길 아랫면에 씌우는 살짝 어두운 색조(윗면과 구분용)
-  function isConnectorType(type){ return isPillarType(type) || type === 'hinge' || type === 'lbracket' || type === 'clip' || type === 'pin' || type === 'halfRail'; }
+  function isConnectorType(type){ return isPillarType(type) || type === 'hinge' || type === 'lbracket' || type === 'clip' || type === 'pin' || type === 'basket'; }
   // 부품마다 크기가 다른 것(핀 길이)까지 반영한 치수
   function defOf(p){ const d = PART_DEFS[p.type]; return (p.type === 'pin' && p.len) ? Object.assign({}, d, { h: p.len }) : d; }
 
@@ -761,7 +761,7 @@
     if (type === 'lbracket') return cssVar('--bracket');
     if (type === 'clip') return cssVar('--clip');
     if (type === 'pin') return cssVar('--pin');
-    if (isStraightType(type) || type === 'halfRail') return cssVar('--straight');
+    if (isStraightType(type)) return cssVar('--straight');
     if (type === 'marble') return '#4FB3E8';
     return cssVar('--blueprint');
   }
@@ -1002,7 +1002,7 @@
   })();
 
   // ----- 사용 부품 목록: 화면 구석에 놓은 부품을 이름과 번호로 보여 주고, 누르면 그 부품이 선택된다
-  const PART_SHORT = { panel: '타공판 대', panelHalf: '타공판 1/2', panelQuarter: '타공판 1/4', pillar: '기둥', pillarHalf: '기둥 1/2', hinge: '경첩', lbracket: 'ㄱ자연결대', tape: '종이테이프', clip: '클립', pin: '핀', straight: '직선길', straightHalf: '직선길 1/2', halfRail: '반원길', marble: '구슬' };
+  const PART_SHORT = { panel: '타공판 대', panelHalf: '타공판 1/2', panelQuarter: '타공판 1/4', pillar: '기둥', pillarHalf: '기둥 1/2', hinge: '경첩', lbracket: 'ㄱ자연결대', tape: '종이테이프', clip: '클립', pin: '핀', straight: '직선길', straightHalf: '직선길 1/2', basket: '바구니', marble: '구슬' };
   const partListEl = document.getElementById('partList'), partListBody = document.getElementById('partListBody');
   function setPartListFolded(folded){
     partListEl.classList.toggle('folded', folded);
@@ -1503,27 +1503,11 @@
     }
 
     const shape = type === 'marble' ? new CANNON.Sphere(MARBLE_R) : new CANNON.Box(new CANNON.Vec3(def.w / 2, def.h / 2, def.d / 2));
-    const body = new CANNON.Body({ mass: 0, shape: (isStraightType(type) || type === 'halfRail') ? undefined : shape });
+    const body = new CANNON.Body({ mass: 0, shape: isStraightType(type) ? undefined : shape });
     if (isStraightType(type)) {
       // H 모양 단면 그대로: 아래쪽 바닥 판 + 양옆 레일 (구슬은 두 레일 사이 바닥 위를 구른다)
       body.addShape(new CANNON.Box(new CANNON.Vec3(def.w / 2, RAMP_FLOOR_T / 2, def.d / 2)), new CANNON.Vec3(0, RAMP_FLOOR_Y, 0));
       [-1, 1].forEach(sg => body.addShape(new CANNON.Box(new CANNON.Vec3(def.w / 2, def.h / 2, RAMP_RAIL_T / 2)), new CANNON.Vec3(0, 0, sg * (def.d / 2 - RAMP_RAIL_T / 2))));
-    }
-    if (type === 'halfRail') {
-      // 반원을 짧은 직선 조각(H 단면) 12개로 근사한 물리 모양. 조각마다 위치·각도가 달라 곡선을 따라간다.
-      // 각 조각 기준 길이 방향은 원의 접선, 레일 좌우 방향은 원의 반지름 방향(중심에서 바깥쪽).
-      const railMag = def.d / 2 - RAMP_RAIL_T / 2;
-      for (let i = 0; i < HALFRAIL_SEGMENTS; i++) {
-        const th = (i + 0.5) * Math.PI / HALFRAIL_SEGMENTS;
-        const segLen = 2 * HALFRAIL_R * Math.sin(Math.PI / HALFRAIL_SEGMENTS / 2) + 1; // 이웃 조각과 겹치도록 1만큼 여유
-        const cx = HALFRAIL_R * Math.cos(th), cz = HALFRAIL_R * Math.sin(th);
-        const segQ = new CANNON.Quaternion().setFromAxisAngle(new CANNON.Vec3(0, 1, 0), -(th + Math.PI / 2));
-        body.addShape(new CANNON.Box(new CANNON.Vec3(segLen / 2, RAMP_FLOOR_T / 2, def.d / 2)), new CANNON.Vec3(cx, RAMP_FLOOR_Y, cz), segQ);
-        [-1, 1].forEach(sg => {
-          const rx = cx + sg * railMag * Math.cos(th), rz = cz + sg * railMag * Math.sin(th);
-          body.addShape(new CANNON.Box(new CANNON.Vec3(segLen / 2, def.h / 2, RAMP_RAIL_T / 2)), new CANNON.Vec3(rx, 0, rz), segQ);
-        });
-      }
     }
     if (type === 'marble') body.collisionResponse = false; // 놓아 둔 표시일 뿐이라 다른 부품이나 공과 부딪히지 않는다
     body.position.set(x, y, z);
@@ -1576,32 +1560,35 @@
         dot.position.set(sg * (def.w / 2 - MARBLE_R - 2), RAMP_FLOOR_Y + RAMP_FLOOR_T / 2 + 0.3, 0);
         mesh.add(dot);
       });
-    } else if (type === 'halfRail') {
-      // 원레일을 통째로 만들고 절반(180˚)만 쓰는 방식 — 링·원통 도형에 시작각·각도범위를 주면 곡선이 매끈하게 나온다.
+    } else if (type === 'basket') {
+      // 컵 모양(재질 두께 3mm): 바깥면(옆+바닥) + 안쪽면(옆+바닥, 두께만큼 안으로 들어감) + 위 테두리 고리(두께가 보이는 단면)
       mesh = new THREE.Group();
-      const railMat = new THREE.MeshStandardMaterial({ color: partColor('straight') });
-      const railMatBottom = new THREE.MeshStandardMaterial({ color: new THREE.Color(partColor('straight')).multiplyScalar(0.82), side: THREE.DoubleSide });
-      const floorGeo = new THREE.RingGeometry(HALFRAIL_R - def.d / 2, HALFRAIL_R + def.d / 2, 32, 1, 0, Math.PI);
-      const floorTop = new THREE.Mesh(floorGeo, railMat);
-      floorTop.rotation.x = -Math.PI / 2;
-      floorTop.position.y = RAMP_FLOOR_Y + RAMP_FLOOR_T / 2;
-      mesh.add(floorTop);
-      const floorBottom = new THREE.Mesh(floorGeo, railMatBottom);
-      floorBottom.rotation.x = Math.PI / 2;
-      floorBottom.position.y = RAMP_FLOOR_Y - RAMP_FLOOR_T / 2;
-      mesh.add(floorBottom);
+      const basketMat = new THREE.MeshStandardMaterial({ color: partColor('basket'), side: THREE.DoubleSide });
+      const outerWall = new THREE.Mesh(new THREE.CylinderGeometry(BASKET_R_TOP, BASKET_R_BOTTOM, BASKET_H, 24, 1, true), basketMat);
+      mesh.add(outerWall);
+      const outerBottom = new THREE.Mesh(new THREE.CircleGeometry(BASKET_R_BOTTOM, 24), basketMat);
+      outerBottom.rotation.x = Math.PI / 2;
+      outerBottom.position.y = -BASKET_H / 2;
+      mesh.add(outerBottom);
+      const innerWall = new THREE.Mesh(new THREE.CylinderGeometry(BASKET_R_TOP - BASKET_WALL_T, BASKET_R_BOTTOM - BASKET_WALL_T, BASKET_H - BASKET_WALL_T, 24, 1, true), basketMat);
+      innerWall.position.y = BASKET_WALL_T / 2;
+      mesh.add(innerWall);
+      const innerBottom = new THREE.Mesh(new THREE.CircleGeometry(BASKET_R_BOTTOM - BASKET_WALL_T, 24), basketMat);
+      innerBottom.rotation.x = -Math.PI / 2;
+      innerBottom.position.y = -BASKET_H / 2 + BASKET_WALL_T;
+      mesh.add(innerBottom);
+      const rim = new THREE.Mesh(new THREE.RingGeometry(BASKET_R_TOP - BASKET_WALL_T, BASKET_R_TOP, 24), basketMat);
+      rim.rotation.x = -Math.PI / 2;
+      rim.position.y = BASKET_H / 2;
+      mesh.add(rim);
+      // 손잡이 대신 양옆에 핀(길이 1cm) — 컵 중간 높이, 바깥벽에서 옆으로 튀어나온다
+      const pegMat2 = new THREE.MeshStandardMaterial({ color: partColor('basket') });
+      const BASKET_PEG_EMBED = BASKET_WALL_T; // 핀 끝을 컵 벽 두께(3mm)만큼만 밀어 넣는다 — 그 이상 넣으면 안쪽 면을 뚫고 튀어나와 보인다
       [-1, 1].forEach(sg => {
-        const rWall = HALFRAIL_R + sg * (def.d / 2 - RAMP_RAIL_T / 2);
-        const wall = new THREE.Mesh(new THREE.CylinderGeometry(rWall, rWall, def.h, 32, 1, true, 0, Math.PI), railMat);
-        mesh.add(wall);
-      });
-      // 길 양 끝, 레일 사이 바닥에 구슬을 세워 둘 수 있는 작은 자리 표시
-      const hrDotMat = new THREE.MeshBasicMaterial({ color: 0x000000, opacity: 0.35, transparent: true });
-      [0, Math.PI].forEach(th => {
-        const dot = new THREE.Mesh(new THREE.CircleGeometry(1, 20), hrDotMat);
-        dot.rotation.x = -Math.PI / 2;
-        dot.position.set(HALFRAIL_R * Math.cos(th), RAMP_FLOOR_Y + RAMP_FLOOR_T / 2 + 0.3, HALFRAIL_R * Math.sin(th));
-        mesh.add(dot);
+        const peg = new THREE.Mesh(new THREE.CylinderGeometry(HOLE_R_WORLD, HOLE_R_WORLD, BASKET_PEG_OUT + BASKET_PEG_EMBED, 16), pegMat2);
+        peg.rotation.z = Math.PI / 2;
+        peg.position.set(sg * ((BASKET_R_TOP + BASKET_R_BOTTOM) / 2 + BASKET_PEG_OUT / 2 - BASKET_PEG_EMBED / 2), 0, 0);
+        mesh.add(peg);
       });
     } else {
       mesh = new THREE.Mesh(geo, mat);
@@ -1665,15 +1652,6 @@
         const cap = new THREE.Mesh(new THREE.BoxGeometry(def.w, CLIP_CAP_T, capSide), clipMat);
         cap.position.set(0, def.h / 2 + CLIP_EAR_H + CLIP_CAP_T / 2, s * (capW / 2 - capSide / 2));
         mesh.add(cap);
-      });
-    } else if (type === 'halfRail') {
-      // 지름 양 끝(반원의 두 시작점)에 클립과 같은 방식의 핀 — 타공판 구멍에 꽂는다
-      const hrPegMat = new THREE.MeshStandardMaterial({ color: partColor('straight') });
-      const hrFloorBottomY = RAMP_FLOOR_Y - RAMP_FLOOR_T / 2;
-      [0, Math.PI].forEach(th => {
-        const peg = new THREE.Mesh(new THREE.CylinderGeometry(HOLE_R_WORLD, HOLE_R_WORLD, HALFRAIL_PEG_OUT + HALFRAIL_PEG_IN, 16), hrPegMat);
-        peg.position.set(HALFRAIL_R * Math.cos(th), hrFloorBottomY - (HALFRAIL_PEG_OUT - HALFRAIL_PEG_IN) / 2, HALFRAIL_R * Math.sin(th));
-        mesh.add(peg);
       });
     }
     scene.add(mesh);
@@ -2239,13 +2217,13 @@
     const lx = holeSnap(local.x, pdef.w);
     const lz = holeSnap(local.z, pdef.d);
     const pinLen = type === 'pin' ? ((existingTarget && existingTarget.len) || PIN_DEFAULT_LEN) : 0;
-    const lift = type === 'pin' ? pinLen / 2 - PIN_IN : ((type === 'clip' || type === 'lbracket') ? PART_DEFS[type].h / 2 : (type === 'halfRail' ? HALFRAIL_LIFT : 0)); // 클립·ㄱ자연결대·반원길은 판 위에 얹히고 핀만 구멍에 들어간다. 핀은 한쪽 끝 1cm만 구멍 속에 들어가고 나머지는 판 위로 선다
+    const lift = type === 'pin' ? pinLen / 2 - PIN_IN : ((type === 'clip' || type === 'lbracket') ? PART_DEFS[type].h / 2 : (type === 'basket' ? BASKET_H / 2 + BASKET_PEG_OUT : 0)); // 클립·ㄱ자연결대·바구니는 판 위에 얹히고 핀만 구멍에 들어간다. 핀은 한쪽 끝 1cm만 구멍 속에 들어가고 나머지는 판 위로 선다
     const worldPos = panelPart.mesh.localToWorld(new THREE.Vector3(lx, pdef.h / 2 + lift, lz));
-    if (type === 'lbracket' || type === 'clip' || type === 'pin' || type === 'halfRail') {
+    if (type === 'lbracket' || type === 'clip' || type === 'pin' || type === 'basket') {
       // 아래로 꽂은 핀 끝이 바닥을 뚫고 내려가면 안 되므로, 핀 끝이 바닥에 닿는 높이까지만 들어가고 나머지는 위로 뜬다
       const n = new THREE.Vector3(0, 1, 0).applyQuaternion(panelPart.mesh.quaternion);
       if (n.y > 0.01) {
-        const tipY = worldPos.y - (type === 'pin' ? pinLen / 2 : type === 'halfRail' ? HALFRAIL_LIFT + HALFRAIL_PEG_OUT : PART_DEFS[type].h / 2 + (type === 'clip' ? CLIP_PEG_OUT : LBRACKET_PEG_OUT)) * n.y;
+        const tipY = worldPos.y - (type === 'pin' ? pinLen / 2 : type === 'basket' ? BASKET_H / 2 + BASKET_PEG_OUT : PART_DEFS[type].h / 2 + (type === 'clip' ? CLIP_PEG_OUT : LBRACKET_PEG_OUT)) * n.y;
         if (tipY < 0) worldPos.addScaledVector(n, -tipY / n.y);
       }
     }
