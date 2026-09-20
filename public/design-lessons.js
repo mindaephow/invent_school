@@ -9,6 +9,16 @@ window.IVS_LESSONS = [
     mission: '중력의 에너지를 이용하여 구슬을 목표한 곳까지 도착하게 합니다.',
     steps: [
       '베이스 타공판을 클릭하고, 축 Z → 돌리기 → 0을 차례로 클릭해요.'
+    ],
+    // "샘플 열기" 버튼을 누르면 이 부품 배치를 스케치북에 그대로 보여준다 (design.html의 serializeParts()가 저장하는 형식과 같다)
+    sample: [
+      { type: 'panel', mount: 'floor', pos: [-110, 5, -110], quat: [0, 0, 0, 1], rot: [0, 0, 0], set: [1, 'ㄴ셋'] },
+      { type: 'lbracket', mount: 'floor', pos: [-220, 28, -220], quat: [0, 0, 0.70711, 0.70711], rot: [0, 0, 90], set: [1, 'ㄴ셋'] },
+      { type: 'lbracket', mount: 'floor', pos: [0, 28, -220], quat: [0, 0, 0.70711, 0.70711], rot: [0, 0, 90], set: [1, 'ㄴ셋'] },
+      { type: 'panel', mount: 'floor', pos: [-110, 138, -233], quat: [0.70711, 0, 0, 0.70711], rot: [90, 0, 0], set: [1, 'ㄴ셋'] },
+      { type: 'clip', mount: 'floor', pos: [-220, 248, -224], quat: [0.70711, 0, 0, 0.70711], rot: [90, 0, 0] },
+      { type: 'straight', mount: 'floor', pos: [-220, 248, -206.8], quat: [0, 0, -0.08716, 0.99619], rot: [0, 0, -10] },
+      { type: 'basket', mount: 'floor', pos: [-40, 188, -195], quat: [0, -0.70711, 0, 0.70711], rot: [0, -90, 0], goal: true }
     ]
   }
 ];

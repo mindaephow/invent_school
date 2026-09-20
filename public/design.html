@@ -115,6 +115,9 @@
   .mission .lesson-title{font-size:18px; font-weight:800; color:var(--ink); margin:0 0 2px;}
   .mission .lesson-sub{font-size:13px; color:var(--blueprint); font-weight:600; margin:0 0 8px;}
   .mission h3{font-size:14px; font-weight:700; color:var(--blueprint); margin:12px 0 4px;}
+  .mission .lesson-steps-head{display:flex; align-items:center; justify-content:space-between; gap:8px;}
+  .mission .lesson-steps-head h3{margin:12px 0 4px;}
+  .mission .lesson-steps-head button{padding:4px 10px; font-size:12px;}
   .mission ol{margin:0; padding-left:20px; color:var(--ink-soft); font-size:14px; line-height:1.55;}
   .mission ol li{margin-bottom:4px;}
 
@@ -360,7 +363,7 @@
           <p class="lesson-concept"></p>
           <h3>미션</h3>
           <p class="lesson-mission"></p>
-          <h3>따라하기</h3>
+          <div class="lesson-steps-head"><h3>따라하기</h3><button id="openSampleBtn" class="ghost" type="button" hidden>샘플 열기</button></div>
           <ol class="lesson-steps"></ol>
         </details>
       </section>
@@ -590,6 +593,14 @@
       li.textContent = step;
       stepsEl.appendChild(li);
     });
+    const sampleBtn = document.getElementById('openSampleBtn');
+    if (lesson.sample && lesson.sample.length) {
+      sampleBtn.hidden = false;
+      sampleBtn.addEventListener('click', () => {
+        restoreParts(lesson.sample, {}, true); // keepHistory: true — 되돌리기로 샘플 열기 이전 상태로 돌아갈 수 있게
+        setStatus('샘플을 스케치북에 열었어요. 마음에 안 들면 "되돌리기"로 이전 상태로 돌아갈 수 있어요.', 'success');
+      });
+    }
   })();
 
   const MARBLE_R = 9;
@@ -659,7 +670,25 @@
   world.addBody(floorBody);
 
   // 도착 지점: 따로 놓는 깃발이 아니라, 이미 배치한 부품 하나를 "도착 지점"으로 지정한다(구슬이 멈춰서 그 부품 자리에 있으면 성공).
+  // 어떤 부품인지 한눈에 보이도록, 지정된 부품 위에 작은 깃발을 띄워 표시한다(예전 도착 지점 마커와 같은 모양).
   let goalTargetPart = null;
+  const goalFlagGroup = new THREE.Group();
+  const goalFlagPole = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, 70, 8), new THREE.MeshStandardMaterial({ color: cssVar('--ink-soft') }));
+  goalFlagPole.position.set(0, 35, 0);
+  goalFlagGroup.add(goalFlagPole);
+  const goalFlagCone = new THREE.Mesh(new THREE.ConeGeometry(18, 34, 4), new THREE.MeshStandardMaterial({ color: cssVar('--accent') }));
+  goalFlagCone.position.set(0, 87, 0);
+  goalFlagGroup.add(goalFlagCone);
+  goalFlagGroup.visible = false;
+  scene.add(goalFlagGroup);
+  function updateGoalFlag(){
+    goalFlagGroup.visible = !!goalTargetPart;
+    if (goalTargetPart) {
+      const p = goalTargetPart.body.position;
+      const def = PART_DEFS[goalTargetPart.type];
+      goalFlagGroup.position.set(p.x, p.y + def.h / 2, p.z);
+    }
+  }
 
   let parts = [];
   let balls = []; // 재생 중인 공/구슬 { body, mesh, marble?, idle, done }
@@ -2327,6 +2356,7 @@
       b.mesh.position.copy(b.body.position);
       b.mesh.quaternion.copy(b.body.quaternion);
     });
+    updateGoalFlag();
     updateCamera();
     updateViewCube();
     renderer.render(scene, camera);
