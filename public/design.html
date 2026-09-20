@@ -203,6 +203,16 @@
   .part-list-body button.sel{background:var(--blueprint-soft); border-color:var(--blueprint); font-weight:700;}
   .part-list-body .dot{flex:0 0 10px; width:10px; height:10px; border-radius:50%;}
   .part-list-empty{margin:4px 6px 2px; color:var(--ink-soft); font-size:12px;}
+  .history-panel{position:absolute; right:10px; bottom:58px; z-index:2; width:210px; background:var(--panel); border:1px solid var(--panel-border); border-radius:12px; box-shadow:var(--shadow); font-size:13px;}
+  .history-head{display:flex; align-items:center; gap:4px; padding:5px 6px 5px 4px;}
+  .history-title{flex:1; display:flex; align-items:center; justify-content:space-between; padding:4px 6px; border:0; background:transparent; font-weight:700; font-size:13px; color:var(--ink); cursor:pointer; text-align:left;}
+  .history-head > button:not(.history-title){padding:3px 9px; font-size:16px; line-height:1;}
+  .history-head > button:disabled{opacity:.35; cursor:default;}
+  .history-body{list-style:none; margin:0; padding:0 6px 6px; max-height:170px; overflow-y:auto;}
+  .history-panel.folded .history-body{display:none;}
+  .history-body li button{display:block; width:100%; text-align:left; padding:5px 8px; margin-top:3px; border-radius:8px; font-size:12.5px; background:transparent; border:1px solid transparent; color:var(--ink);}
+  .history-body li button.cur{background:var(--blueprint-soft); border-color:var(--blueprint); font-weight:700;}
+  .history-body li button.future{color:var(--ink-soft);}
   .view-tools{position:absolute; top:10px; left:10px; display:flex; gap:6px; z-index:2;}
   .view-tools button{padding:6px 12px; font-size:12px; font-weight:600; border-radius:999px; background:var(--panel); border:1px solid var(--panel-border); color:var(--ink);}
   .view-tools button.on{background:var(--blueprint); border-color:var(--blueprint); color:#fff;}
@@ -434,6 +444,14 @@
         <div class="part-list" id="partList">
           <button type="button" class="part-list-head" id="partListHead" aria-expanded="true"><span>사용 부품 <b id="partListCount">0</b></span><span id="partListArrow">▾</span></button>
           <div class="part-list-body" id="partListBody"></div>
+        </div>
+        <div class="history-panel" id="historyPanel">
+          <div class="history-head">
+            <button type="button" class="history-title" id="historyToggle" aria-expanded="true"><span>작업 기록 <b id="historyCount">0</b></span><span id="historyArrow">▾</span></button>
+            <button type="button" id="undoBtn" title="되돌리기 (Ctrl+Z)" aria-label="되돌리기">↶</button>
+            <button type="button" id="redoBtn" title="다시 (Ctrl+Y)" aria-label="다시">↷</button>
+          </div>
+          <ol class="history-body" id="historyBody"></ol>
         </div>
         <div class="scene-hint">빈 곳 드래그: 회전 · ✋이동/오른쪽 버튼/두 손가락: 화면 밀기 · 선택한 부품 드래그: 부품 이동 · 휠/핀치: 확대축소</div>
         <div class="viewcube-wrap">
@@ -1051,6 +1069,116 @@
       partListBody.appendChild(b);
     });
   }
+
+  // ----- 작업 기록: 이 화면을 쓰는 동안만 남기고, 새로 불러오면 그 상태가 처음 기록이 된다. 한 줄을 누르면 그 시점으로 돌아간다.
+  const HISTORY_MAX = 60;
+  let history = [];   // { label, snap:{parts, markers}, key, t }
+  let histIndex = -1;
+  let histSuppressUntil = 0;
+  function takeSnapshot(){ return { parts: serializeParts(), markers: serializeMarkers() }; }
+  function snapKey(snap){ return JSON.stringify(snap); }
+  function partNamesOf(list){
+    const cnt = {};
+    return list.map(p => { cnt[p.type] = (cnt[p.type] || 0) + 1; return (PART_SHORT[p.type] || p.type) + ' ' + cnt[p.type]; });
+  }
+  function describeChange(prev, cur){
+    const pm = prev.markers, cm = cur.markers;
+    if (pm && JSON.stringify(pm.start) !== JSON.stringify(cm.start)) return '출발 지점 옮기기';
+    if (pm && JSON.stringify(pm.goal) !== JSON.stringify(cm.goal)) return '도착 지점 옮기기';
+    const a = prev.parts, b = cur.parts, names = partNamesOf(b);
+    if (b.length > a.length) {
+      const k = b.length - a.length;
+      return k === 1 ? names[b.length - 1] + ' 놓기' : '부품 ' + k + '개 한꺼번에 놓기';
+    }
+    if (b.length < a.length) {
+      const k = a.length - b.length;
+      return b.length === 0 ? '전체 삭제' : (k === 1 ? '부품 지우기' : '부품 ' + k + '개 지우기');
+    }
+    const moved = [], turned = [];
+    b.forEach((p, i) => {
+      const q = a[i];
+      if (!q) return;
+      const dp = Math.hypot(p.pos[0] - q.pos[0], p.pos[1] - q.pos[1], p.pos[2] - q.pos[2]);
+      const dq = Math.abs(p.quat[0] * q.quat[0] + p.quat[1] * q.quat[1] + p.quat[2] * q.quat[2] + p.quat[3] * q.quat[3]);
+      if (dp > 0.4) moved.push(i);
+      if (dq < 0.99999) turned.push(i);
+    });
+    const ids = Array.from(new Set(moved.concat(turned)));
+    if (ids.length === 1) {
+      const nm = names[ids[0]];
+      if (moved.length && turned.length) return nm + ' 이동·돌리기';
+      return nm + (moved.length ? ' 이동' : ' 돌리기');
+    }
+    if (ids.length > 1) return ids.length + '개 부품 수정';
+    return '부품 끼우기·수정';
+  }
+  function renderHistory(){
+    document.getElementById('historyCount').textContent = String(history.length);
+    document.getElementById('undoBtn').disabled = histIndex <= 0;
+    document.getElementById('redoBtn').disabled = histIndex >= history.length - 1;
+    const body = document.getElementById('historyBody');
+    body.textContent = '';
+    for (let i = history.length - 1; i >= 0; i--) {
+      const li = document.createElement('li');
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = i === histIndex ? 'cur' : (i > histIndex ? 'future' : '');
+      b.textContent = (i + 1) + '. ' + history[i].label;
+      b.addEventListener('click', () => jumpHistory(i));
+      li.appendChild(b);
+      body.appendChild(li);
+    }
+  }
+  function resetHistory(){
+    const snap = takeSnapshot();
+    history = [{ label: snap.parts.length ? '불러온 상태' : '새로 시작', snap, key: snapKey(snap), t: Date.now() }];
+    histIndex = 0;
+    renderHistory();
+  }
+  function recordHistory(){
+    if (Date.now() < histSuppressUntil || !history.length) return;
+    const snap = takeSnapshot(), key = snapKey(snap);
+    const last = history[histIndex];
+    if (last.key === key) return;
+    const label = describeChange(last.snap, snap), now = Date.now();
+    history.length = histIndex + 1; // 되돌린 뒤에 새로 작업하면 그 뒤의 기록은 새 작업으로 이어진다
+    if (histIndex > 0 && last.label === label && now - last.t < 1200 && /이동|돌리기/.test(label)) {
+      last.snap = snap; last.key = key; last.t = now; // 같은 부품을 이어서 움직이면(방향키 연타 등) 한 줄로 합친다
+    } else {
+      history.push({ label, snap, key, t: now });
+      if (history.length > HISTORY_MAX) history.shift();
+      histIndex = history.length - 1;
+    }
+    renderHistory();
+  }
+  function jumpHistory(i){
+    if (i < 0 || i >= history.length || i === histIndex) return;
+    histSuppressUntil = Date.now() + 200;
+    restoreParts(history[i].snap.parts, history[i].snap.markers, true);
+    histIndex = i;
+    history[i].key = snapKey(takeSnapshot());
+    renderHistory();
+    setStatus('"' + history[i].label + '" 시점으로 돌아왔어요.', 'success');
+  }
+  ['pointerup', 'keyup', 'click', 'change'].forEach(ev => window.addEventListener(ev, () => setTimeout(recordHistory, 40), true));
+  document.getElementById('undoBtn').addEventListener('click', () => jumpHistory(histIndex - 1));
+  document.getElementById('redoBtn').addEventListener('click', () => jumpHistory(histIndex + 1));
+  window.addEventListener('keydown', (e) => {
+    if (!(e.ctrlKey || e.metaKey)) return;
+    const tag = (e.target && e.target.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    const k = e.key.toLowerCase();
+    if (k === 'z' && !e.shiftKey) { e.preventDefault(); jumpHistory(histIndex - 1); }
+    else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); jumpHistory(histIndex + 1); }
+  });
+  function setHistoryFolded(folded){
+    document.getElementById('historyPanel').classList.toggle('folded', folded);
+    document.getElementById('historyToggle').setAttribute('aria-expanded', String(!folded));
+    document.getElementById('historyArrow').textContent = folded ? '▸' : '▾';
+    try { localStorage.setItem('ivs-history-folded', folded ? '1' : '0'); } catch (e) {}
+  }
+  document.getElementById('historyToggle').addEventListener('click', () => setHistoryFolded(!document.getElementById('historyPanel').classList.contains('folded')));
+  try { if (localStorage.getItem('ivs-history-folded') === '1') setHistoryFolded(true); } catch (e) {}
 
   function select(p){
     if (p !== selected) activeAxis = null;
@@ -2022,7 +2150,7 @@
     });
   }
 
-  function restoreParts(list, data){
+  function restoreParts(list, data, keepHistory){
     stopPlay();
     clearBalls();
     parts.slice().forEach(removePart);
@@ -2042,6 +2170,7 @@
     applyMarkers(data);
     select(null);
     buildGuide.hidden = true;
+    if (!keepHistory) resetHistory();
   }
 
   function syncFromScene(){
