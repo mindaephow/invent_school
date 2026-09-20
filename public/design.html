@@ -360,10 +360,6 @@
         </div>
 
         <h2>베이스 — 기둥</h2>
-        <div class="mount-select" role="group" aria-label="기둥 놓는 방향">
-          <button type="button" class="mount-btn pillar-orient-btn active" data-orient="lying">눕히기</button>
-          <button type="button" class="mount-btn pillar-orient-btn" data-orient="standing">세우기</button>
-        </div>
         <div class="part-grid">
           <button class="part-card" data-type="pillar"><span class="part-icon pillar"></span>전체(12칸)</button>
           <button class="part-card" data-type="pillarHalf"><span class="part-icon pillar"></span>1/2(6칸)</button>
@@ -1321,15 +1317,6 @@
 
   let holePick = null; // { type, panel } — optional "타공판 → 구멍" precision placement, started from the modal
 
-  let pillarStanding = false; // 눕히기(default) / 세우기 — chosen before placing a pillar
-
-  document.querySelectorAll('.pillar-orient-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      pillarStanding = btn.dataset.orient === 'standing';
-      document.querySelectorAll('.pillar-orient-btn').forEach(b => b.classList.toggle('active', b === btn));
-    });
-  });
-
   document.querySelectorAll('.part-grid .part-card:not(.locked)').forEach(btn => {
     const type = btn.dataset.type;
     btn.addEventListener('pointerdown', (e) => {
@@ -1368,7 +1355,7 @@
     partCounter++;
     const def = PART_DEFS[type];
     const mc = type === 'marble' ? 'floor' : mountChoice;
-    let x, y, z, mount, angle = isPillarType(type) ? (pillarStanding ? Math.PI / 2 : 0) : 0.2;
+    let x, y, z, mount, angle = isPillarType(type) ? 0 : 0.2;
     if (forcedPos) {
       x = forcedPos.x; y = forcedPos.y; z = forcedPos.z; mount = forcedPos.mount;
     } else if (mc === 'wall') {
