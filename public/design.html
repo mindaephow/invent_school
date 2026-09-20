@@ -169,8 +169,8 @@
   .axis-row .axis-tag{flex:1 1 0;}
   .mode-row button[aria-pressed="true"]{background:var(--blueprint); border-color:var(--blueprint); color:#fff; font-weight:700;}
   .axis-now{margin:0 0 6px; font-size:13px; color:var(--ink);}
-  .num-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin-bottom:8px;}
-  .num-grid button{padding:8px 0; font-size:13px;}
+  .num-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-bottom:8px;}
+  .num-grid button{padding:8px 0; font-size:12px; min-width:0;}
   .num-grid button.on{background:var(--blueprint); border-color:var(--blueprint); color:#fff; font-weight:700;}
   #axisBlock input[type=number]{flex:2; min-width:0; padding:8px 10px; border:1px solid var(--panel-border); border-radius:8px; background:var(--panel); color:var(--ink); font:inherit; font-size:13px;}
   button.danger{width:100%; color:var(--warn); border-color:var(--warn-bg); background:var(--warn-bg);}
@@ -434,7 +434,7 @@
             <p class="axis-now" id="angleLine"></p>
             <div class="num-grid">
               <button type="button" data-angle-val="-90">-90</button><button type="button" data-angle-val="-45">-45</button><button type="button" data-angle-val="-15">-15</button><button type="button" data-angle-val="0">0</button>
-              <button type="button" data-angle-val="15">+15</button><button type="button" data-angle-val="45">+45</button><button type="button" data-angle-val="90">+90</button><button type="button" data-angle-val="180">180</button>
+              <button type="button" data-angle-val="15">+15</button><button type="button" data-angle-val="45">+45</button><button type="button" data-angle-val="90">+90</button>
             </div>
             <div class="rotate-row"><input id="angleInput" type="number" step="1" placeholder="각도 직접 입력(°)" aria-label="각도 직접 입력"><button type="button" id="angleApply">적용</button></div>
             <p class="rot-hint">색 화살표가 돌리는 축이에요 (X 빨강 · Y 초록 · Z 파랑). 각도는 X → Y → Z 순서로 방 기준으로 적용돼요. +는 화살표 끝에서 볼 때 시계 반대 방향이에요.</p>
