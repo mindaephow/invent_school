@@ -658,7 +658,10 @@
   const LBRACKET_PEG_OUT = 20, LBRACKET_PEG_IN = 2; // ㄱ자연결대 핀: 몸통 밖으로 나온 길이 2cm, 몸통 속에 박힌 길이 0.2cm
   const CLIP_EAR_H = 8; // 클립 귀 높이 0.8cm (전에는 2.4cm였는데 3분의 2를 줄였다)
   const CLIP_PEG_OUT = 10, CLIP_PEG_IN = 2; // 클립 핀: 굵기 1cm(구멍 지름), 몸통 밖으로 나온 길이 1cm(판 두께와 같아서 판 뒷면과 딱 맞는다)
-  const CLIP_JOIN_Y = PART_DEFS.clip.h / 2 + PART_DEFS.straight.w / 2; // 끼운 직선길 중심이 클립 중심에서 핀 반대쪽으로 떨어진 거리
+  // 직선길 단면은 H 모양: 양옆 레일(두께 3, 높이 12)과 아래쪽으로 치우친 바닥 판(두께 3). 레일 한쪽이 클립 홈에 끼워지고 나머지는 벽에서 바깥으로 뻗는다.
+  const RAMP_RAIL_T = 3, RAMP_FLOOR_T = 3, RAMP_FLOOR_Y = -2.5;
+  // 끼운 직선길 중심이 클립 중심에서 핀 반대쪽(벽 바깥쪽)으로 떨어진 거리: 홈 가운데(몸통 위 4 + 귀 높이의 반) + 직선길 가운데에서 끼운 레일 가운데까지
+  const CLIP_JOIN_Y = PART_DEFS.clip.h / 2 + CLIP_EAR_H / 2 + (PART_DEFS.straight.d / 2 - RAMP_RAIL_T / 2);
   const MOUNT_LABEL = { floor: '바닥', 'wall-left': '벽(좌)', 'wall-right': '벽(우)', ceiling: '천장' };
 
   function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
@@ -1484,7 +1487,12 @@
     }
 
     const shape = type === 'marble' ? new CANNON.Sphere(MARBLE_R) : new CANNON.Box(new CANNON.Vec3(def.w / 2, def.h / 2, def.d / 2));
-    const body = new CANNON.Body({ mass: 0, shape });
+    const body = new CANNON.Body({ mass: 0, shape: type === 'straight' ? undefined : shape });
+    if (type === 'straight') {
+      // H 모양 단면 그대로: 아래쪽 바닥 판 + 양옆 레일 (구슬은 두 레일 사이 바닥 위를 구른다)
+      body.addShape(new CANNON.Box(new CANNON.Vec3(def.w / 2, RAMP_FLOOR_T / 2, def.d / 2)), new CANNON.Vec3(0, RAMP_FLOOR_Y, 0));
+      [-1, 1].forEach(sg => body.addShape(new CANNON.Box(new CANNON.Vec3(def.w / 2, def.h / 2, RAMP_RAIL_T / 2)), new CANNON.Vec3(0, 0, sg * (def.d / 2 - RAMP_RAIL_T / 2))));
+    }
     if (type === 'marble') body.collisionResponse = false; // 놓아 둔 표시일 뿐이라 다른 부품이나 공과 부딪히지 않는다
     body.position.set(x, y, z);
     body.quaternion.setFromEuler(0, 0, angle);
@@ -1507,7 +1515,21 @@
     } else {
       mat = new THREE.MeshStandardMaterial({ color: partColor(type) });
     }
-    const mesh = new THREE.Mesh(geo, mat);
+    let mesh;
+    if (type === 'straight') {
+      mesh = new THREE.Group();
+      const rampMat = new THREE.MeshStandardMaterial({ color: partColor('straight') });
+      const floor = new THREE.Mesh(new THREE.BoxGeometry(def.w, RAMP_FLOOR_T, def.d), rampMat);
+      floor.position.y = RAMP_FLOOR_Y;
+      mesh.add(floor);
+      [-1, 1].forEach(sg => {
+        const rail = new THREE.Mesh(new THREE.BoxGeometry(def.w, def.h, RAMP_RAIL_T), rampMat);
+        rail.position.z = sg * (def.d / 2 - RAMP_RAIL_T / 2);
+        mesh.add(rail);
+      });
+    } else {
+      mesh = new THREE.Mesh(geo, mat);
+    }
     const pegGeo = new THREE.CylinderGeometry(PEG_R_WORLD, PEG_R_WORLD, 9, 12);
     if (isPillarType(type)) {
       // pegs on both ends of the long axis (w), so it plugs into a panel hole when stood up
@@ -1579,7 +1601,7 @@
   }
 
   // 클립에 끼운 직선길은 클립을 옮기거나 돌리면 같이 움직인다. 직선길을 직접 움직이면 클립에서 빠진다.
-  const CLIP_TO_RAMP = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2);
+  const CLIP_TO_RAMP = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2); // 직선길의 길이는 클립 가로 방향, 폭 방향은 클립 위쪽(벽 바깥쪽)
   function applyJoins(){
     parts.forEach(r => {
       const c = r.joined;
