@@ -183,6 +183,14 @@
     border-radius:16px; box-shadow:var(--shadow); overflow:hidden;
     aspect-ratio:4/3; touch-action:none;
   }
+  .part-list{position:absolute; top:52px; left:10px; z-index:2; width:176px; background:var(--panel); border:1px solid var(--panel-border); border-radius:12px; box-shadow:var(--shadow); font-size:13px;}
+  .part-list-head{display:flex; align-items:center; justify-content:space-between; width:100%; padding:7px 10px; font-weight:700; font-size:13px; background:transparent; border:0; color:var(--ink); cursor:pointer;}
+  .part-list-body{max-height:230px; overflow-y:auto; padding:0 6px 6px;}
+  .part-list.folded .part-list-body{display:none;}
+  .part-list-body button{display:flex; align-items:center; gap:7px; width:100%; text-align:left; padding:6px 8px; margin-top:3px; border-radius:8px; font-size:13px; background:transparent; border:1px solid transparent; color:var(--ink);}
+  .part-list-body button.sel{background:var(--blueprint-soft); border-color:var(--blueprint); font-weight:700;}
+  .part-list-body .dot{flex:0 0 10px; width:10px; height:10px; border-radius:50%;}
+  .part-list-empty{margin:4px 6px 2px; color:var(--ink-soft); font-size:12px;}
   .view-tools{position:absolute; top:10px; left:10px; display:flex; gap:6px; z-index:2;}
   .view-tools button{padding:6px 12px; font-size:12px; font-weight:600; border-radius:999px; background:var(--panel); border:1px solid var(--panel-border); color:var(--ink);}
   .view-tools button.on{background:var(--blueprint); border-color:var(--blueprint); color:#fff;}
@@ -386,6 +394,10 @@
         <div class="view-tools">
           <button id="panToggle" type="button" aria-pressed="false" title="켜고 빈 곳을 끌면 화면이 밀려요 (마우스 오른쪽 버튼이나 손가락 두 개로도 돼요)">✋ 이동</button>
           <button id="viewHome" type="button" title="처음 화면으로">⌂ 처음</button>
+        </div>
+        <div class="part-list" id="partList">
+          <button type="button" class="part-list-head" id="partListHead" aria-expanded="true"><span>사용 부품 <b id="partListCount">0</b></span><span id="partListArrow">▾</span></button>
+          <div class="part-list-body" id="partListBody"></div>
         </div>
         <div class="scene-hint">빈 곳 드래그: 회전 · ✋이동/오른쪽 버튼/두 손가락: 화면 밀기 · 선택한 부품 드래그: 부품 이동 · 휠/핀치: 확대축소</div>
         <div class="viewcube-wrap">
@@ -867,6 +879,43 @@
     });
   });
 
+  // ----- 사용 부품 목록: 화면 구석에 놓은 부품을 이름과 번호로 보여 주고, 누르면 그 부품이 선택된다
+  const PART_SHORT = { panel: '타공판 대', panelHalf: '타공판 1/2', panelQuarter: '타공판 1/4', pillar: '기둥', pillarHalf: '기둥 1/2', hinge: '경첩', lbracket: 'ㄱ자연결대', tape: '종이테이프', clip: '클립', straight: '직선길', marble: '구슬' };
+  const partListEl = document.getElementById('partList'), partListBody = document.getElementById('partListBody');
+  function setPartListFolded(folded){
+    partListEl.classList.toggle('folded', folded);
+    document.getElementById('partListHead').setAttribute('aria-expanded', String(!folded));
+    document.getElementById('partListArrow').textContent = folded ? '▸' : '▾';
+    try { localStorage.setItem('ivs-partlist-folded', folded ? '1' : '0'); } catch (e) {}
+  }
+  document.getElementById('partListHead').addEventListener('click', () => setPartListFolded(!partListEl.classList.contains('folded')));
+  try { if (localStorage.getItem('ivs-partlist-folded') === '1') setPartListFolded(true); } catch (e) {}
+  function refreshPartList(){
+    document.getElementById('partListCount').textContent = String(parts.length);
+    partListBody.textContent = '';
+    if (!parts.length) {
+      const empty = document.createElement('p');
+      empty.className = 'part-list-empty';
+      empty.textContent = '아직 놓은 부품이 없어요';
+      partListBody.appendChild(empty);
+      return;
+    }
+    const count = {};
+    parts.forEach(part => {
+      count[part.type] = (count[part.type] || 0) + 1;
+      const b = document.createElement('button');
+      b.type = 'button';
+      if (part === selected) b.className = 'sel';
+      const dot = document.createElement('span');
+      dot.className = 'dot';
+      dot.style.background = partColor(part.type);
+      b.appendChild(dot);
+      b.appendChild(document.createTextNode((PART_SHORT[part.type] || PART_DEFS[part.type].label) + ' ' + count[part.type]));
+      b.addEventListener('click', () => { if (!playing) select(part); });
+      partListBody.appendChild(b);
+    });
+  }
+
   function select(p){
     if (p !== selected) activeAxis = null;
     syncAxisButtons();
@@ -890,6 +939,7 @@
     updatePanelLabels();
     updateAxisGizmo();
     refreshAxisPanel();
+    refreshPartList();
   }
 
   // 회전한 부품이 가로(x)·높이(y)·세로(z)로 차지하는 절반 크기
