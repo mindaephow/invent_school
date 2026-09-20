@@ -1469,7 +1469,7 @@
     partCounter++;
     const def = PART_DEFS[type];
     const mc = type === 'marble' ? 'floor' : mountChoice;
-    let x, y, z, mount, angle = isPillarType(type) ? 0 : 0.2;
+    let x, y, z, mount;
     if (forcedPos) {
       x = forcedPos.x; y = forcedPos.y; z = forcedPos.z; mount = forcedPos.mount;
     } else if (mc === 'wall') {
@@ -1478,7 +1478,6 @@
       x = left ? -ROOM_HALF + def.w / 2 + 5 : ROOM_HALF - def.w / 2 - 5;
       y = 300 + (partCounter % 3) * 140;
       z = -350 + (partCounter % 4) * 220;
-      angle = 0;
     } else if (mc === 'ceiling') {
       mount = 'ceiling';
       x = -350 + (partCounter % 4) * 220;
@@ -1500,7 +1499,7 @@
     }
     if (type === 'marble') body.collisionResponse = false; // 놓아 둔 표시일 뿐이라 다른 부품이나 공과 부딪히지 않는다
     body.position.set(x, y, z);
-    body.quaternion.setFromEuler(0, 0, angle);
+    body.quaternion.setFromEuler(0, 0, 0);
 
     const geo = type === 'marble' ? new THREE.SphereGeometry(MARBLE_R, 16, 16) : new THREE.BoxGeometry(def.w, def.h, def.d);
     let mat;
