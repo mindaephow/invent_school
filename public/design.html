@@ -1566,17 +1566,23 @@
       const basketMat = new THREE.MeshStandardMaterial({ color: partColor('basket'), side: THREE.DoubleSide });
       const outerWall = new THREE.Mesh(new THREE.CylinderGeometry(BASKET_R_TOP, BASKET_R_BOTTOM, BASKET_H, 24, 1, true), basketMat);
       mesh.add(outerWall);
-      const outerBottom = new THREE.Mesh(new THREE.CircleGeometry(BASKET_R_BOTTOM, 24), basketMat);
+      // 바닥 한가운데 지름 1cm 구멍(핀 부품을 아래에서 꽂을 수 있게) — 바깥·안쪽 바닥판 모두 가운데를 뚫어 둔다
+      const outerBottom = new THREE.Mesh(new THREE.RingGeometry(HOLE_R_WORLD, BASKET_R_BOTTOM, 24), basketMat);
       outerBottom.rotation.x = Math.PI / 2;
       outerBottom.position.y = -BASKET_H / 2;
       mesh.add(outerBottom);
       const innerWall = new THREE.Mesh(new THREE.CylinderGeometry(BASKET_R_TOP - BASKET_WALL_T, BASKET_R_BOTTOM - BASKET_WALL_T, BASKET_H - BASKET_WALL_T, 24, 1, true), basketMat);
       innerWall.position.y = BASKET_WALL_T / 2;
       mesh.add(innerWall);
-      const innerBottom = new THREE.Mesh(new THREE.CircleGeometry(BASKET_R_BOTTOM - BASKET_WALL_T, 24), basketMat);
+      const innerBottom = new THREE.Mesh(new THREE.RingGeometry(HOLE_R_WORLD, BASKET_R_BOTTOM - BASKET_WALL_T, 24), basketMat);
       innerBottom.rotation.x = -Math.PI / 2;
       innerBottom.position.y = -BASKET_H / 2 + BASKET_WALL_T;
       mesh.add(innerBottom);
+      // 구멍 둘레에 지름 1.3cm 볼록 턱(보강 살) — 안쪽에서 보면 가운데가 볼록 솟아 보인다
+      const BASKET_BOSS_R = 6.5, BASKET_BOSS_H = 4;
+      const boss = new THREE.Mesh(new THREE.CylinderGeometry(BASKET_BOSS_R, BASKET_BOSS_R, BASKET_BOSS_H, 20, 1, true), basketMat);
+      boss.position.y = -BASKET_H / 2 + BASKET_WALL_T + BASKET_BOSS_H / 2 - 0.2;
+      mesh.add(boss);
       const rim = new THREE.Mesh(new THREE.RingGeometry(BASKET_R_TOP - BASKET_WALL_T - 0.5, BASKET_R_TOP + 0.5, 24), basketMat);
       rim.rotation.x = -Math.PI / 2;
       rim.position.y = BASKET_H / 2 + 0.15; // 벽 끝과 딱 맞닿는 높이에 두면 겹친 면끼리 깜빡이는(z-fighting) 틈처럼 보여서 살짝 띄우고, 반지름도 안팎으로 살짝 넓혀 겹치게 한다
