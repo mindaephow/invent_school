@@ -82,6 +82,10 @@
   .topbar{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; margin-bottom:18px;}
   .brand{display:inline-flex; align-items:center; gap:10px; font-weight:800; font-size:19px; letter-spacing:-0.04em;}
   .brand .logo{width:32px; height:32px; border-radius:10px; flex:none;}
+  .tb-left{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+  button.discard{border:1px solid var(--panel-border); background:transparent; cursor:pointer; font-family:inherit;}
+  button.discard[hidden]{display:none;}
+  button.discard.armed{color:var(--warn); background:var(--warn-bg); border-color:var(--warn); font-weight:700;}
   .level-badge{font-size:13px; font-weight:500; color:var(--ink-soft); background:var(--blueprint-soft); padding:6px 12px; border-radius:999px;}
 
   .layout{display:grid; grid-template-columns:260px 1fr; gap:20px; align-items:start;}
@@ -243,7 +247,10 @@
 
 <div class="app">
   <header class="topbar">
-    <a href="/" id="backLink" class="level-badge" style="text-decoration:none;">← 처음으로</a>
+    <div class="tb-left">
+      <a href="/" id="backLink" class="level-badge" style="text-decoration:none;">← 처음으로</a>
+      <button id="discardBtn" class="level-badge discard" type="button" hidden>저장 안 하고 나가기</button>
+    </div>
     <div class="brand"><svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="10" fill="#2D5BFF"/><path d="M6 10 L20 15" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/><path d="M12 23 L26 19" stroke="#fff" stroke-opacity="0.7" stroke-width="2.6" stroke-linecap="round"/><circle cx="9" cy="6.5" r="3" fill="#FF6A3D"/></svg>발명융합과학교실</div>
     <div class="level-badge">3D · 코어 구조 (판·기둥·직선길)</div>
   </header>
@@ -1346,7 +1353,9 @@
   // 화면을 닫는 중에도 보낼 수 있도록 fetch keepalive PATCH 한 가지 경로만 쓴다
   // 저장 요청이 겹쳐도 한 번에 하나씩 (새 설계가 두 번 만들어지는 것을 막는다)
   let saveChain = Promise.resolve();
+  let discarding = false; // 저장 없이 나가는 중이면 자동 저장(탭 닫기·이름 변경 등)도 모두 멈춘다
   function persist(keepalive, force){
+    if (discarding) return Promise.resolve();
     saveChain = saveChain.catch(() => {}).then(() => persistNow(keepalive, force));
     return saveChain;
   }
@@ -1386,8 +1395,9 @@
   nameInput.addEventListener('change', () => { persist(false).catch(() => {}); });
 
   // 저장하고 로그아웃한 뒤 로그인 화면으로 (공용 태블릿에서 다음 학생이 이어 쓸 수 있게)
-  async function logout(message){
-    if (project) {
+  async function logout(message, save = true){
+    if (!save) discarding = true;
+    if (save && project) {
       try { await persist(false); }
       catch (err) { setStatus('저장에 실패했어요. 인터넷을 확인하고 다시 눌러주세요.', 'warn'); return false; }
     }
@@ -1399,9 +1409,32 @@
     projectBar.hidden = true;
     backLink.textContent = '← 처음으로';
     startOverlay.hidden = false;
+    discardBtn.hidden = true;
     showLoginStep(message);
+    discarding = false;
     return true;
   }
+
+  const discardBtn = document.getElementById('discardBtn');
+  let discardTimer = null;
+  function resetDiscardBtn(){
+    clearTimeout(discardTimer);
+    discardBtn.classList.remove('armed');
+    discardBtn.textContent = '저장 안 하고 나가기';
+  }
+  discardBtn.addEventListener('click', async () => {
+    if (!discardBtn.classList.contains('armed')) {
+      discardBtn.classList.add('armed');
+      discardBtn.textContent = '정말 저장 안 하고 나갈까요? 한 번 더 누르세요';
+      clearTimeout(discardTimer);
+      discardTimer = setTimeout(resetDiscardBtn, 4000);
+      return;
+    }
+    resetDiscardBtn();
+    discardBtn.disabled = true;
+    await logout('저장하지 않고 나왔어요.', false);
+    discardBtn.disabled = false;
+  });
 
   backLink.addEventListener('click', async (e) => {
     if (!student) return; // 로그인 전에는 그냥 첫 화면으로 이동
@@ -1462,6 +1495,7 @@
     lastSavedKey = projectKey();
     pbStudent.textContent = student.name + (mode === 'teacher' ? ' 선생님' : ' 학생');
     submitBtn.hidden = mode === 'teacher';
+    discardBtn.hidden = false;
     pbSave.textContent = '';
     projectBar.hidden = false;
     backLink.textContent = mode === 'teacher' ? '← 저장하고 선생님 화면으로' : '← 저장하고 나가기';
@@ -1555,6 +1589,7 @@
     pbStudent.textContent = student.name + (mode === 'teacher' ? ' 선생님' : ' 학생');
     pbSave.textContent = '';
     submitBtn.hidden = mode === 'teacher';
+    discardBtn.hidden = false;
     projectBar.hidden = false;
     backLink.textContent = mode === 'teacher' ? '← 저장하고 선생님 화면으로' : '← 저장하고 나가기';
     startOverlay.hidden = true;
