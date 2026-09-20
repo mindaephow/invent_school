@@ -99,6 +99,14 @@
   }
   .sidebar h2{font-weight:700; font-size:17px; color:var(--blueprint); margin-top:2px;}
   .mission p{color:var(--ink-soft); font-size:14px;}
+  .side-group summary, .mission summary{list-style:none; cursor:pointer; display:flex; align-items:center; gap:8px; user-select:none;}
+  .side-group summary::-webkit-details-marker, .mission summary::-webkit-details-marker{display:none;}
+  .side-group summary{font-weight:800; font-size:17px; color:var(--blueprint);}
+  .side-group summary::after, .mission summary::after{content:"▾"; margin-left:auto; color:var(--ink-soft); font-size:13px;}
+  .side-group details:not([open]) > summary::after, .mission details:not([open]) > summary::after{content:"▸";}
+  .side-group details[open] > summary, .mission details[open] > summary{margin-bottom:10px;}
+  .mission summary .lesson-tag{margin-bottom:0;}
+  .mission summary .lesson-title{margin:0; font-size:18px; font-weight:800; color:var(--ink);}
   .mission .lesson-tag{display:inline-block; font-size:12px; font-weight:700; color:#fff; background:var(--blueprint); border-radius:999px; padding:2px 10px; margin-bottom:6px;}
   .mission .lesson-title{font-size:18px; font-weight:800; color:var(--ink); margin:0 0 2px;}
   .mission .lesson-sub{font-size:13px; color:var(--blueprint); font-weight:600; margin:0 0 8px;}
@@ -318,26 +326,22 @@
     <aside class="sidebar">
       <div class="side-head"><b>부품</b><button id="foldSide" class="ghost" type="button" aria-label="부품 목록 접기" title="부품 목록 접기">«</button></div>
       <section class="mission">
-        <span class="lesson-tag">1분기 1차시</span>
-        <p class="lesson-title">중력</p>
-        <p class="lesson-sub">지구가 끌어당기는 힘</p>
-        <p>지구는 모든 것을 아래로 끌어당겨요. 그래서 구슬은 높은 곳에서 낮은 곳으로 굴러 내려와요.</p>
-        <h3>미션</h3>
-        <p>중력의 에너지를 이용하여 구슬을 목표한 곳까지 도착하게 합니다.</p>
-        <h3>따라하기</h3>
-        <ol>
-          <li>베이스 타공판을 클릭하고, 축 Z → 돌리기 → 0을 차례로 클릭해요.</li>
-        </ol>
+        <details data-key="lesson" open>
+          <summary><span class="lesson-tag">1분기 1차시</span><span class="lesson-title">중력</span></summary>
+          <p class="lesson-sub">지구가 끌어당기는 힘</p>
+          <p>지구는 모든 것을 아래로 끌어당겨요. 그래서 구슬은 높은 곳에서 낮은 곳으로 굴러 내려와요.</p>
+          <h3>미션</h3>
+          <p>중력의 에너지를 이용하여 구슬을 목표한 곳까지 도착하게 합니다.</p>
+          <h3>따라하기</h3>
+          <ol>
+            <li>베이스 타공판을 클릭하고, 축 Z → 돌리기 → 0을 차례로 클릭해요.</li>
+          </ol>
+        </details>
       </section>
 
-      <section class="palette">
-        <h2>설치 위치</h2>
-        <div class="mount-select" id="newPartMountSelect" role="group" aria-label="설치 위치 선택">
-          <button type="button" class="mount-btn active" data-mount="floor">바닥</button>
-          <button type="button" class="mount-btn" data-mount="wall">벽</button>
-          <button type="button" class="mount-btn" data-mount="ceiling">천장</button>
-        </div>
-
+      <section class="side-group palette">
+        <details data-key="parts" open>
+          <summary>부품</summary>
         <h2>베이스 — 타공판</h2>
         <div class="part-grid">
           <button class="part-card" data-type="panel"><span class="part-icon panel"></span>전체(12×12)</button>
@@ -363,21 +367,19 @@
           <button class="part-card" data-type="clip"><span class="part-icon clip"></span>클립</button>
         </div>
 
-        <h2>길</h2>
-        <div class="part-grid">
-          <button class="part-card" data-type="straight"><span class="part-icon straight"></span>직선길</button>
-          <button class="part-card locked" disabled><span class="part-icon locked-icon"></span>반원길</button>
-          <button class="part-card locked" disabled><span class="part-icon locked-icon"></span>원형길</button>
-          <button class="part-card locked" disabled><span class="part-icon locked-icon"></span>지그재그길</button>
-        </div>
-
         <h2>기타 장치</h2>
         <div class="part-grid">
           <button class="part-card" data-type="marble"><span class="part-icon marble"></span>구슬</button>
           <button class="part-card locked" disabled><span class="part-icon locked-icon"></span>도미노</button>
           <button class="part-card locked" disabled><span class="part-icon locked-icon"></span>도르래</button>
         </div>
-        <h2>세트</h2>
+        <p class="part-note">부품 이미지를 눌러서 바로 놓거나, 바닥 모드에서 화면 위로 드래그해서 원하는 위치에 놓을 수 있어요. 판 치수는 아직 정확한 실측값이 없어 임시 격자예요.</p>
+        </details>
+      </section>
+
+      <section class="side-group palette">
+        <details data-key="sets" open>
+          <summary>세트</summary>
         <div class="marker-grid">
           <button class="part-card" id="addLSet" type="button"><span class="part-icon lset"></span>ㄴ셋</button>
           <button class="part-card" id="addGSet" type="button"><span class="part-icon gset"></span>ㄱ셋</button>
@@ -389,13 +391,31 @@
           <button class="part-card" id="addChairSet" type="button"><span class="part-icon dset"></span>의자세트</button>
         </div>
         <p class="part-note">세트는 여러 부품을 이미 조립한 채로 한 번에 놓아요. ㄴ셋: 바닥판 + ㄱ자연결대 2개 + 세운 벽판. ㄱ셋: ㄴ셋을 위아래로 뒤집은 모양(벽 위쪽에 판). ㅁ셋 1: 바닥판·위쪽 판·앞벽·뒷벽으로 만든 상자(옆에서 보면 네모). ㅁ셋 2: ㅁ셋 1을 Z축으로 90° 돌린 것. ㄷ셋 1: 바닥판과 위쪽 판이 뒷벽 하나에 이어진 모양(ㅁ셋 1에서 앞벽을 뺀 것). ㄷ셋 2: ㄷ셋 1을 X축으로 90° 돌린 것. ㄷ셋 3: ㄷ셋 2를 X축으로 180° 뒤집은 것. 의자세트: ㄷ셋 3 위에 ㄴ셋을 올리고 의자 판과 다리(앞·뒷벽)를 연결대 4개로 이은 것.</p>
-        <h2>출발 · 도착 지점</h2>
+        </details>
+      </section>
+
+      <section class="side-group palette">
+        <details data-key="markers" open>
+          <summary>출발 · 도착 지점</summary>
         <div class="marker-grid">
           <button class="part-card" id="pickStart" type="button"><span class="part-icon pin-start"></span>출발 지점</button>
           <button class="part-card" id="pickGoal" type="button"><span class="part-icon pin-goal"></span>도착 지점</button>
         </div>
         <p class="part-note">누르면 출발 지점(회색 원)이나 도착 지점(깃발)을 골라 옮길 수 있어요. 기본 자리는 그대로 두고, 필요할 때만 옮기면 돼요. 구슬을 놓으면 구슬 자리에서 출발해요.</p>
-        <p class="part-note">부품 이미지를 눌러서 바로 놓거나, 바닥 모드에서 화면 위로 드래그해서 원하는 위치에 놓을 수 있어요. 판 치수는 아직 정확한 실측값이 없어 임시 격자예요.</p>
+        </details>
+      </section>
+
+      <section class="side-group palette">
+        <details data-key="roads" open>
+          <summary>길</summary>
+        <div class="part-grid">
+          <button class="part-card" data-type="straight"><span class="part-icon straight"></span>직선길</button>
+          <button class="part-card locked" disabled><span class="part-icon locked-icon"></span>반원길</button>
+          <button class="part-card locked" disabled><span class="part-icon locked-icon"></span>원형길</button>
+          <button class="part-card locked" disabled><span class="part-icon locked-icon"></span>지그재그길</button>
+        </div>
+
+        </details>
       </section>
 
       <section class="roadmap">
@@ -978,6 +998,19 @@
       refreshAxisPanel();
     });
   });
+
+  // ----- 왼쪽 메뉴 묶음(수업 카드·부품·세트·출발도착·길): 접고 펴기, 상태를 기억한다
+  (function(){
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem('ivs-side-groups') || '{}') || {}; } catch (e) {}
+    document.querySelectorAll('.sidebar details[data-key]').forEach(d => {
+      if (saved[d.dataset.key] === false) d.open = false;
+      d.addEventListener('toggle', () => {
+        saved[d.dataset.key] = d.open;
+        try { localStorage.setItem('ivs-side-groups', JSON.stringify(saved)); } catch (e) {}
+      });
+    });
+  })();
 
   // ----- 사용 부품 목록: 화면 구석에 놓은 부품을 이름과 번호로 보여 주고, 누르면 그 부품이 선택된다
   const PART_SHORT = { panel: '타공판 대', panelHalf: '타공판 1/2', panelQuarter: '타공판 1/4', pillar: '기둥', pillarHalf: '기둥 1/2', hinge: '경첩', lbracket: 'ㄱ자연결대', tape: '종이테이프', clip: '클립', straight: '직선길', marble: '구슬' };
