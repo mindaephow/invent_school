@@ -761,6 +761,7 @@
     if (type === 'lbracket') return cssVar('--bracket');
     if (type === 'clip') return cssVar('--clip');
     if (type === 'pin') return cssVar('--pin');
+    if (type === 'basket') return cssVar('--pin'); // 빨강 — 핀과 같은 색
     if (isStraightType(type)) return cssVar('--straight');
     if (type === 'marble') return '#4FB3E8';
     return cssVar('--blueprint');
