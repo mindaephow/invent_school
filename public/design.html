@@ -598,7 +598,8 @@
   SETS.chair = {
     label: '의자 세트',
     parts: SETS.dset3.parts
-      .concat(SETS.lset.parts.map(sp => ({ type: sp.type, pos: [sp.pos[0], sp.pos[1] + 266, sp.pos[2]], rot: sp.rot })))
+      // 등받이(ㄴ셋) 연결대는 다리쪽 연결대와 같은 판 구멍에 위아래로 겹치지 않도록 안쪽으로 한 칸(20)씩 옮긴다: A1→A2, A12→A11
+      .concat(SETS.lset.parts.map(sp => ({ type: sp.type, pos: [sp.type === 'lbracket' ? sp.pos[0] + (sp.pos[0] < -110 ? 20 : -20) : sp.pos[0], sp.pos[1] + 266, sp.pos[2]], rot: sp.rot })))
       .concat([-220, 0].flatMap(z => [-220, 0].map(x => ({ type: 'lbracket', pos: [x, 248, z], rot: [0, 0, 90] }))))
   };
   // ㅁ셋 2 = ㅁ셋 1 전체를 Z축으로 +90° 돌린 것 (조립체 가운데 x=-110, y=138 둘레). Z 회전은 마지막에 적용되므로 각 부품의 Z 각도에 90을 더하면 된다.
