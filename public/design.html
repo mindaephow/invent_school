@@ -2174,12 +2174,28 @@
     if (activePointers.size < 2) { pinchStartDist = null; pinchLastMid = null; }
     if (activePointers.size === 0) {
       if (pointerDown && !moved && !draggingPart && e.button !== 1 && e.button !== 2) handleSelectClick(e);
+      if (pointerDown && !moved && e.button === 2) placeMarbleAt(e); // 오른쪽 클릭(끌지 않았을 때): 그 자리에 구슬을 놓거나 옮긴다
       pointerDown = false;
       draggingPart = false;
       dragAxis = null;
       dragRotateState = null;
     }
   });
+  function placeMarbleAt(e){
+    if (playing) return;
+    const p = pointUnderCursor(e);
+    p.y += MARBLE_R;
+    const existing = parts.find(x => x.type === 'marble');
+    if (existing) {
+      existing.body.position.set(p.x, p.y, p.z);
+      select(existing);
+      setStatus('구슬 시작 위치를 옮겼어요.', 'success');
+    } else {
+      addPart('marble', { x: p.x, y: p.y, z: p.z, mount: 'floor' });
+      select(parts[parts.length - 1]);
+      setStatus('오른쪽 클릭한 자리에 구슬을 놓았어요.', 'success');
+    }
+  }
 
   // 축을 골랐을 때 방향키로 그 축 방향으로 움직인다(이동 모드, 기본 2cm·Shift 1mm) 또는 기울인다(돌리기 모드, 기본 5°·Shift 1°)
   window.addEventListener('keydown', (e) => {
