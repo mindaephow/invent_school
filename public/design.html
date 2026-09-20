@@ -1490,6 +1490,14 @@
     const lz = holeSnap(local.z, pdef.d);
     const lift = (type === 'clip' || type === 'lbracket') ? PART_DEFS[type].h / 2 : 0; // 클립·ㄱ자연결대는 판 위에 얹히고 핀만 구멍에 들어간다
     const worldPos = panelPart.mesh.localToWorld(new THREE.Vector3(lx, pdef.h / 2 + lift, lz));
+    if (type === 'lbracket') {
+      // 아래로 꽂은 핀 끝이 바닥을 뚫고 내려가면 안 되므로, 핀 끝이 바닥에 닿는 높이까지만 들어가고 나머지는 위로 뜬다
+      const n = new THREE.Vector3(0, 1, 0).applyQuaternion(panelPart.mesh.quaternion);
+      if (n.y > 0.01) {
+        const tipY = worldPos.y - (PART_DEFS.lbracket.h / 2 + LBRACKET_PEG_OUT) * n.y;
+        if (tipY < 0) worldPos.addScaledVector(n, -tipY / n.y);
+      }
+    }
 
     let placed;
     if (existingTarget) {
