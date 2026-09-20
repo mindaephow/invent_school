@@ -1298,7 +1298,7 @@
   }
 
   let pointerDown = false, lastX = 0, lastY = 0, moved = false, draggingPart = false;
-  const MIN_RADIUS = 100, MAX_RADIUS = 3500;
+  const MIN_RADIUS = 15, MAX_RADIUS = 3500;
   const activePointers = new Map();
   let pinchStartDist = null, pinchStartRadius = null, pinchLastMid = null;
   let panning = false;     // 이번 끌기가 회전이 아니라 화면 밀기인지
@@ -1388,9 +1388,26 @@
       draggingPart = false;
     }
   });
+  // 마우스가 가리키는 곳(부품 위, 없으면 바닥)을 화면에서 그 자리에 둔 채로 확대·축소한다
+  function pointUnderCursor(e){
+    raycaster.setFromCamera(ndcFromEvent(e), camera);
+    const hits = raycaster.intersectObjects(parts.map(p => p.mesh).concat(markerMeshes), true);
+    if (hits.length) return hits[0].point.clone();
+    const floorHit = new THREE.Vector3();
+    if (raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), floorHit) && floorHit.distanceTo(camera.position) < MAX_RADIUS) return floorHit;
+    return raycaster.ray.at(orbit.radius, new THREE.Vector3());
+  }
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
-    orbit.radius = Math.min(Math.max(orbit.radius + e.deltaY * 0.5, MIN_RADIUS), MAX_RADIUS);
+    const s = Math.exp(e.deltaY * 0.0015);
+    const newRadius = Math.min(Math.max(orbit.radius * s, MIN_RADIUS), MAX_RADIUS);
+    const ratio = newRadius / orbit.radius;
+    const p = pointUnderCursor(e);
+    target.set(p.x + (target.x - p.x) * ratio, p.y + (target.y - p.y) * ratio, p.z + (target.z - p.z) * ratio);
+    target.x = Math.min(Math.max(target.x, -ROOM_HALF), ROOM_HALF);
+    target.z = Math.min(Math.max(target.z, -ROOM_HALF), ROOM_HALF);
+    target.y = Math.min(Math.max(target.y, 0), CEIL_Y);
+    orbit.radius = newRadius;
   }, { passive: false });
 
   function placeOnHole(type, panelPart, worldPoint, existingTarget){
