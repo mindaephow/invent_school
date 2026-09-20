@@ -1560,6 +1560,10 @@
         ear.position.set(0, def.h / 2 + CLIP_EAR_H / 2, s * (PART_DEFS.straight.d / 2 + 2));
         mesh.add(ear);
       });
+      // 두 귀 위를 잇는 덮개: 옆에서 보면 네모난 구멍(터널)이 된다
+      const cap = new THREE.Mesh(new THREE.BoxGeometry(def.w, 4, PART_DEFS.straight.d + 8), clipMat);
+      cap.position.set(0, def.h / 2 + CLIP_EAR_H + 2, 0);
+      mesh.add(cap);
     }
     scene.add(mesh);
     world.addBody(body);
