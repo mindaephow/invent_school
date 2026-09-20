@@ -624,7 +624,7 @@
   // real kit: hole diameter 1cm, gap between holes 1cm -> pitch 2cm -> hole diameter is half the pitch
   const HOLE_R_WORLD = GRID_UNIT / 4; // radius = 1/2 pitch diameter = 1/4 pitch as radius
   const HOLE_R_PX = HOLE_R_WORLD * PX_PER_UNIT;
-  const PEG_R_WORLD = HOLE_R_WORLD * 0.8; // snug fit inside the hole
+  const PEG_R_WORLD = HOLE_R_WORLD; // 핀 굵기 1cm = 구멍 지름, 빡빡하게 끼운다
 
   function makePerforatedTexture(baseColorHex, grooves){
     const c = document.createElement('canvas');
