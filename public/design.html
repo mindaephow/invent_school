@@ -454,11 +454,11 @@
   const ROOM_HALF = 750, FLOOR_Y = 0, CEIL_Y = 1500, GRID_UNIT = 20;
 
   const PART_DEFS = {
-    panel:        { label: '타공판(12×12)', w: 220, h: 10, d: 220 }, // 12x12 holes, pitch 20 (2cm) -> 11*20
-    panelHalf:    { label: '타공판(6×12)',  w: 220, h: 10, d: 100 }, // half, cut along one axis
-    panelQuarter: { label: '타공판(6×6)',   w: 100, h: 10, d: 100 }, // quartered
-    pillar:       { label: '기둥(12칸)',    w: 220, h: 10, d: 16 },  // one full row of the panel: 12 holes
-    pillarHalf:   { label: '기둥(6칸)',     w: 100, h: 10, d: 16 },  // half-length pillar: 6 holes
+    panel:        { label: '타공판(12×12)', w: 240, h: 10, d: 240 }, // 구멍 12×12개, 간격 20(2cm), 가장자리 여백 10
+    panelHalf:    { label: '타공판(6×12)',  w: 240, h: 10, d: 120 }, // half, cut along one axis
+    panelQuarter: { label: '타공판(6×6)',   w: 120, h: 10, d: 120 }, // quartered
+    pillar:       { label: '기둥(12칸)',    w: 240, h: 10, d: 16 },  // one full row of the panel: 12 holes
+    pillarHalf:   { label: '기둥(6칸)',     w: 120, h: 10, d: 16 },  // half-length pillar: 6 holes
     hinge:    { label: '경첩',     w: 34,  h: 10, d: 26 },
     lbracket: { label: 'ㄱ자연결대', w: 16, h: 16, d: 16 }, // cube with a peg on all 6 faces
     tape:     { label: '종이테이프', w: 70, h: 4,  d: 20 },
@@ -674,6 +674,49 @@
     scene.add(selectionOutline);
   }
 
+  // 타공판을 선택했을 때만 구멍 이름표를 보여 준다: 앞뒤 줄은 A(안쪽)~L, 왼쪽에서 오른쪽으로 1~12 (판 자체의 방향 기준)
+  let panelLabels = null;
+  function makeLabelMesh(text){
+    const c = document.createElement('canvas');
+    c.width = 64; c.height = 64;
+    const g = c.getContext('2d');
+    g.font = '700 40px sans-serif';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.lineWidth = 8; g.strokeStyle = '#ffffff';
+    g.strokeText(text, 32, 34);
+    g.fillStyle = '#E8590C';
+    g.fillText(text, 32, 34);
+    const mat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthTest: false });
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(GRID_UNIT, GRID_UNIT), mat);
+    m.rotation.x = -Math.PI / 2;
+    m.renderOrder = 10;
+    return m;
+  }
+  function updatePanelLabels(){
+    if (panelLabels) {
+      panelLabels.parent.remove(panelLabels);
+      panelLabels.children.forEach(m => { m.material.map.dispose(); m.material.dispose(); m.geometry.dispose(); });
+      panelLabels = null;
+    }
+    if (!selected || !isPanelType(selected.type)) return;
+    const def = PART_DEFS[selected.type];
+    const cols = def.w / GRID_UNIT, rows = def.d / GRID_UNIT;
+    const g = new THREE.Group();
+    const y = def.h / 2 + 1;
+    for (let i = 0; i < cols; i++) {
+      const m = makeLabelMesh(String(i + 1));
+      m.position.set(-def.w / 2 + GRID_UNIT / 2 + i * GRID_UNIT, y, -def.d / 2 - GRID_UNIT * 0.8);
+      g.add(m);
+    }
+    for (let j = 0; j < rows; j++) {
+      const m = makeLabelMesh(String.fromCharCode(65 + j));
+      m.position.set(-def.w / 2 - GRID_UNIT * 0.8, y, -def.d / 2 + GRID_UNIT / 2 + j * GRID_UNIT);
+      g.add(m);
+    }
+    selected.mesh.add(g);
+    panelLabels = g;
+  }
+
   function select(p){
     selected = p;
     selectedControls.hidden = !p;
@@ -692,6 +735,7 @@
       if (p.type === 'start' && parts.some(x => x.type === 'marble')) setStatus('구슬을 놓았을 때는 구슬 자리에서 출발해요. 이 출발 지점은 구슬이 없을 때 쓰여요.', 'warn');
     }
     updateSelectionOutline();
+    updatePanelLabels();
   }
 
   function isStanding(part){
@@ -1315,10 +1359,14 @@
   function placeOnHole(type, panelPart, worldPoint, existingTarget){
     const pdef = PART_DEFS[panelPart.type];
     const local = panelPart.mesh.worldToLocal(worldPoint.clone());
-    let lx = Math.round(local.x / GRID_UNIT) * GRID_UNIT;
-    let lz = Math.round(local.z / GRID_UNIT) * GRID_UNIT;
-    lx = Math.min(Math.max(lx, -pdef.w / 2 + HOLE_R_WORLD), pdef.w / 2 - HOLE_R_WORLD);
-    lz = Math.min(Math.max(lz, -pdef.d / 2 + HOLE_R_WORLD), pdef.d / 2 - HOLE_R_WORLD);
+    // 구멍 중심은 판 가장자리에서 반 칸(10) 안쪽부터 GRID_UNIT 간격으로 놓여 있다
+    const holeSnap = (v, size) => {
+      const n = size / GRID_UNIT;
+      const k = Math.min(Math.max(Math.round((v + size / 2) / GRID_UNIT - 0.5), 0), n - 1);
+      return -size / 2 + GRID_UNIT / 2 + k * GRID_UNIT;
+    };
+    const lx = holeSnap(local.x, pdef.w);
+    const lz = holeSnap(local.z, pdef.d);
     const lift = type === 'clip' ? PART_DEFS.clip.h / 2 : 0; // 클립은 판 위에 얹히고 핀만 구멍에 들어간다
     const worldPos = panelPart.mesh.localToWorld(new THREE.Vector3(lx, pdef.h / 2 + lift, lz));
 
