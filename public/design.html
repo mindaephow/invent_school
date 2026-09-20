@@ -454,9 +454,9 @@
   const ROOM_HALF = 750, FLOOR_Y = 0, CEIL_Y = 1500, GRID_UNIT = 20;
 
   const PART_DEFS = {
-    panel:        { label: '타공판(12×12)', w: 240, h: 10, d: 240 }, // 구멍 12×12개, 간격 20(2cm), 가장자리 여백 10
-    panelHalf:    { label: '타공판(6×12)',  w: 240, h: 10, d: 120 }, // half, cut along one axis
-    panelQuarter: { label: '타공판(6×6)',   w: 120, h: 10, d: 120 }, // quartered
+    panel:        { label: '타공판(12×12)', w: 250, h: 10, d: 250 }, // 구멍 12×12개(지름 10, 간격 20) + 사이사이·테두리 홈(폭 10) 13줄 = 한 변 25cm
+    panelHalf:    { label: '타공판(6×12)',  w: 250, h: 10, d: 130 }, // half, cut along one axis
+    panelQuarter: { label: '타공판(6×6)',   w: 130, h: 10, d: 130 }, // quartered
     pillar:       { label: '기둥(12칸)',    w: 240, h: 10, d: 16 },  // one full row of the panel: 12 holes
     pillarHalf:   { label: '기둥(6칸)',     w: 120, h: 10, d: 16 },  // half-length pillar: 6 holes
     hinge:    { label: '경첩',     w: 34,  h: 10, d: 26 },
@@ -594,6 +594,11 @@
     statusEl.className = 'status' + (kind ? ' ' + kind : '');
   }
 
+  // 판 한 변 = 홈(10) + 구멍(10) + 홈(10) + … + 구멍(10) + 홈(10). 첫 구멍 중심은 가장자리에서 15 안쪽
+  const HOLE_EDGE = GRID_UNIT * 0.75;
+  function holeCount(size){ return Math.round((size - GRID_UNIT / 2) / GRID_UNIT); }
+  function firstHoleAt(size){ return -size / 2 + HOLE_EDGE; }
+
   function isPanelType(type){ return type === 'panel' || type === 'panelHalf' || type === 'panelQuarter'; }
   function isPillarType(type){ return type === 'pillar' || type === 'pillarHalf'; }
   function isConnectorType(type){ return isPillarType(type) || type === 'hinge' || type === 'lbracket' || type === 'clip'; }
@@ -622,15 +627,15 @@
     tctx.fillStyle = baseColorHex;
     tctx.fillRect(0, 0, 64, 64);
     if (grooves) {
-      // 구멍 줄 사이(칸 경계)마다 가로·세로로 얕은 홈: 칸 한 변 20 중 약 4.5 폭
-      const gw = 7;
-      tctx.fillStyle = 'rgba(0,0,0,0.24)';
-      tctx.fillRect(0, 0, 64, gw); tctx.fillRect(0, 64 - gw, 64, gw);
-      tctx.fillRect(0, 0, gw, 64); tctx.fillRect(64 - gw, 0, gw, 64);
+      // 한 칸(20) = 띠(왼쪽·위쪽 10) + 구멍이 든 네모(오른쪽·아래쪽 10). 띠 한가운데(폭 5)가 홈이고, 판 끝에 띠 하나가 더 닫아 준다.
+      tctx.fillStyle = 'rgba(0,0,0,0.3)';
+      tctx.fillRect(8, 0, 16, 64);
+      tctx.fillRect(0, 8, 64, 16);
     }
+    const hc = grooves ? 48 : 32;
     tctx.fillStyle = 'rgba(0,0,0,0.4)';
     tctx.beginPath();
-    tctx.arc(32, 32, HOLE_R_PX, 0, Math.PI * 2);
+    tctx.arc(hc, hc, HOLE_R_PX, 0, Math.PI * 2);
     tctx.fill();
     const tex = new THREE.CanvasTexture(c);
     tex.wrapS = THREE.RepeatWrapping;
@@ -645,12 +650,11 @@
     const g = c.getContext('2d');
     g.fillStyle = '#ffffff';
     g.fillRect(0, 0, 64, 64);
-    const gw = 7;
     g.fillStyle = '#5a5a5a';
-    g.fillRect(0, 0, 64, gw); g.fillRect(0, 64 - gw, 64, gw);
-    g.fillRect(0, 0, gw, 64); g.fillRect(64 - gw, 0, gw, 64);
+    g.fillRect(8, 0, 16, 64);
+    g.fillRect(0, 8, 64, 16);
     g.fillStyle = '#000000';
-    g.beginPath(); g.arc(32, 32, HOLE_R_PX, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.arc(48, 48, HOLE_R_PX, 0, Math.PI * 2); g.fill();
     const tex = new THREE.CanvasTexture(c);
     tex.wrapS = THREE.RepeatWrapping;
     tex.wrapT = THREE.RepeatWrapping;
@@ -733,17 +737,17 @@
     }
     if (!selected || !isPanelType(selected.type)) return;
     const def = PART_DEFS[selected.type];
-    const cols = def.w / GRID_UNIT, rows = def.d / GRID_UNIT;
+    const cols = holeCount(def.w), rows = holeCount(def.d);
     const g = new THREE.Group();
     const y = def.h / 2 + 1;
     for (let i = 0; i < cols; i++) {
       const m = makeLabelMesh(String(i + 1));
-      m.position.set(-def.w / 2 + GRID_UNIT / 2 + i * GRID_UNIT, y, -def.d / 2 - GRID_UNIT * 0.8);
+      m.position.set(firstHoleAt(def.w) + i * GRID_UNIT, y, -def.d / 2 - GRID_UNIT * 0.8);
       g.add(m);
     }
     for (let j = 0; j < rows; j++) {
       const m = makeLabelMesh(String.fromCharCode(65 + j));
-      m.position.set(-def.w / 2 - GRID_UNIT * 0.8, y, -def.d / 2 + GRID_UNIT / 2 + j * GRID_UNIT);
+      m.position.set(-def.w / 2 - GRID_UNIT * 0.8, y, firstHoleAt(def.d) + j * GRID_UNIT);
       g.add(m);
     }
     selected.mesh.add(g);
@@ -1392,11 +1396,11 @@
   function placeOnHole(type, panelPart, worldPoint, existingTarget){
     const pdef = PART_DEFS[panelPart.type];
     const local = panelPart.mesh.worldToLocal(worldPoint.clone());
-    // 구멍 중심은 판 가장자리에서 반 칸(10) 안쪽부터 GRID_UNIT 간격으로 놓여 있다
     const holeSnap = (v, size) => {
-      const n = size / GRID_UNIT;
-      const k = Math.min(Math.max(Math.round((v + size / 2) / GRID_UNIT - 0.5), 0), n - 1);
-      return -size / 2 + GRID_UNIT / 2 + k * GRID_UNIT;
+      const n = holeCount(size);
+      const first = firstHoleAt(size);
+      const k = Math.min(Math.max(Math.round((v - first) / GRID_UNIT), 0), n - 1);
+      return first + k * GRID_UNIT;
     };
     const lx = holeSnap(local.x, pdef.w);
     const lz = holeSnap(local.z, pdef.d);
