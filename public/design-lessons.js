@@ -18,7 +18,7 @@ window.IVS_LESSONS = [
       { type: 'panel', mount: 'floor', pos: [-110, 138, -233], quat: [0.70711, 0, 0, 0.70711], rot: [90, 0, 0], set: [1, 'ㄴ셋'] },
       { type: 'clip', mount: 'floor', pos: [-220, 248, -224], quat: [0.70711, 0, 0, 0.70711], rot: [90, 0, 0] },
       { type: 'straight', mount: 'floor', pos: [-220, 248, -206.8], quat: [0, 0, -0.08716, 0.99619], rot: [0, 0, -10] },
-      { type: 'basket', mount: 'floor', pos: [-40, 188, -195], quat: [0, -0.70711, 0, 0.70711], rot: [0, -90, 0], goal: true }
+      { type: 'basket', mount: 'floor', pos: [-40, 188, -203], quat: [0, -0.70711, 0, 0.70711], rot: [0, -90, 0], goal: true }
     ]
   }
 ];

@@ -619,6 +619,7 @@
   const BASKET_PEG_EMBED = BASKET_WALL_T - 1; // 핀 끝이 벽 두께 속으로 들어가는 길이
   const BASKET_PEG_CX = (BASKET_R_TOP + BASKET_R_BOTTOM) / 2 + BASKET_PEG_OUT / 2 - BASKET_PEG_EMBED / 2; // 핀 중심의 옆으로 튀어나온 거리
   const BASKET_PEG_TIP = BASKET_PEG_CX + (BASKET_PEG_OUT + BASKET_PEG_EMBED) / 2; // 핀의 가장 바깥쪽 끝까지 거리 — 이 끝이 실제로 타공판 구멍에 꽂힌다
+  const BASKET_WALL_PENETRATE = 8; // 핀이 구멍 속으로 들어가는 깊이 — BASKET_PEG_OUT(10)만큼 다 넣으면 컵 몸통이 벽과 겹쳐 보이고, 너무 적게 넣으면 핀이 벽에 안 닿아 보인다. 둘 사이에서 맞춘 값.
   // 직선길 단면은 H 모양: 양옆 레일(두께 3, 높이 12)과 아래쪽으로 치우친 바닥 판(두께 3). 레일 한쪽이 클립 홈에 끼워지고 나머지는 벽에서 바깥으로 뻗는다.
   const RAMP_RAIL_T = 3, RAMP_FLOOR_T = 3;
   const RAMP_FLOOR_Y = -7; // H의 가운데 막대: 레일 가운데보다 0.7cm 아래로 치우친 자리 (클립 아래쪽 팔이 벽을 물어도 막대와 겹치지 않는다)
@@ -2295,8 +2296,8 @@
         flat.normalize();
         quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 0, 0), flat);
         const holePoint = panelPart.mesh.localToWorld(new THREE.Vector3(lx, pdef.h / 2, lz));
-        // 핀 끝이 판 표면에 닿기만 하는 게 아니라, 핀이 튀어나온 길이(BASKET_PEG_OUT)만큼 구멍 속으로 더 들어가야 진짜로 꽂힌 모양이 된다
-        worldPos = holePoint.addScaledVector(outward, BASKET_PEG_TIP - BASKET_PEG_OUT);
+        // 핀 끝이 판 표면에 닿기만 하는 게 아니라 구멍 속으로 더 들어가야 진짜로 꽂힌 모양이 된다 (단, 컵 몸통이 벽과 겹치지 않는 깊이까지만)
+        worldPos = holePoint.addScaledVector(outward, BASKET_PEG_TIP - BASKET_WALL_PENETRATE);
       } else {
         // 바닥·천장: 옆으로 꽂을 벽이 없으니 그냥 똑바로 세워서 얹는다
         quat = new THREE.Quaternion();
