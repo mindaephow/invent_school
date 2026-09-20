@@ -593,10 +593,10 @@
       { type: 'lbracket', pos: [0, 28, -220],     rot: [0, 90, 90] }
     ]
   };
-  // ㄷ셋 3 + ㄴ셋 = ㄷ셋 3 위에 ㄴ셋을 그대로 얹은 것: ㄴ셋의 바닥판이 ㅁ셋 1의 위쪽 판 높이(가운데 271)에 오도록 ㄴ셋을 266만큼 올렸다.
+  // ㄷ셋 3 + ㄴ셋 = ㄷ셋 3 위에 ㄴ셋을 그대로 올린 것: ㄷ셋 3 앞·뒷벽 윗면(y=263)에 ㄴ셋 바닥판 아랫면이 딱 닿도록 ㄴ셋을 263만큼 올렸다.
   SETS.d3l = {
     label: 'ㄷ셋 3 + ㄴ셋',
-    parts: SETS.dset3.parts.concat(SETS.lset.parts.map(sp => ({ type: sp.type, pos: [sp.pos[0], sp.pos[1] + 266, sp.pos[2]], rot: sp.rot })))
+    parts: SETS.dset3.parts.concat(SETS.lset.parts.map(sp => ({ type: sp.type, pos: [sp.pos[0], sp.pos[1] + 263, sp.pos[2]], rot: sp.rot })))
   };
   // ㅁ셋 2 = ㅁ셋 1 전체를 Z축으로 +90° 돌린 것 (조립체 가운데 x=-110, y=138 둘레). Z 회전은 마지막에 적용되므로 각 부품의 Z 각도에 90을 더하면 된다.
   SETS.mset2 = {
