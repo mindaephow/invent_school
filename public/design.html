@@ -202,6 +202,10 @@
   .part-list-body button{display:flex; align-items:center; gap:7px; width:100%; text-align:left; padding:6px 8px; margin-top:3px; border-radius:8px; font-size:13px; background:transparent; border:1px solid transparent; color:var(--ink);}
   .part-list-body button.sel{background:var(--blueprint-soft); border-color:var(--blueprint); font-weight:700;}
   .part-list-body .dot{flex:0 0 10px; width:10px; height:10px; border-radius:50%;}
+  .part-list-body button.set-head{font-weight:700; background:var(--blueprint-soft); border-color:var(--panel-border);}
+  .part-list-body button.set-head.has-sel{border-color:var(--blueprint);}
+  .part-list-body button.child{margin-left:14px; width:calc(100% - 14px);}
+  .part-list-sub{margin:8px 6px 2px; font-size:11.5px; color:var(--ink-soft); font-weight:700;}
   .part-list-empty{margin:4px 6px 2px; color:var(--ink-soft); font-size:12px;}
   .history-panel{background:var(--panel); border:1px solid var(--panel-border); border-radius:12px; box-shadow:var(--shadow); font-size:13px;}
   .history-head{display:flex; align-items:center; gap:6px; padding:6px 8px;}
@@ -759,6 +763,7 @@
   let playing = false;
   let succeeded = false;
   let partCounter = 0;
+  let setCounter = 0; // 세트로 놓을 때마다 1씩 늘어나는 세트 번호
   let mountChoice = 'floor';
 
   const selectedControls = document.getElementById('selectedControls');
@@ -1037,6 +1042,7 @@
   }
   document.getElementById('partListHead').addEventListener('click', () => setPartListFolded(!partListEl.classList.contains('folded')));
   try { if (localStorage.getItem('ivs-partlist-folded') === '1') setPartListFolded(true); } catch (e) {}
+  const foldedSets = new Set(); // 접어 둔 세트 (세트 번호)
   function refreshPartList(){
     document.getElementById('partListCount').textContent = String(parts.length);
     partListBody.textContent = '';
@@ -1047,23 +1053,56 @@
       partListBody.appendChild(empty);
       return;
     }
-    // 같은 종류끼리 모아서 (왼쪽 부품 목록 순서), 종류 안에서는 놓은 순서대로 번호를 붙인다
-    const count = {};
-    const numbered = parts.map(part => ({ part, n: (count[part.type] = (count[part.type] || 0) + 1) }));
     const order = Object.keys(PART_SHORT);
-    numbered.sort((a, b) => (order.indexOf(a.part.type) - order.indexOf(b.part.type)) || (a.n - b.n));
-    numbered.forEach(({ part, n }) => {
-      const b = document.createElement('button');
-      b.type = 'button';
-      if (part === selected) b.className = 'sel';
-      const dot = document.createElement('span');
-      dot.className = 'dot';
-      dot.style.background = partColor(part.type);
-      b.appendChild(dot);
-      b.appendChild(document.createTextNode((PART_SHORT[part.type] || PART_DEFS[part.type].label) + ' ' + n));
-      b.addEventListener('click', () => { if (!playing) select(part); });
-      partListBody.appendChild(b);
+    // 세트로 놓은 부품은 세트별로 묶고, 나머지는 같은 종류끼리 모은다 (번호는 묶음 안에서 놓은 순서대로)
+    const setGroups = new Map();
+    const loose = [];
+    parts.forEach(part => {
+      if (part.set) {
+        if (!setGroups.has(part.set.id)) setGroups.set(part.set.id, { id: part.set.id, label: part.set.label, list: [] });
+        setGroups.get(part.set.id).list.push(part);
+      } else loose.push(part);
     });
+    if (selected && selected.set) foldedSets.delete(selected.set.id); // 고른 부품이 보이도록 그 세트는 펼친다
+    function items(list, child){
+      const count = {};
+      const numbered = list.map(part => ({ part, n: (count[part.type] = (count[part.type] || 0) + 1) }));
+      numbered.sort((x, y) => (order.indexOf(x.part.type) - order.indexOf(y.part.type)) || (x.n - y.n));
+      numbered.forEach(({ part, n }) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = (part === selected ? 'sel' : '') + (child ? ' child' : '');
+        const dot = document.createElement('span');
+        dot.className = 'dot';
+        dot.style.background = partColor(part.type);
+        b.appendChild(dot);
+        b.appendChild(document.createTextNode((PART_SHORT[part.type] || PART_DEFS[part.type].label) + ' ' + n));
+        b.addEventListener('click', () => { if (!playing) select(part); });
+        partListBody.appendChild(b);
+      });
+    }
+    const seen = {};
+    Array.from(setGroups.values()).sort((x, y) => x.id - y.id).forEach(g => {
+      seen[g.label] = (seen[g.label] || 0) + 1;
+      const folded = foldedSets.has(g.id);
+      const head = document.createElement('button');
+      head.type = 'button';
+      head.className = 'set-head' + (g.list.includes(selected) ? ' has-sel' : '');
+      head.setAttribute('aria-expanded', String(!folded));
+      head.textContent = (folded ? '▸ ' : '▾ ') + g.label + (seen[g.label] > 1 ? ' (' + seen[g.label] + ')' : '') + ' · ' + g.list.length;
+      head.addEventListener('click', () => { if (foldedSets.has(g.id)) foldedSets.delete(g.id); else foldedSets.add(g.id); refreshPartList(); });
+      partListBody.appendChild(head);
+      if (!folded) items(g.list, true);
+    });
+    if (loose.length) {
+      if (setGroups.size) {
+        const label = document.createElement('p');
+        label.className = 'part-list-sub';
+        label.textContent = '낱개 부품';
+        partListBody.appendChild(label);
+      }
+      items(loose, false);
+    }
   }
 
   // ----- 작업 기록: 이 화면을 쓰는 동안만 남기고, 새로 불러오면 그 상태가 처음 기록이 된다. 한 줄을 누르면 그 시점으로 돌아간다.
@@ -1496,9 +1535,11 @@
   function addSet(key){
     const set = SETS[key];
     if (playing || !set) return;
+    const setId = ++setCounter;
     set.parts.forEach(sp => {
       addPart(sp.type, { x: sp.pos[0], y: sp.pos[1], z: sp.pos[2], mount: 'floor' });
       const p = parts[parts.length - 1];
+      p.set = { id: setId, label: set.label };
       p.body.position.set(sp.pos[0], sp.pos[1], sp.pos[2]);
       p.rot = { x: sp.rot[0], y: sp.rot[1], z: sp.rot[2] };
       const q = quatFromRot(p.rot);
@@ -2137,6 +2178,7 @@
         quat: [p.body.quaternion.x, p.body.quaternion.y, p.body.quaternion.z, p.body.quaternion.w].map(round5)
       };
       if (p.joined) o.join = parts.indexOf(p.joined);
+      if (p.set) o.set = [p.set.id, p.set.label];
       const rr = getRot(p);
       o.rot = [rr.x, rr.y, rr.z];
       return o;
@@ -2144,6 +2186,7 @@
   }
 
   function restoreParts(list, data, keepHistory){
+    setCounter = 0;
     stopPlay();
     clearBalls();
     parts.slice().forEach(removePart);
@@ -2155,6 +2198,7 @@
       p.body.position.set(d.pos[0], d.pos[1], d.pos[2]);
       p.body.quaternion.set(d.quat[0], d.quat[1], d.quat[2], d.quat[3]);
       if (Array.isArray(d.rot) && d.rot.length === 3) p.rot = { x: d.rot[0], y: d.rot[1], z: d.rot[2] };
+      if (Array.isArray(d.set) && d.set.length === 2) { p.set = { id: d.set[0], label: d.set[1] }; setCounter = Math.max(setCounter, d.set[0]); }
       made[i] = p;
     });
     (list || []).forEach((d, i) => {
