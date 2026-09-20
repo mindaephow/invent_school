@@ -627,15 +627,15 @@
     tctx.fillStyle = baseColorHex;
     tctx.fillRect(0, 0, 64, 64);
     if (grooves) {
-      // 한 칸(20) = 띠(왼쪽·위쪽 10) + 구멍이 든 네모(오른쪽·아래쪽 10). 띠 한가운데(폭 5)가 홈이고, 판 끝에 띠 하나가 더 닫아 준다.
+      // 한 칸(20) = 띠 10 + 구멍이 든 네모 10, 가로·세로 모두 띠가 먼저 온다(캔버스는 세로가 뒤집혀 붙으므로 세로 띠는 아래쪽에 둔다).
+      // 띠 한가운데(폭 5)가 홈이고, 판 끝에 띠 하나가 더 닫아 준다.
       tctx.fillStyle = 'rgba(0,0,0,0.3)';
       tctx.fillRect(8, 0, 16, 64);
-      tctx.fillRect(0, 8, 64, 16);
+      tctx.fillRect(0, 40, 64, 16);
     }
-    const hc = grooves ? 48 : 32;
     tctx.fillStyle = 'rgba(0,0,0,0.4)';
     tctx.beginPath();
-    tctx.arc(hc, hc, HOLE_R_PX, 0, Math.PI * 2);
+    tctx.arc(grooves ? 48 : 32, grooves ? 16 : 32, HOLE_R_PX, 0, Math.PI * 2);
     tctx.fill();
     const tex = new THREE.CanvasTexture(c);
     tex.wrapS = THREE.RepeatWrapping;
@@ -652,9 +652,9 @@
     g.fillRect(0, 0, 64, 64);
     g.fillStyle = '#5a5a5a';
     g.fillRect(8, 0, 16, 64);
-    g.fillRect(0, 8, 64, 16);
+    g.fillRect(0, 40, 64, 16);
     g.fillStyle = '#000000';
-    g.beginPath(); g.arc(48, 48, HOLE_R_PX, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.arc(48, 16, HOLE_R_PX, 0, Math.PI * 2); g.fill();
     const tex = new THREE.CanvasTexture(c);
     tex.wrapS = THREE.RepeatWrapping;
     tex.wrapT = THREE.RepeatWrapping;
