@@ -656,7 +656,8 @@
   };
   const MARBLE_R = 9;
   const LBRACKET_PEG_OUT = 20, LBRACKET_PEG_IN = 2; // ㄱ자연결대 핀: 몸통 밖으로 나온 길이 2cm, 몸통 속에 박힌 길이 0.2cm
-  const CLIP_EAR_H = 24; // 클립 귀 높이 (직선길 끝이 이만큼 끼워진다)
+  const CLIP_EAR_H = 8; // 클립 귀 높이 0.8cm (전에는 2.4cm였는데 3분의 2를 줄였다)
+  const CLIP_PEG_OUT = 10, CLIP_PEG_IN = 2; // 클립 핀: 굵기 1cm(구멍 지름), 몸통 밖으로 나온 길이 1cm(판 두께와 같아서 판 뒷면과 딱 맞는다)
   const CLIP_JOIN_Y = PART_DEFS.clip.h / 2 + PART_DEFS.straight.w / 2; // 끼운 직선길 중심이 클립 중심에서 핀 반대쪽으로 떨어진 거리
   const MOUNT_LABEL = { floor: '바닥', 'wall-left': '벽(좌)', 'wall-right': '벽(우)', ceiling: '천장' };
 
@@ -1551,9 +1552,9 @@
     } else if (type === 'clip') {
       // 아래쪽 핀(타공판 구멍) + 위쪽 두 귀(직선길 폭 26을 양옆에서 잡는다)
       const clipMat = new THREE.MeshStandardMaterial({ color: partColor('clip') });
-      const peg = new THREE.Mesh(pegGeo, clipMat);
-      peg.position.set(0, -(def.h / 2 + 3), 0);
-      mesh.add(peg);
+      const clipPeg = new THREE.Mesh(new THREE.CylinderGeometry(HOLE_R_WORLD, HOLE_R_WORLD, CLIP_PEG_OUT + CLIP_PEG_IN, 16), clipMat);
+      clipPeg.position.set(0, -(def.h / 2 + (CLIP_PEG_OUT - CLIP_PEG_IN) / 2), 0);
+      mesh.add(clipPeg);
       [-1, 1].forEach(s => {
         const ear = new THREE.Mesh(new THREE.BoxGeometry(def.w, CLIP_EAR_H, 4), clipMat);
         ear.position.set(0, def.h / 2 + CLIP_EAR_H / 2, s * (PART_DEFS.straight.d / 2 + 2));
@@ -2092,11 +2093,11 @@
     const lz = holeSnap(local.z, pdef.d);
     const lift = (type === 'clip' || type === 'lbracket') ? PART_DEFS[type].h / 2 : 0; // 클립·ㄱ자연결대는 판 위에 얹히고 핀만 구멍에 들어간다
     const worldPos = panelPart.mesh.localToWorld(new THREE.Vector3(lx, pdef.h / 2 + lift, lz));
-    if (type === 'lbracket') {
+    if (type === 'lbracket' || type === 'clip') {
       // 아래로 꽂은 핀 끝이 바닥을 뚫고 내려가면 안 되므로, 핀 끝이 바닥에 닿는 높이까지만 들어가고 나머지는 위로 뜬다
       const n = new THREE.Vector3(0, 1, 0).applyQuaternion(panelPart.mesh.quaternion);
       if (n.y > 0.01) {
-        const tipY = worldPos.y - (PART_DEFS.lbracket.h / 2 + LBRACKET_PEG_OUT) * n.y;
+        const tipY = worldPos.y - (PART_DEFS[type].h / 2 + (type === 'clip' ? CLIP_PEG_OUT : LBRACKET_PEG_OUT)) * n.y;
         if (tipY < 0) worldPos.addScaledVector(n, -tipY / n.y);
       }
     }
