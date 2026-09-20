@@ -161,10 +161,18 @@
   .rotate-row button{flex:1;}
   .axis-row{align-items:stretch;}
   .axis-row button{padding:8px 0; font-size:13px;}
-  .axis-row .axis-tag{flex:0 0 34px; display:flex; align-items:center; justify-content:center; border-radius:8px; color:#fff; font-weight:800; font-size:14px; padding:0; border:0; cursor:pointer;}
+  .axis-row .axis-tag{display:flex; align-items:center; justify-content:center; border-radius:8px; color:#fff; font-weight:800; font-size:14px; padding:0; border:0; cursor:pointer;}
   .axis-row .axis-tag.on{outline:3px solid var(--ink); outline-offset:1px;}
   .ax-x{background:#E5484D;} .ax-y{background:#30A46C;} .ax-z{background:#3E63DD;}
   .rot-hint{margin:0 0 8px; font-size:12px; color:var(--ink-soft); line-height:1.4;}
+  .axis-label{flex:0 0 auto; align-self:center; font-size:13px; font-weight:700; color:var(--ink-soft); padding-right:2px;}
+  .axis-row .axis-tag{flex:1 1 0;}
+  .mode-row button[aria-pressed="true"]{background:var(--blueprint); border-color:var(--blueprint); color:#fff; font-weight:700;}
+  .axis-now{margin:0 0 6px; font-size:13px; color:var(--ink);}
+  .num-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin-bottom:8px;}
+  .num-grid button{padding:8px 0; font-size:13px;}
+  .num-grid button.on{background:var(--blueprint); border-color:var(--blueprint); color:#fff; font-weight:700;}
+  #axisBlock input[type=number]{flex:2; min-width:0; padding:8px 10px; border:1px solid var(--panel-border); border-radius:8px; background:var(--panel); color:var(--ink); font:inherit; font-size:13px;}
   button.danger{width:100%; color:var(--warn); border-color:var(--warn-bg); background:var(--warn-bg);}
 
   .roadmap-note{font-size:12px; color:var(--ink-soft); line-height:1.5;}
@@ -306,7 +314,7 @@
         <p>중력의 에너지를 이용하여 구슬을 목표한 곳까지 도착하게 합니다.</p>
         <h3>따라하기</h3>
         <ol>
-          <li>베이스 타공판을 클릭하고, 수평 0°를 클릭해요.</li>
+          <li>베이스 타공판을 클릭하고, 축 Z → 돌리기 → 0을 차례로 클릭해요.</li>
         </ol>
       </section>
 
@@ -411,15 +419,31 @@
           <button id="mvDown">▼ 높이</button>
           <button id="mvFwd">앞</button>
         </div>
-        <div class="rotate-row axis-row"><button type="button" class="axis-tag ax-x" data-axis-pick="x" aria-pressed="false" title="X축으로만 움직이기">X</button><button data-axis="x" data-deg="-90">-90°</button><button data-axis="x" data-deg="-15">-15°</button><button data-axis="x" data-deg="15">+15°</button><button data-axis="x" data-deg="90">+90°</button></div>
-        <div class="rotate-row axis-row"><button type="button" class="axis-tag ax-y" data-axis-pick="y" aria-pressed="false" title="Y축으로만 움직이기">Y</button><button data-axis="y" data-deg="-90">-90°</button><button data-axis="y" data-deg="-15">-15°</button><button data-axis="y" data-deg="15">+15°</button><button data-axis="y" data-deg="90">+90°</button></div>
-        <div class="rotate-row axis-row"><button type="button" class="axis-tag ax-z" data-axis-pick="z" aria-pressed="false" title="Z축으로만 움직이기">Z</button><button data-axis="z" data-deg="-90">-90°</button><button data-axis="z" data-deg="-15">-15°</button><button data-axis="z" data-deg="15">+15°</button><button data-axis="z" data-deg="90">+90°</button></div>
-        <p class="rot-hint">축 글자(X·Y·Z)를 누르면 그 축으로만 움직여요. 부품을 마우스로 끌거나 방향키(← → ↑ ↓)를 누르세요. Shift를 같이 누르면 1mm씩 움직여요.</p>
-        <p class="rot-hint">화면의 색 화살표가 돌리는 축이에요 (X 빨강 · Y 초록 · Z 파랑). +는 화살표 끝에서 볼 때 시계 반대 방향으로 돌아요.</p>
-        <div class="rotate-row">
-          <button data-angle="0">수평 0°</button>
-          <button data-angle="90">직각 90°</button>
-          <button data-angle="180">180°</button>
+        <div id="axisBlock">
+          <div class="rotate-row axis-row">
+            <span class="axis-label">축</span>
+            <button type="button" class="axis-tag ax-x" data-axis-pick="x" aria-pressed="false" title="X축">X</button>
+            <button type="button" class="axis-tag ax-y" data-axis-pick="y" aria-pressed="false" title="Y축">Y</button>
+            <button type="button" class="axis-tag ax-z" data-axis-pick="z" aria-pressed="false" title="Z축">Z</button>
+          </div>
+          <div class="rotate-row mode-row">
+            <button type="button" data-mode="rotate" aria-pressed="false">돌리기</button>
+            <button type="button" data-mode="move" aria-pressed="true">이동</button>
+          </div>
+          <div id="rotPanel" hidden>
+            <p class="axis-now" id="angleLine"></p>
+            <div class="num-grid">
+              <button type="button" data-angle-val="-90">-90</button><button type="button" data-angle-val="-45">-45</button><button type="button" data-angle-val="-15">-15</button><button type="button" data-angle-val="0">0</button>
+              <button type="button" data-angle-val="15">+15</button><button type="button" data-angle-val="45">+45</button><button type="button" data-angle-val="90">+90</button><button type="button" data-angle-val="180">180</button>
+            </div>
+            <div class="rotate-row"><input id="angleInput" type="number" step="1" placeholder="각도 직접 입력(°)" aria-label="각도 직접 입력"><button type="button" id="angleApply">적용</button></div>
+            <p class="rot-hint">색 화살표가 돌리는 축이에요 (X 빨강 · Y 초록 · Z 파랑). 각도는 X → Y → Z 순서로 방 기준으로 적용돼요. +는 화살표 끝에서 볼 때 시계 반대 방향이에요.</p>
+          </div>
+          <div id="movePanel" hidden>
+            <p class="axis-now" id="posLine"></p>
+            <div class="rotate-row"><input id="posInput" type="number" step="0.1" placeholder="위치 직접 입력(cm)" aria-label="위치 직접 입력"><button type="button" id="posApply">적용</button></div>
+            <p class="rot-hint">부품을 마우스로 끌거나 방향키(← → ↑ ↓)를 누르세요. Shift를 같이 누르면 1mm씩 움직여요.</p>
+          </div>
         </div>
         <button id="connectToPanel" class="primary" hidden>🔗 타공판에 연결</button>
         <button id="joinToClip" class="primary" hidden>🔗 클립에 끼우기</button>
@@ -825,13 +849,21 @@
       b.setAttribute('aria-pressed', String(on));
     });
   }
+  let axisMode = 'move'; // 'move' | 'rotate'
   document.querySelectorAll('#selectedControls [data-axis-pick]').forEach(btn => {
     btn.addEventListener('click', () => {
       if (!selected || selected.isMarker) return;
       activeAxis = activeAxis === btn.dataset.axisPick ? null : btn.dataset.axisPick;
       syncAxisButtons();
       updateAxisGizmo();
-      setStatus(activeAxis ? activeAxis.toUpperCase() + '축으로만 움직여요. 부품을 끌거나 방향키를 누르세요 (Shift = 1mm씩)' : '부품을 배치하고 재생을 눌러보세요.', activeAxis ? 'warn' : null);
+      refreshAxisPanel();
+      setStatus(activeAxis ? activeAxis.toUpperCase() + '축을 골랐어요. 돌리기 또는 이동을 고르세요.' : '부품을 배치하고 재생을 눌러보세요.', activeAxis ? 'warn' : null);
+    });
+  });
+  document.querySelectorAll('#selectedControls [data-mode]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      axisMode = btn.dataset.mode;
+      refreshAxisPanel();
     });
   });
 
@@ -849,7 +881,7 @@
       document.getElementById('joinToClip').hidden = p.type !== 'straight';
       // 출발·도착 지점은 위치만 옮긴다 (회전·설치 위치 변경·삭제 없음, 기본 위치로 되돌리기 있음)
       const mk = !!p.isMarker;
-      document.querySelectorAll('#selectedControls .rotate-row, #selectedMountSelect').forEach(el => { el.style.display = mk ? 'none' : ''; });
+      document.querySelectorAll('#selectedControls .rotate-row, #selectedMountSelect, #axisBlock').forEach(el => { el.style.display = mk ? 'none' : ''; });
       document.getElementById('deletePart').hidden = mk;
       document.getElementById('resetMarker').hidden = !mk;
       if (p.type === 'start' && parts.some(x => x.type === 'marble')) setStatus('구슬을 놓았을 때는 구슬 자리에서 출발해요. 이 출발 지점은 구슬이 없을 때 쓰여요.', 'warn');
@@ -857,6 +889,7 @@
     updateSelectionOutline();
     updatePanelLabels();
     updateAxisGizmo();
+    refreshAxisPanel();
   }
 
   // 회전한 부품이 가로(x)·높이(y)·세로(z)로 차지하는 절반 크기
@@ -1193,28 +1226,72 @@
     selectedControls.style.top = ny + 'px';
   });
   window.addEventListener('pointerup', () => { modalDrag = null; });
-  // 세계 축(X·Y·Z) 둘레로 돌린다. 오일러 각으로 되읽으면 90°를 넘을 때 방향이 뒤집히므로 회전을 곱해서 더한다.
-  const AXIS_VEC = { x: new CANNON.Vec3(1, 0, 0), y: new CANNON.Vec3(0, 1, 0), z: new CANNON.Vec3(0, 0, 1) };
-  function rotateSelectedBy(axis, rad){
-    if (!selected) return;
-    unjoin(selected);
-    const dq = new CANNON.Quaternion();
-    dq.setFromAxisAngle(AXIS_VEC[axis], rad);
-    const nq = dq.mult(selected.body.quaternion);
-    nq.normalize();
-    selected.body.quaternion.set(nq.x, nq.y, nq.z, nq.w);
+  // ----- 회전: 축을 고르고 각도를 누르면 "그 축의 각도"가 그 값이 된다 (세계 기준으로 X → Y → Z 순서로 적용)
+  const D2R = Math.PI / 180;
+  const ROT_ORDER = 'ZYX';
+  function normDeg(d){ d = ((d % 360) + 540) % 360 - 180; return d === -180 ? 180 : d; }
+  function round3d(v){ return Math.round(v * 1000) / 1000; }
+  function fmtNum(v){ return String(Math.round(v * 10) / 10); }
+  function quatFromRot(r){ return new THREE.Quaternion().setFromEuler(new THREE.Euler(r.x * D2R, r.y * D2R, r.z * D2R, ROT_ORDER)); }
+  function getRot(part){
+    const q = part.body.quaternion;
+    if (part.rot) {
+      const c = quatFromRot(part.rot);
+      if (Math.abs(c.x * q.x + c.y * q.y + c.z * q.z + c.w * q.w) > 0.99995) return part.rot;
+    }
+    const e = new THREE.Euler().setFromQuaternion(new THREE.Quaternion(q.x, q.y, q.z, q.w), ROT_ORDER);
+    part.rot = { x: round3d(normDeg(e.x / D2R)), y: round3d(normDeg(e.y / D2R)), z: round3d(normDeg(e.z / D2R)) };
+    return part.rot;
   }
-  document.querySelectorAll('#selectedControls [data-axis]').forEach(btn => {
-    btn.addEventListener('click', () => rotateSelectedBy(btn.dataset.axis, Number(btn.dataset.deg) * Math.PI / 180));
+  function setRotAxis(axis, deg){
+    if (!selected || selected.isMarker || !axis || !isFinite(deg)) return;
+    unjoin(selected);
+    const r = Object.assign({}, getRot(selected));
+    r[axis] = round3d(normDeg(deg));
+    const q = quatFromRot(r);
+    selected.body.quaternion.set(q.x, q.y, q.z, q.w);
+    selected.rot = r;
+    refreshAxisPanel();
+  }
+  const rotPanel = document.getElementById('rotPanel'), movePanel = document.getElementById('movePanel');
+  const angleInput = document.getElementById('angleInput'), posInput = document.getElementById('posInput');
+  function refreshAxisPanel(){
+    if (!selected || selected.isMarker) return;
+    document.querySelectorAll('#axisBlock [data-mode]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === axisMode)));
+    rotPanel.hidden = !(activeAxis && axisMode === 'rotate');
+    movePanel.hidden = !(activeAxis && axisMode === 'move');
+    if (!activeAxis) return;
+    const AX = activeAxis.toUpperCase();
+    if (axisMode === 'rotate') {
+      const v = getRot(selected)[activeAxis];
+      document.getElementById('angleLine').innerHTML = AX + '축 지금 각도: <b>' + fmtNum(v) + '°</b>';
+      document.querySelectorAll('#rotPanel [data-angle-val]').forEach(b => b.classList.toggle('on', Math.abs(Number(b.dataset.angleVal) - v) < 0.05));
+    } else {
+      const v = selected.body.position[activeAxis] / 10;
+      document.getElementById('posLine').innerHTML = AX + ' 위치: <b>' + fmtNum(v) + ' cm</b>';
+      if (document.activeElement !== posInput) posInput.value = fmtNum(v);
+    }
+  }
+  document.querySelectorAll('#rotPanel [data-angle-val]').forEach(btn => {
+    btn.addEventListener('click', () => setRotAxis(activeAxis, Number(btn.dataset.angleVal)));
   });
-  document.querySelectorAll('#selectedControls [data-angle]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      if (!selected) return;
-      unjoin(selected);
-      const deg = Number(btn.dataset.angle);
-      selected.body.quaternion.setFromEuler(0, 0, deg * Math.PI / 180);
-    });
+  document.getElementById('angleApply').addEventListener('click', () => {
+    if (angleInput.value === '') return;
+    setRotAxis(activeAxis, Number(angleInput.value));
+    angleInput.value = '';
   });
+  angleInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('angleApply').click(); });
+  function applyPosInput(){
+    if (!selected || selected.isMarker || !activeAxis || posInput.value === '') return;
+    const cm = Number(posInput.value);
+    if (!isFinite(cm)) return;
+    unjoin(selected);
+    const p = selected.body.position;
+    moveSelectedTo(activeAxis === 'x' ? cm * 10 : p.x, activeAxis === 'y' ? cm * 10 : p.y, activeAxis === 'z' ? cm * 10 : p.z);
+    refreshAxisPanel();
+  }
+  document.getElementById('posApply').addEventListener('click', applyPosInput);
+  posInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') applyPosInput(); });
   function nudge(dx, dy, dz){
     if (!selected) return;
     unjoin(selected);
@@ -1473,7 +1550,7 @@
     if (selected && !playing) {
       raycaster.setFromCamera(ndcFromEvent(e), camera);
       draggingPart = raycaster.intersectObject(selected.mesh, true).length > 0;
-      if (draggingPart && activeAxis && !selected.isMarker) {
+      if (draggingPart && activeAxis && axisMode === 'move' && !selected.isMarker) {
         const P0 = new THREE.Vector3().copy(selected.body.position);
         const a = AXIS_DIR[activeAxis];
         const t0 = axisParam(e, P0, a);
@@ -1519,7 +1596,7 @@
 
   // 축을 골랐을 때 방향키로 그 축 방향으로 움직인다 (기본 2cm, Shift를 누르면 1mm)
   window.addEventListener('keydown', (e) => {
-    if (!selected || selected.isMarker || !activeAxis || playing) return;
+    if (!selected || selected.isMarker || !activeAxis || axisMode !== 'move' || playing) return;
     const tag = (e.target && e.target.tagName) || '';
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
     let dir = 0;
@@ -1660,6 +1737,7 @@
       selectionOutline.quaternion.copy(selected.body.quaternion);
     }
     if (axisGizmo && selected) axisGizmo.position.copy(selected.body.position);
+    if (selected && !selected.isMarker && !selectedControls.hidden && activeAxis && axisMode === 'move') refreshAxisPanel();
     balls.forEach(b => {
       b.mesh.position.copy(b.body.position);
       b.mesh.quaternion.copy(b.body.quaternion);
@@ -1720,6 +1798,8 @@
         quat: [p.body.quaternion.x, p.body.quaternion.y, p.body.quaternion.z, p.body.quaternion.w].map(round5)
       };
       if (p.joined) o.join = parts.indexOf(p.joined);
+      const rr = getRot(p);
+      o.rot = [rr.x, rr.y, rr.z];
       return o;
     });
   }
@@ -1735,6 +1815,7 @@
       const p = parts[parts.length - 1];
       p.body.position.set(d.pos[0], d.pos[1], d.pos[2]);
       p.body.quaternion.set(d.quat[0], d.quat[1], d.quat[2], d.quat[3]);
+      if (Array.isArray(d.rot) && d.rot.length === 3) p.rot = { x: d.rot[0], y: d.rot[1], z: d.rot[2] };
       made[i] = p;
     });
     (list || []).forEach((d, i) => {
