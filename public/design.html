@@ -125,6 +125,7 @@
   .part-icon.straight{background:var(--blueprint);}
   .part-icon.gset{width:26px; height:26px; margin:0 auto 5px; background:none; border-right:7px solid var(--blueprint); border-top:7px solid var(--blueprint); border-radius:0;}
   .part-icon.mset{width:26px; height:26px; margin:0 auto 5px; background:none; border:7px solid var(--blueprint); border-radius:0;}
+  .part-icon.dset{width:26px; height:26px; margin:0 auto 5px; background:none; border:7px solid var(--blueprint); border-right:0; border-radius:0;}
   .part-icon.lset{width:26px; height:26px; margin:0 auto 5px; background:none; border-left:7px solid var(--blueprint); border-bottom:7px solid var(--blueprint); border-radius:0;}
   .part-icon.clip{width:26px; margin:0 auto 5px; background:linear-gradient(90deg, var(--clip) 0 22%, transparent 22% 78%, var(--clip) 78% 100%), linear-gradient(var(--clip), var(--clip)) bottom/100% 30% no-repeat; border-radius:3px;}
   .part-icon.pin-start{width:26px; margin:0 auto 5px; border-radius:50%; border:3px solid var(--ink-soft); background:transparent;}
@@ -382,8 +383,9 @@
           <button class="part-card" id="addGSet" type="button"><span class="part-icon gset"></span>ㄱ셋</button>
           <button class="part-card" id="addMSet" type="button"><span class="part-icon mset"></span>ㅁ셋 1</button>
           <button class="part-card" id="addM2Set" type="button"><span class="part-icon mset"></span>ㅁ셋 2</button>
+          <button class="part-card" id="addDSet" type="button"><span class="part-icon dset"></span>ㄷ셋</button>
         </div>
-        <p class="part-note">세트는 여러 부품을 이미 조립한 채로 한 번에 놓아요. ㄴ셋: 바닥판 + ㄱ자연결대 2개 + 세운 벽판. ㄱ셋: ㄴ셋을 위아래로 뒤집은 모양(벽 위쪽에 판). ㅁ셋 1: 바닥판·위쪽 판·앞벽·뒷벽으로 만든 상자(옆에서 보면 네모). ㅁ셋 2: ㅁ셋 1을 Z축으로 90° 돌린 것.</p>
+        <p class="part-note">세트는 여러 부품을 이미 조립한 채로 한 번에 놓아요. ㄴ셋: 바닥판 + ㄱ자연결대 2개 + 세운 벽판. ㄱ셋: ㄴ셋을 위아래로 뒤집은 모양(벽 위쪽에 판). ㅁ셋 1: 바닥판·위쪽 판·앞벽·뒷벽으로 만든 상자(옆에서 보면 네모). ㅁ셋 2: ㅁ셋 1을 Z축으로 90° 돌린 것. ㄷ셋: 바닥판과 위쪽 판이 뒷벽 하나에 이어진 모양(ㅁ셋 1에서 앞벽을 뺀 것).</p>
         <h2>출발 · 도착 지점</h2>
         <div class="marker-grid">
           <button class="part-card" id="pickStart" type="button"><span class="part-icon pin-start"></span>출발 지점</button>
@@ -554,6 +556,11 @@
         ...[-220, 0].flatMap(z => [28, 248].flatMap(y => [-220, 0].map(x => ({ type: 'lbracket', pos: [x, y, z], rot: [0, 0, 90] }))))
       ]
     }
+  };
+  // ㄷ셋 = ㅁ셋 1에서 앞벽과 앞쪽 연결대 4개를 뺀 것: 바닥판·위쪽 판이 뒷벽 하나에 이어진 모양(옆에서 보면 ㄷ)
+  SETS.dset = {
+    label: 'ㄷ셋',
+    parts: SETS.mset.parts.filter(sp => !(sp.type === 'lbracket' && sp.pos[2] === 0) && !(sp.type === 'panel' && sp.pos[2] === 13))
   };
   // ㅁ셋 2 = ㅁ셋 1 전체를 Z축으로 +90° 돌린 것 (조립체 가운데 x=-110, y=138 둘레). Z 회전은 마지막에 적용되므로 각 부품의 Z 각도에 90을 더하면 된다.
   SETS.mset2 = {
@@ -1310,6 +1317,7 @@
   document.getElementById('addGSet').addEventListener('click', () => addSet('gset'));
   document.getElementById('addMSet').addEventListener('click', () => addSet('mset'));
   document.getElementById('addM2Set').addEventListener('click', () => addSet('mset2'));
+  document.getElementById('addDSet').addEventListener('click', () => addSet('dset'));
 
   function removePart(p){
     parts.forEach(x => { if (x.joined === p) x.joined = null; });
