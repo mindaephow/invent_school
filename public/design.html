@@ -118,7 +118,9 @@
   .mission .lesson-steps-head{display:flex; align-items:center; justify-content:space-between; gap:8px;}
   .mission .lesson-steps-head h3{margin:12px 0 4px;}
   .mission .lesson-steps-head button{padding:4px 10px; font-size:12px;}
-  .mission ol{margin:0; padding-left:20px; color:var(--ink-soft); font-size:14px; line-height:1.55;}
+  .mission ol{margin:0; padding-left:20px; color:var(--ink-soft); font-size:14px; line-height:1.55; max-height:220px; overflow-y:auto;}
+  .mission .lesson-step-btn{list-style:none; margin:8px 0 8px -20px;}
+  .mission .lesson-step-btn button{width:100%;}
   .mission ol li{margin-bottom:4px;}
 
   .mount-select{display:flex; gap:6px; margin-bottom:12px;}
@@ -190,7 +192,8 @@
   .ax-x{background:#E5484D;} .ax-y{background:#30A46C;} .ax-z{background:#3E63DD;}
   .rot-hint{margin:0 0 8px; font-size:12px; color:var(--ink-soft); line-height:1.4;}
   .axis-label{flex:0 0 auto; align-self:center; font-size:13px; font-weight:700; color:var(--ink-soft); padding-right:2px;}
-  .axis-row .axis-tag{flex:1 1 0; min-height:42px; font-size:18px;}
+  .axis-row .axis-tag{flex:1 1 0; min-height:42px; font-size:18px; flex-direction:column; gap:1px;}
+  .axis-hint{font-size:10px; font-weight:700; opacity:0.9;}
   .mode-row button[aria-pressed="true"]{background:var(--blueprint); border-color:var(--blueprint); color:#fff; font-weight:700;}
   .axis-now{margin:0 0 6px; font-size:13px; color:var(--ink);}
   .num-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-bottom:8px;}
@@ -391,6 +394,7 @@
           <p class="lesson-mission"></p>
           <div class="lesson-steps-head"><h3>따라하기</h3><button id="openSampleBtn" class="ghost" type="button" hidden>샘플 열기</button></div>
           <ol class="lesson-steps"></ol>
+          <button id="startFollowBtn" class="primary" type="button" hidden>🖍 따라하기 시작</button>
         </details>
       </section>
 
@@ -474,6 +478,7 @@
         <div class="view-tools">
           <button id="panToggle" type="button" aria-pressed="false" title="켜고 빈 곳을 끌면 화면이 밀려요 (마우스 오른쪽 버튼이나 손가락 두 개로도 돼요)">✋ 이동</button>
           <button id="viewHome" type="button" title="처음 화면으로">⌂ 처음</button>
+          <button id="clearBtn" type="button" class="ghost" title="스케치북을 싹 비우고 새로 시작해요">🔄 초기화</button>
         </div>
         <div class="part-list" id="partList">
           <button type="button" class="part-list-head" id="partListHead" aria-expanded="true"><span>사용 부품 <b id="partListCount">0</b></span><span id="partListArrow">▾</span></button>
@@ -514,9 +519,9 @@
         <div id="axisBlock">
           <div class="rotate-row axis-row">
             <span class="axis-label">축</span>
-            <button type="button" class="axis-tag ax-x" data-axis-pick="x" aria-pressed="false" title="X축">X</button>
-            <button type="button" class="axis-tag ax-y" data-axis-pick="y" aria-pressed="false" title="Y축">Y</button>
-            <button type="button" class="axis-tag ax-z" data-axis-pick="z" aria-pressed="false" title="Z축">Z</button>
+            <button type="button" class="axis-tag ax-x" data-axis-pick="x" aria-pressed="false" title="X축(좌우)">X<span class="axis-hint">좌우</span></button>
+            <button type="button" class="axis-tag ax-y" data-axis-pick="y" aria-pressed="false" title="Y축(위아래)">Y<span class="axis-hint">위아래</span></button>
+            <button type="button" class="axis-tag ax-z" data-axis-pick="z" aria-pressed="false" title="Z축(앞뒤)">Z<span class="axis-hint">앞뒤</span></button>
           </div>
           <div class="rotate-row mode-row">
             <button type="button" data-mode="rotate" aria-pressed="false">돌리기</button>
@@ -554,10 +559,10 @@
         <button id="deletePart" class="danger">이 부품 삭제</button>
       </div>
 
-      <div class="play-panel" id="playPanel">
+      <div class="play-panel folded" id="playPanel">
         <div class="play-panel-head" id="playPanelHead">
           <span><span class="drag-handle">⠿</span> 컨트롤 (끌어서 옮기기)</span>
-          <button type="button" class="ghost" id="playPanelFold" aria-label="컨트롤 접기" aria-expanded="true">▾</button>
+          <button type="button" class="ghost" id="playPanelFold" aria-label="컨트롤 펼치기" aria-expanded="false">▸</button>
         </div>
         <div class="play-panel-body" id="playPanelBody">
           <div class="play-row">
@@ -580,7 +585,6 @@
         </div>
       </div>
       <div class="controls">
-        <button id="clearBtn" class="ghost">전체 삭제</button>
         <p id="status" class="status">부품을 배치하고 재생을 눌러보세요.</p>
         <div class="rotate-row" id="holeCoordRow" hidden>
           <input id="holeCoordInput" type="text" placeholder="예: A1" maxlength="4" aria-label="구멍 위치 직접 입력(예: A1)">
@@ -640,10 +644,16 @@
     card.querySelector('.lesson-concept').textContent = lesson.concept;
     card.querySelector('.lesson-mission').textContent = lesson.mission;
     const stepsEl = card.querySelector('.lesson-steps');
+    const startFollowBtn = document.getElementById('startFollowBtn');
     stepsEl.innerHTML = '';
     (lesson.steps || []).forEach(step => {
       const li = document.createElement('li');
-      li.textContent = step;
+      if (step === '__START_FOLLOW__') {
+        li.className = 'lesson-step-btn';
+        li.appendChild(startFollowBtn); // 버튼을 이 자리로 옮긴다(복제 아님 — 이벤트 리스너 그대로 유지)
+      } else {
+        li.textContent = step;
+      }
       stepsEl.appendChild(li);
     });
     const sampleBtn = document.getElementById('openSampleBtn');
@@ -652,6 +662,14 @@
       sampleBtn.addEventListener('click', () => {
         restoreParts(lesson.sample, {}, true); // keepHistory: true — 되돌리기로 샘플 열기 이전 상태로 돌아갈 수 있게
         setStatus('샘플을 스케치북에 열었어요. 마음에 안 들면 "되돌리기"로 이전 상태로 돌아갈 수 있어요.', 'success');
+      });
+      startFollowBtn.hidden = false;
+      startFollowBtn.addEventListener('click', () => {
+        // 글씨 연습 공책처럼, 빈 스케치북에 샘플 모양을 점선으로 흐릿하게 띄워놓고 그 위에 직접 따라 놓게 한다
+        document.getElementById('clearBtn').click();
+        if (!guideGroup.children.length) buildGuideOutline();
+        guideGroup.visible = true;
+        setStatus('점선을 따라 부품을 놓아보세요.', 'success');
       });
     }
   })();
@@ -735,6 +753,29 @@
   goalFlagGroup.add(goalFlagCone);
   goalFlagGroup.visible = false;
   scene.add(goalFlagGroup);
+
+  // "따라만들기" 점선 가이드 — 글씨 연습 공책처럼, 샘플 모양을 흐릿한 점선 와이어프레임으로 겹쳐 보여주고
+  // 학생은 그 위에 실제 부품을 놓아서 따라 만든다. 물리 충돌·선택 대상이 아닌 순수 시각 가이드.
+  const guideGroup = new THREE.Group();
+  guideGroup.visible = false;
+  scene.add(guideGroup);
+  function buildGuideOutline(){
+    guideGroup.clear();
+    const lesson = window.IVS_LESSONS && window.IVS_LESSONS[0];
+    const sample = (lesson && lesson.sample) || [];
+    sample.forEach(d => {
+      const def = PART_DEFS[d.type];
+      if (!def) return;
+      const geo = new THREE.BoxGeometry(def.w, def.h, def.d);
+      const edges = new THREE.EdgesGeometry(geo);
+      const mat = new THREE.LineDashedMaterial({ color: cssVar('--blueprint'), dashSize: 6, gapSize: 5, transparent: true, opacity: 0.55 });
+      const line = new THREE.LineSegments(edges, mat);
+      line.computeLineDistances();
+      line.position.set(d.pos[0], d.pos[1], d.pos[2]);
+      line.quaternion.set(d.quat[0], d.quat[1], d.quat[2], d.quat[3]);
+      guideGroup.add(line);
+    });
+  }
   function updateGoalFlag(){
     goalFlagGroup.visible = !!goalTargetPart;
     if (goalTargetPart) {
