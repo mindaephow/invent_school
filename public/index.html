@@ -285,12 +285,20 @@
     <div class="card">
       <h3 style="font-size:15px;">회차 등록</h3>
       <form id="curriculumForm" class="session-picker" style="margin-top:10px;">
+        <select id="curriculumSubject" required><option value="goldberg">골드버그</option><option value="robot">로봇</option><option value="aviation">항공</option></select>
+        <select id="curriculumCategory"><option value="">(전체 공통)</option></select>
         <select id="termForCurriculum" required></select>
         <select id="sessionForCurriculum" required></select>
         <button type="submit" class="primary">등록</button>
       </form>
     </div>
     <div class="card">
+      <div class="crumbs" id="curriculumSubjectTabs">
+        <button type="button" data-subject-tab="goldberg">골드버그</button>
+        <button type="button" class="current" data-subject-tab="robot">로봇</button>
+        <button type="button" data-subject-tab="aviation">항공</button>
+      </div>
+      <select id="curriculumCategoryFilter" hidden style="margin-bottom:10px;"><option value="">전체 카테고리</option></select>
       <div class="table-wrap">
         <table>
           <thead><tr><th>학기·분기</th><th>회차</th><th></th></tr></thead>
@@ -1137,6 +1145,8 @@
   const SESSION_NUMBERS = Array.from({ length: 24 }, (_, i) => String(i + 1));
   const termForCurriculum = document.getElementById('termForCurriculum');
   const sessionForCurriculum = document.getElementById('sessionForCurriculum');
+  const curriculumSubjectSel = document.getElementById('curriculumSubject');
+  const curriculumCategorySel = document.getElementById('curriculumCategory');
   const curriculumForm = document.getElementById('curriculumForm');
   const curriculumList = document.getElementById('curriculumList');
   const curriculumEmpty = document.getElementById('curriculumEmpty');
@@ -1144,30 +1154,75 @@
   termForCurriculum.innerHTML = '<option value="">학기·분기</option>' + TERMS.map(t => `<option value="${t}">${t}</option>`).join('');
   sessionForCurriculum.innerHTML = '<option value="">총 회차 수</option>' + SESSION_NUMBERS.map(n => `<option value="${n}">${n}회</option>`).join('');
 
+  function fillCurriculumCategoryOptions(sel, selectEl){
+    const cur = selectEl.value;
+    selectEl.innerHTML = '<option value="">(전체 공통)</option>' + robotCategories.filter((c) => c.subject === sel).map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`).join('');
+    selectEl.value = cur;
+  }
+  curriculumSubjectSel.addEventListener('change', () => fillCurriculumCategoryOptions(curriculumSubjectSel.value, curriculumCategorySel));
+
   curriculumForm.onsubmit = async (e) => {
     e.preventDefault();
     if (!db || !state.teacherId) return;
+    const subject = curriculumSubjectSel.value;
+    const category = curriculumCategorySel.value || null;
     const term = termForCurriculum.value;
     const totalSessions = Number(sessionForCurriculum.value) || 0;
     if (!term || !totalSessions) { alert('학기·분기와 총 회차 수를 모두 선택하세요.'); return; }
-    const existingSnap = await db.collection('curriculum').where('teacherId', '==', state.teacherId).where('term', '==', term).get();
+    let existingQuery = db.collection('curriculum').where('teacherId', '==', state.teacherId).where('term', '==', term).where('subject', '==', subject);
+    if (category) existingQuery = existingQuery.where('category', '==', category);
+    const existingSnap = await existingQuery.get();
     const existingSessions = new Set(existingSnap.docs.map(d => d.data().session));
     for (let n = 1; n <= totalSessions; n++) {
       if (existingSessions.has(n)) continue;
-      await db.collection('curriculum').add({ teacherId: state.teacherId, term, session: n, createdAt: Date.now() });
+      await db.collection('curriculum').add({ teacherId: state.teacherId, subject, category, term, session: n, createdAt: Date.now() });
     }
     sessionForCurriculum.value = '';
     renderCurriculumList();
   };
 
+  // ---------- 커리큘럼 과목 탭(골드버그/로봇/항공) + 로봇 카테고리 필터 ----------
+  let curriculumSubjectTab = 'robot';
+  let curriculumCategoryFilterValue = '';
+  const curriculumSubjectTabsEl = document.getElementById('curriculumSubjectTabs');
+  const curriculumCategoryFilterEl = document.getElementById('curriculumCategoryFilter');
+  curriculumSubjectTabsEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-subject-tab]');
+    if (!btn) return;
+    curriculumSubjectTab = btn.dataset.subjectTab;
+    curriculumCategoryFilterValue = '';
+    syncCurriculumSubjectUI();
+    renderCurriculumList();
+  });
+  curriculumCategoryFilterEl.addEventListener('change', () => {
+    curriculumCategoryFilterValue = curriculumCategoryFilterEl.value;
+    renderCurriculumList();
+  });
+  function syncCurriculumSubjectUI(){
+    curriculumSubjectTabsEl.querySelectorAll('[data-subject-tab]').forEach((b) => b.classList.toggle('current', b.dataset.subjectTab === curriculumSubjectTab));
+    curriculumCategoryFilterEl.hidden = curriculumSubjectTab !== 'robot';
+    if (curriculumSubjectTab === 'robot') {
+      const cur = curriculumCategoryFilterValue;
+      curriculumCategoryFilterEl.innerHTML = '<option value="">전체 카테고리</option>' + robotCategories.filter((c) => c.subject === 'robot').map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`).join('');
+      curriculumCategoryFilterEl.value = cur;
+    }
+  }
+
   async function renderCurriculumList(){
     curriculumList.innerHTML = '';
     if (!db || !state.teacherId) return;
     const snap = await db.collection('curriculum').where('teacherId', '==', state.teacherId).get();
-    curriculumEmpty.hidden = !snap.empty;
-    if (snap.empty) return;
+    const filteredDocs = snap.docs.filter((doc) => {
+      const d = doc.data();
+      const subj = d.subject || 'goldberg';
+      if (subj !== curriculumSubjectTab) return false;
+      if (curriculumSubjectTab === 'robot' && curriculumCategoryFilterValue && d.category !== curriculumCategoryFilterValue) return false;
+      return true;
+    });
+    curriculumEmpty.hidden = filteredDocs.length > 0;
+    if (!filteredDocs.length) return;
     const byTerm = {};
-    snap.docs.forEach(doc => {
+    filteredDocs.forEach(doc => {
       const term = doc.data().term;
       (byTerm[term] = byTerm[term] || []).push(doc);
     });
@@ -1592,7 +1647,7 @@
       document.getElementById('tab-curriculum').hidden = btn.dataset.tab !== 'curriculum';
       document.getElementById('tab-parts').hidden = btn.dataset.tab !== 'parts';
       if (btn.dataset.tab === 'home') renderHome();
-      if (btn.dataset.tab === 'curriculum') renderCurriculumList();
+      if (btn.dataset.tab === 'curriculum') { loadCategories().then(() => { fillCurriculumCategoryOptions(curriculumSubjectSel.value, curriculumCategorySel); syncCurriculumSubjectUI(); renderCurriculumList(); }); }
       if (btn.dataset.tab === 'parts') { loadCategories().then(loadParts); }
     });
   });
