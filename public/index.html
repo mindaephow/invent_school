@@ -1500,7 +1500,7 @@
       document.getElementById('tab-parts').hidden = btn.dataset.tab !== 'parts';
       if (btn.dataset.tab === 'home') renderHome();
       if (btn.dataset.tab === 'curriculum') renderCurriculumList();
-      if (btn.dataset.tab === 'parts') { loadCategories(); loadParts(); }
+      if (btn.dataset.tab === 'parts') { loadCategories().then(loadParts); }
     });
   });
 
