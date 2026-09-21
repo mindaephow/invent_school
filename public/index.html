@@ -1331,26 +1331,48 @@
   let robotCategories = [];
 
   function categoryLabel(id){ const c = robotCategories.find((x) => x.id === id); return c ? c.name : ''; }
-  function partGroupTitle(p){
-    const catLabel = p.category ? categoryLabel(p.category) : (PART_SUBJECT_LABEL[p.subject] || p.subject);
-    return catLabel + (p.volume != null ? p.volume + '권' : '') + '-부품리스트';
-  }
   function partRowHtml(p){
     const sub = [p.color, (p.qty != null ? p.qty + '개' : '')].filter(Boolean).join(' · ');
-    return `<div class="design-row"><div class="item-main"><div class="item-title">${escapeHtml(p.icon ? p.icon + ' ' : '')}${escapeHtml(p.name)}</div><div class="item-sub">${escapeHtml(sub)}</div></div><button type="button" class="ghost" data-delete-part="${escapeHtml(p.id)}">삭제</button></div>`;
+    const btn = p._merged ? '' : `<button type="button" class="ghost" data-delete-part="${escapeHtml(p.id)}">삭제</button>`;
+    return `<div class="design-row"><div class="item-main"><div class="item-title">${escapeHtml(p.icon ? p.icon + ' ' : '')}${escapeHtml(p.name)}</div><div class="item-sub">${escapeHtml(sub)}</div></div>${btn}</div>`;
   }
+  function partSectionHtml(title, items){
+    return `<div class="item-sub" style="font-weight:700; margin:10px 0 2px;">${escapeHtml(title)}</div>${items.map(partRowHtml).join('')}`;
+  }
+  // 카테고리(예: 큐보) 단위로 묶고, 그 안에서 권별 섹션 + 맨 끝에 전체 권 합친 누적 섹션을 보여준다
+  // (큐보 2권을 만들려면 1권 부품도 있어야 하는 것처럼, 뒤 권은 앞 권 부품 위에 쌓이는 구조라서)
   function renderParts(parts){
     document.getElementById('partListEmpty').hidden = parts.length > 0;
     if (!parts.length) { document.getElementById('partListArea').innerHTML = ''; return; }
-    const groups = new Map();
+    const byCategoryKey = new Map();
     parts.forEach((p) => {
-      const key = partGroupTitle(p);
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(p);
+      const catKey = p.category || ('__subject__' + p.subject);
+      const catLabel = p.category ? categoryLabel(p.category) : (PART_SUBJECT_LABEL[p.subject] || p.subject);
+      if (!byCategoryKey.has(catKey)) byCategoryKey.set(catKey, { label: catLabel, byVolume: new Map(), noVolume: [] });
+      const g = byCategoryKey.get(catKey);
+      if (p.volume != null) {
+        if (!g.byVolume.has(p.volume)) g.byVolume.set(p.volume, []);
+        g.byVolume.get(p.volume).push(p);
+      } else {
+        g.noVolume.push(p);
+      }
     });
-    document.getElementById('partListArea').innerHTML = Array.from(groups.entries()).map(([title, items]) =>
-      `<div class="item-sub" style="font-weight:700; margin:10px 0 2px;">${escapeHtml(title)}</div>${items.map(partRowHtml).join('')}`
-    ).join('');
+    let html = '';
+    byCategoryKey.forEach((g) => {
+      const volumes = Array.from(g.byVolume.keys()).sort((a, b) => a - b);
+      if (g.noVolume.length) html += partSectionHtml(g.label + '-부품리스트', g.noVolume);
+      volumes.forEach((v) => { html += partSectionHtml(g.label + v + '권-부품리스트', g.byVolume.get(v)); });
+      if (volumes.length > 1) {
+        const merged = new Map();
+        volumes.forEach((v) => g.byVolume.get(v).forEach((p) => {
+          const key = p.name + '|' + (p.color || '');
+          if (!merged.has(key)) merged.set(key, { ...p, qty: 0, _merged: true });
+          merged.get(key).qty += (p.qty || 0);
+        }));
+        html += partSectionHtml(`${g.label} 1~${volumes[volumes.length - 1]}권 누적`, Array.from(merged.values()));
+      }
+    });
+    document.getElementById('partListArea').innerHTML = html;
   }
   async function loadParts(){
     try { renderParts((await adminApi({ action: 'list_parts' })).parts || []); }
