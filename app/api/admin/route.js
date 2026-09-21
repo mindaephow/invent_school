@@ -7,11 +7,11 @@
 // POST { action: 'create_teacher', name, email, phone?, password? } 본사에서 선생님 등록 (바로 승인됨)
 // POST { action: 'delete_teacher', teacherId }                      선생님 삭제 (수업·학생·학생 로그인 계정·과제까지 함께 삭제)
 // POST { action: 'list_parts' }                                      부품 카탈로그 목록 (이름·아이콘·과목만, 3D 모양은 코드로 별도 구현)
-// POST { action: 'add_part', name, icon, subject, category?, volume?, qty?, color? } 부품 카탈로그에 등록
+// POST { action: 'add_part', name, icon, subject, category?, volume?, qty?, color?, size? } 부품 카탈로그에 등록
 // POST { action: 'delete_part', partId }                             부품 카탈로그에서 삭제
 // POST { action: 'list_robot_categories' }                           로봇 커리큘럼 카테고리(브랜드·권 수) 목록
-// POST { action: 'add_robot_category', name, volumes }               로봇 카테고리 등록
-// POST { action: 'update_robot_category', categoryId, name, volumes } 로봇 카테고리 수정
+// POST { action: 'add_robot_category', name, volumes, description? }               로봇 카테고리 등록
+// POST { action: 'update_robot_category', categoryId, name, volumes, description? } 로봇 카테고리 수정
 // POST { action: 'delete_robot_category', categoryId }                로봇 카테고리 삭제
 // 헤더: Authorization: Bearer <관리자 access_token>
 //
@@ -94,13 +94,13 @@ const PART_SUBJECTS = ['goldberg', 'robot', 'aviation']
 async function listParts(sb) {
   const { data, error } = await sb.from('ivs_part_catalog').select('id, data, created_at').order('created_at', { ascending: true })
   if (error) throw new Error(error.message)
-  return (data || []).map((r) => ({ id: r.id, name: r.data?.name || '', icon: r.data?.icon || '', subject: r.data?.subject || '', category: r.data?.category || '', volume: r.data?.volume ?? null, qty: r.data?.qty ?? null, color: r.data?.color || '', createdAt: r.created_at }))
+  return (data || []).map((r) => ({ id: r.id, name: r.data?.name || '', icon: r.data?.icon || '', subject: r.data?.subject || '', category: r.data?.category || '', volume: r.data?.volume ?? null, qty: r.data?.qty ?? null, color: r.data?.color || '', size: r.data?.size || '', createdAt: r.created_at }))
 }
 
 async function listRobotCategories(sb) {
   const { data, error } = await sb.from('ivs_robot_categories').select('id, data, created_at').order('created_at', { ascending: true })
   if (error) throw new Error(error.message)
-  return (data || []).map((r) => ({ id: r.id, name: r.data?.name || '', volumes: r.data?.volumes || 0, createdAt: r.created_at }))
+  return (data || []).map((r) => ({ id: r.id, name: r.data?.name || '', volumes: r.data?.volumes || 0, description: r.data?.description || '', createdAt: r.created_at }))
 }
 
 export async function POST(request) {
@@ -185,11 +185,12 @@ export async function POST(request) {
       const volumeRaw = body.volume
       const volume = volumeRaw === '' || volumeRaw == null ? null : Number(volumeRaw)
       const color = String(body.color || '').trim()
+      const size = String(body.size || '').trim()
       if (!name) return json({ error: '부품 이름을 입력해주세요.' }, 400)
       if (!PART_SUBJECTS.includes(subject)) return json({ error: '과목을 선택해주세요.' }, 400)
       if (qty != null && (!Number.isInteger(qty) || qty < 1)) return json({ error: '수량은 1 이상 정수로 입력해주세요.' }, 400)
       if (volume != null && (!Number.isInteger(volume) || volume < 1)) return json({ error: '권은 1 이상 정수로 입력해주세요.' }, 400)
-      const { error } = await sb.from('ivs_part_catalog').insert({ data: { name, icon, subject, category: category || null, volume, qty, color: color || null, createdAt: Date.now() } })
+      const { error } = await sb.from('ivs_part_catalog').insert({ data: { name, icon, subject, category: category || null, volume, qty, color: color || null, size: size || null, createdAt: Date.now() } })
       if (error) throw new Error(error.message)
       return json({ ok: true, parts: await listParts(sb) })
     }
@@ -207,9 +208,10 @@ export async function POST(request) {
     if (body?.action === 'add_robot_category') {
       const name = String(body.name || '').trim()
       const volumes = Number(body.volumes)
+      const description = String(body.description || '').trim()
       if (!name) return json({ error: '카테고리 이름을 입력해주세요.' }, 400)
       if (!Number.isInteger(volumes) || volumes < 1) return json({ error: '권 수를 1 이상 정수로 입력해주세요.' }, 400)
-      const { error } = await sb.from('ivs_robot_categories').insert({ data: { name, volumes, createdAt: Date.now() } })
+      const { error } = await sb.from('ivs_robot_categories').insert({ data: { name, volumes, description: description || null, createdAt: Date.now() } })
       if (error) throw new Error(error.message)
       return json({ ok: true, categories: await listRobotCategories(sb) })
     }
@@ -218,13 +220,14 @@ export async function POST(request) {
       const categoryId = body.categoryId
       const name = String(body.name || '').trim()
       const volumes = Number(body.volumes)
+      const description = String(body.description || '').trim()
       if (typeof categoryId !== 'string') return json({ error: '잘못된 요청입니다.' }, 400)
       if (!name) return json({ error: '카테고리 이름을 입력해주세요.' }, 400)
       if (!Number.isInteger(volumes) || volumes < 1) return json({ error: '권 수를 1 이상 정수로 입력해주세요.' }, 400)
       const { data: row, error: getErr } = await sb.from('ivs_robot_categories').select('data').eq('id', categoryId).maybeSingle()
       if (getErr) throw new Error(getErr.message)
       if (!row) return json({ error: '카테고리를 찾지 못했습니다.' }, 404)
-      const { error } = await sb.from('ivs_robot_categories').update({ data: { ...row.data, name, volumes, updatedAt: Date.now() } }).eq('id', categoryId)
+      const { error } = await sb.from('ivs_robot_categories').update({ data: { ...row.data, name, volumes, description: description || null, updatedAt: Date.now() } }).eq('id', categoryId)
       if (error) throw new Error(error.message)
       return json({ ok: true, categories: await listRobotCategories(sb) })
     }

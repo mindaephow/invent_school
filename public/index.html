@@ -351,6 +351,7 @@
           <div><label>수량</label><input id="partQty" type="number" min="1" step="1" autocomplete="off"></div>
           <div><label>색상</label><input id="partColor" placeholder="예: 레드" autocomplete="off"></div>
         </div>
+        <div><label>사이즈</label><input id="partSize" placeholder="예: 15cm, M3" autocomplete="off"></div>
         <div class="row2">
           <div><label>과목</label><select id="partSubject" required><option value="goldberg">골드버그</option><option value="robot">로봇</option><option value="aviation">항공</option></select></div>
           <div id="partCategoryWrap"><label>카테고리 (로봇만)</label><select id="partCategory"><option value="">(전체 공통)</option></select></div>
@@ -377,6 +378,7 @@
           <div><label>카테고리 이름</label><input id="categoryName" required autocomplete="off"></div>
           <div><label>권 수</label><input id="categoryVolumes" type="number" min="1" step="1" required autocomplete="off"></div>
         </div>
+        <div><label>설명 (브랜드 전체 조립 방식 등)</label><textarea id="categoryDescription" rows="3"></textarea></div>
         <p class="note err" id="categoryMsg" hidden></p>
         <button type="submit" class="primary" id="categorySubmitBtn">등록</button>
       </form>
@@ -1332,7 +1334,7 @@
 
   function categoryLabel(id){ const c = robotCategories.find((x) => x.id === id); return c ? c.name : ''; }
   function partRowHtml(p){
-    const sub = [p.color, (p.qty != null ? p.qty + '개' : '')].filter(Boolean).join(' · ');
+    const sub = [p.size, p.color, (p.qty != null ? p.qty + '개' : '')].filter(Boolean).join(' · ');
     const btn = p._merged ? '' : `<button type="button" class="ghost" data-delete-part="${escapeHtml(p.id)}">삭제</button>`;
     return `<div class="design-row"><div class="item-main"><div class="item-title">${escapeHtml(p.icon ? p.icon + ' ' : '')}${escapeHtml(p.name)}</div><div class="item-sub">${escapeHtml(sub)}</div></div>${btn}</div>`;
   }
@@ -1405,7 +1407,7 @@
     try {
       const subject = document.getElementById('partSubject').value;
       const isRobot = subject === 'robot';
-      await adminApi({ action: 'add_part', name: document.getElementById('partName').value, icon: document.getElementById('partIcon').value, subject, category: isRobot ? document.getElementById('partCategory').value : '', volume: isRobot ? document.getElementById('partVolume').value : '', qty: document.getElementById('partQty').value, color: document.getElementById('partColor').value });
+      await adminApi({ action: 'add_part', name: document.getElementById('partName').value, icon: document.getElementById('partIcon').value, subject, category: isRobot ? document.getElementById('partCategory').value : '', volume: isRobot ? document.getElementById('partVolume').value : '', qty: document.getElementById('partQty').value, color: document.getElementById('partColor').value, size: document.getElementById('partSize').value });
       document.getElementById('partForm').reset();
       document.getElementById('partForm').hidden = true;
       document.getElementById('togglePartForm').textContent = '+ 부품 등록';
@@ -1423,7 +1425,8 @@
   });
 
   function categoryRowHtml(c){
-    return `<div class="design-row"><div class="item-main"><div class="item-title">${escapeHtml(c.name)}</div><div class="item-sub">${c.volumes}권</div></div><div style="display:flex; gap:8px;"><button type="button" class="ghost" data-edit-category="${escapeHtml(c.id)}">수정</button><button type="button" class="ghost" data-delete-category="${escapeHtml(c.id)}">삭제</button></div></div>`;
+    const desc = c.description ? `<div class="item-sub">${escapeHtml(c.description)}</div>` : '';
+    return `<div class="design-row" style="align-items:flex-start;"><div class="item-main"><div class="item-title">${escapeHtml(c.name)}</div><div class="item-sub">${c.volumes}권</div>${desc}</div><div style="display:flex; gap:8px;"><button type="button" class="ghost" data-edit-category="${escapeHtml(c.id)}">수정</button><button type="button" class="ghost" data-delete-category="${escapeHtml(c.id)}">삭제</button></div></div>`;
   }
   function renderCategories(){
     document.getElementById('categoryListArea').innerHTML = robotCategories.map(categoryRowHtml).join('');
@@ -1453,8 +1456,8 @@
     try {
       const editingId = document.getElementById('categoryEditId').value;
       const payload = editingId
-        ? { action: 'update_robot_category', categoryId: editingId, name: document.getElementById('categoryName').value, volumes: Number(document.getElementById('categoryVolumes').value) }
-        : { action: 'add_robot_category', name: document.getElementById('categoryName').value, volumes: Number(document.getElementById('categoryVolumes').value) };
+        ? { action: 'update_robot_category', categoryId: editingId, name: document.getElementById('categoryName').value, volumes: Number(document.getElementById('categoryVolumes').value), description: document.getElementById('categoryDescription').value }
+        : { action: 'add_robot_category', name: document.getElementById('categoryName').value, volumes: Number(document.getElementById('categoryVolumes').value), description: document.getElementById('categoryDescription').value };
       await adminApi(payload);
       resetCategoryForm();
       document.getElementById('categoryForm').hidden = true;
@@ -1471,6 +1474,7 @@
       document.getElementById('categoryEditId').value = c.id;
       document.getElementById('categoryName').value = c.name;
       document.getElementById('categoryVolumes').value = c.volumes;
+      document.getElementById('categoryDescription').value = c.description || '';
       document.getElementById('categorySubmitBtn').textContent = '수정 저장';
       document.getElementById('categoryForm').hidden = false;
       document.getElementById('toggleCategoryForm').textContent = '숨기기';

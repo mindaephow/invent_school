@@ -30,14 +30,15 @@
   }
   h3{margin:0 0 10px;}
   p{margin:0 0 8px; line-height:1.5;}
-  button, input, select{font-family:inherit; font-size:14px;}
+  button, input, select, textarea{font-family:inherit; font-size:14px;}
   button{cursor:pointer; border-radius:9px; border:1px solid var(--border); background:var(--surface); color:var(--ink); padding:9px 14px;}
   button:disabled{opacity:0.5; cursor:not-allowed;}
   button.primary{background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:600;}
   button.ghost{background:transparent;}
   button.danger-armed{background:var(--absent-bg); border-color:var(--absent); color:var(--absent); font-weight:700;}
-  input, select{border:1px solid var(--border); border-radius:8px; padding:8px 10px; background:var(--surface); color:var(--ink); width:100%;}
-  input:focus, select:focus, button:focus-visible{outline:2px solid var(--accent); outline-offset:1px;}
+  input, select, textarea{border:1px solid var(--border); border-radius:8px; padding:8px 10px; background:var(--surface); color:var(--ink); width:100%;}
+  textarea{resize:vertical;}
+  input:focus, select:focus, textarea:focus, button:focus-visible{outline:2px solid var(--accent); outline-offset:1px;}
   label{display:block; font-size:12px; color:var(--ink-soft); margin-bottom:4px; font-weight:600;}
 
   .app{max-width:840px; margin:0 auto;}
@@ -130,6 +131,7 @@
           <div><label for="pQty">수량</label><input id="pQty" type="number" min="1" step="1" autocomplete="off"></div>
           <div><label for="pColor">색상</label><input id="pColor" placeholder="예: 레드" autocomplete="off"></div>
         </div>
+        <div><label for="pSize">사이즈</label><input id="pSize" placeholder="예: 15cm, M3" autocomplete="off"></div>
         <div class="grid2">
           <div><label for="pSubject">과목</label><select id="pSubject" required><option value="goldberg">골드버그</option><option value="robot">로봇</option><option value="aviation">항공</option></select></div>
           <div id="pCategoryWrap"><label for="pCategory">카테고리 (로봇만)</label><select id="pCategory"><option value="">(전체 공통)</option></select></div>
@@ -149,6 +151,7 @@
           <div><label for="rName">카테고리 이름</label><input id="rName" required autocomplete="off"></div>
           <div><label for="rVolumes">권 수</label><input id="rVolumes" type="number" min="1" step="1" required autocomplete="off"></div>
         </div>
+        <div><label for="rDescription">설명 (브랜드 전체 조립 방식 등)</label><textarea id="rDescription" rows="3"></textarea></div>
         <p class="note err" id="createCategoryMsg" hidden></p>
         <button type="submit" class="primary" id="createCategoryBtn">등록</button>
       </form>
@@ -280,7 +283,7 @@
   const SUBJECT_LABEL = { goldberg: '골드버그', robot: '로봇', aviation: '항공' };
   function categoryName(id){ const c = categories.find((x) => x.id === id); return c ? c.name : ''; }
   function partRowHtml(p){
-    const sub = [p.color, (p.qty != null ? p.qty + '개' : '')].filter(Boolean).join(' · ');
+    const sub = [p.size, p.color, (p.qty != null ? p.qty + '개' : '')].filter(Boolean).join(' · ');
     const acts = p._merged ? '' : `<div class="acts"><button class="ghost" data-delete-part="${esc(p.id)}" data-armed-text="한 번 더 누르면 삭제돼요">삭제</button></div>`;
     return `<div class="row"><div class="who"><b>${esc(p.icon ? p.icon + ' ' : '')}${esc(p.name)}</b><span>${esc(sub)}</span></div>${acts}</div>`;
   }
@@ -350,7 +353,7 @@
     btn.disabled = true; m.hidden = true;
     try {
       const isRobot = $('pSubject').value === 'robot';
-      const data = await api({ action: 'add_part', name: $('pName').value, icon: $('pIcon').value, subject: $('pSubject').value, category: isRobot ? $('pCategory').value : '', volume: isRobot ? $('pVolume').value : '', qty: $('pQty').value, color: $('pColor').value }, await token());
+      const data = await api({ action: 'add_part', name: $('pName').value, icon: $('pIcon').value, subject: $('pSubject').value, category: isRobot ? $('pCategory').value : '', volume: isRobot ? $('pVolume').value : '', qty: $('pQty').value, color: $('pColor').value, size: $('pSize').value }, await token());
       $('createPartForm').reset();
       $('createPartForm').hidden = true;
       $('toggleCreatePart').textContent = '+ 부품 등록';
@@ -376,7 +379,8 @@
   });
 
   function categoryRowHtml(c){
-    return `<div class="row"><div class="who"><b>${esc(c.name)}</b><span>${c.volumes}권</span></div><div class="acts"><button class="ghost" data-edit-category="${esc(c.id)}">수정</button><button class="ghost" data-delete-category="${esc(c.id)}" data-armed-text="한 번 더 누르면 삭제돼요">삭제</button></div></div>`;
+    const desc = c.description ? `<p class="note" style="margin-top:4px;">${esc(c.description)}</p>` : '';
+    return `<div class="row" style="align-items:flex-start;"><div class="who"><b>${esc(c.name)}</b><span>${c.volumes}권</span>${desc}</div><div class="acts"><button class="ghost" data-edit-category="${esc(c.id)}">수정</button><button class="ghost" data-delete-category="${esc(c.id)}" data-armed-text="한 번 더 누르면 삭제돼요">삭제</button></div></div>`;
   }
   let categories = [];
   function renderCategories(){
@@ -407,8 +411,8 @@
     try {
       const editingId = $('rId').value;
       const payload = editingId
-        ? { action: 'update_robot_category', categoryId: editingId, name: $('rName').value, volumes: Number($('rVolumes').value) }
-        : { action: 'add_robot_category', name: $('rName').value, volumes: Number($('rVolumes').value) };
+        ? { action: 'update_robot_category', categoryId: editingId, name: $('rName').value, volumes: Number($('rVolumes').value), description: $('rDescription').value }
+        : { action: 'add_robot_category', name: $('rName').value, volumes: Number($('rVolumes').value), description: $('rDescription').value };
       const data = await api(payload, await token());
       resetCategoryForm();
       $('createCategoryForm').hidden = true;
@@ -426,6 +430,7 @@
       $('rId').value = c.id;
       $('rName').value = c.name;
       $('rVolumes').value = c.volumes;
+      $('rDescription').value = c.description || '';
       $('createCategoryBtn').textContent = '수정 저장';
       $('createCategoryForm').hidden = false;
       $('toggleCreateCategory').textContent = '숨기기';
