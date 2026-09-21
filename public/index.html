@@ -1361,16 +1361,16 @@
     byCategoryKey.forEach((g) => {
       const volumes = Array.from(g.byVolume.keys()).sort((a, b) => a - b);
       if (g.noVolume.length) html += partSectionHtml(g.label + '-부품리스트', g.noVolume);
-      volumes.forEach((v) => { html += partSectionHtml(g.label + v + '권-부품리스트', g.byVolume.get(v)); });
-      if (volumes.length > 1) {
-        const merged = new Map();
-        volumes.forEach((v) => g.byVolume.get(v).forEach((p) => {
+      const merged = new Map();
+      volumes.forEach((v, i) => {
+        html += partSectionHtml(g.label + v + '권-부품리스트', g.byVolume.get(v));
+        g.byVolume.get(v).forEach((p) => {
           const key = p.name + '|' + (p.color || '');
           if (!merged.has(key)) merged.set(key, { ...p, qty: 0, _merged: true });
           merged.get(key).qty += (p.qty || 0);
-        }));
-        html += partSectionHtml(`${g.label} 1~${volumes[volumes.length - 1]}권 누적`, Array.from(merged.values()));
-      }
+        });
+        if (i > 0) html += partSectionHtml(`${g.label} 1~${v}권 누적`, Array.from(merged.values()));
+      });
     });
     document.getElementById('partListArea').innerHTML = html;
   }
