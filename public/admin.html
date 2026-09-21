@@ -297,7 +297,7 @@
   }
   $('pSubject').addEventListener('change', syncPartCategoryVisibility);
   function partSectionHtml(title, items){
-    return `<h4 style="margin:16px 0 6px; font-size:13px; color:var(--ink-soft);">${esc(title)}</h4>${items.map(partRowHtml).join('')}`;
+    return `<details style="margin:14px 0;"><summary style="cursor:pointer; font-size:13px; font-weight:700; color:var(--ink-soft); padding:4px 0;">${esc(title)} <span style="font-weight:400;">(${items.length}개 종류)</span></summary>${items.map(partRowHtml).join('')}</details>`;
   }
   // 카테고리(예: 큐보) 단위로 묶고, 그 안에서 권별 섹션 + 맨 끝에 전체 권 합친 누적 섹션을 보여준다
   // (큐보 2권을 만들려면 1권 부품도 있어야 하는 것처럼, 뒤 권은 앞 권 부품 위에 쌓이는 구조라서)
