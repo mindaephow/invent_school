@@ -635,14 +635,27 @@
   const ROOM_HALF = 750, FLOOR_Y = 0, CEIL_Y = 1500, GRID_UNIT = 20;
 
   const PART_DEFS = window.IVS_PART_DEFS; // 부품 정의는 design-parts.js로 분리됨
+  // 설계 종류(design-select.html에서 넘어옴). 골드버그만 실제 커리큘럼·부품이 있고, 로봇·항공은 같은 화면에 빈 상태로 들어간다.
+  const SUBJECT = (new URLSearchParams(location.search).get('subject') || 'goldberg').toLowerCase();
+  const SUBJECT_LABEL = { goldberg: '골드버그', robot: '로봇', aviation: '항공' }[SUBJECT] || '골드버그';
   // 세트 정의는 design-sets.js로 분리됨(위치는 mm, 각도는 X·Y·Z °)
   const SETS = window.IVS_SETS;
 
   // 차시 카드(design-lessons.js의 데이터를 화면에 채움) — 지금은 첫 항목만 보여준다
   (function renderLessonCard(){
-    const lesson = (window.IVS_LESSONS || [])[0];
     const card = document.getElementById('lessonCard');
-    if (!lesson || !card) return;
+    if (!card) return;
+    if (SUBJECT !== 'goldberg') {
+      card.querySelector('.lesson-tag').textContent = SUBJECT_LABEL;
+      card.querySelector('.lesson-title').textContent = '아직 등록된 커리큘럼이 없어요';
+      card.querySelector('.lesson-sub').textContent = '';
+      card.querySelector('.lesson-concept').textContent = '';
+      card.querySelector('.lesson-mission').textContent = '곧 준비할게요.';
+      card.querySelector('.lesson-steps').innerHTML = '';
+      return;
+    }
+    const lesson = (window.IVS_LESSONS || [])[0];
+    if (!lesson) return;
     card.querySelector('.lesson-tag').textContent = lesson.tag;
     const pbLessonTag = document.getElementById('pbLessonTag');
     pbLessonTag.textContent = lesson.tag;
@@ -680,6 +693,21 @@
         if (project) project.data.lessonTag = lesson.tag; // 저장할 때 이 차시 연습인지 표시해서 불러오기 목록에서 묶어 보이게 한다
         setStatus('점선을 따라 부품을 놓아보세요.', 'success');
       });
+    }
+  })();
+
+  // 로봇·항공은 아직 부품이 정의되어 있지 않아 팔레트를 비운 상태로 보여준다(골드버그 부품 정의는 그대로 둔다)
+  (function renderPalette(){
+    if (SUBJECT === 'goldberg') return;
+    document.querySelectorAll('.side-group.palette').forEach(el => { el.hidden = true; });
+    const roadmapEl = document.querySelector('.roadmap');
+    if (roadmapEl) roadmapEl.hidden = true;
+    const sidebar = document.querySelector('.sidebar');
+    if (sidebar) {
+      const empty = document.createElement('section');
+      empty.className = 'side-group palette';
+      empty.innerHTML = '<p class="part-note">아직 등록된 부품이 없어요. 곧 준비할게요!</p>';
+      sidebar.appendChild(empty);
     }
   })();
 
