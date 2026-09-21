@@ -186,11 +186,39 @@ export async function POST(request) {
       const volume = volumeRaw === '' || volumeRaw == null ? null : Number(volumeRaw)
       const color = String(body.color || '').trim()
       const size = String(body.size || '').trim()
+      const imageSvg = String(body.imageSvg || '').trim()
       if (!name) return json({ error: '부품 이름을 입력해주세요.' }, 400)
       if (!PART_SUBJECTS.includes(subject)) return json({ error: '과목을 선택해주세요.' }, 400)
       if (qty != null && (!Number.isInteger(qty) || qty < 1)) return json({ error: '수량은 1 이상 정수로 입력해주세요.' }, 400)
       if (volume != null && (!Number.isInteger(volume) || volume < 1)) return json({ error: '권은 1 이상 정수로 입력해주세요.' }, 400)
-      const { error } = await sb.from('ivs_part_catalog').insert({ data: { name, icon, subject, category: category || null, volume, qty, color: color || null, size: size || null, createdAt: Date.now() } })
+      const { error } = await sb.from('ivs_part_catalog').insert({ data: { name, icon, subject, category: category || null, volume, qty, color: color || null, size: size || null, image_svg: imageSvg || null, createdAt: Date.now() } })
+      if (error) throw new Error(error.message)
+      return json({ ok: true, parts: await listParts(sb) })
+    }
+
+    if (body?.action === 'update_part') {
+      const partId = body.partId
+      if (typeof partId !== 'string') return json({ error: '잘못된 요청입니다.' }, 400)
+      const name = String(body.name || '').trim()
+      const icon = String(body.icon || '').trim()
+      const subject = String(body.subject || '')
+      const category = String(body.category || '').trim()
+      const qtyRaw = body.qty
+      const qty = qtyRaw === '' || qtyRaw == null ? null : Number(qtyRaw)
+      const volumeRaw = body.volume
+      const volume = volumeRaw === '' || volumeRaw == null ? null : Number(volumeRaw)
+      const color = String(body.color || '').trim()
+      const size = String(body.size || '').trim()
+      const imageSvg = String(body.imageSvg || '').trim()
+      if (!name) return json({ error: '부품 이름을 입력해주세요.' }, 400)
+      if (!PART_SUBJECTS.includes(subject)) return json({ error: '과목을 선택해주세요.' }, 400)
+      if (qty != null && (!Number.isInteger(qty) || qty < 1)) return json({ error: '수량은 1 이상 정수로 입력해주세요.' }, 400)
+      if (volume != null && (!Number.isInteger(volume) || volume < 1)) return json({ error: '권은 1 이상 정수로 입력해주세요.' }, 400)
+      const { data: existing, error: fetchErr } = await sb.from('ivs_part_catalog').select('data').eq('id', partId).maybeSingle()
+      if (fetchErr) throw new Error(fetchErr.message)
+      if (!existing) return json({ error: '부품을 찾을 수 없어요.' }, 404)
+      const createdAt = existing.data?.createdAt ?? Date.now()
+      const { error } = await sb.from('ivs_part_catalog').update({ data: { name, icon, subject, category: category || null, volume, qty, color: color || null, size: size || null, image_svg: imageSvg || null, createdAt } }).eq('id', partId)
       if (error) throw new Error(error.message)
       return json({ ok: true, parts: await listParts(sb) })
     }
