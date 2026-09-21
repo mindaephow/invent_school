@@ -214,6 +214,7 @@
     <button class="tab-btn" data-tab="attend">출석부</button>
     <button class="tab-btn" data-tab="curriculum">커리큘럼</button>
     <a class="tab-btn" href="design-select.html" style="text-decoration:none; cursor:pointer;">설계하기</a>
+    <button class="tab-btn" id="partsTabBtn" data-tab="parts" hidden>부품 관리</button>
     <a class="tab-btn" id="adminLink" href="admin.html" hidden style="text-decoration:none; cursor:pointer; margin-left:auto;">본사 관리자</a>
   </nav>
 
@@ -331,6 +332,53 @@
         <input type="file" id="curriculumBulkFileInput" accept=".xlsx,.xls,.csv" style="margin:10px 0;">
         <div id="curriculumBulkPreview"></div>
       </div>
+    </div>
+  </section>
+
+  <section id="tab-parts" hidden>
+    <div class="card">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+        <h3 style="font-size:15px; margin:0;">부품 등록</h3>
+        <button type="button" class="ghost" id="togglePartForm">+ 부품 등록</button>
+      </div>
+      <p class="note" style="margin-top:8px;">이름·아이콘만 등록해요. 실제 3D 모양·동작은 별도로 구현한 뒤에 설계 화면에서 쓸 수 있어요.</p>
+      <form id="partForm" class="add-form" hidden>
+        <div class="row2">
+          <div><label>부품 이름</label><input id="partName" required autocomplete="off"></div>
+          <div><label>아이콘 (이모지)</label><input id="partIcon" placeholder="예: 🤖" autocomplete="off"></div>
+        </div>
+        <div class="row2">
+          <div><label>과목</label><select id="partSubject" required><option value="robot">로봇</option><option value="aviation">항공</option></select></div>
+          <div id="partCategoryWrap"><label>카테고리 (로봇만)</label><select id="partCategory"><option value="">(전체 공통)</option></select></div>
+        </div>
+        <p class="note err" id="partMsg" hidden></p>
+        <button type="submit" class="primary">등록</button>
+      </form>
+    </div>
+    <div class="card">
+      <div class="list" id="partListArea"></div>
+      <p class="list-empty" id="partListEmpty" hidden>등록된 부품이 없어요.</p>
+    </div>
+
+    <div class="card">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+        <h3 style="font-size:15px; margin:0;">로봇 카테고리 관리</h3>
+        <button type="button" class="ghost" id="toggleCategoryForm">+ 카테고리 등록</button>
+      </div>
+      <p class="note" style="margin-top:8px;">브랜드 이름과 권 수만 등록해요. 실제 차시 내용은 나중에 채워요.</p>
+      <form id="categoryForm" class="add-form" hidden>
+        <input type="hidden" id="categoryEditId">
+        <div class="row2">
+          <div><label>카테고리 이름</label><input id="categoryName" required autocomplete="off"></div>
+          <div><label>권 수</label><input id="categoryVolumes" type="number" min="1" step="1" required autocomplete="off"></div>
+        </div>
+        <p class="note err" id="categoryMsg" hidden></p>
+        <button type="submit" class="primary" id="categorySubmitBtn">등록</button>
+      </form>
+    </div>
+    <div class="card">
+      <div class="list" id="categoryListArea"></div>
+      <p class="list-empty" id="categoryListEmpty" hidden>등록된 카테고리가 없어요.</p>
     </div>
   </section>
   </div>
@@ -456,7 +504,9 @@
     state.teacherName = info.name;
     authCard.hidden = true;
     appBody.hidden = false;
-    document.getElementById('adminLink').hidden = !(session.user.app_metadata && session.user.app_metadata.role === 'admin');
+    const isAdmin = !!(session.user.app_metadata && session.user.app_metadata.role === 'admin');
+    document.getElementById('adminLink').hidden = !isAdmin;
+    document.getElementById('partsTabBtn').hidden = !isAdmin;
     renderTeacherChip();
     renderHome();
     renderManage();
@@ -1263,6 +1313,135 @@
     reader.readAsArrayBuffer(file);
   });
 
+  // ---------- 부품·로봇 카테고리 관리 (admin.html과 같은 /api/admin을 씀. 같은 storageKey라 로그인 세션도 같음) ----------
+  async function adminApi(payload){
+    const { data: { session } } = await db.auth.getSession();
+    const res = await fetch('/api/admin', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (session ? session.access_token : '') }, body: JSON.stringify(payload) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || '요청을 처리하지 못했어요.');
+    return data;
+  }
+
+  const PART_SUBJECT_LABEL = { robot: '로봇', aviation: '항공' };
+  let robotCategories = [];
+
+  function categoryLabel(id){ const c = robotCategories.find((x) => x.id === id); return c ? c.name : ''; }
+  function partRowHtml(p){
+    const sub = [PART_SUBJECT_LABEL[p.subject] || p.subject, p.category ? categoryLabel(p.category) : ''].filter(Boolean).join(' · ');
+    return `<div class="design-row"><div class="item-main"><div class="item-title">${escapeHtml(p.icon ? p.icon + ' ' : '')}${escapeHtml(p.name)}</div><div class="item-sub">${escapeHtml(sub)}</div></div><button type="button" class="ghost" data-delete-part="${escapeHtml(p.id)}">삭제</button></div>`;
+  }
+  function renderParts(parts){
+    document.getElementById('partListArea').innerHTML = parts.map(partRowHtml).join('');
+    document.getElementById('partListEmpty').hidden = parts.length > 0;
+  }
+  async function loadParts(){
+    try { renderParts((await adminApi({ action: 'list_parts' })).parts || []); }
+    catch (err) { document.getElementById('partListArea').innerHTML = ''; document.getElementById('partListEmpty').hidden = false; document.getElementById('partListEmpty').textContent = err.message; }
+  }
+
+  function fillPartCategoryOptions(){
+    const sel = document.getElementById('partCategory');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">(전체 공통)</option>' + robotCategories.map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`).join('');
+    sel.value = cur;
+  }
+  function syncPartCategoryVisibility(){
+    document.getElementById('partCategoryWrap').hidden = document.getElementById('partSubject').value !== 'robot';
+  }
+  document.getElementById('partSubject').addEventListener('change', syncPartCategoryVisibility);
+
+  document.getElementById('togglePartForm').addEventListener('click', () => {
+    const f = document.getElementById('partForm');
+    f.hidden = !f.hidden;
+    document.getElementById('togglePartForm').textContent = f.hidden ? '+ 부품 등록' : '숨기기';
+    if (!f.hidden) syncPartCategoryVisibility();
+  });
+  document.getElementById('partForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('partForm').querySelector('button[type="submit"]'), m = document.getElementById('partMsg');
+    btn.disabled = true; m.hidden = true;
+    try {
+      const subject = document.getElementById('partSubject').value;
+      await adminApi({ action: 'add_part', name: document.getElementById('partName').value, icon: document.getElementById('partIcon').value, subject, category: subject === 'robot' ? document.getElementById('partCategory').value : '' });
+      document.getElementById('partForm').reset();
+      document.getElementById('partForm').hidden = true;
+      document.getElementById('togglePartForm').textContent = '+ 부품 등록';
+      await loadParts();
+    } catch (err) { m.textContent = err.message; m.hidden = false; }
+    finally { btn.disabled = false; }
+  });
+  document.getElementById('partListArea').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-delete-part]');
+    if (!btn) return;
+    armDeleteButton(btn, async () => {
+      try { await adminApi({ action: 'delete_part', partId: btn.dataset.deletePart }); await loadParts(); }
+      catch (err) { alert(err.message); }
+    });
+  });
+
+  function categoryRowHtml(c){
+    return `<div class="design-row"><div class="item-main"><div class="item-title">${escapeHtml(c.name)}</div><div class="item-sub">${c.volumes}권</div></div><div style="display:flex; gap:8px;"><button type="button" class="ghost" data-edit-category="${escapeHtml(c.id)}">수정</button><button type="button" class="ghost" data-delete-category="${escapeHtml(c.id)}">삭제</button></div></div>`;
+  }
+  function renderCategories(){
+    document.getElementById('categoryListArea').innerHTML = robotCategories.map(categoryRowHtml).join('');
+    document.getElementById('categoryListEmpty').hidden = robotCategories.length > 0;
+    fillPartCategoryOptions();
+  }
+  async function loadCategories(){
+    try { robotCategories = (await adminApi({ action: 'list_robot_categories' })).categories || []; renderCategories(); }
+    catch (err) { document.getElementById('categoryListArea').innerHTML = ''; document.getElementById('categoryListEmpty').hidden = false; document.getElementById('categoryListEmpty').textContent = err.message; }
+  }
+
+  function resetCategoryForm(){
+    document.getElementById('categoryForm').reset();
+    document.getElementById('categoryEditId').value = '';
+    document.getElementById('categorySubmitBtn').textContent = '등록';
+  }
+  document.getElementById('toggleCategoryForm').addEventListener('click', () => {
+    const f = document.getElementById('categoryForm');
+    if (!f.hidden && document.getElementById('categoryEditId').value) { resetCategoryForm(); f.hidden = true; document.getElementById('toggleCategoryForm').textContent = '+ 카테고리 등록'; return; }
+    f.hidden = !f.hidden;
+    document.getElementById('toggleCategoryForm').textContent = f.hidden ? '+ 카테고리 등록' : '숨기기';
+  });
+  document.getElementById('categoryForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('categorySubmitBtn'), m = document.getElementById('categoryMsg');
+    btn.disabled = true; m.hidden = true;
+    try {
+      const editingId = document.getElementById('categoryEditId').value;
+      const payload = editingId
+        ? { action: 'update_robot_category', categoryId: editingId, name: document.getElementById('categoryName').value, volumes: Number(document.getElementById('categoryVolumes').value) }
+        : { action: 'add_robot_category', name: document.getElementById('categoryName').value, volumes: Number(document.getElementById('categoryVolumes').value) };
+      await adminApi(payload);
+      resetCategoryForm();
+      document.getElementById('categoryForm').hidden = true;
+      document.getElementById('toggleCategoryForm').textContent = '+ 카테고리 등록';
+      await loadCategories();
+    } catch (err) { m.textContent = err.message; m.hidden = false; }
+    finally { btn.disabled = false; }
+  });
+  document.getElementById('categoryListArea').addEventListener('click', (e) => {
+    const editBtn = e.target.closest('[data-edit-category]');
+    if (editBtn) {
+      const c = robotCategories.find((x) => x.id === editBtn.dataset.editCategory);
+      if (!c) return;
+      document.getElementById('categoryEditId').value = c.id;
+      document.getElementById('categoryName').value = c.name;
+      document.getElementById('categoryVolumes').value = c.volumes;
+      document.getElementById('categorySubmitBtn').textContent = '수정 저장';
+      document.getElementById('categoryForm').hidden = false;
+      document.getElementById('toggleCategoryForm').textContent = '숨기기';
+      document.getElementById('categoryName').focus();
+      return;
+    }
+    const btn = e.target.closest('[data-delete-category]');
+    if (!btn) return;
+    armDeleteButton(btn, async () => {
+      try { await adminApi({ action: 'delete_robot_category', categoryId: btn.dataset.deleteCategory }); await loadCategories(); }
+      catch (err) { alert(err.message); }
+    });
+  });
+
   // ---------- tabs ----------
   document.querySelectorAll('button.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1271,8 +1450,10 @@
       document.getElementById('tab-manage').hidden = btn.dataset.tab !== 'manage';
       document.getElementById('tab-attend').hidden = btn.dataset.tab !== 'attend';
       document.getElementById('tab-curriculum').hidden = btn.dataset.tab !== 'curriculum';
+      document.getElementById('tab-parts').hidden = btn.dataset.tab !== 'parts';
       if (btn.dataset.tab === 'home') renderHome();
       if (btn.dataset.tab === 'curriculum') renderCurriculumList();
+      if (btn.dataset.tab === 'parts') { loadCategories(); loadParts(); }
     });
   });
 
