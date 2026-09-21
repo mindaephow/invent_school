@@ -94,7 +94,7 @@ const PART_SUBJECTS = ['goldberg', 'robot', 'aviation']
 async function listParts(sb) {
   const { data, error } = await sb.from('ivs_part_catalog').select('id, data, created_at').order('created_at', { ascending: true })
   if (error) throw new Error(error.message)
-  return (data || []).map((r) => ({ id: r.id, name: r.data?.name || '', icon: r.data?.icon || '', subject: r.data?.subject || '', category: r.data?.category || '', volume: r.data?.volume ?? null, qty: r.data?.qty ?? null, color: r.data?.color || '', size: r.data?.size || '', createdAt: r.created_at }))
+  return (data || []).map((r) => ({ id: r.id, name: r.data?.name || '', icon: r.data?.icon || '', subject: r.data?.subject || '', category: r.data?.category || '', volume: r.data?.volume ?? null, qty: r.data?.qty ?? null, color: r.data?.color || '', size: r.data?.size || '', imageSvg: r.data?.image_svg || '', createdAt: r.created_at }))
 }
 
 async function listRobotCategories(sb) {

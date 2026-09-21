@@ -1342,7 +1342,8 @@
   function partRowHtml(p){
     const sub = [p.size, p.color, (p.qty != null ? p.qty + '개' : '')].filter(Boolean).join(' · ');
     const btn = p._merged ? '' : `<button type="button" class="ghost" data-delete-part="${escapeHtml(p.id)}">삭제</button>`;
-    return `<div class="design-row"><div class="item-main"><div class="item-title">${escapeHtml(p.icon ? p.icon + ' ' : '')}${escapeHtml(p.name)}</div><div class="item-sub">${escapeHtml(sub)}</div></div>${btn}</div>`;
+    const thumb = p.imageSvg ? `<div style="width:44px; height:44px; flex:none; display:flex; align-items:center; justify-content:center; background:#fff; border:1px solid var(--border); border-radius:8px; overflow:hidden;">${p.imageSvg}</div>` : '';
+    return `<div class="design-row" style="align-items:center;">${thumb}<div class="item-main"><div class="item-title">${escapeHtml(p.icon ? p.icon + ' ' : '')}${escapeHtml(p.name)}</div><div class="item-sub">${escapeHtml(sub)}</div></div>${btn}</div>`;
   }
   function partSectionHtml(title, items){
     return `<details style="margin:10px 0;"><summary style="cursor:pointer; font-size:13px; font-weight:700; color:var(--ink-soft); padding:4px 0;">${escapeHtml(title)} <span style="font-weight:400;">(${items.length}개 종류)</span></summary>${items.map(partRowHtml).join('')}</details>`;
