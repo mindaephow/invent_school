@@ -679,6 +679,7 @@
       const cat = currentCategory();
       card.querySelector('.lesson-tag').textContent = cat.name + ' ' + volSel.value + '권';
       card.querySelector('.lesson-title').textContent = sessionSel.value + '차시 · 아직 등록된 실습이 없어요';
+      if (window.__renderVolumeParts) window.__renderVolumeParts(cat.id, Number(volSel.value));
     }
     catSel.addEventListener('change', () => { fillVolumes(); update(); });
     volSel.addEventListener('change', update);
@@ -765,10 +766,42 @@
     if (sidebar) {
       const empty = document.createElement('section');
       empty.className = 'side-group palette';
+      empty.id = 'volumePartsPalette';
       empty.innerHTML = '<p class="part-note">아직 등록된 부품이 없어요. 곧 준비할게요!</p>';
       sidebar.appendChild(empty);
     }
   })();
+
+  // 관리자가 등록한 부품 카탈로그(이름·수량·색상·사이즈)를 선택된 카테고리·권 기준으로 보여준다.
+  // 실제 3D 모양은 아직 없어서 놓을 수 없는 참고용 카드(잠김 스타일)로만 표시한다.
+  let robotPartsCache = [];
+  function renderVolumeParts(categoryId, volume){
+    const el = document.getElementById('volumePartsPalette');
+    if (!el) return;
+    const items = robotPartsCache.filter(p => p.category === categoryId && (p.volume == null || p.volume === volume));
+    if (!items.length) { el.innerHTML = '<p class="part-note">아직 등록된 부품이 없어요. 곧 준비할게요!</p>'; return; }
+    el.innerHTML = '<h2>' + volume + '권 부품</h2><div class="part-grid">' + items.map(p => {
+      const sub = [p.size, p.color, (p.qty != null ? p.qty + '개' : '')].filter(Boolean).join(' · ');
+      return '<button class="part-card locked" disabled><span class="part-icon locked-icon"></span>' + (p.icon ? p.icon + ' ' : '') + esc(p.name) + (sub ? '<br><small>' + esc(sub) + '</small>' : '') + '</button>';
+    }).join('') + '</div><p class="part-note">아직 3D로 놓을 순 없고, 어떤 부품이 있는지 참고만 할 수 있어요.</p>';
+  }
+  window.__renderVolumeParts = renderVolumeParts;
+  async function loadRobotPartsFromDb(){
+    if (SUBJECT !== 'robot' || !accessToken) return;
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/ivs_part_catalog?select=id,data&data->>subject=eq.robot`, {
+        headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + accessToken }
+      });
+      if (!res.ok) return;
+      const rows = await res.json();
+      robotPartsCache = (rows || []).map(r => ({ id: r.id, name: r.data && r.data.name, icon: r.data && r.data.icon, category: r.data && r.data.category, volume: r.data && r.data.volume, qty: r.data && r.data.qty, color: r.data && r.data.color, size: r.data && r.data.size }));
+      const picker = document.querySelector('.lesson-picker');
+      if (picker) {
+        const sels = picker.querySelectorAll('select');
+        if (sels.length >= 2) renderVolumeParts(sels[0].value, Number(sels[1].value));
+      }
+    } catch (err) { /* 못 불러오면 빈 상태 그대로 둔다 */ }
+  }
 
   const MARBLE_R = 8; // 지름 1.6cm(=16 units)
   const LBRACKET_PEG_OUT = 20, LBRACKET_PEG_IN = 2; // ㄱ자연결대 핀: 몸통 밖으로 나온 길이 2cm, 몸통 속에 박힌 길이 0.2cm
@@ -3026,7 +3059,7 @@
     lastActivity = Date.now();
     refreshSubmitBtn();
     setStatus(data.parts && data.parts.length ? '저장된 작업을 불러왔어요. 이어서 만들어보세요.' : '부품을 배치하고 재생을 눌러보세요.', null);
-    loadRobotCategoriesFromDb();
+    loadRobotCategoriesFromDb().then(loadRobotPartsFromDb);
   }
 
   // ----- 로그인 화면 -----
@@ -3120,7 +3153,7 @@
     lastActivity = Date.now();
     refreshSubmitBtn();
     setStatus('부품을 배치하고 재생을 눌러보세요.', null);
-    loadRobotCategoriesFromDb();
+    loadRobotCategoriesFromDb().then(loadRobotPartsFromDb);
   }
 
   function feedbackHtml(fb){
