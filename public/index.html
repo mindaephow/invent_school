@@ -362,6 +362,11 @@
       </form>
     </div>
     <div class="card">
+      <div class="crumbs" id="partSubjectTabs">
+        <button type="button" class="current" data-subject-tab="robot">로봇</button>
+        <button type="button" data-subject-tab="goldberg">골드버그</button>
+        <button type="button" data-subject-tab="aviation">항공</button>
+      </div>
       <div class="list" id="partListArea"></div>
       <p class="list-empty" id="partListEmpty" hidden>등록된 부품이 없어요.</p>
     </div>
@@ -1344,7 +1349,18 @@
   }
   // 카테고리(예: 큐보) 단위로 묶고, 그 안에서 권별 섹션 + 맨 끝에 전체 권 합친 누적 섹션을 보여준다
   // (큐보 2권을 만들려면 1권 부품도 있어야 하는 것처럼, 뒤 권은 앞 권 부품 위에 쌓이는 구조라서)
+  let allParts = [];
+  let partSubjectTab = 'robot';
+  document.getElementById('partSubjectTabs').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-subject-tab]');
+    if (!btn) return;
+    partSubjectTab = btn.dataset.subjectTab;
+    document.getElementById('partSubjectTabs').querySelectorAll('[data-subject-tab]').forEach((b) => b.classList.toggle('current', b === btn));
+    renderParts(allParts);
+  });
   function renderParts(parts){
+    allParts = parts;
+    parts = parts.filter((p) => p.subject === partSubjectTab);
     document.getElementById('partListEmpty').hidden = parts.length > 0;
     if (!parts.length) { document.getElementById('partListArea').innerHTML = ''; return; }
     const byCategoryKey = new Map();

@@ -140,6 +140,11 @@
         <p class="note err" id="createPartMsg" hidden></p>
         <button type="submit" class="primary" id="createPartBtn">등록</button>
       </form>
+      <div id="partSubjectTabs" style="display:flex; gap:6px; margin-top:10px;">
+        <button type="button" class="primary" data-subject-tab="robot">로봇</button>
+        <button type="button" class="ghost" data-subject-tab="goldberg">골드버그</button>
+        <button type="button" class="ghost" data-subject-tab="aviation">항공</button>
+      </div>
       <div id="partList"></div>
     </section>
     <section class="card">
@@ -304,7 +309,18 @@
   }
   // 카테고리(예: 큐보) 단위로 묶고, 그 안에서 권별 섹션 + 맨 끝에 전체 권 합친 누적 섹션을 보여준다
   // (큐보 2권을 만들려면 1권 부품도 있어야 하는 것처럼, 뒤 권은 앞 권 부품 위에 쌓이는 구조라서)
+  let allParts = [];
+  let partSubjectTab = 'robot';
+  $('partSubjectTabs').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-subject-tab]');
+    if (!btn) return;
+    partSubjectTab = btn.dataset.subjectTab;
+    $('partSubjectTabs').querySelectorAll('[data-subject-tab]').forEach((b) => b.className = b === btn ? 'primary' : 'ghost');
+    renderParts(allParts);
+  });
   function renderParts(parts){
+    allParts = parts;
+    parts = parts.filter((p) => p.subject === partSubjectTab);
     if (!parts.length) { $('partList').innerHTML = '<p class="empty">등록된 부품이 없어요.</p>'; return; }
     const byCategoryKey = new Map(); // categoryKey -> { label, byVolume: Map<volume, parts[]>, noVolume: parts[] }
     parts.forEach((p) => {
