@@ -124,6 +124,11 @@
       <p class="note">이름·아이콘만 등록해요. 실제 3D 모양·동작은 별도로 구현한 뒤에 설계 화면에서 쓸 수 있어요.</p>
       <form id="createPartForm" class="form" hidden>
         <div class="grid2">
+          <div><label for="pSubject">과목</label><select id="pSubject" required><option value="goldberg">골드버그</option><option value="robot">로봇</option><option value="aviation">항공</option></select></div>
+          <div id="pCategoryWrap"><label for="pCategory">카테고리 (로봇만)</label><select id="pCategory"><option value="">(전체 공통)</option></select></div>
+        </div>
+        <div id="pVolumeWrap"><label for="pVolume">권 (로봇만, 비우면 전체 공통)</label><input id="pVolume" type="number" min="1" step="1" autocomplete="off"></div>
+        <div class="grid2">
           <div><label for="pName">부품 이름</label><input id="pName" required autocomplete="off"></div>
           <div><label for="pIcon">아이콘 (이모지)</label><input id="pIcon" placeholder="예: 🤖" autocomplete="off"></div>
         </div>
@@ -132,11 +137,6 @@
           <div><label for="pColor">색상</label><input id="pColor" placeholder="예: 레드" autocomplete="off"></div>
         </div>
         <div><label for="pSize">사이즈</label><input id="pSize" placeholder="예: 15cm, M3" autocomplete="off"></div>
-        <div class="grid2">
-          <div><label for="pSubject">과목</label><select id="pSubject" required><option value="goldberg">골드버그</option><option value="robot">로봇</option><option value="aviation">항공</option></select></div>
-          <div id="pCategoryWrap"><label for="pCategory">카테고리 (로봇만)</label><select id="pCategory"><option value="">(전체 공통)</option></select></div>
-        </div>
-        <div id="pVolumeWrap"><label for="pVolume">권 (로봇만, 비우면 전체 공통)</label><input id="pVolume" type="number" min="1" step="1" autocomplete="off"></div>
         <p class="note err" id="createPartMsg" hidden></p>
         <button type="submit" class="primary" id="createPartBtn">등록</button>
       </form>
