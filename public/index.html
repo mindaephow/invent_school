@@ -355,6 +355,7 @@
           <div><label>과목</label><select id="partSubject" required><option value="robot">로봇</option><option value="aviation">항공</option></select></div>
           <div id="partCategoryWrap"><label>카테고리 (로봇만)</label><select id="partCategory"><option value="">(전체 공통)</option></select></div>
         </div>
+        <div id="partVolumeWrap"><label>권 (로봇만, 비우면 전체 공통)</label><input id="partVolume" type="number" min="1" step="1" autocomplete="off"></div>
         <p class="note err" id="partMsg" hidden></p>
         <button type="submit" class="primary">등록</button>
       </form>
@@ -1331,7 +1332,7 @@
 
   function categoryLabel(id){ const c = robotCategories.find((x) => x.id === id); return c ? c.name : ''; }
   function partRowHtml(p){
-    const sub = [PART_SUBJECT_LABEL[p.subject] || p.subject, p.category ? categoryLabel(p.category) : '', p.color, (p.qty != null ? p.qty + '개' : '')].filter(Boolean).join(' · ');
+    const sub = [PART_SUBJECT_LABEL[p.subject] || p.subject, p.category ? categoryLabel(p.category) : '', (p.volume != null ? p.volume + '권' : ''), p.color, (p.qty != null ? p.qty + '개' : '')].filter(Boolean).join(' · ');
     return `<div class="design-row"><div class="item-main"><div class="item-title">${escapeHtml(p.icon ? p.icon + ' ' : '')}${escapeHtml(p.name)}</div><div class="item-sub">${escapeHtml(sub)}</div></div><button type="button" class="ghost" data-delete-part="${escapeHtml(p.id)}">삭제</button></div>`;
   }
   function renderParts(parts){
@@ -1350,7 +1351,9 @@
     sel.value = cur;
   }
   function syncPartCategoryVisibility(){
-    document.getElementById('partCategoryWrap').hidden = document.getElementById('partSubject').value !== 'robot';
+    const isRobot = document.getElementById('partSubject').value === 'robot';
+    document.getElementById('partCategoryWrap').hidden = !isRobot;
+    document.getElementById('partVolumeWrap').hidden = !isRobot;
   }
   document.getElementById('partSubject').addEventListener('change', syncPartCategoryVisibility);
 
@@ -1366,7 +1369,8 @@
     btn.disabled = true; m.hidden = true;
     try {
       const subject = document.getElementById('partSubject').value;
-      await adminApi({ action: 'add_part', name: document.getElementById('partName').value, icon: document.getElementById('partIcon').value, subject, category: subject === 'robot' ? document.getElementById('partCategory').value : '', qty: document.getElementById('partQty').value, color: document.getElementById('partColor').value });
+      const isRobot = subject === 'robot';
+      await adminApi({ action: 'add_part', name: document.getElementById('partName').value, icon: document.getElementById('partIcon').value, subject, category: isRobot ? document.getElementById('partCategory').value : '', volume: isRobot ? document.getElementById('partVolume').value : '', qty: document.getElementById('partQty').value, color: document.getElementById('partColor').value });
       document.getElementById('partForm').reset();
       document.getElementById('partForm').hidden = true;
       document.getElementById('togglePartForm').textContent = '+ 부품 등록';
