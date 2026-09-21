@@ -205,7 +205,7 @@
   .scene-wrap{
     position:relative; background:var(--scene-bg); border:1px solid var(--panel-border);
     border-radius:16px; box-shadow:var(--shadow); overflow:hidden;
-    aspect-ratio:4/3; touch-action:none;
+    aspect-ratio:1/1; touch-action:none; flex-shrink:0;
   }
   .part-list{position:absolute; top:52px; left:10px; z-index:2; width:176px; background:var(--panel); border:1px solid var(--panel-border); border-radius:12px; box-shadow:var(--shadow); font-size:13px;}
   .part-list-head{display:flex; align-items:center; justify-content:space-between; width:100%; padding:7px 10px; font-weight:700; font-size:13px; background:transparent; border:0; color:var(--ink); cursor:pointer;}
@@ -283,6 +283,31 @@
   button.primary{background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:700;}
   button.ghost{background:transparent;}
   button.toggle.on{background:var(--blueprint); border-color:var(--blueprint); color:#fff;}
+  .play-timer{font-weight:700; font-size:16px; color:var(--ink);}
+  .record-badge{color:var(--success); background:var(--success-bg); padding:2px 10px; border-radius:999px;}
+  .confetti-piece{
+    position:absolute; top:-20px; width:8px; height:14px; opacity:0.95;
+    animation: confetti-fall 1.7s ease-in forwards; pointer-events:none; z-index:30;
+  }
+  @keyframes confetti-fall{
+    0%{ transform:translateY(0) rotate(0deg); opacity:1; }
+    100%{ transform:translateY(420px) rotate(560deg); opacity:0; }
+  }
+  .play-timer[hidden]{display:none;}
+  .play-panel{
+    position:fixed; left:50%; bottom:16px; transform:translateX(-50%);
+    background:var(--panel); border:1px solid var(--blueprint);
+    border-radius:16px; padding:10px 14px; box-shadow:var(--shadow);
+    z-index:850; display:flex; flex-direction:column; gap:6px;
+    width:400px;
+  }
+  .play-panel-head{display:flex; align-items:center; justify-content:space-between; gap:4px; cursor:grab; touch-action:none; font-size:11px; color:var(--ink-soft); font-weight:700;}
+  .play-panel-head:active{cursor:grabbing;}
+  .play-panel-head button{padding:2px 8px; font-size:12px; line-height:1.4; cursor:pointer;}
+  .play-panel-body{display:flex; flex-direction:column; gap:6px; min-height:112px;}
+  .play-panel.folded .play-panel-body{display:none;}
+  .play-row{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+  .play-row-label{font-size:11px; color:var(--ink-soft); font-weight:700; min-width:40px;}
   .status{flex-basis:100%; font-size:14px; color:var(--ink-soft); margin:0;}
   .status.success{color:var(--success); font-weight:700;}
   .status.warn{color:var(--warn); font-weight:700;}
@@ -529,9 +554,32 @@
         <button id="deletePart" class="danger">이 부품 삭제</button>
       </div>
 
+      <div class="play-panel" id="playPanel">
+        <div class="play-panel-head" id="playPanelHead">
+          <span><span class="drag-handle">⠿</span> 컨트롤 (끌어서 옮기기)</span>
+          <button type="button" class="ghost" id="playPanelFold" aria-label="컨트롤 접기" aria-expanded="true">▾</button>
+        </div>
+        <div class="play-panel-body" id="playPanelBody">
+          <div class="play-row">
+            <span class="play-row-label">구슬</span>
+            <button id="playBtn" class="primary">▶ 재생</button>
+            <button id="resetBtn">↺ 리셋</button>
+          </div>
+          <div class="play-row">
+            <span class="play-row-label">기록</span>
+            <span id="recordBadge" class="play-timer record-badge">🏁 0.0초</span>
+            <span id="confirmCountdown" class="play-timer" hidden>⏳ 확정까지 3.0초</span>
+          </div>
+          <div class="play-row">
+            <span class="play-row-label">초시계</span>
+            <span id="playTimer" class="play-timer">⏱ 0.0초</span>
+            <button id="timerPauseBtn" class="ghost">⏸ 퓨즈</button>
+            <button id="timerStopBtn" class="ghost">■ 중지</button>
+            <button id="timerResetBtn" class="ghost">↺ 리셋</button>
+          </div>
+        </div>
+      </div>
       <div class="controls">
-        <button id="playBtn" class="primary">▶ 재생</button>
-        <button id="resetBtn">↺ 다시 도전</button>
         <button id="clearBtn" class="ghost">전체 삭제</button>
         <p id="status" class="status">부품을 배치하고 재생을 눌러보세요.</p>
         <div class="rotate-row" id="holeCoordRow" hidden>
@@ -699,7 +747,7 @@
   let parts = [];
   let balls = []; // 재생 중인 공/구슬 { body, mesh, marble?, idle, done }
   let selected = null;
-  let playing = false;
+  let playing = false; // 지금 이 순간 물리 연산이 도는 중인지 (퓨즈로 잠깐 꺼질 수 있다)
   let succeeded = false;
   let partCounter = 0;
   let setCounter = 0; // 세트로 놓을 때마다 1씩 늘어나는 세트 번호
@@ -710,6 +758,44 @@
   const selectedLabel = document.getElementById('selectedLabel');
   const statusEl = document.getElementById('status');
   const buildGuide = document.getElementById('buildGuide');
+  const playBtnEl = document.getElementById('playBtn');
+  const playTimerEl = document.getElementById('playTimer');
+  const recordBadgeEl = document.getElementById('recordBadge');
+  const confirmCountdownEl = document.getElementById('confirmCountdown');
+  const GOAL_CONFIRM_MS = 3000; // 들어간 뒤 이만큼(3초) 안 나오면 확정
+  const timerPauseBtnEl = document.getElementById('timerPauseBtn');
+  const timerStopBtnEl = document.getElementById('timerStopBtn');
+  const timerResetBtnEl = document.getElementById('timerResetBtn');
+
+  // 초시계: 구슬 플레이어를 기본으로 따라가지만(재생하면 같이 가고, 퓨즈하면 같이 멈춤),
+  // 초시계 자체의 퓨즈/중지/리셋으로 구슬과 따로 조작할 수도 있다.
+  // elapsedMs: 지금까지 쌓인 시간(멈춰 있는 동안의 값). runSince: 지금 도는 중이면 그 시작 시각(performance.now()), 안 돌면 null.
+  let timerElapsedMs = 0;
+  let timerRunSince = null;
+  let timerLocked = false; // 중지(완전정지) 상태 — 리셋 전까지는 구슬이 재생돼도 같이 안 돈다
+  function timerNowSec(){ return (timerElapsedMs + (timerRunSince !== null ? performance.now() - timerRunSince : 0)) / 1000; }
+  function timerRender(){ playTimerEl.textContent = '⏱ ' + timerNowSec().toFixed(1) + '초'; }
+  function timerStart(){
+    if (timerLocked || timerRunSince !== null) return;
+    timerRunSince = performance.now();
+  }
+  function timerPause(){
+    if (timerRunSince === null) return;
+    timerElapsedMs += performance.now() - timerRunSince;
+    timerRunSince = null;
+  }
+  function timerHardStop(){
+    timerPause();
+    timerLocked = true;
+  }
+  function timerResetToZero(){
+    timerElapsedMs = 0;
+    timerRunSince = null;
+    timerLocked = false;
+    timerRender();
+    recordBadgeEl.textContent = '🏁 0.0초';
+    confirmCountdownEl.hidden = true;
+  }
 
   function setStatus(text, kind){
     statusEl.textContent = text;
@@ -1811,6 +1897,37 @@
     selectedControls.style.top = ny + 'px';
   });
   window.addEventListener('pointerup', () => { modalDrag = null; });
+
+  // 재생/초시계 컨트롤 패널도 3D 화면을 가리지 않게 끌어서 옮길 수 있게 한다
+  const playPanel = document.getElementById('playPanel');
+  const playPanelHead = document.getElementById('playPanelHead');
+  let playPanelDrag = null;
+  playPanelHead.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('#playPanelFold')) return;
+    const rect = playPanel.getBoundingClientRect();
+    playPanelDrag = { offsetX: e.clientX - rect.left, offsetY: e.clientY - rect.top };
+    playPanel.style.left = rect.left + 'px';
+    playPanel.style.top = rect.top + 'px';
+    playPanel.style.bottom = 'auto';
+    playPanel.style.transform = 'none';
+    e.preventDefault();
+  });
+  window.addEventListener('pointermove', (e) => {
+    if (!playPanelDrag) return;
+    const w = playPanel.offsetWidth, h = playPanel.offsetHeight;
+    const nx = Math.min(Math.max(e.clientX - playPanelDrag.offsetX, 4), window.innerWidth - w - 4);
+    const ny = Math.min(Math.max(e.clientY - playPanelDrag.offsetY, 4), window.innerHeight - h - 4);
+    playPanel.style.left = nx + 'px';
+    playPanel.style.top = ny + 'px';
+  });
+  window.addEventListener('pointerup', () => { playPanelDrag = null; });
+
+  document.getElementById('playPanelFold').addEventListener('click', () => {
+    const folded = playPanel.classList.toggle('folded');
+    document.getElementById('playPanelFold').textContent = folded ? '▸' : '▾';
+    document.getElementById('playPanelFold').setAttribute('aria-expanded', String(!folded));
+  });
+
   // ----- 회전: 축을 고르고 각도를 누르면 "그 축의 각도"가 그 값이 된다 (세계 기준으로 X → Y → Z 순서로 적용)
   const D2R = Math.PI / 180;
   const ROT_ORDER = 'ZYX';
@@ -1914,7 +2031,28 @@
     balls = [];
   }
 
+  function isRunInProgress(){
+    // succeeded는 확정 전까지 취소될 수 있으니, 실제로 끝났는지는 b.done만 본다
+    return balls.length > 0 && balls.some(b => !b.done);
+  }
+
   document.getElementById('playBtn').addEventListener('click', () => {
+    if (playing) {
+      // 재생 중 -> 퓨즈(일시정지). 구슬은 그 자리에 그대로 있고, 다시 누르면 이어서 간다
+      playing = false;
+      playBtnEl.textContent = '▶ 재생';
+      timerPause();
+      setStatus('⏸ 퓨즈했어요. 다시 재생을 누르면 이어서 굴러가요.', null);
+      return;
+    }
+    if (isRunInProgress()) {
+      // 퓨즈된 상태 -> 이어서 재생 (처음부터 다시 만들지 않는다)
+      playing = true;
+      playBtnEl.textContent = '⏸ 퓨즈';
+      timerStart();
+      setStatus('구슬이 굴러가고 있어요...', null);
+      return;
+    }
     const marbles = parts.filter(p => p.type === 'marble');
     if (!marbles.length) { setStatus('구슬을 먼저 놓아주세요.', 'warn'); return; }
     clearBalls();
@@ -1930,19 +2068,38 @@
     });
     playing = true;
     succeeded = false;
+    playBtnEl.textContent = '⏸ 퓨즈';
+    timerResetToZero();
+    timerStart();
     buildGuide.hidden = true;
     select(null);
     setStatus('구슬이 굴러가고 있어요...', null);
   });
 
+  // 초시계는 기본적으로 구슬 재생/퓨즈를 그대로 따라가지만, 아래 버튼으로 따로 조작할 수 있다
+  document.getElementById('timerPauseBtn').addEventListener('click', () => {
+    if (timerRunSince !== null) timerPause(); else timerStart();
+    timerRender();
+  });
+  document.getElementById('timerStopBtn').addEventListener('click', () => {
+    timerHardStop();
+    timerRender();
+  });
+  document.getElementById('timerResetBtn').addEventListener('click', () => {
+    timerResetToZero();
+    if (playing) timerStart(); // 구슬이 지금 굴러가는 중이면 리셋 즉시 다시 같이 돈다
+  });
+
   function stopPlay(){
     playing = false;
+    playBtnEl.textContent = '▶ 재생';
   }
 
   document.getElementById('resetBtn').addEventListener('click', () => {
     stopPlay();
     clearBalls();
     succeeded = false;
+    timerResetToZero();
     setStatus('부품을 배치하고 재생을 눌러보세요.', null);
   });
 
@@ -1964,47 +2121,98 @@
     parts.slice().forEach(removePart);
     clearBalls();
     succeeded = false;
+    timerResetToZero();
     select(null);
     buildGuide.hidden = true;
     setStatus('부품을 배치하고 재생을 눌러보세요.', null);
   });
 
   // 구슬이 도착 지점으로 정한 부품의 발밑 범위 안에 있는지(수평 거리·높이) 확인한다
-  function isBallAtGoal(p){
-    if (!goalTargetPart) return false;
+  // 도착 지점 위 입구 높이에 눈에 안 보이는 얇은 막(센서)을 둔다.
+  // withinR/withinY: 지금 그 안쪽 범위에 있는지. sensorY: 입구 높이(이걸 위→아래로 지나가면 "통과").
+  function goalContainment(p){
+    if (!goalTargetPart) return null;
     const gp = goalTargetPart.body.position;
     const def = PART_DEFS[goalTargetPart.type];
-    const r = Math.max(def.w, def.d) / 2 + MARBLE_R;
+    const r = Math.max(def.w, def.d) / 2 - MARBLE_R * 0.5;
     const dx = p.x - gp.x, dz = p.z - gp.z;
-    return Math.sqrt(dx * dx + dz * dz) < r && Math.abs(p.y - gp.y) < def.h + MARBLE_R * 2;
+    const withinR = Math.sqrt(dx * dx + dz * dz) < r;
+    const sensorY = gp.y + def.h / 2 - MARBLE_R; // 입구에서 구슬 하나만큼 안쪽 높이
+    const withinY = p.y < sensorY && p.y > gp.y - def.h / 2 - MARBLE_R;
+    return { withinR, sensorY, inside: withinR && withinY };
+  }
+  function celebrateSuccess(){
+    const colors = ['#FF8659', '#4FCB78', '#6FA0FF', '#FFD84A', '#F27C78', '#8A7442'];
+    for (let i = 0; i < 40; i++) {
+      const el = document.createElement('div');
+      el.className = 'confetti-piece';
+      el.style.left = (Math.random() * 100) + '%';
+      el.style.background = colors[Math.floor(Math.random() * colors.length)];
+      el.style.animationDelay = (Math.random() * 0.35) + 's';
+      sceneWrap.appendChild(el);
+      setTimeout(() => el.remove(), 2200);
+    }
   }
   function checkGoalAndIdle(){
-    if (!balls.length || succeeded) return;
+    if (!balls.length) return;
     let active = 0;
     for (const b of balls) {
       if (b.done) continue;
       const p = b.body.position;
       if (p.y < -300) { b.done = 'fell'; continue; }
+      const g = goalContainment(p);
+      const prevY = b.prevY === undefined ? p.y : b.prevY;
+      b.prevY = p.y;
       const v = b.body.velocity;
       const speed = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-      if (speed < 4) b.idle++; else b.idle = 0;
-      if (b.idle > 90) {
-        // 구슬이 멈췄을 때, 그 자리가 도착 지점 안이면 성공
-        if (isBallAtGoal(p)) {
+
+      if (!b.inGoal) {
+        // 아직 안 들어간 상태 — 입구를 위에서 아래로 통과하는 순간만 잡는다.
+        // 통과해도 재생·초시계 둘 다 계속 흘러가고, 그 순간의 초만 "기록 후보"로 따로 저장해둔다.
+        if (g && g.withinR && prevY >= g.sensorY && p.y < g.sensorY) {
+          b.inGoal = true;
+          b.inGoalSince = performance.now();
+          b.recordSec = timerNowSec();
+          recordBadgeEl.textContent = '🏁 ' + b.recordSec.toFixed(1) + '초';
+          confirmCountdownEl.hidden = false;
+        } else {
+          if (speed < 4) b.idle++; else b.idle = 0;
+          if (b.idle > 90) { b.done = 'stopped'; continue; } // 도착 지점 밖에서 멈추면 실패
+        }
+      } else if (!g.inside) {
+        // 들어갔다가 충격 등으로 다시 튕겨나갔다 — 저장해둔 기록 후보를 버리고 다시 굴러가는 중으로
+        b.inGoal = false;
+        b.idle = 0;
+        b.recordSec = null;
+        recordBadgeEl.textContent = '🏁 0.0초';
+        confirmCountdownEl.hidden = true;
+      } else {
+        // 안에 있는 채로(계속 굴러다녀도 상관없다) — 통과한 뒤 3초 동안 안 나오면 그때 확정된다
+        const leftMs = GOAL_CONFIRM_MS - (performance.now() - b.inGoalSince);
+        if (leftMs <= 0) {
           succeeded = true;
-          setStatus('🎉 성공! 목표 지점에 도착했어요', 'success');
+          b.done = 'goal';
+          stopPlay();
+          timerPause();
+          confirmCountdownEl.hidden = true;
+          playTimerEl.textContent = '⏱ ' + b.recordSec.toFixed(1) + '초';
+          setStatus(`🎉 성공! 목표 지점에 도착했어요 (${b.recordSec.toFixed(1)}초)`, 'success');
           buildGuide.hidden = false;
+          celebrateSuccess();
           return;
         }
-        b.done = 'stopped';
-        continue;
+        confirmCountdownEl.textContent = '⏳ 확정까지 ' + (leftMs / 1000).toFixed(1) + '초';
       }
       active++;
     }
     if (active === 0) {
       stopPlay();
-      if (balls.every(b => b.done === 'fell')) setStatus('구슬이 바닥 밖으로 떨어졌어요. 구조를 다시 확인해보세요.', 'warn');
-      else setStatus('구슬이 멈췄어요! 구조를 조절하고 다시 도전해보세요.', 'warn');
+      timerPause();
+      timerRender();
+      if (!balls.some(b => b.done === 'goal')) {
+        if (balls.every(b => b.done === 'fell')) setStatus('❌ 실패! 구슬이 바닥 밖으로 떨어졌어요. 구조를 다시 확인해보세요.', 'warn');
+        else setStatus('❌ 실패! 목표 지점 밖에서 멈췄어요. 구조를 조절하고 다시 도전해보세요.', 'warn');
+      }
     }
   }
 
@@ -2391,6 +2599,7 @@
       world.step(1 / 60);
       checkGoalAndIdle();
     }
+    if (timerRunSince !== null) timerRender();
     applyJoins();
     parts.forEach(p => {
       p.mesh.position.copy(p.body.position);
