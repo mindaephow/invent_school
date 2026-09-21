@@ -131,7 +131,7 @@
           <div><label for="pColor">색상</label><input id="pColor" placeholder="예: 레드" autocomplete="off"></div>
         </div>
         <div class="grid2">
-          <div><label for="pSubject">과목</label><select id="pSubject" required><option value="robot">로봇</option><option value="aviation">항공</option></select></div>
+          <div><label for="pSubject">과목</label><select id="pSubject" required><option value="goldberg">골드버그</option><option value="robot">로봇</option><option value="aviation">항공</option></select></div>
           <div id="pCategoryWrap"><label for="pCategory">카테고리 (로봇만)</label><select id="pCategory"><option value="">(전체 공통)</option></select></div>
         </div>
         <div id="pVolumeWrap"><label for="pVolume">권 (로봇만, 비우면 전체 공통)</label><input id="pVolume" type="number" min="1" step="1" autocomplete="off"></div>
@@ -277,7 +277,7 @@
     finally { btn.disabled = false; }
   });
 
-  const SUBJECT_LABEL = { robot: '로봇', aviation: '항공' };
+  const SUBJECT_LABEL = { goldberg: '골드버그', robot: '로봇', aviation: '항공' };
   function categoryName(id){ const c = categories.find((x) => x.id === id); return c ? c.name : ''; }
   function partRowHtml(p){
     const sub = [p.color, (p.qty != null ? p.qty + '개' : '')].filter(Boolean).join(' · ');

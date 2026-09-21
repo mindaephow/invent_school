@@ -89,7 +89,7 @@ async function listTeachers(sb) {
   }))
 }
 
-const PART_SUBJECTS = ['robot', 'aviation']
+const PART_SUBJECTS = ['goldberg', 'robot', 'aviation']
 
 async function listParts(sb) {
   const { data, error } = await sb.from('ivs_part_catalog').select('id, data, created_at').order('created_at', { ascending: true })

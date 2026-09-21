@@ -352,7 +352,7 @@
           <div><label>색상</label><input id="partColor" placeholder="예: 레드" autocomplete="off"></div>
         </div>
         <div class="row2">
-          <div><label>과목</label><select id="partSubject" required><option value="robot">로봇</option><option value="aviation">항공</option></select></div>
+          <div><label>과목</label><select id="partSubject" required><option value="goldberg">골드버그</option><option value="robot">로봇</option><option value="aviation">항공</option></select></div>
           <div id="partCategoryWrap"><label>카테고리 (로봇만)</label><select id="partCategory"><option value="">(전체 공통)</option></select></div>
         </div>
         <div id="partVolumeWrap"><label>권 (로봇만, 비우면 전체 공통)</label><input id="partVolume" type="number" min="1" step="1" autocomplete="off"></div>
@@ -1327,7 +1327,7 @@
     return data;
   }
 
-  const PART_SUBJECT_LABEL = { robot: '로봇', aviation: '항공' };
+  const PART_SUBJECT_LABEL = { goldberg: '골드버그', robot: '로봇', aviation: '항공' };
   let robotCategories = [];
 
   function categoryLabel(id){ const c = robotCategories.find((x) => x.id === id); return c ? c.name : ''; }
