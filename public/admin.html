@@ -145,6 +145,7 @@
         <button type="button" class="ghost" data-subject-tab="goldberg">골드버그</button>
         <button type="button" class="ghost" data-subject-tab="aviation">항공</button>
       </div>
+      <div id="partCategoryTabs" style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;" hidden></div>
       <div id="partList"></div>
     </section>
     <section class="card">
@@ -311,21 +312,29 @@
   // (큐보 2권을 만들려면 1권 부품도 있어야 하는 것처럼, 뒤 권은 앞 권 부품 위에 쌓이는 구조라서)
   let allParts = [];
   let partSubjectTab = 'robot';
+  let partCategoryTab = null; // 분류(카테고리) 탭에서 선택된 categoryKey — 분류가 둘 이상일 때만 사용
   $('partSubjectTabs').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-subject-tab]');
     if (!btn) return;
     partSubjectTab = btn.dataset.subjectTab;
+    partCategoryTab = null;
     $('partSubjectTabs').querySelectorAll('[data-subject-tab]').forEach((b) => b.className = b === btn ? 'primary' : 'ghost');
+    renderParts(allParts);
+  });
+  $('partCategoryTabs').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-category-tab]');
+    if (!btn) return;
+    partCategoryTab = btn.dataset.categoryTab;
     renderParts(allParts);
   });
   function renderParts(parts){
     allParts = parts;
     parts = parts.filter((p) => p.subject === partSubjectTab);
-    if (!parts.length) { $('partList').innerHTML = '<p class="empty">등록된 부품이 없어요.</p>'; return; }
+    if (!parts.length) { $('partCategoryTabs').hidden = true; $('partCategoryTabs').innerHTML = ''; $('partList').innerHTML = '<p class="empty">등록된 부품이 없어요.</p>'; return; }
     const byCategoryKey = new Map(); // categoryKey -> { label, byVolume: Map<volume, parts[]>, noVolume: parts[] }
     parts.forEach((p) => {
       const catKey = p.category || ('__subject__' + p.subject);
-      const catLabel = p.category ? categoryName(p.category) : (SUBJECT_LABEL[p.subject] || p.subject);
+      const catLabel = p.category ? categoryName(p.category) : '공통';
       if (!byCategoryKey.has(catKey)) byCategoryKey.set(catKey, { label: catLabel, byVolume: new Map(), noVolume: [] });
       const g = byCategoryKey.get(catKey);
       if (p.volume != null) {
@@ -335,22 +344,35 @@
         g.noVolume.push(p);
       }
     });
+    // 로봇 탭 하단엔 분류(예: 큐보, 메타)를 항상 선택 탭으로 보여준다
+    const keys = Array.from(byCategoryKey.keys());
+    if (partSubjectTab === 'robot') {
+      if (!partCategoryTab || !byCategoryKey.has(partCategoryTab)) partCategoryTab = keys[0];
+      $('partCategoryTabs').hidden = false;
+      $('partCategoryTabs').innerHTML = keys.map((k) => `<button type="button" class="${k === partCategoryTab ? 'primary' : 'ghost'}" data-category-tab="${esc(k)}">${esc(byCategoryKey.get(k).label)}</button>`).join('');
+    } else {
+      partCategoryTab = null;
+      $('partCategoryTabs').hidden = true;
+      $('partCategoryTabs').innerHTML = '';
+    }
+    const keysToRender = partCategoryTab ? [partCategoryTab] : keys;
     let html = '';
-    byCategoryKey.forEach((g) => {
+    keysToRender.forEach((key) => {
+      const g = byCategoryKey.get(key);
       const volumes = Array.from(g.byVolume.keys()).sort((a, b) => a - b);
       if (g.noVolume.length) html += partSectionHtml(g.label + '-부품리스트', g.noVolume);
       const merged = new Map(); // name+color -> {part, qty} — 지금까지(1권~현재 권)의 누적
       volumes.forEach((v, i) => {
         html += partSectionHtml(g.label + v + '권-부품리스트', g.byVolume.get(v));
         g.byVolume.get(v).forEach((p) => {
-          const key = p.name + '|' + (p.color || '');
-          if (!merged.has(key)) merged.set(key, { ...p, qty: 0, _merged: true });
-          merged.get(key).qty += (p.qty || 0);
+          const key2 = p.name + '|' + (p.color || '');
+          if (!merged.has(key2)) merged.set(key2, { ...p, qty: 0, _merged: true });
+          merged.get(key2).qty += (p.qty || 0);
         });
         if (i > 0) html += partSectionHtml(`${g.label} 1~${v}권 누적`, Array.from(merged.values()).map((p) => ({ ...p })));
       });
     });
-    $('partList').innerHTML = html;
+    $('partList').innerHTML = html || '<p class="empty">등록된 부품이 없어요.</p>';
   }
   async function loadParts(){
     const data = await api({ action: 'list_parts' }, await token());

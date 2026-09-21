@@ -390,6 +390,7 @@
         <button type="button" data-subject-tab="goldberg">골드버그</button>
         <button type="button" data-subject-tab="aviation">항공</button>
       </div>
+      <div class="crumbs" id="partCategoryTabs" hidden style="margin-top:6px;"></div>
       <div class="list" id="partListArea"></div>
       <p class="list-empty" id="partListEmpty" hidden>등록된 부품이 없어요.</p>
     </div>
@@ -1439,11 +1440,19 @@
   // (큐보 2권을 만들려면 1권 부품도 있어야 하는 것처럼, 뒤 권은 앞 권 부품 위에 쌓이는 구조라서)
   let allParts = [];
   let partSubjectTab = 'robot';
+  let partCategoryTab = null;
   document.getElementById('partSubjectTabs').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-subject-tab]');
     if (!btn) return;
     partSubjectTab = btn.dataset.subjectTab;
+    partCategoryTab = null;
     document.getElementById('partSubjectTabs').querySelectorAll('[data-subject-tab]').forEach((b) => b.classList.toggle('current', b === btn));
+    renderParts(allParts);
+  });
+  document.getElementById('partCategoryTabs').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-category-tab]');
+    if (!btn) return;
+    partCategoryTab = btn.dataset.categoryTab;
     renderParts(allParts);
   });
   function renderParts(parts){
@@ -1451,7 +1460,8 @@
     document.querySelectorAll('#partSubjectTabs [data-subject-tab]').forEach((b) => b.classList.toggle('current', b.dataset.subjectTab === partSubjectTab));
     parts = parts.filter((p) => p.subject === partSubjectTab);
     document.getElementById('partListEmpty').hidden = parts.length > 0;
-    if (!parts.length) { document.getElementById('partListArea').innerHTML = ''; return; }
+    const catTabsEl = document.getElementById('partCategoryTabs');
+    if (!parts.length) { document.getElementById('partListArea').innerHTML = ''; catTabsEl.hidden = true; catTabsEl.innerHTML = ''; return; }
     const byCategoryKey = new Map();
     parts.forEach((p) => {
       const catKey = p.category || ('__subject__' + p.subject);
@@ -1465,8 +1475,19 @@
         g.noVolume.push(p);
       }
     });
+    const catKeys = Array.from(byCategoryKey.keys());
+    if (partSubjectTab === 'robot') {
+      if (!partCategoryTab || !byCategoryKey.has(partCategoryTab)) partCategoryTab = catKeys[0];
+      catTabsEl.hidden = false;
+      catTabsEl.innerHTML = catKeys.map((k) => `<button type="button" class="${k === partCategoryTab ? 'current' : ''}" data-category-tab="${escapeHtml(k)}">${escapeHtml(byCategoryKey.get(k).label || '기타')}</button>`).join('');
+    } else {
+      catTabsEl.hidden = true;
+      catTabsEl.innerHTML = '';
+      partCategoryTab = null;
+    }
     let html = '';
-    byCategoryKey.forEach((g) => {
+    byCategoryKey.forEach((g, key) => {
+      if (partSubjectTab === 'robot' && key !== partCategoryTab) return;
       const volumes = Array.from(g.byVolume.keys()).sort((a, b) => a - b);
       if (g.noVolume.length) html += partSectionHtml(g.label + '-부품리스트', g.noVolume);
       const merged = new Map();
