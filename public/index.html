@@ -556,6 +556,13 @@
     if (back.get('tab') === 'attend' && back.get('course')) {
       history.replaceState(null, '', location.pathname);
       openAttendanceFor(back.get('course'));
+    } else {
+      let savedTab = null;
+      try { savedTab = sessionStorage.getItem('ivs-active-tab'); } catch (e) {}
+      if (savedTab && savedTab !== 'home') {
+        const savedBtn = document.querySelector(`.tab-btn[data-tab="${savedTab}"]`);
+        if (savedBtn && !savedBtn.hidden) savedBtn.click();
+      }
     }
   }
   db.auth.onAuthStateChange((event, session) => { setTimeout(() => applySession(session), 0); });
@@ -1419,7 +1426,7 @@
     const editBtn = p._merged ? '' : `<button type="button" class="ghost" data-edit-part="${escapeHtml(p.id)}">수정</button>`;
     const delBtn = p._merged ? '' : `<button type="button" class="ghost" data-delete-part="${escapeHtml(p.id)}">삭제</button>`;
     const thumb = p.imageSvg ? `<button type="button" class="part-thumb" data-view-image="${escapeHtml(p.id)}">${p.imageSvg}</button>` : '';
-    return `<div class="design-row" style="align-items:center;"><div class="item-main"><div class="item-title">${escapeHtml(p.icon ? p.icon + ' ' : '')}${escapeHtml(p.name)}</div><div class="item-sub">${escapeHtml(sub)}</div></div>${thumb}${editBtn}${delBtn}</div>`;
+    return `<div class="design-row" style="align-items:center;"><div class="item-main"><div class="item-title">${escapeHtml(p.icon ? p.icon + ' ' : '')}${escapeHtml(p.name)}</div><div class="item-sub">${escapeHtml(sub)}</div></div><div style="display:flex; align-items:center; gap:8px; flex:none;">${thumb}${editBtn}${delBtn}</div></div>`;
   }
   function partSectionHtml(title, items){
     return `<details style="margin:10px 0;"><summary style="cursor:pointer; font-size:13px; font-weight:700; color:var(--ink-soft); padding:4px 0;">${escapeHtml(title)} <span style="font-weight:400;">(${items.length}개 종류)</span></summary>${items.map(partRowHtml).join('')}</details>`;
@@ -1640,6 +1647,7 @@
   // ---------- tabs ----------
   document.querySelectorAll('button.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
+      try { sessionStorage.setItem('ivs-active-tab', btn.dataset.tab); } catch (e) {}
       document.querySelectorAll('button.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
       document.getElementById('tab-home').hidden = btn.dataset.tab !== 'home';
       document.getElementById('tab-manage').hidden = btn.dataset.tab !== 'manage';
