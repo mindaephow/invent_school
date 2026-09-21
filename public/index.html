@@ -348,6 +348,10 @@
           <div><label>아이콘 (이모지)</label><input id="partIcon" placeholder="예: 🤖" autocomplete="off"></div>
         </div>
         <div class="row2">
+          <div><label>수량</label><input id="partQty" type="number" min="1" step="1" autocomplete="off"></div>
+          <div><label>색상</label><input id="partColor" placeholder="예: 레드" autocomplete="off"></div>
+        </div>
+        <div class="row2">
           <div><label>과목</label><select id="partSubject" required><option value="robot">로봇</option><option value="aviation">항공</option></select></div>
           <div id="partCategoryWrap"><label>카테고리 (로봇만)</label><select id="partCategory"><option value="">(전체 공통)</option></select></div>
         </div>
@@ -1327,7 +1331,7 @@
 
   function categoryLabel(id){ const c = robotCategories.find((x) => x.id === id); return c ? c.name : ''; }
   function partRowHtml(p){
-    const sub = [PART_SUBJECT_LABEL[p.subject] || p.subject, p.category ? categoryLabel(p.category) : ''].filter(Boolean).join(' · ');
+    const sub = [PART_SUBJECT_LABEL[p.subject] || p.subject, p.category ? categoryLabel(p.category) : '', p.color, (p.qty != null ? p.qty + '개' : '')].filter(Boolean).join(' · ');
     return `<div class="design-row"><div class="item-main"><div class="item-title">${escapeHtml(p.icon ? p.icon + ' ' : '')}${escapeHtml(p.name)}</div><div class="item-sub">${escapeHtml(sub)}</div></div><button type="button" class="ghost" data-delete-part="${escapeHtml(p.id)}">삭제</button></div>`;
   }
   function renderParts(parts){
@@ -1362,7 +1366,7 @@
     btn.disabled = true; m.hidden = true;
     try {
       const subject = document.getElementById('partSubject').value;
-      await adminApi({ action: 'add_part', name: document.getElementById('partName').value, icon: document.getElementById('partIcon').value, subject, category: subject === 'robot' ? document.getElementById('partCategory').value : '' });
+      await adminApi({ action: 'add_part', name: document.getElementById('partName').value, icon: document.getElementById('partIcon').value, subject, category: subject === 'robot' ? document.getElementById('partCategory').value : '', qty: document.getElementById('partQty').value, color: document.getElementById('partColor').value });
       document.getElementById('partForm').reset();
       document.getElementById('partForm').hidden = true;
       document.getElementById('togglePartForm').textContent = '+ 부품 등록';

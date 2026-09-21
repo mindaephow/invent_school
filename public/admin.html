@@ -127,6 +127,10 @@
           <div><label for="pIcon">아이콘 (이모지)</label><input id="pIcon" placeholder="예: 🤖" autocomplete="off"></div>
         </div>
         <div class="grid2">
+          <div><label for="pQty">수량</label><input id="pQty" type="number" min="1" step="1" autocomplete="off"></div>
+          <div><label for="pColor">색상</label><input id="pColor" placeholder="예: 레드" autocomplete="off"></div>
+        </div>
+        <div class="grid2">
           <div><label for="pSubject">과목</label><select id="pSubject" required><option value="robot">로봇</option><option value="aviation">항공</option></select></div>
           <div id="pCategoryWrap"><label for="pCategory">카테고리 (로봇만)</label><select id="pCategory"><option value="">(전체 공통)</option></select></div>
         </div>
@@ -275,7 +279,7 @@
   const SUBJECT_LABEL = { robot: '로봇', aviation: '항공' };
   function categoryName(id){ const c = categories.find((x) => x.id === id); return c ? c.name : ''; }
   function partRowHtml(p){
-    const sub = [SUBJECT_LABEL[p.subject] || p.subject, p.category ? categoryName(p.category) : ''].filter(Boolean).join(' · ');
+    const sub = [SUBJECT_LABEL[p.subject] || p.subject, p.category ? categoryName(p.category) : '', p.color, (p.qty != null ? p.qty + '개' : '')].filter(Boolean).join(' · ');
     return `<div class="row"><div class="who"><b>${esc(p.icon ? p.icon + ' ' : '')}${esc(p.name)}</b><span>${esc(sub)}</span></div><div class="acts"><button class="ghost" data-delete-part="${esc(p.id)}" data-armed-text="한 번 더 누르면 삭제돼요">삭제</button></div></div>`;
   }
   function fillPartCategoryOptions(){
@@ -307,7 +311,7 @@
     const btn = $('createPartBtn'), m = $('createPartMsg');
     btn.disabled = true; m.hidden = true;
     try {
-      const data = await api({ action: 'add_part', name: $('pName').value, icon: $('pIcon').value, subject: $('pSubject').value, category: $('pSubject').value === 'robot' ? $('pCategory').value : '' }, await token());
+      const data = await api({ action: 'add_part', name: $('pName').value, icon: $('pIcon').value, subject: $('pSubject').value, category: $('pSubject').value === 'robot' ? $('pCategory').value : '', qty: $('pQty').value, color: $('pColor').value }, await token());
       $('createPartForm').reset();
       $('createPartForm').hidden = true;
       $('toggleCreatePart').textContent = '+ 부품 등록';
