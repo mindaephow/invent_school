@@ -1455,13 +1455,27 @@
     partCategoryTab = btn.dataset.categoryTab;
     renderParts(allParts);
   });
+  function renderGroupHtml(g){
+    let html = '';
+    const volumes = Array.from(g.byVolume.keys()).sort((a, b) => a - b);
+    if (g.noVolume.length) html += partSectionHtml(g.label + '-부품리스트', g.noVolume);
+    const merged = new Map();
+    volumes.forEach((v, i) => {
+      html += partSectionHtml(g.label + v + '권-부품리스트', g.byVolume.get(v));
+      g.byVolume.get(v).forEach((p) => {
+        const key = p.name + '|' + (p.color || '');
+        if (!merged.has(key)) merged.set(key, { ...p, qty: 0, _merged: true });
+        merged.get(key).qty += (p.qty || 0);
+      });
+      if (i > 0) html += partSectionHtml(`${g.label} 1~${v}권 누적`, Array.from(merged.values()));
+    });
+    return html;
+  }
   function renderParts(parts){
     allParts = parts;
     document.querySelectorAll('#partSubjectTabs [data-subject-tab]').forEach((b) => b.classList.toggle('current', b.dataset.subjectTab === partSubjectTab));
     parts = parts.filter((p) => p.subject === partSubjectTab);
-    document.getElementById('partListEmpty').hidden = parts.length > 0;
     const catTabsEl = document.getElementById('partCategoryTabs');
-    if (!parts.length) { document.getElementById('partListArea').innerHTML = ''; catTabsEl.hidden = true; catTabsEl.innerHTML = ''; return; }
     const byCategoryKey = new Map();
     parts.forEach((p) => {
       const catKey = p.category || ('__subject__' + p.subject);
@@ -1475,32 +1489,24 @@
         g.noVolume.push(p);
       }
     });
-    const catKeys = Array.from(byCategoryKey.keys());
+    let html = '';
     if (partSubjectTab === 'robot') {
-      if (!partCategoryTab || !byCategoryKey.has(partCategoryTab)) partCategoryTab = catKeys[0];
-      catTabsEl.hidden = false;
-      catTabsEl.innerHTML = catKeys.map((k) => `<button type="button" class="${k === partCategoryTab ? 'current' : ''}" data-category-tab="${escapeHtml(k)}">${escapeHtml(byCategoryKey.get(k).label || '기타')}</button>`).join('');
+      // 등록된 카테고리(브랜드)는 부품이 아직 하나도 없어도 전부 탭으로 보여준다
+      const catKeys = robotCategories.filter((c) => c.subject === 'robot').map((c) => c.id);
+      Array.from(byCategoryKey.keys()).forEach((k) => { if (!catKeys.includes(k)) catKeys.push(k); });
+      if (!partCategoryTab || !catKeys.includes(partCategoryTab)) partCategoryTab = catKeys[0] || null;
+      catTabsEl.hidden = catKeys.length === 0;
+      catTabsEl.innerHTML = catKeys.map((k) => `<button type="button" class="${k === partCategoryTab ? 'current' : ''}" data-category-tab="${escapeHtml(k)}">${escapeHtml(categoryLabel(k) || (byCategoryKey.get(k) && byCategoryKey.get(k).label) || '기타')}</button>`).join('');
+      const g = partCategoryTab ? byCategoryKey.get(partCategoryTab) : null;
+      html = g ? renderGroupHtml(g) : '';
+      document.getElementById('partListEmpty').hidden = !!g;
     } else {
       catTabsEl.hidden = true;
       catTabsEl.innerHTML = '';
       partCategoryTab = null;
+      byCategoryKey.forEach((g) => { html += renderGroupHtml(g); });
+      document.getElementById('partListEmpty').hidden = parts.length > 0;
     }
-    let html = '';
-    byCategoryKey.forEach((g, key) => {
-      if (partSubjectTab === 'robot' && key !== partCategoryTab) return;
-      const volumes = Array.from(g.byVolume.keys()).sort((a, b) => a - b);
-      if (g.noVolume.length) html += partSectionHtml(g.label + '-부품리스트', g.noVolume);
-      const merged = new Map();
-      volumes.forEach((v, i) => {
-        html += partSectionHtml(g.label + v + '권-부품리스트', g.byVolume.get(v));
-        g.byVolume.get(v).forEach((p) => {
-          const key = p.name + '|' + (p.color || '');
-          if (!merged.has(key)) merged.set(key, { ...p, qty: 0, _merged: true });
-          merged.get(key).qty += (p.qty || 0);
-        });
-        if (i > 0) html += partSectionHtml(`${g.label} 1~${v}권 누적`, Array.from(merged.values()));
-      });
-    });
     document.getElementById('partListArea').innerHTML = html;
   }
   async function loadParts(){
