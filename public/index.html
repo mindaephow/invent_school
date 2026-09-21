@@ -1425,11 +1425,25 @@
   let robotCategories = [];
 
   function categoryLabel(id){ const c = robotCategories.find((x) => x.id === id); return c ? c.name : ''; }
+  // 같은 이름(예: 25프레임)의 부품이 여러 권에 걸쳐 한 화면에 동시에 그려질 때, SVG 내부 id(mask/gradient/clipPath 등)가
+  // 서로 겹치면 브라우저가 엉뚱한 정의를 가져다 써서 색이 틀어진다 — 부품 id를 접미사로 붙여서 겹치지 않게 만든다.
+  function uniquifySvgIds(svg, suffix){
+    if (!svg) return svg;
+    const ids = new Set();
+    svg.replace(/\sid="([^"]+)"/g, (m, id) => { ids.add(id); return m; });
+    if (!ids.size) return svg;
+    let out = svg;
+    ids.forEach((id) => {
+      out = out.split('id="' + id + '"').join('id="' + id + '-' + suffix + '"');
+      out = out.split('url(#' + id + ')').join('url(#' + id + '-' + suffix + ')');
+    });
+    return out;
+  }
   function partRowHtml(p){
     const sub = [p.size, p.color, (p.qty != null ? p.qty + '개' : '')].filter(Boolean).join(' · ');
     const editBtn = p._merged ? '' : `<button type="button" class="ghost" data-edit-part="${escapeHtml(p.id)}">수정</button>`;
     const delBtn = p._merged ? '' : `<button type="button" class="ghost" data-delete-part="${escapeHtml(p.id)}">삭제</button>`;
-    const thumbSrc = p.imageSvg || p.imageSvgDiagonal;
+    const thumbSrc = uniquifySvgIds(p.imageSvg || p.imageSvgDiagonal, p.id);
     const thumb = thumbSrc ? `<button type="button" class="part-thumb" data-view-image="${escapeHtml(p.id)}">${thumbSrc}</button>` : '';
     return `<div class="design-row" style="align-items:center;"><div class="item-main"><div class="item-title">${escapeHtml(p.icon ? p.icon + ' ' : '')}${escapeHtml(p.name)}</div><div class="item-sub">${escapeHtml(sub)}</div></div><div style="display:flex; align-items:center; gap:8px; flex:none;">${thumb}${editBtn}${delBtn}</div></div>`;
   }
@@ -1568,8 +1582,8 @@
       if (p && (p.imageSvg || p.imageSvgDiagonal)) {
         document.getElementById('imgModalTitle').textContent = [p.name, p.size].filter(Boolean).join(' · ');
         const shots = [];
-        if (p.imageSvg) shots.push(`<div class="img-modal-shot"><div class="note" style="margin-bottom:6px;">위/정면</div>${p.imageSvg}</div>`);
-        if (p.imageSvgDiagonal) shots.push(`<div class="img-modal-shot"><div class="note" style="margin-bottom:6px;">대각선(입체)</div>${p.imageSvgDiagonal}</div>`);
+        if (p.imageSvg) shots.push(`<div class="img-modal-shot"><div class="note" style="margin-bottom:6px;">위/정면</div>${uniquifySvgIds(p.imageSvg, p.id)}</div>`);
+        if (p.imageSvgDiagonal) shots.push(`<div class="img-modal-shot"><div class="note" style="margin-bottom:6px;">대각선(입체)</div>${uniquifySvgIds(p.imageSvgDiagonal, p.id)}</div>`);
         document.getElementById('imgModalBody').innerHTML = `<div class="img-modal-shots">${shots.join('')}</div>`;
         document.getElementById('imgModalBackdrop').hidden = false;
       }
