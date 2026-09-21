@@ -1539,7 +1539,7 @@
     if (viewBtn) {
       const p = allParts.find((x) => x.id === viewBtn.dataset.viewImage);
       if (p && (p.imageSvg || p.imageSvgDiagonal)) {
-        document.getElementById('imgModalTitle').textContent = p.name || '';
+        document.getElementById('imgModalTitle').textContent = [p.name, p.size].filter(Boolean).join(' · ');
         const shots = [];
         if (p.imageSvg) shots.push(`<div class="img-modal-shot"><div class="note" style="margin-bottom:6px;">위/정면</div>${p.imageSvg}</div>`);
         if (p.imageSvgDiagonal) shots.push(`<div class="img-modal-shot"><div class="note" style="margin-bottom:6px;">대각선(입체)</div>${p.imageSvgDiagonal}</div>`);
