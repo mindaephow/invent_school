@@ -331,6 +331,10 @@
     width:100%; padding:10px; border:1px solid var(--panel-border); border-radius:8px;
     background:var(--panel); color:var(--ink); font-size:14px; font-family:inherit;
   }
+  .lesson-picker select{
+    flex:1; min-width:0; padding:6px 8px; border:1px solid var(--panel-border); border-radius:7px;
+    background:var(--panel); color:var(--ink); font-size:12px; font-family:inherit;
+  }
   .start-card .note{font-size:13px; color:var(--ink-soft);}
   .start-card .err{font-size:13px; color:var(--warn); font-weight:700; margin-top:10px;}
   .proj-list{display:flex; flex-direction:column; gap:8px;}
@@ -629,6 +633,7 @@
 <script src="design-parts.js"></script>
 <script src="design-sets.js"></script>
 <script src="design-lessons.js"></script>
+<script src="design-robot-categories.js"></script>
 <script>
 (function(){
   // real-world scale: GRID_UNIT (20 units = 2cm pitch) is the anchor; room is ~150cm x 150cm x 150cm
@@ -641,10 +646,64 @@
   // 세트 정의는 design-sets.js로 분리됨(위치는 mm, 각도는 X·Y·Z °)
   const SETS = window.IVS_SETS;
 
+  // 로봇 카테고리 선택(카테고리→권→차시). DB(ivs_robot_categories)에 등록된 게 있으면 그걸 쓰고,
+  // 아직 없으면(또는 로그인 전이라 못 불러왔으면) design-robot-categories.js의 기본값을 임시로 쓴다.
+  // 관리자가 등록/수정/삭제하면 renderRobotPicker(카테고리 배열)를 다시 불러서 화면을 새로고침한다(window.__refreshRobotPicker).
+  function renderRobotPicker(categories){
+    const card = document.getElementById('lessonCard');
+    if (!card || !categories || !categories.length) return;
+    const sessionsPerVolume = window.IVS_ROBOT_SESSIONS_PER_VOLUME || 12;
+    let picker = card.querySelector('.lesson-picker');
+    if (!picker) {
+      picker = document.createElement('div');
+      picker.className = 'lesson-picker';
+      picker.style.cssText = 'display:flex; gap:6px; margin:8px 0;';
+      card.querySelector('summary').after(picker);
+    }
+    picker.innerHTML = '';
+    const catSel = document.createElement('select');
+    categories.forEach(c => { const o = document.createElement('option'); o.value = c.id; o.textContent = c.name; catSel.appendChild(o); });
+    const volSel = document.createElement('select');
+    const sessionSel = document.createElement('select');
+    function currentCategory(){ return categories.find(c => c.id === catSel.value) || categories[0]; }
+    function fillVolumes(){
+      volSel.innerHTML = '';
+      const cat = currentCategory();
+      for (let i = 1; i <= cat.volumes; i++) { const o = document.createElement('option'); o.value = i; o.textContent = i + '권'; volSel.appendChild(o); }
+    }
+    function fillSessions(){
+      sessionSel.innerHTML = '';
+      for (let i = 1; i <= sessionsPerVolume; i++) { const o = document.createElement('option'); o.value = i; o.textContent = i + '차시'; sessionSel.appendChild(o); }
+    }
+    function update(){
+      const cat = currentCategory();
+      card.querySelector('.lesson-tag').textContent = cat.name + ' ' + volSel.value + '권';
+      card.querySelector('.lesson-title').textContent = sessionSel.value + '차시 · 아직 등록된 실습이 없어요';
+    }
+    catSel.addEventListener('change', () => { fillVolumes(); update(); });
+    volSel.addEventListener('change', update);
+    sessionSel.addEventListener('change', update);
+    fillVolumes();
+    fillSessions();
+    picker.appendChild(catSel);
+    picker.appendChild(volSel);
+    picker.appendChild(sessionSel);
+    card.querySelector('.lesson-sub').textContent = '';
+    card.querySelector('.lesson-concept').textContent = '';
+    card.querySelector('.lesson-mission').textContent = '곧 준비할게요.';
+    card.querySelector('.lesson-steps').innerHTML = '';
+    update();
+  }
+  window.__refreshRobotPicker = renderRobotPicker;
+
   // 차시 카드(design-lessons.js의 데이터를 화면에 채움) — 지금은 첫 항목만 보여준다
   (function renderLessonCard(){
     const card = document.getElementById('lessonCard');
     if (!card) return;
+    if (SUBJECT === 'robot' && (window.IVS_ROBOT_CATEGORIES || []).length) {
+      renderRobotPicker(window.IVS_ROBOT_CATEGORIES);
+      return;
+    }
     if (SUBJECT !== 'goldberg') {
       card.querySelector('.lesson-tag').textContent = SUBJECT_LABEL;
       card.querySelector('.lesson-title').textContent = '아직 등록된 커리큘럼이 없어요';
@@ -2711,6 +2770,23 @@
   const db = createSupabaseDb(SUPABASE_URL, SUPABASE_KEY, { storageKey: 'ivs-student-auth' });
   // 선생님 화면에서 로그인한 상태로 들어오면 선생님 로그인 정보를 이어받아 선생님 전용 프로젝트로 저장한다
   const tdb = createSupabaseDb(SUPABASE_URL, SUPABASE_KEY, { storageKey: 'ivs-teacher-auth' });
+
+  // 로봇 카테고리는 관리자가 admin.html에서 등록·수정·삭제한다(ivs_robot_categories). 로그인 후(accessToken 확보 후)
+  // 불러와서, 있으면 design-robot-categories.js의 기본값을 덮어쓴다(없으면 기본값 그대로 둔다).
+  async function loadRobotCategoriesFromDb(){
+    if (SUBJECT !== 'robot' || !accessToken) return;
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/ivs_robot_categories?select=id,data&order=created_at.asc`, {
+        headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + accessToken }
+      });
+      if (!res.ok) return;
+      const rows = await res.json();
+      const categories = (rows || [])
+        .map(r => ({ id: r.id, name: r.data && r.data.name, volumes: r.data && r.data.volumes }))
+        .filter(c => c.name && Number.isInteger(c.volumes) && c.volumes > 0);
+      if (categories.length && window.__refreshRobotPicker) window.__refreshRobotPicker(categories);
+    } catch (err) { /* 못 불러오면 기본값(design-robot-categories.js) 그대로 둔다 */ }
+  }
   let mode = 'student'; // 'student' | 'teacher'
 
   const startOverlay = document.getElementById('startOverlay');
@@ -2950,6 +3026,7 @@
     lastActivity = Date.now();
     refreshSubmitBtn();
     setStatus(data.parts && data.parts.length ? '저장된 작업을 불러왔어요. 이어서 만들어보세요.' : '부품을 배치하고 재생을 눌러보세요.', null);
+    loadRobotCategoriesFromDb();
   }
 
   // ----- 로그인 화면 -----
@@ -3043,6 +3120,7 @@
     lastActivity = Date.now();
     refreshSubmitBtn();
     setStatus('부품을 배치하고 재생을 눌러보세요.', null);
+    loadRobotCategoriesFromDb();
   }
 
   function feedbackHtml(fb){

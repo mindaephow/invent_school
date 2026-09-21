@@ -6,6 +6,13 @@
 // POST { action: 'set_approved', teacherId, approved }              선생님 승인 / 승인 취소
 // POST { action: 'create_teacher', name, email, phone?, password? } 본사에서 선생님 등록 (바로 승인됨)
 // POST { action: 'delete_teacher', teacherId }                      선생님 삭제 (수업·학생·학생 로그인 계정·과제까지 함께 삭제)
+// POST { action: 'list_parts' }                                      부품 카탈로그 목록 (이름·아이콘·과목만, 3D 모양은 코드로 별도 구현)
+// POST { action: 'add_part', name, icon, subject }                   부품 카탈로그에 등록
+// POST { action: 'delete_part', partId }                             부품 카탈로그에서 삭제
+// POST { action: 'list_robot_categories' }                           로봇 커리큘럼 카테고리(브랜드·권 수) 목록
+// POST { action: 'add_robot_category', name, volumes }               로봇 카테고리 등록
+// POST { action: 'update_robot_category', categoryId, name, volumes } 로봇 카테고리 수정
+// POST { action: 'delete_robot_category', categoryId }                로봇 카테고리 삭제
 // 헤더: Authorization: Bearer <관리자 access_token>
 //
 // 환경변수: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
@@ -82,6 +89,20 @@ async function listTeachers(sb) {
   }))
 }
 
+const PART_SUBJECTS = ['robot', 'aviation']
+
+async function listParts(sb) {
+  const { data, error } = await sb.from('ivs_part_catalog').select('id, data, created_at').order('created_at', { ascending: true })
+  if (error) throw new Error(error.message)
+  return (data || []).map((r) => ({ id: r.id, name: r.data?.name || '', icon: r.data?.icon || '', subject: r.data?.subject || '', category: r.data?.category || '', createdAt: r.created_at }))
+}
+
+async function listRobotCategories(sb) {
+  const { data, error } = await sb.from('ivs_robot_categories').select('id, data, created_at').order('created_at', { ascending: true })
+  if (error) throw new Error(error.message)
+  return (data || []).map((r) => ({ id: r.id, name: r.data?.name || '', volumes: r.data?.volumes || 0, createdAt: r.created_at }))
+}
+
 export async function POST(request) {
   const sb = admin()
   const who = await requireAdmin(sb, request)
@@ -150,6 +171,63 @@ export async function POST(request) {
       const { error } = await sb.auth.admin.deleteUser(teacherId)
       if (error) throw new Error(error.message)
       return json({ ok: true, teachers: await listTeachers(sb) })
+    }
+
+    if (body?.action === 'list_parts') return json({ parts: await listParts(sb) })
+
+    if (body?.action === 'add_part') {
+      const name = String(body.name || '').trim()
+      const icon = String(body.icon || '').trim()
+      const subject = String(body.subject || '')
+      const category = String(body.category || '').trim()
+      if (!name) return json({ error: '부품 이름을 입력해주세요.' }, 400)
+      if (!PART_SUBJECTS.includes(subject)) return json({ error: '과목을 선택해주세요.' }, 400)
+      const { error } = await sb.from('ivs_part_catalog').insert({ data: { name, icon, subject, category: category || null, createdAt: Date.now() } })
+      if (error) throw new Error(error.message)
+      return json({ ok: true, parts: await listParts(sb) })
+    }
+
+    if (body?.action === 'delete_part') {
+      const partId = body.partId
+      if (typeof partId !== 'string') return json({ error: '잘못된 요청입니다.' }, 400)
+      const { error } = await sb.from('ivs_part_catalog').delete().eq('id', partId)
+      if (error) throw new Error(error.message)
+      return json({ ok: true, parts: await listParts(sb) })
+    }
+
+    if (body?.action === 'list_robot_categories') return json({ categories: await listRobotCategories(sb) })
+
+    if (body?.action === 'add_robot_category') {
+      const name = String(body.name || '').trim()
+      const volumes = Number(body.volumes)
+      if (!name) return json({ error: '카테고리 이름을 입력해주세요.' }, 400)
+      if (!Number.isInteger(volumes) || volumes < 1) return json({ error: '권 수를 1 이상 정수로 입력해주세요.' }, 400)
+      const { error } = await sb.from('ivs_robot_categories').insert({ data: { name, volumes, createdAt: Date.now() } })
+      if (error) throw new Error(error.message)
+      return json({ ok: true, categories: await listRobotCategories(sb) })
+    }
+
+    if (body?.action === 'update_robot_category') {
+      const categoryId = body.categoryId
+      const name = String(body.name || '').trim()
+      const volumes = Number(body.volumes)
+      if (typeof categoryId !== 'string') return json({ error: '잘못된 요청입니다.' }, 400)
+      if (!name) return json({ error: '카테고리 이름을 입력해주세요.' }, 400)
+      if (!Number.isInteger(volumes) || volumes < 1) return json({ error: '권 수를 1 이상 정수로 입력해주세요.' }, 400)
+      const { data: row, error: getErr } = await sb.from('ivs_robot_categories').select('data').eq('id', categoryId).maybeSingle()
+      if (getErr) throw new Error(getErr.message)
+      if (!row) return json({ error: '카테고리를 찾지 못했습니다.' }, 404)
+      const { error } = await sb.from('ivs_robot_categories').update({ data: { ...row.data, name, volumes, updatedAt: Date.now() } }).eq('id', categoryId)
+      if (error) throw new Error(error.message)
+      return json({ ok: true, categories: await listRobotCategories(sb) })
+    }
+
+    if (body?.action === 'delete_robot_category') {
+      const categoryId = body.categoryId
+      if (typeof categoryId !== 'string') return json({ error: '잘못된 요청입니다.' }, 400)
+      const { error } = await sb.from('ivs_robot_categories').delete().eq('id', categoryId)
+      if (error) throw new Error(error.message)
+      return json({ ok: true, categories: await listRobotCategories(sb) })
     }
 
     return json({ error: '알 수 없는 요청입니다.' }, 400)
