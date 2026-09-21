@@ -335,6 +335,8 @@
   .start-card .err{font-size:13px; color:var(--warn); font-weight:700; margin-top:10px;}
   .proj-list{display:flex; flex-direction:column; gap:8px;}
   .proj-item{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; border:1px solid var(--panel-border); border-radius:10px; padding:10px 12px;}
+  .proj-group-head{font-size:12px; font-weight:700; color:var(--blueprint); margin:10px 0 -2px; padding-left:2px;}
+  .proj-group-head:first-child{margin-top:0;}
   .proj-item .pname{font-weight:600; font-size:14px; word-break:break-all;}
   .proj-item .sub{font-size:12px; color:var(--ink-soft);}
   .badge-ok{font-size:11px; background:var(--success-bg); color:var(--success); padding:2px 8px; border-radius:999px; margin-left:6px; font-weight:700; white-space:nowrap;}
@@ -675,6 +677,7 @@
         document.getElementById('clearBtn').click();
         if (!guideGroup.children.length) buildGuideOutline();
         guideGroup.visible = true;
+        if (project) project.data.lessonTag = lesson.tag; // 저장할 때 이 차시 연습인지 표시해서 불러오기 목록에서 묶어 보이게 한다
         setStatus('점선을 따라 부품을 놓아보세요.', 'success');
       });
     }
@@ -2172,6 +2175,7 @@
     select(null);
     buildGuide.hidden = true;
     guideGroup.visible = false;
+    if (project) delete project.data.lessonTag;
     setStatus('부품을 배치하고 재생을 눌러보세요.', null);
   });
 
@@ -2751,6 +2755,7 @@
     });
     select(null);
     buildGuide.hidden = true;
+    guideGroup.visible = false;
     if (!keepHistory) resetHistory();
   }
 
@@ -3044,7 +3049,23 @@
       <button id="newDraftBtn" class="primary" type="button" style="margin-top:14px; width:100%;">새 설계 시작</button>
       <button id="closeLoadBtn" class="ghost" type="button" style="margin-top:10px; width:100%;">닫기</button>`;
     const listEl = document.getElementById('projList');
+    // 어느 차시(따라하기 시작)에서 연습한 건지로 묶어서, 그냥 쌓이기만 하지 않고 정리돼 보이게 한다
+    const groups = new Map();
     list.forEach(p => {
+      const tag = p.data.lessonTag || '__OTHER__';
+      if (!groups.has(tag)) groups.set(tag, []);
+      groups.get(tag).push(p);
+    });
+    const orderedTags = [...groups.keys()].filter(t => t !== '__OTHER__');
+    if (groups.has('__OTHER__')) orderedTags.push('__OTHER__');
+    orderedTags.forEach(tag => {
+      if (orderedTags.length > 1) {
+        const head = document.createElement('div');
+        head.className = 'proj-group-head';
+        head.textContent = tag === '__OTHER__' ? '개별 연습' : tag;
+        listEl.appendChild(head);
+      }
+      groups.get(tag).forEach(p => {
       const row = document.createElement('div');
       row.className = 'proj-item';
       const when = p.data.updatedAt ? new Date(p.data.updatedAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
@@ -3069,6 +3090,7 @@
         }
       });
       listEl.appendChild(row);
+      });
     });
     document.getElementById('newDraftBtn').addEventListener('click', openDraft);
     document.getElementById('closeLoadBtn').addEventListener('click', () => { startOverlay.hidden = true; });
