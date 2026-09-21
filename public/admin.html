@@ -279,8 +279,12 @@
 
   const SUBJECT_LABEL = { robot: '로봇', aviation: '항공' };
   function categoryName(id){ const c = categories.find((x) => x.id === id); return c ? c.name : ''; }
+  function partGroupTitle(p){
+    const catLabel = p.category ? categoryName(p.category) : (SUBJECT_LABEL[p.subject] || p.subject);
+    return catLabel + (p.volume != null ? p.volume + '권' : '') + '-부품리스트';
+  }
   function partRowHtml(p){
-    const sub = [SUBJECT_LABEL[p.subject] || p.subject, p.category ? categoryName(p.category) : '', (p.volume != null ? p.volume + '권' : ''), p.color, (p.qty != null ? p.qty + '개' : '')].filter(Boolean).join(' · ');
+    const sub = [p.color, (p.qty != null ? p.qty + '개' : '')].filter(Boolean).join(' · ');
     return `<div class="row"><div class="who"><b>${esc(p.icon ? p.icon + ' ' : '')}${esc(p.name)}</b><span>${esc(sub)}</span></div><div class="acts"><button class="ghost" data-delete-part="${esc(p.id)}" data-armed-text="한 번 더 누르면 삭제돼요">삭제</button></div></div>`;
   }
   function fillPartCategoryOptions(){
@@ -296,7 +300,16 @@
   }
   $('pSubject').addEventListener('change', syncPartCategoryVisibility);
   function renderParts(parts){
-    $('partList').innerHTML = parts.length ? parts.map(partRowHtml).join('') : '<p class="empty">등록된 부품이 없어요.</p>';
+    if (!parts.length) { $('partList').innerHTML = '<p class="empty">등록된 부품이 없어요.</p>'; return; }
+    const groups = new Map();
+    parts.forEach((p) => {
+      const key = partGroupTitle(p);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(p);
+    });
+    $('partList').innerHTML = Array.from(groups.entries()).map(([title, items]) =>
+      `<h4 style="margin:16px 0 6px; font-size:13px; color:var(--ink-soft);">${esc(title)}</h4>${items.map(partRowHtml).join('')}`
+    ).join('');
   }
   async function loadParts(){
     const data = await api({ action: 'list_parts' }, await token());
