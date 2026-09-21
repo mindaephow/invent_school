@@ -352,6 +352,8 @@
   .project-bar[hidden]{display:none;}
   .project-bar input{flex:1; min-width:140px; max-width:300px; width:auto;}
   .pb-student{font-size:13px; color:var(--ink-soft);}
+  .pb-lesson-tag{display:inline-block; font-size:12px; font-weight:700; color:#fff; background:var(--blueprint); border-radius:999px; padding:4px 10px;}
+  .pb-lesson-tag[hidden]{display:none;}
   .pb-save{font-size:12px; color:var(--ink-soft); margin-right:auto;}
   button.armed{background:var(--warn-bg); border-color:var(--warn); color:var(--warn); font-weight:700;}
 </style>
@@ -367,6 +369,7 @@
   </header>
 
   <div class="project-bar" id="projectBar" hidden>
+    <span class="pb-lesson-tag" id="pbLessonTag" hidden></span>
     <span class="pb-student" id="pbStudent"></span>
     <input id="projectNameInput" maxlength="40" aria-label="프로젝트 이름" placeholder="프로젝트 이름">
     <span class="pb-save" id="pbSave"></span>
@@ -639,6 +642,9 @@
     const card = document.getElementById('lessonCard');
     if (!lesson || !card) return;
     card.querySelector('.lesson-tag').textContent = lesson.tag;
+    const pbLessonTag = document.getElementById('pbLessonTag');
+    pbLessonTag.textContent = lesson.tag;
+    pbLessonTag.hidden = false;
     card.querySelector('.lesson-title').textContent = lesson.title;
     card.querySelector('.lesson-sub').textContent = lesson.sub;
     card.querySelector('.lesson-concept').textContent = lesson.concept;
@@ -2165,6 +2171,7 @@
     timerResetToZero();
     select(null);
     buildGuide.hidden = true;
+    guideGroup.visible = false;
     setStatus('부품을 배치하고 재생을 눌러보세요.', null);
   });
 
