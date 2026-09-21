@@ -143,10 +143,11 @@
       <div id="partList"></div>
     </section>
     <section class="card">
-      <div class="toolbar"><h3 style="font-size:16px;">로봇 카테고리 관리</h3><button type="button" id="toggleCreateCategory">+ 카테고리 등록</button></div>
-      <p class="note">브랜드 이름과 권 수만 등록해요. 실제 차시 내용은 나중에 채워요.</p>
+      <div class="toolbar"><h3 style="font-size:16px;">카테고리 관리</h3><button type="button" id="toggleCreateCategory">+ 카테고리 등록</button></div>
+      <p class="note">과목·브랜드 이름·권 수만 등록해요. 실제 차시 내용은 나중에 채워요.</p>
       <form id="createCategoryForm" class="form" hidden>
         <input type="hidden" id="rId">
+        <div><label for="rSubject">과목</label><select id="rSubject" required><option value="goldberg">골드버그</option><option value="robot">로봇</option><option value="aviation">항공</option></select></div>
         <div class="grid2">
           <div><label for="rName">카테고리 이름</label><input id="rName" required autocomplete="off"></div>
           <div><label for="rVolumes">권 수</label><input id="rVolumes" type="number" min="1" step="1" required autocomplete="off"></div>
@@ -290,13 +291,12 @@
   function fillPartCategoryOptions(){
     const sel = $('pCategory');
     const cur = sel.value;
-    sel.innerHTML = '<option value="">(전체 공통)</option>' + categories.map((c) => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
+    const subject = $('pSubject').value;
+    sel.innerHTML = '<option value="">(전체 공통)</option>' + categories.filter((c) => c.subject === subject).map((c) => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
     sel.value = cur;
   }
   function syncPartCategoryVisibility(){
-    const isRobot = $('pSubject').value === 'robot';
-    $('pCategoryWrap').hidden = !isRobot;
-    $('pVolumeWrap').hidden = !isRobot;
+    fillPartCategoryOptions();
   }
   $('pSubject').addEventListener('change', syncPartCategoryVisibility);
   function partSectionHtml(title, items){
@@ -384,7 +384,12 @@
   }
   let categories = [];
   function renderCategories(){
-    $('categoryList').innerHTML = categories.length ? categories.map(categoryRowHtml).join('') : '<p class="empty">등록된 카테고리가 없어요.</p>';
+    if (!categories.length) { $('categoryList').innerHTML = '<p class="empty">등록된 카테고리가 없어요.</p>'; fillPartCategoryOptions(); return; }
+    const bySubject = new Map();
+    categories.forEach((c) => { const k = c.subject; if (!bySubject.has(k)) bySubject.set(k, []); bySubject.get(k).push(c); });
+    $('categoryList').innerHTML = Array.from(bySubject.entries()).map(([subject, items]) =>
+      `<h4 style="margin:16px 0 6px; font-size:13px; color:var(--ink-soft);">${esc(SUBJECT_LABEL[subject] || subject)}</h4>${items.map(categoryRowHtml).join('')}`
+    ).join('');
     fillPartCategoryOptions();
   }
   async function loadCategories(){
@@ -411,8 +416,8 @@
     try {
       const editingId = $('rId').value;
       const payload = editingId
-        ? { action: 'update_robot_category', categoryId: editingId, name: $('rName').value, volumes: Number($('rVolumes').value), description: $('rDescription').value }
-        : { action: 'add_robot_category', name: $('rName').value, volumes: Number($('rVolumes').value), description: $('rDescription').value };
+        ? { action: 'update_robot_category', categoryId: editingId, name: $('rName').value, volumes: Number($('rVolumes').value), subject: $('rSubject').value, description: $('rDescription').value }
+        : { action: 'add_robot_category', name: $('rName').value, volumes: Number($('rVolumes').value), subject: $('rSubject').value, description: $('rDescription').value };
       const data = await api(payload, await token());
       resetCategoryForm();
       $('createCategoryForm').hidden = true;
@@ -428,6 +433,7 @@
       const c = categories.find((x) => x.id === editBtn.dataset.editCategory);
       if (!c) return;
       $('rId').value = c.id;
+      $('rSubject').value = c.subject;
       $('rName').value = c.name;
       $('rVolumes').value = c.volumes;
       $('rDescription').value = c.description || '';

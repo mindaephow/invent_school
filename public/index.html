@@ -368,12 +368,13 @@
 
     <div class="card">
       <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-        <h3 style="font-size:15px; margin:0;">로봇 카테고리 관리</h3>
+        <h3 style="font-size:15px; margin:0;">카테고리 관리</h3>
         <button type="button" class="ghost" id="toggleCategoryForm">+ 카테고리 등록</button>
       </div>
-      <p class="note" style="margin-top:8px;">브랜드 이름과 권 수만 등록해요. 실제 차시 내용은 나중에 채워요.</p>
+      <p class="note" style="margin-top:8px;">과목·브랜드 이름·권 수만 등록해요. 실제 차시 내용은 나중에 채워요.</p>
       <form id="categoryForm" class="add-form" hidden>
         <input type="hidden" id="categoryEditId">
+        <div><label>과목</label><select id="categorySubject" required><option value="goldberg">골드버그</option><option value="robot">로봇</option><option value="aviation">항공</option></select></div>
         <div class="row2">
           <div><label>카테고리 이름</label><input id="categoryName" required autocomplete="off"></div>
           <div><label>권 수</label><input id="categoryVolumes" type="number" min="1" step="1" required autocomplete="off"></div>
@@ -1384,13 +1385,12 @@
   function fillPartCategoryOptions(){
     const sel = document.getElementById('partCategory');
     const cur = sel.value;
-    sel.innerHTML = '<option value="">(전체 공통)</option>' + robotCategories.map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`).join('');
+    const subject = document.getElementById('partSubject').value;
+    sel.innerHTML = '<option value="">(전체 공통)</option>' + robotCategories.filter((c) => c.subject === subject).map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`).join('');
     sel.value = cur;
   }
   function syncPartCategoryVisibility(){
-    const isRobot = document.getElementById('partSubject').value === 'robot';
-    document.getElementById('partCategoryWrap').hidden = !isRobot;
-    document.getElementById('partVolumeWrap').hidden = !isRobot;
+    fillPartCategoryOptions();
   }
   document.getElementById('partSubject').addEventListener('change', syncPartCategoryVisibility);
 
@@ -1429,8 +1429,13 @@
     return `<div class="design-row" style="align-items:flex-start;"><div class="item-main"><div class="item-title">${escapeHtml(c.name)}</div><div class="item-sub">${c.volumes}권</div>${desc}</div><div style="display:flex; gap:8px;"><button type="button" class="ghost" data-edit-category="${escapeHtml(c.id)}">수정</button><button type="button" class="ghost" data-delete-category="${escapeHtml(c.id)}">삭제</button></div></div>`;
   }
   function renderCategories(){
-    document.getElementById('categoryListArea').innerHTML = robotCategories.map(categoryRowHtml).join('');
     document.getElementById('categoryListEmpty').hidden = robotCategories.length > 0;
+    if (!robotCategories.length) { document.getElementById('categoryListArea').innerHTML = ''; fillPartCategoryOptions(); return; }
+    const bySubject = new Map();
+    robotCategories.forEach((c) => { const k = c.subject; if (!bySubject.has(k)) bySubject.set(k, []); bySubject.get(k).push(c); });
+    document.getElementById('categoryListArea').innerHTML = Array.from(bySubject.entries()).map(([subject, items]) =>
+      `<div class="item-sub" style="font-weight:700; margin:10px 0 2px;">${escapeHtml(PART_SUBJECT_LABEL[subject] || subject)}</div>${items.map(categoryRowHtml).join('')}`
+    ).join('');
     fillPartCategoryOptions();
   }
   async function loadCategories(){
@@ -1456,8 +1461,8 @@
     try {
       const editingId = document.getElementById('categoryEditId').value;
       const payload = editingId
-        ? { action: 'update_robot_category', categoryId: editingId, name: document.getElementById('categoryName').value, volumes: Number(document.getElementById('categoryVolumes').value), description: document.getElementById('categoryDescription').value }
-        : { action: 'add_robot_category', name: document.getElementById('categoryName').value, volumes: Number(document.getElementById('categoryVolumes').value), description: document.getElementById('categoryDescription').value };
+        ? { action: 'update_robot_category', categoryId: editingId, name: document.getElementById('categoryName').value, volumes: Number(document.getElementById('categoryVolumes').value), subject: document.getElementById('categorySubject').value, description: document.getElementById('categoryDescription').value }
+        : { action: 'add_robot_category', name: document.getElementById('categoryName').value, volumes: Number(document.getElementById('categoryVolumes').value), subject: document.getElementById('categorySubject').value, description: document.getElementById('categoryDescription').value };
       await adminApi(payload);
       resetCategoryForm();
       document.getElementById('categoryForm').hidden = true;
@@ -1472,6 +1477,7 @@
       const c = robotCategories.find((x) => x.id === editBtn.dataset.editCategory);
       if (!c) return;
       document.getElementById('categoryEditId').value = c.id;
+      document.getElementById('categorySubject').value = c.subject;
       document.getElementById('categoryName').value = c.name;
       document.getElementById('categoryVolumes').value = c.volumes;
       document.getElementById('categoryDescription').value = c.description || '';
