@@ -2247,11 +2247,15 @@
     }
     let mesh;
     if (type.indexOf('robot:') === 0 && def.svg) {
-      // 형태를 다시 해석해서 그리지 않고, 등록된 정면 이미지를 그대로 가져와 납작한 판에 텍스처로 씌운다.
+      // 형태를 다시 해석해서 그리지 않고, 등록된 정면 이미지를 그대로 윗면에 텍스처로 씌운 "두께 있는 상자"로 만든다.
+      // (판 하나로 만들면 모양은 이미지와 똑같아도 두께가 사라져 2D처럼 보이고, 눕히려고 mesh.rotation을 주면
+      // 매 프레임 animate()의 mesh.quaternion.copy(body.quaternion)가 그 회전을 항등값으로 덮어써서 다시 세워진 채
+      // 나온다 — 상자는 원래부터 Y가 두께 방향이라 회전 없이도 눕혀 있으므로 이 문제 자체가 없다.)
       const tex = robotSvgTexture(def.svg);
-      const planeMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide });
-      mesh = new THREE.Mesh(new THREE.PlaneGeometry(def.planeW || def.w, def.planeD || def.d), planeMat);
-      mesh.rotation.x = -Math.PI / 2; // 바닥에 눕혀서 위에서 내려다보이게(다른 로봇 부품들과 같은 방향)
+      const topMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true });
+      const sideMat = new THREE.MeshStandardMaterial({ color: partColor(type) });
+      const w = def.planeW || def.w, d = def.planeD || def.d;
+      mesh = new THREE.Mesh(new THREE.BoxGeometry(w, def.h, d), [sideMat, sideMat, topMat, sideMat, sideMat, sideMat]); // +X -X +Y -Y +Z -Z
     } else if (isStraightType(type)) {
       mesh = new THREE.Group();
       const rampMat = new THREE.MeshStandardMaterial({ color: partColor('straight') });
