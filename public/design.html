@@ -796,8 +796,8 @@
   })();
 
   // 관리자가 등록한 부품 카탈로그(이름·수량·색상·사이즈)를 선택된 카테고리·권 기준으로 보여준다.
-  // "사이즈" 글자(예: "10×50×5mm")에서 가로×세로×두께 숫자 3개를 뽑아 상자 모양으로 3D에 놓을 수 있게 등록한다.
-  // 볼트·기어·센서처럼 사이즈가 없거나 형태가 복잡한 부품은 정확한 모양 대신 작은 기본 상자로 대체한다(실제 생김새와 다를 수 있음).
+  // "사이즈" 글자(예: "10×50×5mm")를 읽어서 골드버그 부품처럼(타공판·기둥이 구멍 텍스처를 입히는 것과 같은 방식) 부품 갈래별로
+  // 실제 생김새에 가까운 모양을 만든다. 사이즈·형태 정보가 전혀 없는 일부 부품(센서·모터 등)은 그래도 상자로 대신한다.
   let robotPartsCache = [];
   function parseRobotBoxDims(sizeStr){
     if (!sizeStr) return null;
@@ -806,12 +806,95 @@
     const nums = [Number(m[1]), Number(m[2]), Number(m[3])].sort((a, b) => b - a);
     return { w: nums[0], d: nums[1], h: Math.max(nums[2], 2) };
   }
+  function parseHoleGrid(sizeStr){ // "구멍 N×M": N=폭 방향 줄 수, M=길이 방향 구멍 수
+    if (!sizeStr) return null;
+    const m = sizeStr.match(/구멍\s*(\d+)\s*[×xX]\s*(\d+)/);
+    return m ? { rows: Number(m[1]), cols: Number(m[2]) } : null;
+  }
+  function parseDiameterMM(sizeStr){
+    if (!sizeStr) return null;
+    const m = sizeStr.match(/[ØøΦ]\s*(\d+(?:\.\d+)?)/);
+    return m ? Number(m[1]) : null;
+  }
+  function parseBendArmsMM(sizeStr){ // "팔샱35mm(4구메)+55mm(6구메)" → [35, 55]
+    if (!sizeStr) return null;
+    const m = sizeStr.match(/(\d+(?:\.\d+)?)\s*mm\([^)]*\)\s*\+\s*(\d+(?:\.\d+)?)\s*mm/);
+    return m ? [Number(m[1]), Number(m[2])] : null;
+  }
+  function parseBendAngleDeg(name){
+    const m = (name || '').match(/(\d+)\s*도/);
+    return m ? Number(m[1]) : null;
+  }
+  function parseRingRadiusMM(sizeStr){
+    if (!sizeStr) return null;
+    const m = sizeStr.match(/R\s*(\d+(?:\.\d+)?)\s*mm/);
+    return m ? Number(m[1]) : null;
+  }
   const ROBOT_COLOR_HEX = { '화이트': '#F2F4F8', '레드': '#E1493F', '블랙': '#2B2F36', '회색': '#9CA5AF', '그레이': '#9CA5AF' };
+  function parseBoltLengthMM(sizeStr){
+    if (!sizeStr) return null;
+    const m = sizeStr.match(/길이\s*(\d+(?:\.\d+)?)\s*mm/);
+    return m ? Number(m[1]) : null;
+  }
   function registerRobotPartDef(p){
     const type = 'robot:' + p.id;
     if (!PART_DEFS[type]) {
       const dims = parseRobotBoxDims(p.size) || { w: 20, h: 12, d: 20 };
-      PART_DEFS[type] = { label: p.name, w: dims.w, h: dims.h, d: dims.d, color: (p.color && ROBOT_COLOR_HEX[p.color]) || null };
+      const def = { label: p.name, w: dims.w, h: dims.h, d: dims.d, color: (p.color && ROBOT_COLOR_HEX[p.color]) || null };
+      const group = robotPartGroupTitle(p.name);
+      if (group === '프레임') {
+        const ringR = parseRingRadiusMM(p.size);
+        const bendDeg = parseBendAngleDeg(p.name);
+        if (ringR) {
+          def.shapeKind = 'frameRing';
+          def.ringR = ringR;
+          def.armWidth = 10; // 실측 데이터가 없어 한 줄 구멍 폭(10mm)으로 가정
+          def.w = ringR * 2; def.h = 5; def.d = ringR * 2;
+        } else if (bendDeg) {
+          const arms = parseBendArmsMM(p.size) || [dims.w / 2, dims.w / 2];
+          def.shapeKind = 'frameBent';
+          def.bendDeg = bendDeg;
+          def.arm1 = arms[0];
+          def.arm2 = arms[1];
+          def.armWidth = 10; // 실측 데이터가 없어 한 줄 구멍 폭(10mm)으로 가정
+        } else {
+          const holes = parseHoleGrid(p.size);
+          def.shapeKind = 'frame';
+          def.holesLen = holes ? holes.cols : Math.max(1, Math.round(dims.w / 10));
+          def.holesWidth = holes ? holes.rows : Math.max(1, Math.round(dims.d / 10));
+        }
+      } else if (group === '바퀴') {
+        def.shapeKind = 'wheel';
+        def.wheelR = 22; def.wheelW = 14; // 실측 데이터가 없어 소형 로봇 바퀴 크기로 가정
+        def.w = def.wheelR * 2; def.h = def.wheelW; def.d = def.wheelR * 2;
+      } else if (group === '기어') {
+        const dia = parseDiameterMM(p.size) || Math.max(dims.w, dims.d, 20);
+        def.shapeKind = 'gear';
+        def.gearR = dia / 2;
+        def.w = dia; def.h = 8; def.d = dia;
+      } else if (group === '축') {
+        def.shapeKind = 'shaft'; // 십자단면(+) 축 — w=길이, h/d는 팔 두께
+      } else if (group === '볼트·너트·부속') {
+        if (p.name.includes('볼트')) {
+          const len = parseBoltLengthMM(p.size) || 10;
+          def.shapeKind = 'bolt';
+          def.boltLen = len; def.boltR = 2.2; def.headR = 4.5;
+          def.w = def.headR * 2; def.h = len + 2; def.d = def.headR * 2;
+        } else if (p.name.includes('너트')) {
+          def.shapeKind = 'nut';
+          def.nutR = 5; def.nutH = 3;
+          def.w = def.nutR * 2; def.h = def.nutH; def.d = def.nutR * 2;
+        } else {
+          def.shapeKind = 'stud'; // 부시·리벳
+          def.studR = Math.max(dims.w, dims.d) / 2 || 3;
+          def.studH = Math.min(dims.w, dims.d, dims.h) || 5;
+        }
+      } else if (group === '모터·서보' && p.name.includes('모터')) {
+        def.shapeKind = 'motor';
+        def.motorR = Math.min(dims.d, dims.h) / 2 || 15;
+        def.motorLen = dims.w;
+      }
+      PART_DEFS[type] = def;
     }
     return type;
   }
@@ -1226,6 +1309,32 @@
     // pillar = one row of the perforated panel's holes, cut into a long strip
     const tex = makePillarTexture(partColor('pillar'));
     tex.repeat.set(w / GRID_UNIT, 1);
+    return new THREE.MeshStandardMaterial({ map: tex, color: 0xffffff });
+  }
+
+  // 로봇 프레임: 큐보 부품은 10mm 피치(기둥·타공판의 20 대신 10)라, 같은 반복 텍스처 방식을 피치만 다르게 써서
+  // 실제 등록된 "구멍 N×M" 개수만큼 구멍이 보이는 판을 만든다.
+  const ROBOT_HOLE_PITCH = 10;
+  function makeRobotFrameTexture(baseColorHex){
+    const c = document.createElement('canvas');
+    c.width = 64; c.height = 64;
+    const tctx = c.getContext('2d');
+    tctx.fillStyle = baseColorHex;
+    tctx.fillRect(0, 0, 64, 64);
+    tctx.fillStyle = 'rgba(255,255,255,0.10)';
+    tctx.fillRect(0, 0, 64, 20);
+    tctx.fillStyle = 'rgba(0,0,0,0.45)';
+    tctx.beginPath();
+    tctx.arc(32, 32, 13, 0, Math.PI * 2);
+    tctx.fill();
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    return tex;
+  }
+  function makeRobotFrameMaterial(lengthMM, widthMM, colorHex){
+    const tex = makeRobotFrameTexture(colorHex);
+    tex.repeat.set(Math.max(1, lengthMM / ROBOT_HOLE_PITCH), Math.max(1, widthMM / ROBOT_HOLE_PITCH));
     return new THREE.MeshStandardMaterial({ map: tex, color: 0xffffff });
   }
 
@@ -1864,6 +1973,7 @@
     partCounter++;
     const pinLen = type === 'pin' ? Math.min(Math.max((forcedPos && forcedPos.len) || PIN_DEFAULT_LEN, PIN_MIN_LEN), PIN_MAX_LEN) : 0;
     const def = type === 'pin' ? Object.assign({}, PART_DEFS.pin, { h: pinLen }) : PART_DEFS[type];
+    const rk = def.shapeKind || null; // 로봇 부품 갈래(shapeKind) — 프레임/바퀴/기어 등 실제 모양을 고를 때 쓴다
     const mc = type === 'marble' ? 'floor' : mountChoice;
     let x, y, z, mount;
     if (forcedPos) {
@@ -1931,6 +2041,14 @@
       const flat = new THREE.MeshStandardMaterial({ color: partColor('hinge') });
       const holed = makePanelMaterial(def.w, def.d, partColor('hinge'));
       mat = [flat, flat, holed, holed, flat, flat];
+    } else if (rk === 'frame') {
+      // 큐보 프레임: 타공판·기둥과 같은 방식으로 윗면에 등록된 구멍 개수만큼 실제 구멍이 보이게 텍스처를 입힌다
+      const c = partColor(type);
+      const flat = new THREE.MeshStandardMaterial({ color: c });
+      const holed = makeRobotFrameMaterial(def.w, def.d, c);
+      const holedBottom = makeRobotFrameMaterial(def.w, def.d, c);
+      holedBottom.color.set(BOTTOM_TINT);
+      mat = [flat, flat, holed, holedBottom, flat, flat];
     } else {
       mat = new THREE.MeshStandardMaterial({ color: partColor(type) });
     }
@@ -2000,6 +2118,95 @@
         peg.position.set(sg * BASKET_PEG_CX, 0, 0);
         mesh.add(peg);
       });
+    } else if (rk === 'frameBent') {
+      // 꺾인 프레임: 팔 두 개를 등록된 각도로 이어붙인다(예: 135°는 두 팔 사이가 135°). 전체를 바운딩박스 가운데로 옮겨서
+      // 선택·회전 기준점이 자연스럽게 부품 한가운데에 오게 한다.
+      mesh = new THREE.Group();
+      const c = partColor(type);
+      const segMat = new THREE.MeshStandardMaterial({ color: c });
+      const rad = (180 - def.bendDeg) * Math.PI / 180;
+      const seg1 = new THREE.Mesh(new THREE.BoxGeometry(def.arm1, def.h, def.armWidth), segMat);
+      seg1.position.set(def.arm1 / 2, 0, 0);
+      mesh.add(seg1);
+      const seg2 = new THREE.Mesh(new THREE.BoxGeometry(def.arm2, def.h, def.armWidth), segMat);
+      seg2.position.set(Math.cos(rad) * def.arm2 / 2, 0, Math.sin(rad) * def.arm2 / 2);
+      seg2.rotation.y = -rad;
+      mesh.add(seg2);
+      const xs = [0, def.arm1, Math.cos(rad) * def.arm2], zs = [0, 0, Math.sin(rad) * def.arm2];
+      const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cz = (Math.min(...zs) + Math.max(...zs)) / 2;
+      mesh.children.forEach(m => { m.position.x -= cx; m.position.z -= cz; });
+    } else if (rk === 'frameRing') {
+      // 반원프레임: 실제로 둥근 부품이라 곧은 상자로는 안 맞아서 반원(토러스)으로 만든다
+      const c = partColor(type);
+      mesh = new THREE.Mesh(new THREE.TorusGeometry(def.ringR, Math.max(2, def.h / 2), 8, 28, Math.PI), new THREE.MeshStandardMaterial({ color: c }));
+      mesh.rotation.x = -Math.PI / 2;
+    } else if (rk === 'wheel') {
+      // 바퀴: 타이어(바깥 원기둥) + 림(안쪽 밝은 원기둥)
+      mesh = new THREE.Group();
+      const tireMat = new THREE.MeshStandardMaterial({ color: def.color || '#2B2F36' });
+      const rimMat = new THREE.MeshStandardMaterial({ color: '#C3CBD6' });
+      const tire = new THREE.Mesh(new THREE.CylinderGeometry(def.wheelR, def.wheelR, def.wheelW, 28), tireMat);
+      tire.rotation.x = Math.PI / 2;
+      mesh.add(tire);
+      const rim = new THREE.Mesh(new THREE.CylinderGeometry(def.wheelR * 0.55, def.wheelR * 0.55, def.wheelW + 1, 16), rimMat);
+      rim.rotation.x = Math.PI / 2;
+      mesh.add(rim);
+    } else if (rk === 'gear') {
+      // 기어: 이(톱니)까지는 못 만들어도, 몸통(원판) + 가운데 허브로 최소한 동그란 기계 부품처럼 보이게 한다
+      mesh = new THREE.Group();
+      const c = partColor(type);
+      const bodyMat = new THREE.MeshStandardMaterial({ color: c });
+      const hubMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(c).multiplyScalar(0.7) });
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(def.gearR, def.gearR, 8, 24), bodyMat);
+      body.rotation.x = Math.PI / 2;
+      mesh.add(body);
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(def.gearR * 0.35, def.gearR * 0.35, 9, 16), hubMat);
+      hub.rotation.x = Math.PI / 2;
+      mesh.add(hub);
+    } else if (rk === 'shaft') {
+      // 축: 실제로 십자(+) 단면이라, 평범한 사각 기둥 대신 십자 모양을 그려서 길이만큼 뽑아(extrude) 만든다
+      const c = partColor(type);
+      const armW = Math.min(def.h, def.d) / 2, full = Math.max(def.h, def.d) / 2;
+      const shape = new THREE.Shape();
+      shape.moveTo(-armW, -full); shape.lineTo(armW, -full); shape.lineTo(armW, -armW); shape.lineTo(full, -armW);
+      shape.lineTo(full, armW); shape.lineTo(armW, armW); shape.lineTo(armW, full); shape.lineTo(-armW, full);
+      shape.lineTo(-armW, armW); shape.lineTo(-full, armW); shape.lineTo(-full, -armW); shape.lineTo(-armW, -armW);
+      shape.closePath();
+      const geoShaft = new THREE.ExtrudeGeometry(shape, { depth: def.w, bevelEnabled: false });
+      geoShaft.rotateY(Math.PI / 2);
+      geoShaft.translate(def.w / 2, 0, 0);
+      mesh = new THREE.Mesh(geoShaft, new THREE.MeshStandardMaterial({ color: c || '#B8C0CC' }));
+    } else if (rk === 'bolt') {
+      // 볼트: 머리(짧고 굵은 원기둥) + 나사축(가늘고 긴 원기둥)
+      mesh = new THREE.Group();
+      const boltMat = new THREE.MeshStandardMaterial({ color: '#8B95A1' });
+      const head = new THREE.Mesh(new THREE.CylinderGeometry(def.headR, def.headR, 3, 16), boltMat);
+      mesh.add(head);
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(def.boltR, def.boltR, def.boltLen, 12), boltMat);
+      shaft.position.y = -(def.boltLen / 2 + 1.5);
+      mesh.add(shaft);
+    } else if (rk === 'nut') {
+      // 너트: 육각기둥(원기둥의 각을 6개로 줄이면 육각형이 된다) + 가운데 구멍 느낌의 어두운 속
+      mesh = new THREE.Group();
+      const nutMat = new THREE.MeshStandardMaterial({ color: '#7C8590' });
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(def.nutR, def.nutR, def.nutH, 6), nutMat);
+      mesh.add(body);
+      const hole = new THREE.Mesh(new THREE.CylinderGeometry(def.nutR * 0.45, def.nutR * 0.45, def.nutH + 0.5, 12), new THREE.MeshStandardMaterial({ color: '#2B2F36' }));
+      mesh.add(hole);
+    } else if (rk === 'stud') {
+      // 부시·리벳: 짧은 원기둥
+      mesh = new THREE.Mesh(new THREE.CylinderGeometry(def.studR, def.studR, def.studH, 16), new THREE.MeshStandardMaterial({ color: partColor(type) || '#8B95A1' }));
+    } else if (rk === 'motor') {
+      // 모터: 몸통(원기둥) + 축 튀어나온 부분(가는 원기둥)
+      mesh = new THREE.Group();
+      const c = partColor(type);
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(def.motorR, def.motorR, def.motorLen, 20), new THREE.MeshStandardMaterial({ color: c }));
+      body.rotation.z = Math.PI / 2;
+      mesh.add(body);
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 8, 10), new THREE.MeshStandardMaterial({ color: '#B8C0CC' }));
+      shaft.rotation.z = Math.PI / 2;
+      shaft.position.x = def.motorLen / 2 + 4;
+      mesh.add(shaft);
     } else {
       mesh = new THREE.Mesh(geo, mat);
     }
