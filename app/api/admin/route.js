@@ -94,7 +94,7 @@ const PART_SUBJECTS = ['goldberg', 'robot', 'aviation']
 async function listParts(sb) {
   const { data, error } = await sb.from('ivs_part_catalog').select('id, data, created_at').order('created_at', { ascending: true })
   if (error) throw new Error(error.message)
-  return (data || []).map((r) => ({ id: r.id, name: r.data?.name || '', icon: r.data?.icon || '', subject: r.data?.subject || '', category: r.data?.category || '', volume: r.data?.volume ?? null, qty: r.data?.qty ?? null, color: r.data?.color || '', size: r.data?.size || '', imageSvg: r.data?.image_svg || '', imageSvgDiagonal: r.data?.image_svg_diagonal || '', createdAt: r.created_at }))
+  return (data || []).map((r) => ({ id: r.id, name: r.data?.name || '', icon: r.data?.icon || '', subject: r.data?.subject || '', category: r.data?.category || '', volume: r.data?.volume ?? null, qty: r.data?.qty ?? null, color: r.data?.color || '', size: r.data?.size || '', imageSvg: r.data?.image_svg || '', imageSvgDiagonal: r.data?.image_svg_diagonal || '', primaryImage: r.data?.primary_image === 'diagonal' ? 'diagonal' : 'front', createdAt: r.created_at }))
 }
 
 async function listRobotCategories(sb) {
@@ -188,11 +188,12 @@ export async function POST(request) {
       const size = String(body.size || '').trim()
       const imageSvg = String(body.imageSvg || '').trim()
       const imageSvgDiagonal = String(body.imageSvgDiagonal || '').trim()
+      const primaryImage = body.primaryImage === 'diagonal' ? 'diagonal' : 'front'
       if (!name) return json({ error: '부품 이름을 입력해주세요.' }, 400)
       if (!PART_SUBJECTS.includes(subject)) return json({ error: '과목을 선택해주세요.' }, 400)
       if (qty != null && (!Number.isInteger(qty) || qty < 1)) return json({ error: '수량은 1 이상 정수로 입력해주세요.' }, 400)
       if (volume != null && (!Number.isInteger(volume) || volume < 1)) return json({ error: '권은 1 이상 정수로 입력해주세요.' }, 400)
-      const { error } = await sb.from('ivs_part_catalog').insert({ data: { name, icon, subject, category: category || null, volume, qty, color: color || null, size: size || null, image_svg: imageSvg || null, image_svg_diagonal: imageSvgDiagonal || null, createdAt: Date.now() } })
+      const { error } = await sb.from('ivs_part_catalog').insert({ data: { name, icon, subject, category: category || null, volume, qty, color: color || null, size: size || null, image_svg: imageSvg || null, image_svg_diagonal: imageSvgDiagonal || null, primary_image: primaryImage, createdAt: Date.now() } })
       if (error) throw new Error(error.message)
       return json({ ok: true, parts: await listParts(sb) })
     }
@@ -212,6 +213,7 @@ export async function POST(request) {
       const size = String(body.size || '').trim()
       const imageSvg = String(body.imageSvg || '').trim()
       const imageSvgDiagonal = String(body.imageSvgDiagonal || '').trim()
+      const primaryImage = body.primaryImage === 'diagonal' ? 'diagonal' : 'front'
       if (!name) return json({ error: '부품 이름을 입력해주세요.' }, 400)
       if (!PART_SUBJECTS.includes(subject)) return json({ error: '과목을 선택해주세요.' }, 400)
       if (qty != null && (!Number.isInteger(qty) || qty < 1)) return json({ error: '수량은 1 이상 정수로 입력해주세요.' }, 400)
@@ -220,7 +222,7 @@ export async function POST(request) {
       if (fetchErr) throw new Error(fetchErr.message)
       if (!existing) return json({ error: '부품을 찾을 수 없어요.' }, 404)
       const createdAt = existing.data?.createdAt ?? Date.now()
-      const { error } = await sb.from('ivs_part_catalog').update({ data: { name, icon, subject, category: category || null, volume, qty, color: color || null, size: size || null, image_svg: imageSvg || null, image_svg_diagonal: imageSvgDiagonal || null, createdAt } }).eq('id', partId)
+      const { error } = await sb.from('ivs_part_catalog').update({ data: { name, icon, subject, category: category || null, volume, qty, color: color || null, size: size || null, image_svg: imageSvg || null, image_svg_diagonal: imageSvgDiagonal || null, primary_image: primaryImage, createdAt } }).eq('id', partId)
       if (error) throw new Error(error.message)
       return json({ ok: true, parts: await listParts(sb) })
     }

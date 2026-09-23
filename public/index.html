@@ -376,6 +376,12 @@
         <div><label>사이즈</label><input id="partSize" placeholder="예: 15cm, M3" autocomplete="off"></div>
         <div><label>이미지 — 위/정면 샷 (SVG 코드, 선택)</label><textarea id="partImageSvg" rows="3" placeholder="&lt;svg&gt;...&lt;/svg&gt; 코드를 붙여넣으면 목록에 썸네일로 보여요." autocomplete="off"></textarea></div>
         <div><label>이미지 — 대각선(입체) 샷 (SVG 코드, 선택)</label><textarea id="partImageSvgDiagonal" rows="3" placeholder="&lt;svg&gt;...&lt;/svg&gt; 코드를 붙여넣으면 위 이미지 옆에 나란히 보여요." autocomplete="off"></textarea></div>
+        <div><label>학생 설계 화면에 대표로 보여줄 이미지</label>
+          <div style="display:flex; gap:14px; align-items:center; padding-top:2px;">
+            <label style="display:flex; align-items:center; gap:6px; font-weight:400;"><input type="radio" name="partPrimaryImage" value="front" checked> 위/정면 샷</label>
+            <label style="display:flex; align-items:center; gap:6px; font-weight:400;"><input type="radio" name="partPrimaryImage" value="diagonal"> 대각선(입체) 샷</label>
+          </div>
+        </div>
         <p class="note err" id="partMsg" hidden></p>
         <div style="display:flex; gap:8px;">
           <button type="submit" class="primary" id="partSubmitBtn">등록</button>
@@ -1442,7 +1448,8 @@
     const sub = [p.size, p.color, (p.qty != null ? p.qty + '개' : '')].filter(Boolean).join(' · ');
     const editBtn = p._merged ? '' : `<button type="button" class="ghost" data-edit-part="${escapeHtml(p.id)}">수정</button>`;
     const delBtn = p._merged ? '' : `<button type="button" class="ghost" data-delete-part="${escapeHtml(p.id)}">삭제</button>`;
-    const thumbSrc = uniquifySvgIds(p.imageSvg || p.imageSvgDiagonal, p.id);
+    const primarySvg = p.primaryImage === 'diagonal' ? p.imageSvgDiagonal : p.imageSvg;
+    const thumbSrc = uniquifySvgIds(primarySvg || p.imageSvg || p.imageSvgDiagonal, p.id);
     const thumb = thumbSrc ? `<button type="button" class="part-thumb" data-view-image="${escapeHtml(p.id)}">${thumbSrc}</button>` : '';
     return `<div class="design-row" style="align-items:center;"><div class="item-main"><div class="item-title">${escapeHtml(p.icon ? p.icon + ' ' : '')}${escapeHtml(p.name)}</div><div class="item-sub">${escapeHtml(sub)}</div></div><div style="display:flex; align-items:center; gap:8px; flex:none;">${thumb}${editBtn}${delBtn}</div></div>`;
   }
@@ -1559,7 +1566,8 @@
       const subject = document.getElementById('partSubject').value;
       const isRobot = subject === 'robot';
       const editId = document.getElementById('partEditId').value;
-      const payload = { name: document.getElementById('partName').value, icon: document.getElementById('partIcon').value, subject, category: isRobot ? document.getElementById('partCategory').value : '', volume: isRobot ? document.getElementById('partVolume').value : '', qty: document.getElementById('partQty').value, color: document.getElementById('partColor').value, size: document.getElementById('partSize').value, imageSvg: document.getElementById('partImageSvg').value, imageSvgDiagonal: document.getElementById('partImageSvgDiagonal').value };
+      const primaryImageInput = document.querySelector('input[name="partPrimaryImage"]:checked');
+      const payload = { name: document.getElementById('partName').value, icon: document.getElementById('partIcon').value, subject, category: isRobot ? document.getElementById('partCategory').value : '', volume: isRobot ? document.getElementById('partVolume').value : '', qty: document.getElementById('partQty').value, color: document.getElementById('partColor').value, size: document.getElementById('partSize').value, imageSvg: document.getElementById('partImageSvg').value, imageSvgDiagonal: document.getElementById('partImageSvgDiagonal').value, primaryImage: primaryImageInput ? primaryImageInput.value : 'front' };
       if (editId) { payload.action = 'update_part'; payload.partId = editId; } else { payload.action = 'add_part'; }
       await adminApi(payload);
       resetPartForm();
@@ -1581,8 +1589,8 @@
       if (p && (p.imageSvg || p.imageSvgDiagonal)) {
         document.getElementById('imgModalTitle').textContent = [p.name, p.size].filter(Boolean).join(' · ');
         const shots = [];
-        if (p.imageSvg) shots.push(`<div class="img-modal-shot"><div class="note" style="margin-bottom:6px;">위/정면</div>${uniquifySvgIds(p.imageSvg, p.id)}</div>`);
-        if (p.imageSvgDiagonal) shots.push(`<div class="img-modal-shot"><div class="note" style="margin-bottom:6px;">대각선(입체)</div>${uniquifySvgIds(p.imageSvgDiagonal, p.id)}</div>`);
+        if (p.imageSvg) shots.push(`<div class="img-modal-shot"><div class="note" style="margin-bottom:6px;">위/정면${p.primaryImage !== 'diagonal' ? ' · 대표' : ''}</div>${uniquifySvgIds(p.imageSvg, p.id)}</div>`);
+        if (p.imageSvgDiagonal) shots.push(`<div class="img-modal-shot"><div class="note" style="margin-bottom:6px;">대각선(입체)${p.primaryImage === 'diagonal' ? ' · 대표' : ''}</div>${uniquifySvgIds(p.imageSvgDiagonal, p.id)}</div>`);
         document.getElementById('imgModalBody').innerHTML = `<div class="img-modal-shots">${shots.join('')}</div>`;
         document.getElementById('imgModalBackdrop').hidden = false;
       }
@@ -1606,6 +1614,8 @@
       document.getElementById('partSize').value = p.size || '';
       document.getElementById('partImageSvg').value = p.imageSvg || '';
       document.getElementById('partImageSvgDiagonal').value = p.imageSvgDiagonal || '';
+      const primaryRadio = document.querySelector('input[name="partPrimaryImage"][value="' + (p.primaryImage === 'diagonal' ? 'diagonal' : 'front') + '"]');
+      if (primaryRadio) primaryRadio.checked = true;
       document.getElementById('partSubmitBtn').textContent = '수정 저장';
       document.getElementById('partCancelEdit').hidden = false;
       document.getElementById('partForm').scrollIntoView({ behavior: 'smooth', block: 'start' });

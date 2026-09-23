@@ -138,6 +138,7 @@
   .part-icon.hinge::after{content:""; position:absolute; left:50%; top:50%; width:7px; height:7px; background:var(--ink); border-radius:50%; transform:translate(-50%,-50%);}
   .part-icon.tape{background:repeating-linear-gradient(45deg, var(--tape), var(--tape) 5px, transparent 5px, transparent 9px); border:1px dashed var(--ink-soft);}
   .part-icon-svg{display:block; width:auto; margin:0 auto 5px;}
+  .part-icon-robot{height:52px; max-width:100%;}
   .svg-pillar{fill:var(--pillar);} .svg-hole{fill:rgba(0,0,0,0.4);}
   .svg-bracket{fill:var(--bracket);} .svg-bracket-line{fill:none; stroke:rgba(255,255,255,0.7); stroke-width:1.4;}
   .svg-clip{fill:var(--clip);}
@@ -791,6 +792,14 @@
     }
     return type;
   }
+  // 관리자가 부품 관리에서 고른 대표 이미지(정면/대각선)를 쓰고, 없으면 있는 쪽으로 대신한다.
+  function robotPartIconHtml(p){
+    const svg = (p.primaryImage === 'diagonal' ? p.imageSvgDiagonal : p.imageSvg) || p.imageSvg || p.imageSvgDiagonal;
+    if (!svg) return '';
+    // width/height는 루트 <svg> 태그에서만 떼어내야 한다 — 태그 안 어딘가에 있는 첫 width/height를 그냥 지우면
+    // (루트에 width/height가 없는, viewBox만 있는 SVG의 경우) 내부 도형의 크기가 잘못 지워질 수 있다.
+    return svg.replace(/^<svg\b([^>]*)>/, (m, attrs) => '<svg class="part-icon-svg part-icon-robot"' + attrs.replace(/\s(width|height)="[^"]*"/g, '') + '>');
+  }
   function renderVolumeParts(categoryId, volume){
     const el = document.getElementById('volumePartsPalette');
     if (!el) return;
@@ -798,8 +807,7 @@
     if (!items.length) { el.innerHTML = '<p class="part-note">아직 등록된 부품이 없어요. 곧 준비할게요!</p>'; return; }
     el.innerHTML = '<h2>' + volume + '권 부품</h2><div class="part-grid">' + items.map(p => {
       const type = registerRobotPartDef(p);
-      const sub = [p.size, p.color, (p.qty != null ? p.qty + '개' : '')].filter(Boolean).join(' · ');
-      return '<button class="part-card" data-type="' + esc(type) + '">' + (p.icon ? p.icon + ' ' : '') + esc(p.name) + (sub ? '<br><small>' + esc(sub) + '</small>' : '') + '</button>';
+      return '<button class="part-card" data-type="' + esc(type) + '">' + robotPartIconHtml(p) + esc(p.name) + '</button>';
     }).join('') + '</div><p class="part-note">부품을 누르거나 3D 화면으로 끌어서 놓아보세요. 실제 부품 생김새와는 다를 수 있어요.</p>';
     el.querySelectorAll('.part-card').forEach(wirePartCard);
   }
@@ -812,7 +820,7 @@
       });
       if (!res.ok) return;
       const rows = await res.json();
-      robotPartsCache = (rows || []).map(r => ({ id: r.id, name: r.data && r.data.name, icon: r.data && r.data.icon, category: r.data && r.data.category, volume: r.data && r.data.volume, qty: r.data && r.data.qty, color: r.data && r.data.color, size: r.data && r.data.size }));
+      robotPartsCache = (rows || []).map(r => ({ id: r.id, name: r.data && r.data.name, icon: r.data && r.data.icon, category: r.data && r.data.category, volume: r.data && r.data.volume, qty: r.data && r.data.qty, color: r.data && r.data.color, size: r.data && r.data.size, imageSvg: r.data && r.data.image_svg, imageSvgDiagonal: r.data && r.data.image_svg_diagonal, primaryImage: r.data && r.data.primary_image }));
       // 저장된 프로젝트를 불러올 때 restoreParts가 즉시 PART_DEFS를 찾을 수 있도록, 화면에 아직 안 띄운 권까지 전부 미리 등록해 둔다.
       robotPartsCache.forEach(registerRobotPartDef);
       const picker = document.querySelector('.lesson-picker');
