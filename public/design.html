@@ -2272,51 +2272,24 @@
       // 곧은 프레임: 등록된 사진처럼 윗면에 구멍이 10mm 간격으로 뚫려 보이는 판.
       mesh = new THREE.Mesh(new THREE.BoxGeometry(def.w, def.h, def.d), robotPlateMaterials(def.w, def.d, partColor(type)));
     } else if (rk === 'frameBent') {
-      // 꺾인 프레임: 팔 두 개를 상자 두 개로 따로 붙이면 꺾이는 자리에 이가 안 맞는 틈/뾰족한 자국이 남는다(사진 속 실제
-      // 부품은 이음매 없이 매끈한 판 하나다) — 그래서 판 전체를 꺾인 윤곽(육각형) 하나로 오려서 두께만큼 뽑아(extrude) 만든다.
-      // 팔 두 개가 코너에서 뻗어나가는 방향 사이의 각도 = bendDeg 그 자체다(참고 사진 구멍 좌표로 직접 검산: 135도 프레임은
-      // 두 팔 방향 벡터 사이각이 정확히 135°, 90도 프레임은 90°).
+      // 꺾인 프레임: 팔 두 개를 상자 두 개로 붙이되, 각자 코너 너머로 폭의 절반(W/2)만큼 더 늘려서 겹치게 만든다.
+      // (육각형 하나로 오려서 이어붙이는 방식을 두 번 시도했는데, 뾰족한 이음매 점이나 대각선으로 가로지르는 이음선이
+      // 90°처럼 덜 벌어진 각도에서 모양을 깨뜨렸다 — 135°에서만 우연히 맞았을 뿐. 두 상자를 코너 안쪽으로 살짝 겹치게
+      // 늘리는 게 어떤 각도에서도 안전하다: 코너 둘레가 항상 두 상자 중 하나에는 포함되기 때문에 틈이 생길 수 없다.)
       const c = partColor(type);
       const rad = def.bendDeg * Math.PI / 180;
-      const d1 = { x: 1, y: 0 }, d2 = { x: Math.cos(rad), y: Math.sin(rad) }; // 팔 방향(x,y는 이 부품의 X,Z축)
-      const perp1 = { x: -d1.y, y: d1.x }, perp2 = { x: -d2.y, y: d2.x };
       const W = def.armWidth;
-      const addv = (a, b) => ({ x: a.x + b.x, y: a.y + b.y });
-      const scl = (a, s) => ({ x: a.x * s, y: a.y * s });
-      // 팔 옆면(코너에서 W/2만큼 띄운 직선) 두 개를 서로 교차시켜 꺾이는 자리의 이음매 점을 구한다 — 틈도 겹침도 없이 딱 맞는다.
-      function lineIntersect(p1, v1, p2, v2){
-        const denom = v1.x * v2.y - v1.y * v2.x;
-        if (Math.abs(denom) < 1e-6) return p1;
-        const t = ((p2.x - p1.x) * v2.y - (p2.y - p1.y) * v2.x) / denom;
-        return addv(p1, scl(v1, t));
-      }
-      const arm1End = scl(d1, def.arm1), arm2End = scl(d2, def.arm2);
-      const jointA = lineIntersect(scl(perp1, W / 2), d1, scl(perp2, W / 2), d2);
-      const jointB = lineIntersect(scl(perp1, -W / 2), d1, scl(perp2, -W / 2), d2);
-      const pts = [
-        jointA,
-        addv(arm1End, scl(perp1, W / 2)),
-        addv(arm1End, scl(perp1, -W / 2)),
-        jointB,
-        addv(arm2End, scl(perp2, -W / 2)),
-        addv(arm2End, scl(perp2, W / 2))
-      ];
-      const shape2d = new THREE.Shape();
-      shape2d.moveTo(pts[0].x, pts[0].y);
-      pts.slice(1).forEach(p => shape2d.lineTo(p.x, p.y));
-      shape2d.closePath();
-      const bentGeo = new THREE.ExtrudeGeometry(shape2d, { depth: def.h, bevelEnabled: false });
-      bentGeo.rotateX(-Math.PI / 2); // Shape는 XY평면에 그렸으니 바닥(XZ평면)에 눕힌다
-      bentGeo.translate(0, def.h / 2, 0);
-      // 구멍 텍스처 반복 횟수는 ExtrudeGeometry가 실제로 UV를 매기는 기준(이 2D 윤곽의 바운딩박스)에 맞춰야 구멍 크기·간격이 맞는다.
-      const allXs = pts.map(p => p.x), allYs = pts.map(p => p.y);
-      const bboxW = Math.max(...allXs) - Math.min(...allXs), bboxD = Math.max(...allYs) - Math.min(...allYs);
-      const capMat = makeRobotFrameMaterial(bboxW, bboxD, c);
-      const sideMat = new THREE.MeshStandardMaterial({ color: c });
-      mesh = new THREE.Mesh(bentGeo, [sideMat, new THREE.MeshStandardMaterial({ map: capMat.map, color: 0xffffff })]);
+      const ext1 = new THREE.Mesh(new THREE.BoxGeometry(def.arm1 + W / 2, def.h, W), robotPlateMaterials(def.arm1 + W / 2, W, c));
+      ext1.position.set((def.arm1 - W / 2) / 2, 0, 0);
+      const ext2 = new THREE.Mesh(new THREE.BoxGeometry(def.arm2 + W / 2, def.h, W), robotPlateMaterials(def.arm2 + W / 2, W, c));
+      ext2.position.set(Math.cos(rad) * (def.arm2 - W / 2) / 2, 0, Math.sin(rad) * (def.arm2 - W / 2) / 2);
+      ext2.rotation.y = -rad;
+      mesh = new THREE.Group();
+      mesh.add(ext1, ext2);
+      const arm1End = { x: def.arm1, y: 0 }, arm2End = { x: Math.cos(rad) * def.arm2, y: Math.sin(rad) * def.arm2 };
       const xs = [0, arm1End.x, arm2End.x], zs = [0, arm1End.y, arm2End.y];
       const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cz = (Math.min(...zs) + Math.max(...zs)) / 2;
-      mesh.position.x -= cx; mesh.position.z -= cz;
+      mesh.children.forEach(m => { m.position.x -= cx; m.position.z -= cz; });
     } else if (rk === 'bracket') {
       // ㄴ자 앵글 브라켓: 바닥에 눕는 판(arm1) + 그 끝에서 위로 서는 판(arm2, 두 판 모두 두께 h, 폭 armWidth) — 코너가 원점.
       // 두 판 다 바깥쪽 면(+Y 방향, 세운 판은 세워지면서 그 면이 앞을 보게 된다)에 구멍을 뚫는다.
