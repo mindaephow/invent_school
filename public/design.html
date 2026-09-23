@@ -923,7 +923,8 @@
     const type = 'robot:' + p.id;
     if (!PART_DEFS[type]) {
       const dims = parseRobotBoxDims(p.size) || { w: 20, h: 12, d: 20 };
-      const def = { label: p.name, w: dims.w, h: dims.h, d: dims.d, color: (p.color && ROBOT_COLOR_HEX[p.color]) || null };
+      // 형태를 다시 그려 넣지 말고, 등록된 정면 이미지를 그대로 가져다 쓴다 — 있으면 이 svg가 실제 모양을 대신한다.
+      const def = { label: p.name, w: dims.w, h: dims.h, d: dims.d, color: (p.color && ROBOT_COLOR_HEX[p.color]) || null, svg: p.imageSvg || p.imageSvgDiagonal || null };
       const group = robotPartGroupTitle(p.name);
       if (p.name === '메인보드') {
         // 등록된 사진으로 확인: 짙은 남색-회색 기판에 포트·버튼이 달린 납작한 보드 — 상자 그대로 쓰되 색만 보드 색으로 바꾼다.
@@ -1448,6 +1449,18 @@
     return new THREE.MeshStandardMaterial({ map: tex, color: 0xffffff });
   }
 
+  // 로봇 부품: 형태를 다시 그리지 않고 등록된 정면 이미지를 그대로 텍스처로 가져와 납작한 판에 씌운다.
+  // 같은 부품을 여러 개 놓아도 같은 텍스처를 다시 안 만들도록 svg 문자열 기준으로 캐시해 둔다.
+  const robotSvgTextureCache = new Map();
+  function robotSvgTexture(svg){
+    if (!svg) return null;
+    if (robotSvgTextureCache.has(svg)) return robotSvgTextureCache.get(svg);
+    const dataUri = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+    const tex = new THREE.TextureLoader().load(dataUri);
+    tex.anisotropy = 4;
+    robotSvgTextureCache.set(svg, tex);
+    return tex;
+  }
   // 로봇 프레임·브라켓 구멍 텍스처 — 등록된 참고 사진과 같은 10mm 피치(골드버그 타공판의 절반)에, 구멍 둘레에
   // 살짝 튀어나온 링(보스)까지 그려서 사진 속 "구멍 뚫린 금속판" 느낌을 낸다. 한 칸(10mm)이 텍스처 한 장.
   const ROBOT_HOLE_PITCH_MM = 10;
@@ -2203,7 +2216,13 @@
       mat = new THREE.MeshStandardMaterial({ color: partColor(type) });
     }
     let mesh;
-    if (isStraightType(type)) {
+    if (type.indexOf('robot:') === 0 && def.svg) {
+      // 형태를 다시 해석해서 그리지 않고, 등록된 정면 이미지를 그대로 가져와 납작한 판에 텍스처로 씌운다.
+      const tex = robotSvgTexture(def.svg);
+      const planeMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide });
+      mesh = new THREE.Mesh(new THREE.PlaneGeometry(def.w, def.d), planeMat);
+      mesh.rotation.x = -Math.PI / 2; // 바닥에 눕혀서 위에서 내려다보이게(다른 로봇 부품들과 같은 방향)
+    } else if (isStraightType(type)) {
       mesh = new THREE.Group();
       const rampMat = new THREE.MeshStandardMaterial({ color: partColor('straight') });
       const rampMatBottom = new THREE.MeshStandardMaterial({ color: new THREE.Color(partColor('straight')).multiplyScalar(0.82) });
