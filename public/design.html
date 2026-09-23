@@ -1031,6 +1031,23 @@
         def.hubColor = '#c71212'; // 사진 속 빨간 축 허브
       }
       if (!def.color) def.color = ROBOT_GROUP_DEFAULT_COLOR[group] || null;
+      // 이미지를 판에 붙일 실제 크기(planeW/planeD)를 정한다. 프레임류 svg는 1 svg 단위 ≈ 1mm로 그려진 도면이라
+      // viewBox 크기를 그대로 mm로 쓸 수 있다(여백까지 포함해서 — 여백을 빼고 부품 치수에 억지로 맞추면 그만큼
+      // 이미지가 눌리거나 늘어나서 구멍 간격·비율이 다 깨진다). 그 외(아이콘 스타일) svg는 실제 mm 단위가 아니라서,
+      // 종횡비만 살려 부품 치수 박스 안에 맞춘다.
+      if (def.svg) {
+        const vb = (def.svg.match(/viewBox="[-\d.]+\s+[-\d.]+\s+([\d.]+)\s+([\d.]+)"/) || []);
+        const vbW = vb[1] ? Number(vb[1]) : null, vbH = vb[2] ? Number(vb[2]) : null;
+        if (vbW && vbH) {
+          if (group === '프레임') {
+            def.planeW = vbW; def.planeD = vbH;
+          } else {
+            const scale = Math.min(def.w / vbW, def.d / vbH);
+            def.planeW = vbW * scale; def.planeD = vbH * scale;
+          }
+        }
+      }
+      if (!def.planeW) { def.planeW = def.w; def.planeD = def.d; }
       PART_DEFS[type] = def;
     }
     return type;
@@ -2220,7 +2237,7 @@
       // 형태를 다시 해석해서 그리지 않고, 등록된 정면 이미지를 그대로 가져와 납작한 판에 텍스처로 씌운다.
       const tex = robotSvgTexture(def.svg);
       const planeMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide });
-      mesh = new THREE.Mesh(new THREE.PlaneGeometry(def.w, def.d), planeMat);
+      mesh = new THREE.Mesh(new THREE.PlaneGeometry(def.planeW || def.w, def.planeD || def.d), planeMat);
       mesh.rotation.x = -Math.PI / 2; // 바닥에 눕혀서 위에서 내려다보이게(다른 로봇 부품들과 같은 방향)
     } else if (isStraightType(type)) {
       mesh = new THREE.Group();
