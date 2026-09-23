@@ -843,6 +843,82 @@
     const m = sizeStr.match(/길이\s*(\d+(?:\.\d+)?)\s*mm/);
     return m ? Number(m[1]) : null;
   }
+  // ---- 여기부터: size 글자가 아니라 등록된 정면 이미지(svg) 안의 실제 구멍 좌표를 코드가 직접 읽어서 판정한다 ----
+  // (135도 프레임 각도 버그가 "사람이 눈으로 보고 비슷하게" 만든 코드에서 나왔던 것과 같은 실수를 구조적으로 막기 위함.
+  // 이 정면 svg들은 <mask> 안에 구멍 위치만큼 <circle>을 뚫는 방식으로 그려져 있고, 1 svg 단위 ≈ 1mm로 그려진 도면이라
+  // 이 좌표를 실측 치수처럼 그대로 쓸 수 있다.)
+  function parseSvgMaskHoleCenters(svg){
+    if (!svg) return [];
+    const m = svg.match(/<mask[^>]*>([\s\S]*?)<\/mask>/);
+    const src = m ? m[1] : '';
+    return [...src.matchAll(/<circle[^>]*\bcx="(-?[\d.]+)"[^>]*\bcy="(-?[\d.]+)"/g)].map(mm => ({ x: Number(mm[1]), y: Number(mm[2]) }));
+  }
+  // 세 점을 지나는 원의 중심·반지름 — 구멍들이 원 위에 있는지(반원프레임 등) 확인할 때 쓴다.
+  function circumcircle(a, b, c){
+    const d = 2 * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y));
+    if (Math.abs(d) < 1e-6) return null;
+    const ux = ((a.x*a.x+a.y*a.y)*(b.y-c.y) + (b.x*b.x+b.y*b.y)*(c.y-a.y) + (c.x*c.x+c.y*c.y)*(a.y-b.y)) / d;
+    const uy = ((a.x*a.x+a.y*a.y)*(c.x-b.x) + (b.x*b.x+b.y*b.y)*(a.x-c.x) + (c.x*c.x+c.y*c.y)*(b.x-a.x)) / d;
+    return { x: ux, y: uy, r: Math.hypot(a.x - ux, a.y - uy) };
+  }
+  // 점 하나(origin)에서 방향(dir)으로 뻗은 직선까지 p의 수직 거리.
+  function pointLineResidual(p, origin, dir){
+    const cross = (p.x - origin.x) * dir.y - (p.y - origin.y) * dir.x;
+    return Math.abs(cross) / Math.hypot(dir.x, dir.y);
+  }
+  // 구멍 좌표들만 보고 평평한 판 / 꺾인 판(각도까지) / 반원인지 스스로 판정한다 — svg에 구멍이 나열된 "순서"에는 기대지 않는다
+  // (구멍이 그려진 순서가 실제 배치 순서와 다를 수 있어서, 좌표 자체의 기하학적 구조만으로 판정해야 한다).
+  function classifyFrameFromSvgHoles(holes){
+    if (holes.length < 3) return null;
+    const pts = holes;
+    // 반원: 아무 3점(처음·중간·끝)으로 외접원을 구해 나머지가 그 위에 있는지 확인
+    if (pts.length >= 5) {
+      const cc = circumcircle(pts[0], pts[Math.floor(pts.length / 2)], pts[pts.length - 1]);
+      if (cc && cc.r > 0) {
+        const maxErr = Math.max(...pts.map(p => Math.abs(Math.hypot(p.x - cc.x, p.y - cc.y) - cc.r)));
+        if (maxErr < 2) return { kind: 'ring', ringR: cc.r };
+      }
+    }
+    // 곧은 판: 가장 멀리 떨어진 두 점을 잇는 직선에 나머지 점들이 다 올라가 있으면 안 꺾인 것
+    let maxD = 0, farA = pts[0], farB = pts[0];
+    pts.forEach(p => pts.forEach(q => { const d = Math.hypot(p.x - q.x, p.y - q.y); if (d > maxD) { maxD = d; farA = p; farB = q; } }));
+    const straightDir = { x: farB.x - farA.x, y: farB.y - farA.y };
+    if (Math.hypot(straightDir.x, straightDir.y) > 1e-6 && Math.max(...pts.map(p => pointLineResidual(p, farA, straightDir))) < 1.5) {
+      return { kind: 'flat' };
+    }
+    // 꺾인 판: 코너가 될 후보를 하나씩 시도해서, 나머지 점들이 코너에서 두 방향(직선 두 개)으로 깔끔히 갈리는지 확인한다.
+    // (원형으로 정렬한 각도에서 가장 큰 틈 2개로 자르면 두 방향 묶음이 나온다 — 순서에 안 기대는 방식.)
+    let best = null;
+    for (let ci = 0; ci < pts.length; ci++) {
+      const corner = pts[ci];
+      const others = pts.filter((_, idx) => idx !== ci);
+      const withAngle = others.map(p => ({ p, ang: Math.atan2(p.y - corner.y, p.x - corner.x) })).sort((a, b) => a.ang - b.ang);
+      const n = withAngle.length;
+      if (n < 2) continue;
+      const gaps = [];
+      for (let i = 0; i < n; i++) {
+        const next = withAngle[(i + 1) % n];
+        let gap = next.ang - withAngle[i].ang;
+        if (i === n - 1 && gap <= 0) gap += Math.PI * 2; // 마지막 한 쌍만 각도가 한바퀴 돌아 이어진다
+        gaps.push({ i, gap });
+      }
+      gaps.sort((a, b) => b.gap - a.gap);
+      if (gaps.length < 2 || gaps[1].gap < 0.2) continue; // 유의미한 틈이 하나뿐이면(=사실상 한 방향) 이 후보는 코너가 아니다
+      const [c1, c2] = [gaps[0].i, gaps[1].i].sort((a, b) => a - b);
+      const groupA = [], groupB = [];
+      for (let i = 0; i < n; i++) (i > c1 && i <= c2 ? groupA : groupB).push(withAngle[i].p);
+      if (!groupA.length || !groupB.length) continue;
+      const farthest = group => group.reduce((f, p) => Math.hypot(p.x - corner.x, p.y - corner.y) > Math.hypot(f.x - corner.x, f.y - corner.y) ? p : f, group[0]);
+      const tipA = farthest(groupA), tipB = farthest(groupB);
+      const dirA = { x: tipA.x - corner.x, y: tipA.y - corner.y }, dirB = { x: tipB.x - corner.x, y: tipB.y - corner.y };
+      const residual = groupA.concat(groupB).reduce((sum, p) => sum + pointLineResidual(p, corner, groupA.includes(p) ? dirA : dirB), 0) / pts.length;
+      if (!best || residual < best.residual) best = { residual, dirA, dirB };
+    }
+    if (!best || best.residual > 1.5) return { kind: 'flat' };
+    const cosv = (best.dirA.x * best.dirB.x + best.dirA.y * best.dirB.y) / (Math.hypot(best.dirA.x, best.dirA.y) * Math.hypot(best.dirB.x, best.dirB.y));
+    const bendDeg = Math.round(Math.acos(Math.max(-1, Math.min(1, cosv))) * 180 / Math.PI);
+    return { kind: 'bent', bendDeg };
+  }
   function registerRobotPartDef(p){
     const type = 'robot:' + p.id;
     if (!PART_DEFS[type]) {
@@ -863,15 +939,23 @@
         def.w = 24; def.h = 30; def.d = 14;
         def.color = def.color || '#f2f4f7';
       } else if (group === '프레임') {
-        const ringR = parseRingRadiusMM(p.size);
-        const bendDeg = parseBendAngleDeg(p.name);
+        // 이름·글자 설명이 아니라 등록된 정면 이미지의 실제 구멍 좌표로 먼저 판정한다(글자 설명은 이미지가 없을 때만 대신 쓴다) —
+        // "135도"라는 이름만 믿고 각도 공식을 손으로 짰다가 실제로는 틀렸던 적이 있어서, 그림 자체를 계산해 검산하는 쪽을 우선한다.
+        const svgSrc = p.imageSvg || p.imageSvgDiagonal;
+        const svgHoles = parseSvgMaskHoleCenters(svgSrc);
+        const svgShape = classifyFrameFromSvgHoles(svgHoles);
+        // 반지름은 제조사가 글자로 못박은 값(R30mm 등)이 그림에서 3점으로 어림잡은 값보다 정확하니 글자를 우선한다.
+        const ringR = parseRingRadiusMM(p.size) || (svgShape && svgShape.kind === 'ring' ? svgShape.ringR : null);
+        // 각도는 반대다 — "135도"라는 이름만 믿고 짠 각도 공식이 실제로 틀렸던 적이 있어서, 그림 속 구멍 좌표로 직접 계산한
+        // 값을 우선하고 글자(이름)는 그림이 없을 때만 대신 쓴다.
+        const bendDeg = (svgShape && svgShape.kind === 'bent') ? svgShape.bendDeg : parseBendAngleDeg(p.name);
         if (ringR) {
           def.shapeKind = 'frameRing';
           def.ringR = ringR;
           def.armWidth = 10; // 실측 데이터가 없어 한 줄 구멍 폭(10mm)으로 가정
           def.w = ringR * 2; def.h = 5; def.d = ringR * 2;
           const holeCountM = (p.size || '').match(/구멍\s*(\d+)\s*개/);
-          def.holeCount = holeCountM ? Number(holeCountM[1]) : 9;
+          def.holeCount = holeCountM ? Number(holeCountM[1]) : (svgHoles.length || 9);
         } else if (bendDeg) {
           // 팔 길이가 따로 안 적혀 있으면(예: 90도 프레임), 정확히 직각으로 굽은 꼴이라 바운딩박스 자체가 팔 길이와 같다
           const arms = parseBendArmsMM(p.size) || [dims.w, dims.d];
