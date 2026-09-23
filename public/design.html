@@ -2246,11 +2246,15 @@
       mat = new THREE.MeshStandardMaterial({ color: partColor(type) });
     }
     let mesh;
-    if (type.indexOf('robot:') === 0 && def.svg) {
-      // 형태를 다시 해석해서 그리지 않고, 등록된 정면 이미지를 그대로 윗면에 텍스처로 씌운 "두께 있는 상자"로 만든다.
-      // (판 하나로 만들면 모양은 이미지와 똑같아도 두께가 사라져 2D처럼 보이고, 눕히려고 mesh.rotation을 주면
-      // 매 프레임 animate()의 mesh.quaternion.copy(body.quaternion)가 그 회전을 항등값으로 덮어써서 다시 세워진 채
-      // 나온다 — 상자는 원래부터 Y가 두께 방향이라 회전 없이도 눕혀 있으므로 이 문제 자체가 없다.)
+    if (type.indexOf('robot:') === 0 && def.svg && (rk === 'frame' || rk === 'frameBent' || rk === 'frameRing')) {
+      // 프레임류만: 등록된 정면 이미지가 실측 축척 그대로인 "위에서 본 설계도"라서(구멍이 mm 좌표 그대로 찍힘),
+      // 그 이미지를 윗면에 텍스처로 씌운 "두께 있는 상자"로 만들면 모양이 아이콘과 똑같이 나온다.
+      // (판 하나로 만들면 두께가 사라져 2D처럼 보이고, 눕히려고 mesh.rotation을 주면 매 프레임 animate()의
+      // mesh.quaternion.copy(body.quaternion)가 그 회전을 항등값으로 덮어써서 다시 세워진 채 나온다 — 상자는
+      // 원래부터 Y가 두께 방향이라 회전 없이도 눕혀 있으므로 이 문제 자체가 없다.)
+      // 브라켓·기어·바퀴 등 다른 갈래는 등록된 이미지가 실측 축척이 아니라 원근감 있는 입체 아이콘 그림이라
+      // (예: 브라켓은 gradient·skewY로 앞/옆/윗면을 한 그림에 욱여넣은 것) 이 방식을 쓰면 그 그림의 종횡비로
+      // 상자 크기가 잡혀 실제 치수와 안 맞고 찌그러진다 — 그런 갈래는 아래 갈래별 손조립 코드로 내려간다.
       const tex = robotSvgTexture(def.svg);
       const topMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true });
       const sideMat = new THREE.MeshStandardMaterial({ color: partColor(type) });
