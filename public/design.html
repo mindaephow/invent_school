@@ -164,6 +164,10 @@
     background:var(--blueprint); color:#fff; font-size:12px; font-weight:600;
     padding:6px 10px; border-radius:8px; box-shadow:var(--shadow); opacity:0.92;
   }
+  .box-select-rect{
+    position:fixed; z-index:9998; pointer-events:none;
+    background:rgba(45,91,255,0.12); border:1.5px solid var(--blueprint);
+  }
 
   .modal-backdrop{
     position:fixed; inset:0; background:rgba(10,14,24,0.25);
@@ -513,7 +517,7 @@
             <div class="part-list-body" id="requiredListBody"></div>
           </div>
         </div>
-        <div class="scene-hint">빈 곳 드래그: 회전 · ✋이동/오른쪽 버튼/두 손가락: 화면 밀기 · 선택한 부품 드래그: 부품 이동 · 휠/핀치: 확대축소</div>
+        <div class="scene-hint">빈 곳 드래그: 회전 · ✋이동/오른쪽 버튼/두 손가락: 화면 밀기 · 선택한 부품 드래그: 부품 이동 · 휠/핀치: 확대축소 · Ctrl+드래그: 여러 부품 한번에 고르기</div>
         <div class="viewcube-wrap">
           <div class="viewcube" id="viewCube">
             <div class="face front" data-face="front">앞</div>
@@ -1671,20 +1675,17 @@
   document.getElementById('historyToggle').addEventListener('click', () => setHistoryFolded(!document.getElementById('historyPanel').classList.contains('folded')));
   try { if (localStorage.getItem('ivs-history-folded') === '1') setHistoryFolded(true); } catch (e) {}
 
-  // ----- 세트 전체 선택: 세트의 부품 전부를 하나처럼 옮기고 돌린다.
-  // 고른 세트를 대신하는 가짜 부품(body.position / body.quaternion 에 값을 넣으면 세트의 모든 부품이 같이 움직인다)을 만들어서
-  // 기존의 이동·돌리기·방향키·끌기 코드가 그대로 동작하게 한다. 돌리기 각도는 세트를 고른 순간을 0°로 본다.
-  function selectSet(id){
-    if (playing) return;
-    const members = parts.filter(m => m.set && m.set.id === id);
-    if (!members.length) return;
+  // ----- 여러 부품을 하나처럼 옮기고 돌리기: 세트 전체 선택과 박스(Ctrl+드래그) 다중 선택이 같이 쓰는 공통 로직.
+  // 고른 부품들을 대신하는 가짜 부품(body.position / body.quaternion 에 값을 넣으면 멤버 전부가 같이 움직인다)을 만들어서
+  // 기존의 이동·돌리기·방향키·끌기 코드가 그대로 동작하게 한다. 돌리기 각도는 고른 순간을 0°로 본다.
+  function makeGroupProxy(members, label, setInfo){
     const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
     members.forEach(m => {
       const h = rotatedHalfExtents(m), c = m.body.position;
       [['x', 0], ['y', 1], ['z', 2]].forEach(([k, i]) => { lo[i] = Math.min(lo[i], c[k] - h[k]); hi[i] = Math.max(hi[i], c[k] + h[k]); });
     });
-    PART_DEFS.group = { label: members[0].set.label + ' 전체', w: hi[0] - lo[0], h: hi[1] - lo[1], d: hi[2] - lo[2] };
-    const proxy = { isGroup: true, type: 'group', mount: 'floor', set: members[0].set, members, joined: null, rot: { x: 0, y: 0, z: 0 } };
+    PART_DEFS.group = { label, w: hi[0] - lo[0], h: hi[1] - lo[1], d: hi[2] - lo[2] };
+    const proxy = { isGroup: true, type: 'group', mount: 'floor', set: setInfo || { id: null, label }, members, joined: null, rot: { x: 0, y: 0, z: 0 } };
     proxy.body = {
       position: {
         x: (lo[0] + hi[0]) / 2, y: (lo[1] + hi[1]) / 2, z: (lo[2] + hi[2]) / 2,
@@ -1712,7 +1713,13 @@
         }
       }
     };
-    select(proxy);
+    return proxy;
+  }
+  function selectSet(id){
+    if (playing) return;
+    const members = parts.filter(m => m.set && m.set.id === id);
+    if (!members.length) return;
+    select(makeGroupProxy(members, members[0].set.label + ' 전체', members[0].set));
     setStatus(members[0].set.label + ' 전체를 골랐어요. 이동과 돌리기가 부품 ' + members.length + '개에 함께 적용돼요.', 'warn');
   }
   document.getElementById('selectWholeSet').addEventListener('click', () => { if (selected && selected.set) selectSet(selected.set.id); });
@@ -2858,6 +2865,29 @@
     return Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
   }
 
+  // Ctrl+드래그로 화면에 사각형을 그려서, 그 안에 중심이 들어오는 부품을 한꺼번에 고른다(2개 이상이면 세트 선택과 같은 방식으로 묶어서 같이 옮기고 돌린다).
+  let boxSelecting = false, boxSelectStart = null, boxSelectEl = null;
+  function updateBoxSelectRect(x1, y1, x2, y2){
+    if (!boxSelectEl) return;
+    boxSelectEl.style.left = Math.min(x1, x2) + 'px';
+    boxSelectEl.style.top = Math.min(y1, y2) + 'px';
+    boxSelectEl.style.width = Math.abs(x2 - x1) + 'px';
+    boxSelectEl.style.height = Math.abs(y2 - y1) + 'px';
+  }
+  function finishBoxSelect(x1, y1, x2, y2){
+    const lo = { x: Math.min(x1, x2), y: Math.min(y1, y2) }, hi = { x: Math.max(x1, x2), y: Math.max(y1, y2) };
+    const rect = canvas.getBoundingClientRect();
+    const v = new THREE.Vector3();
+    const hits = parts.filter(p => {
+      v.set(p.body.position.x, p.body.position.y, p.body.position.z).project(camera);
+      const sx = rect.left + (v.x + 1) / 2 * rect.width, sy = rect.top + (1 - v.y) / 2 * rect.height;
+      return sx >= lo.x && sx <= hi.x && sy >= lo.y && sy <= hi.y;
+    });
+    if (!hits.length) { select(null); return; }
+    if (hits.length === 1) { select(hits[0]); return; }
+    select(makeGroupProxy(hits, '고른 부품 ' + hits.length + '개'));
+    setStatus('부품 ' + hits.length + '개를 골랐어요. 이동과 돌리기가 함께 적용돼요.', 'warn');
+  }
   canvas.addEventListener('pointerdown', (e) => {
     activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (activePointers.size >= 2) {
@@ -2865,6 +2895,17 @@
       pinchStartDist = pinchDist();
       pinchStartRadius = orbit.radius;
       pinchLastMid = pinchMid();
+      return;
+    }
+    if (e.ctrlKey && e.button !== 1 && e.button !== 2 && !playing) {
+      boxSelecting = true;
+      boxSelectStart = { x: e.clientX, y: e.clientY };
+      boxSelectEl = document.createElement('div');
+      boxSelectEl.className = 'box-select-rect';
+      document.body.appendChild(boxSelectEl);
+      updateBoxSelectRect(e.clientX, e.clientY, e.clientX, e.clientY);
+      pointerDown = true; moved = false;
+      lastX = e.clientX; lastY = e.clientY;
       return;
     }
     pointerDown = true; moved = false;
@@ -2899,6 +2940,12 @@
       return;
     }
     if (!pointerDown) return;
+    if (boxSelecting) {
+      const dx0 = e.clientX - boxSelectStart.x, dy0 = e.clientY - boxSelectStart.y;
+      if (Math.abs(dx0) + Math.abs(dy0) > 10) moved = true;
+      updateBoxSelectRect(boxSelectStart.x, boxSelectStart.y, e.clientX, e.clientY);
+      return;
+    }
     const dx = e.clientX - lastX, dy = e.clientY - lastY;
     if (Math.abs(dx) + Math.abs(dy) > 10) moved = true;
     if (moved) {
@@ -2917,6 +2964,13 @@
     activePointers.delete(e.pointerId);
     if (activePointers.size < 2) { pinchStartDist = null; pinchLastMid = null; }
     if (activePointers.size === 0) {
+      if (boxSelecting) {
+        if (moved) finishBoxSelect(boxSelectStart.x, boxSelectStart.y, e.clientX, e.clientY);
+        if (boxSelectEl) { boxSelectEl.remove(); boxSelectEl = null; }
+        boxSelecting = false; boxSelectStart = null;
+        pointerDown = false;
+        return;
+      }
       if (pointerDown && !moved && !draggingPart && e.button !== 1 && e.button !== 2) handleSelectClick(e);
       if (pointerDown && !moved && e.button === 2) placeMarbleAt(e); // 오른쪽 클릭(끌지 않았을 때): 그 자리에 구슬을 놓거나 옮긴다
       pointerDown = false;
