@@ -783,6 +783,8 @@
     document.querySelectorAll('.side-group.palette').forEach(el => { el.hidden = true; });
     const roadmapEl = document.querySelector('.roadmap');
     if (roadmapEl) roadmapEl.hidden = true;
+    const playPanelEl = document.getElementById('playPanel');
+    if (playPanelEl) playPanelEl.hidden = true; // 구슬 재생·기록·초시계 컨트롤은 골드버그 전용
     const sidebar = document.querySelector('.sidebar');
     if (sidebar) {
       const empty = document.createElement('section');
