@@ -836,6 +836,8 @@
     return m ? Number(m[1]) : null;
   }
   const ROBOT_COLOR_HEX = { '화이트': '#F2F4F8', '레드': '#E1493F', '블랙': '#2B2F36', '회색': '#9CA5AF', '그레이': '#9CA5AF' };
+  // 색 정보가 아예 없는 부품(볼트·기어·블록 등)에 쓰는 갈래별 기본 색 — 등록된 사진 속 재질 느낌(금속=회색, 전자부품=짙은 남색-회색)으로 정했다.
+  const ROBOT_GROUP_DEFAULT_COLOR = { '프레임': '#c7cbd1', '브라켓': '#c7cbd1', '블록': '#d7dbe0', '기어': '#8a929c', '축': '#8a929c', '볼트·너트·부속': '#9aa1ab', '모터·서보': '#2c2f33', '센서': '#2c2f33' };
   function parseBoltLengthMM(sizeStr){
     if (!sizeStr) return null;
     const m = sizeStr.match(/길이\s*(\d+(?:\.\d+)?)\s*mm/);
@@ -847,7 +849,20 @@
       const dims = parseRobotBoxDims(p.size) || { w: 20, h: 12, d: 20 };
       const def = { label: p.name, w: dims.w, h: dims.h, d: dims.d, color: (p.color && ROBOT_COLOR_HEX[p.color]) || null };
       const group = robotPartGroupTitle(p.name);
-      if (group === '프레임') {
+      if (p.name === '메인보드') {
+        // 등록된 사진으로 확인: 짙은 남색-회색 기판에 포트·버튼이 달린 납작한 보드 — 상자 그대로 쓰되 색만 보드 색으로 바꾼다.
+        def.color = def.color || '#30363f';
+      } else if (p.name === '리모컨') {
+        // 등록된 사진으로 확인: 손에 쥐는 곡선형 컨트롤러 — size 글자가 없어 쥐는 크기로 상자를 잡는다.
+        def.w = 95; def.h = 16; def.d = 55;
+        def.color = def.color || '#2c2f33';
+      } else if (p.name === '눈블록') {
+        // 등록된 사진으로 확인: 옆으로 꽂는 핀 위에 볼록한 렌즈(눈)가 달린 장식 부품.
+        // 이름에 "블록"이 들어있어 아래 그룹 분류상 블록으로 잘못 묶이므로, 그룹 분기보다 먼저 여기서 처리한다.
+        def.shapeKind = 'eye';
+        def.w = 24; def.h = 30; def.d = 14;
+        def.color = def.color || '#f2f4f7';
+      } else if (group === '프레임') {
         const ringR = parseRingRadiusMM(p.size);
         const bendDeg = parseBendAngleDeg(p.name);
         if (ringR) {
@@ -869,10 +884,34 @@
           def.holesLen = holes ? holes.cols : Math.max(1, Math.round(dims.w / 10));
           def.holesWidth = holes ? holes.rows : Math.max(1, Math.round(dims.d / 10));
         }
+      } else if (group === '브라켓') {
+        // 등록된 사진으로 확인: 프레임의 꺾인 판(135도·90도 프레임)은 바닥에 눕힌 채 옆으로만 꺾이지만,
+        // 브라켓은 한쪽 판은 바닥에 눕고 다른 쪽 판은 위로 서는 "ㄴ자 앵글"이다 — 꺾이는 축이 달라서 frameBent를 못 쓰고 따로 만든다.
+        // "N열"의 N은 구멍이 몇 줄인지(=팔 폭 10mm×N)와 같다 — size 글자의 세 번째 숫자가 그 폭이다(1열=10mm, 2열=20mm).
+        const boxNums = (p.size || '').match(/(\d+(?:\.\d+)?)\s*[×xX]\s*(\d+(?:\.\d+)?)\s*[×xX]\s*(\d+(?:\.\d+)?)/);
+        const arm1 = boxNums ? Number(boxNums[1]) : dims.w;
+        const arm2 = boxNums ? Number(boxNums[2]) : dims.d;
+        const rowWidth = boxNums ? Number(boxNums[3]) : 10;
+        def.shapeKind = 'bracket';
+        def.arm1 = arm1; def.arm2 = arm2; def.armWidth = rowWidth;
+        def.h = 3; // 사진 속 접힌 금속판 두께 — 실측 데이터가 없어 프레임보다 얇은 판으로 가정
+        def.w = arm1; def.h2 = arm2; def.d = rowWidth;
+      } else if (group === '블록') {
+        // 등록된 사진으로 확인: 위에는 이어붙일 돌기(스터드), 앞에는 끼울 구멍이 한 칸(10mm)마다 있는 커넥터 블록.
+        // "N단"의 N이 칸 수 — 몇 단이든 같은 규칙으로 길이(10mm×N)와 돌기·구멍 개수가 정해진다(이름에 숫자가 없으면 가로 길이/10으로 대신 셈).
+        const n = Math.max(1, Number((p.name.match(/(\d+)단/) || [])[1]) || Math.round(dims.w / 10));
+        def.shapeKind = 'block';
+        def.blockUnits = n;
+        def.w = n * 10; def.h = dims.h || 10; def.d = dims.d || 10;
       } else if (group === '바퀴') {
+        // 등록된 사진으로 확인: 둘 다 지름은 같고(정면 이미지 반지름이 둘 다 170으로 동일), 색만 다르다 —
+        // "작은바퀴"는 빨간 고무 타이어 테두리 + 짙은 색 안쪽 휠, "데코바퀴"는 테두리 없이 전체가 무광 회색인 휠캡.
+        const isDecor = p.name.includes('데코');
         def.shapeKind = 'wheel';
-        def.wheelR = 22; def.wheelW = 14; // 실측 데이터가 없어 소형 로봇 바퀴 크기로 가정
+        def.wheelR = 22; def.wheelW = 14; // 실측 데이터가 없어 소형 로봇 바퀴 크기로 가정(둘 다 같은 크기)
         def.w = def.wheelR * 2; def.h = def.wheelW; def.d = def.wheelR * 2;
+        if (!def.color) def.color = isDecor ? '#555c63' : '#c62634';
+        def.rimColor = isDecor ? '#555c63' : '#22262a'; // 데코바퀴는 테두리도 같은 회색, 작은바퀴는 안쪽이 짙은 색
       } else if (group === '기어') {
         const dia = parseDiameterMM(p.size) || Math.max(dims.w, dims.d, 20);
         def.shapeKind = 'gear';
@@ -894,12 +933,17 @@
           def.shapeKind = 'stud'; // 부시·리벳
           def.studR = Math.max(dims.w, dims.d) / 2 || 3;
           def.studH = Math.min(dims.w, dims.d, dims.h) || 5;
+          // 등록된 사진으로 확인: 부시는 무채색 금속이 아니라 빨간 고무 재질이었다(십자 모양 구멍이 뚫린 빨간 원반).
+          if (p.name.includes('부시')) def.color = def.color || '#c62634';
         }
       } else if (group === '모터·서보' && p.name.includes('모터')) {
+        // 등록된 사진으로 확인: 납작한 원통 몸통 한쪽 면에 빨간 축 허브가 튀어나온 기어드 DC모터 모양.
         def.shapeKind = 'motor';
         def.motorR = Math.min(dims.d, dims.h) / 2 || 15;
         def.motorLen = dims.w;
+        def.hubColor = '#c71212'; // 사진 속 빨간 축 허브
       }
+      if (!def.color) def.color = ROBOT_GROUP_DEFAULT_COLOR[group] || null;
       PART_DEFS[type] = def;
     }
     return type;
@@ -2113,6 +2157,19 @@
       const xs = [0, def.arm1, Math.cos(rad) * def.arm2], zs = [0, 0, Math.sin(rad) * def.arm2];
       const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cz = (Math.min(...zs) + Math.max(...zs)) / 2;
       mesh.children.forEach(m => { m.position.x -= cx; m.position.z -= cz; });
+    } else if (rk === 'bracket') {
+      // ㄴ자 앵글 브라켓: 바닥에 눕는 판(arm1) + 그 끝에서 위로 서는 판(arm2, 두 판 모두 두께 h, 폭 armWidth) — 코너가 원점.
+      // 바운딩박스 가운데(x는 arm1의 반, y는 arm2의 반)로 옮겨서 선택·회전 기준점이 부품 한가운데에 오게 한다.
+      mesh = new THREE.Group();
+      const c = partColor(type);
+      const segMat = new THREE.MeshStandardMaterial({ color: c });
+      const base = new THREE.Mesh(new THREE.BoxGeometry(def.arm1, def.h, def.armWidth), segMat);
+      base.position.set(def.arm1 / 2, 0, 0);
+      mesh.add(base);
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(def.h, def.h2, def.armWidth), segMat);
+      wall.position.set(0, def.h2 / 2, 0);
+      mesh.add(wall);
+      mesh.children.forEach(m => { m.position.x -= def.arm1 / 2; m.position.y -= def.h2 / 2; });
     } else if (rk === 'frameRing') {
       // 반원프레임: 실제로 둥근 부품이라 곧은 상자로는 안 맞아서 반원(토러스)으로 만든다.
       // 최상위 메쉬에 직접 회전을 주면 매 프레임 물리 바디의 회전값(0)으로 덮어써지므로, 다른 모양들처럼 Group으로 감싸고
@@ -2127,7 +2184,7 @@
       mesh = new THREE.Group();
       const c = partColor(type);
       const tireMat = new THREE.MeshStandardMaterial({ color: c });
-      const rimMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(c).multiplyScalar(1.3) });
+      const rimMat = new THREE.MeshStandardMaterial({ color: def.rimColor || new THREE.Color(c).multiplyScalar(1.3) });
       const tire = new THREE.Mesh(new THREE.CylinderGeometry(def.wheelR, def.wheelR, def.wheelW, 28), tireMat);
       tire.rotation.x = Math.PI / 2;
       mesh.add(tire);
@@ -2180,16 +2237,49 @@
       // 부시·리벳: 짧은 원기둥
       mesh = new THREE.Mesh(new THREE.CylinderGeometry(def.studR, def.studR, def.studH, 16), new THREE.MeshStandardMaterial({ color: partColor(type) }));
     } else if (rk === 'motor') {
-      // 모터: 몸통(원기둥) + 축 튀어나온 부분(가는 원기둥)
+      // 모터: 몸통(원기둥, 사진 속 납작한 비율) 한쪽 면에 빨간 축 허브 — 반대쪽엔 옅은 색 축
       mesh = new THREE.Group();
       const c = partColor(type);
       const body = new THREE.Mesh(new THREE.CylinderGeometry(def.motorR, def.motorR, def.motorLen, 20), new THREE.MeshStandardMaterial({ color: c }));
       body.rotation.z = Math.PI / 2;
       mesh.add(body);
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(def.motorR * 0.6, def.motorR * 0.6, 3, 20), new THREE.MeshStandardMaterial({ color: def.hubColor || '#c71212' }));
+      hub.rotation.z = Math.PI / 2;
+      hub.position.x = -(def.motorLen / 2 + 1.5);
+      mesh.add(hub);
       const shaft = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 8, 10), new THREE.MeshStandardMaterial({ color: new THREE.Color(c).multiplyScalar(1.3) }));
       shaft.rotation.z = Math.PI / 2;
       shaft.position.x = def.motorLen / 2 + 4;
       mesh.add(shaft);
+    } else if (rk === 'block') {
+      // 커넥터 블록: 상자 + 윗면 돌기(스터드) N개 + 앞면 끼움 구멍(다크서클) N개 — N=blockUnits(2단/3단 등)
+      mesh = new THREE.Group();
+      const c = partColor(type);
+      const blockMat = new THREE.MeshStandardMaterial({ color: c });
+      const box = new THREE.Mesh(new THREE.BoxGeometry(def.w, def.h, def.d), blockMat);
+      mesh.add(box);
+      const studR = Math.min(def.d, 10) * 0.35, studH = 4;
+      const holeMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(c).multiplyScalar(0.45) });
+      for (let i = 0; i < def.blockUnits; i++) {
+        const cx = -def.w / 2 + 10 * i + 5;
+        const stud = new THREE.Mesh(new THREE.CylinderGeometry(studR, studR, studH, 14), blockMat);
+        stud.position.set(cx, def.h / 2 + studH / 2, 0);
+        mesh.add(stud);
+        const socket = new THREE.Mesh(new THREE.CircleGeometry(studR, 14), holeMat);
+        socket.position.set(cx, 0, def.d / 2 + 0.2);
+        mesh.add(socket);
+      }
+    } else if (rk === 'eye') {
+      // 눈블록: 옆으로 꽂는 핀 위에 볼록한 렌즈(눈) — 납작하게 눌린 구 + 옆으로 뻗은 원기둥 핀
+      mesh = new THREE.Group();
+      const c = partColor(type);
+      const lens = new THREE.Mesh(new THREE.SphereGeometry(def.h / 2, 20, 16), new THREE.MeshStandardMaterial({ color: c }));
+      lens.scale.set(def.d / def.h, 1, 1);
+      mesh.add(lens);
+      const pin = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, def.w - def.d, 12), new THREE.MeshStandardMaterial({ color: new THREE.Color(c).multiplyScalar(0.75) }));
+      pin.rotation.z = Math.PI / 2;
+      pin.position.x = -(def.d / 2 + (def.w - def.d) / 2);
+      mesh.add(pin);
     } else {
       mesh = new THREE.Mesh(geo, mat);
     }
