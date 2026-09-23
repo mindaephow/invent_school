@@ -139,6 +139,8 @@
   .part-icon.tape{background:repeating-linear-gradient(45deg, var(--tape), var(--tape) 5px, transparent 5px, transparent 9px); border:1px dashed var(--ink-soft);}
   .part-icon-svg{display:block; width:auto; margin:0 auto 5px;}
   .part-icon-robot{height:52px; max-width:100%;}
+  .part-group-title{font-size:12.5px; font-weight:700; color:var(--ink-soft); margin:14px 0 6px; letter-spacing:0.01em;}
+  .part-group-title:first-of-type{margin-top:2px;}
   .svg-pillar{fill:var(--pillar);} .svg-hole{fill:rgba(0,0,0,0.4);}
   .svg-bracket{fill:var(--bracket);} .svg-bracket-line{fill:none; stroke:rgba(255,255,255,0.7); stroke-width:1.4;}
   .svg-clip{fill:var(--clip);}
@@ -800,15 +802,43 @@
     // (루트에 width/height가 없는, viewBox만 있는 SVG의 경우) 내부 도형의 크기가 잘못 지워질 수 있다.
     return svg.replace(/^<svg\b([^>]*)>/, (m, attrs) => '<svg class="part-icon-svg part-icon-robot"' + attrs.replace(/\s(width|height)="[^"]*"/g, '') + '>');
   }
+  // 이름에 들어있는 낱말로 대충 갈래를 나눈다(프레임/블록/바퀴/...). 위에서부터 먼저 맞는 갈래로 들어가고,
+  // 아무 데도 안 맞으면 "기타"로 묶는다.
+  const ROBOT_PART_GROUPS = [
+    { title: '프레임', test: n => n.includes('프레임') },
+    { title: '브라켓', test: n => n.includes('브라켓') },
+    { title: '블록', test: n => n.includes('블록') },
+    { title: '바퀴', test: n => n.includes('바퀴') },
+    { title: '기어', test: n => n.includes('기어') },
+    { title: '축', test: n => n.includes('축') },
+    { title: '모터·서보', test: n => n.includes('모터') || n.includes('서보') },
+    { title: '센서', test: n => n.includes('센서') },
+    { title: '볼트·너트·부속', test: n => n.includes('볼트') || n.includes('너트') || n.includes('리벳') || n.includes('부시') }
+  ];
+  function robotPartGroupTitle(name){
+    const n = name || '';
+    const rule = ROBOT_PART_GROUPS.find(r => r.test(n));
+    return rule ? rule.title : '기타';
+  }
   function renderVolumeParts(categoryId, volume){
     const el = document.getElementById('volumePartsPalette');
     if (!el) return;
     const items = robotPartsCache.filter(p => p.category === categoryId && (p.volume == null || Number(p.volume) === Number(volume)));
     if (!items.length) { el.innerHTML = '<p class="part-note">아직 등록된 부품이 없어요. 곧 준비할게요!</p>'; return; }
-    el.innerHTML = '<h2>' + volume + '권 부품</h2><div class="part-grid">' + items.map(p => {
+    const groups = new Map();
+    items.forEach(p => {
+      const title = robotPartGroupTitle(p.name);
+      if (!groups.has(title)) groups.set(title, []);
+      groups.get(title).push(p);
+    });
+    const order = ROBOT_PART_GROUPS.map(g => g.title).concat('기타').filter(t => groups.has(t));
+    const cardHtml = p => {
       const type = registerRobotPartDef(p);
       return '<button class="part-card" data-type="' + esc(type) + '">' + robotPartIconHtml(p) + esc(p.name) + '</button>';
-    }).join('') + '</div><p class="part-note">부품을 누르거나 3D 화면으로 끌어서 놓아보세요. 실제 부품 생김새와는 다를 수 있어요.</p>';
+    };
+    el.innerHTML = '<h2>' + volume + '권 부품</h2>' + order.map(title =>
+      '<div class="part-group-title">' + esc(title) + '</div><div class="part-grid">' + groups.get(title).map(cardHtml).join('') + '</div>'
+    ).join('') + '<p class="part-note">부품을 누르거나 3D 화면으로 끌어서 놓아보세요. 실제 부품 생김새와는 다를 수 있어요.</p>';
     el.querySelectorAll('.part-card').forEach(wirePartCard);
   }
   window.__renderVolumeParts = renderVolumeParts;
