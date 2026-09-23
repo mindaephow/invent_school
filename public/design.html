@@ -851,7 +851,8 @@
           def.armWidth = 10; // 실측 데이터가 없어 한 줄 구멍 폭(10mm)으로 가정
           def.w = ringR * 2; def.h = 5; def.d = ringR * 2;
         } else if (bendDeg) {
-          const arms = parseBendArmsMM(p.size) || [dims.w / 2, dims.w / 2];
+          // 팔 길이가 따로 안 적혀 있으면(예: 90도 프레임), 정확히 직각으로 굽은 꼴이라 바운딩박스 자체가 팔 길이와 같다
+          const arms = parseBendArmsMM(p.size) || [dims.w, dims.d];
           def.shapeKind = 'frameBent';
           def.bendDeg = bendDeg;
           def.arm1 = arms[0];
@@ -1309,32 +1310,6 @@
     // pillar = one row of the perforated panel's holes, cut into a long strip
     const tex = makePillarTexture(partColor('pillar'));
     tex.repeat.set(w / GRID_UNIT, 1);
-    return new THREE.MeshStandardMaterial({ map: tex, color: 0xffffff });
-  }
-
-  // 로봇 프레임: 큐보 부품은 10mm 피치(기둥·타공판의 20 대신 10)라, 같은 반복 텍스처 방식을 피치만 다르게 써서
-  // 실제 등록된 "구멍 N×M" 개수만큼 구멍이 보이는 판을 만든다.
-  const ROBOT_HOLE_PITCH = 10;
-  function makeRobotFrameTexture(baseColorHex){
-    const c = document.createElement('canvas');
-    c.width = 64; c.height = 64;
-    const tctx = c.getContext('2d');
-    tctx.fillStyle = baseColorHex;
-    tctx.fillRect(0, 0, 64, 64);
-    tctx.fillStyle = 'rgba(255,255,255,0.10)';
-    tctx.fillRect(0, 0, 64, 20);
-    tctx.fillStyle = 'rgba(0,0,0,0.45)';
-    tctx.beginPath();
-    tctx.arc(32, 32, 13, 0, Math.PI * 2);
-    tctx.fill();
-    const tex = new THREE.CanvasTexture(c);
-    tex.wrapS = THREE.RepeatWrapping;
-    tex.wrapT = THREE.RepeatWrapping;
-    return tex;
-  }
-  function makeRobotFrameMaterial(lengthMM, widthMM, colorHex){
-    const tex = makeRobotFrameTexture(colorHex);
-    tex.repeat.set(Math.max(1, lengthMM / ROBOT_HOLE_PITCH), Math.max(1, widthMM / ROBOT_HOLE_PITCH));
     return new THREE.MeshStandardMaterial({ map: tex, color: 0xffffff });
   }
 
@@ -1913,6 +1888,10 @@
     return def.h / 2 + (type === 'clip' ? CLIP_PEG_OUT : 0);
   }
 
+  // 큐보 부품은 전부 같은 10mm 격자로 뚫려 있어서, 대충 겹쳐 놓아도 구멍이 대략 맞아 보이도록 위치를 10mm 단위로 붙인다(정밀 정렬은 아님).
+  const ROBOT_GRID = 10;
+  function snapRobotGrid(v){ return Math.round(v / ROBOT_GRID) * ROBOT_GRID; }
+
   function computeFloorDropPoint(clientX, clientY, type){
     const def = PART_DEFS[type];
     const rect = canvas.getBoundingClientRect();
@@ -1924,12 +1903,10 @@
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -restY(type));
     const hit = new THREE.Vector3();
     if (!raycaster.ray.intersectPlane(plane, hit)) return null;
-    return {
-      x: Math.min(Math.max(hit.x, -ROOM_HALF + 8), ROOM_HALF - 8),
-      y: restY(type),
-      z: Math.min(Math.max(hit.z, -ROOM_HALF + 8), ROOM_HALF - 8),
-      mount: 'floor'
-    };
+    let x = Math.min(Math.max(hit.x, -ROOM_HALF + 8), ROOM_HALF - 8);
+    let z = Math.min(Math.max(hit.z, -ROOM_HALF + 8), ROOM_HALF - 8);
+    if (type.startsWith('robot:')) { x = snapRobotGrid(x); z = snapRobotGrid(z); }
+    return { x, y: restY(type), z, mount: 'floor' };
   }
 
   let holePick = null; // { type, panel } — optional "타공판 → 구멍" precision placement, started from the modal
@@ -2041,15 +2018,8 @@
       const flat = new THREE.MeshStandardMaterial({ color: partColor('hinge') });
       const holed = makePanelMaterial(def.w, def.d, partColor('hinge'));
       mat = [flat, flat, holed, holed, flat, flat];
-    } else if (rk === 'frame') {
-      // 큐보 프레임: 타공판·기둥과 같은 방식으로 윗면에 등록된 구멍 개수만큼 실제 구멍이 보이게 텍스처를 입힌다
-      const c = partColor(type);
-      const flat = new THREE.MeshStandardMaterial({ color: c });
-      const holed = makeRobotFrameMaterial(def.w, def.d, c);
-      const holedBottom = makeRobotFrameMaterial(def.w, def.d, c);
-      holedBottom.color.set(BOTTOM_TINT);
-      mat = [flat, flat, holed, holedBottom, flat, flat];
     } else {
+      // 로봇 부품(프레임 포함)은 위치·결합 형태만 알아보면 되니 구멍 텍스처 없이 등록된 색 그대로 납작하게 칠한다
       mat = new THREE.MeshStandardMaterial({ color: partColor(type) });
     }
     let mesh;
@@ -2136,15 +2106,20 @@
       const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cz = (Math.min(...zs) + Math.max(...zs)) / 2;
       mesh.children.forEach(m => { m.position.x -= cx; m.position.z -= cz; });
     } else if (rk === 'frameRing') {
-      // 반원프레임: 실제로 둥근 부품이라 곧은 상자로는 안 맞아서 반원(토러스)으로 만든다
-      const c = partColor(type);
-      mesh = new THREE.Mesh(new THREE.TorusGeometry(def.ringR, Math.max(2, def.h / 2), 8, 28, Math.PI), new THREE.MeshStandardMaterial({ color: c }));
-      mesh.rotation.x = -Math.PI / 2;
-    } else if (rk === 'wheel') {
-      // 바퀴: 타이어(바깥 원기둥) + 림(안쪽 밝은 원기둥)
+      // 반원프레임: 실제로 둥근 부품이라 곧은 상자로는 안 맞아서 반원(토러스)으로 만든다.
+      // 최상위 메쉬에 직접 회전을 주면 매 프레임 물리 바디의 회전값(0)으로 덮어써지므로, 다른 모양들처럼 Group으로 감싸고
+      // 자식 메쉬에 회전을 줘서 바닥에 눕게 만든다.
       mesh = new THREE.Group();
-      const tireMat = new THREE.MeshStandardMaterial({ color: def.color || '#2B2F36' });
-      const rimMat = new THREE.MeshStandardMaterial({ color: '#C3CBD6' });
+      const c = partColor(type);
+      const torus = new THREE.Mesh(new THREE.TorusGeometry(def.ringR, Math.max(2, def.h / 2), 8, 28, Math.PI), new THREE.MeshStandardMaterial({ color: c }));
+      torus.rotation.x = -Math.PI / 2;
+      mesh.add(torus);
+    } else if (rk === 'wheel') {
+      // 바퀴: 타이어(바깥 원기둥) + 림(안쪽, 살짝 밝은 색 원기둥) — 어디에 끼워지는지 알아볼 정도로만
+      mesh = new THREE.Group();
+      const c = partColor(type);
+      const tireMat = new THREE.MeshStandardMaterial({ color: c });
+      const rimMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(c).multiplyScalar(1.3) });
       const tire = new THREE.Mesh(new THREE.CylinderGeometry(def.wheelR, def.wheelR, def.wheelW, 28), tireMat);
       tire.rotation.x = Math.PI / 2;
       mesh.add(tire);
@@ -2175,11 +2150,11 @@
       const geoShaft = new THREE.ExtrudeGeometry(shape, { depth: def.w, bevelEnabled: false });
       geoShaft.rotateY(Math.PI / 2);
       geoShaft.translate(def.w / 2, 0, 0);
-      mesh = new THREE.Mesh(geoShaft, new THREE.MeshStandardMaterial({ color: c || '#B8C0CC' }));
+      mesh = new THREE.Mesh(geoShaft, new THREE.MeshStandardMaterial({ color: c }));
     } else if (rk === 'bolt') {
       // 볼트: 머리(짧고 굵은 원기둥) + 나사축(가늘고 긴 원기둥)
       mesh = new THREE.Group();
-      const boltMat = new THREE.MeshStandardMaterial({ color: '#8B95A1' });
+      const boltMat = new THREE.MeshStandardMaterial({ color: partColor(type) });
       const head = new THREE.Mesh(new THREE.CylinderGeometry(def.headR, def.headR, 3, 16), boltMat);
       mesh.add(head);
       const shaft = new THREE.Mesh(new THREE.CylinderGeometry(def.boltR, def.boltR, def.boltLen, 12), boltMat);
@@ -2188,14 +2163,14 @@
     } else if (rk === 'nut') {
       // 너트: 육각기둥(원기둥의 각을 6개로 줄이면 육각형이 된다) + 가운데 구멍 느낌의 어두운 속
       mesh = new THREE.Group();
-      const nutMat = new THREE.MeshStandardMaterial({ color: '#7C8590' });
-      const body = new THREE.Mesh(new THREE.CylinderGeometry(def.nutR, def.nutR, def.nutH, 6), nutMat);
+      const c = partColor(type);
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(def.nutR, def.nutR, def.nutH, 6), new THREE.MeshStandardMaterial({ color: c }));
       mesh.add(body);
-      const hole = new THREE.Mesh(new THREE.CylinderGeometry(def.nutR * 0.45, def.nutR * 0.45, def.nutH + 0.5, 12), new THREE.MeshStandardMaterial({ color: '#2B2F36' }));
+      const hole = new THREE.Mesh(new THREE.CylinderGeometry(def.nutR * 0.45, def.nutR * 0.45, def.nutH + 0.5, 12), new THREE.MeshStandardMaterial({ color: new THREE.Color(c).multiplyScalar(0.6) }));
       mesh.add(hole);
     } else if (rk === 'stud') {
       // 부시·리벳: 짧은 원기둥
-      mesh = new THREE.Mesh(new THREE.CylinderGeometry(def.studR, def.studR, def.studH, 16), new THREE.MeshStandardMaterial({ color: partColor(type) || '#8B95A1' }));
+      mesh = new THREE.Mesh(new THREE.CylinderGeometry(def.studR, def.studR, def.studH, 16), new THREE.MeshStandardMaterial({ color: partColor(type) }));
     } else if (rk === 'motor') {
       // 모터: 몸통(원기둥) + 축 튀어나온 부분(가는 원기둥)
       mesh = new THREE.Group();
@@ -2203,7 +2178,7 @@
       const body = new THREE.Mesh(new THREE.CylinderGeometry(def.motorR, def.motorR, def.motorLen, 20), new THREE.MeshStandardMaterial({ color: c }));
       body.rotation.z = Math.PI / 2;
       mesh.add(body);
-      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 8, 10), new THREE.MeshStandardMaterial({ color: '#B8C0CC' }));
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 8, 10), new THREE.MeshStandardMaterial({ color: new THREE.Color(c).multiplyScalar(1.3) }));
       shaft.rotation.z = Math.PI / 2;
       shaft.position.x = def.motorLen / 2 + 4;
       mesh.add(shaft);
@@ -2837,8 +2812,9 @@
       const nz = Math.min(Math.max(hit.z, -ROOM_HALF + 8), ROOM_HALF - 8);
       selected.body.position.set(p.x, ny, nz);
     } else {
-      const nx = Math.min(Math.max(hit.x, -ROOM_HALF + 8), ROOM_HALF - 8);
-      const nz = Math.min(Math.max(hit.z, -ROOM_HALF + 8), ROOM_HALF - 8);
+      let nx = Math.min(Math.max(hit.x, -ROOM_HALF + 8), ROOM_HALF - 8);
+      let nz = Math.min(Math.max(hit.z, -ROOM_HALF + 8), ROOM_HALF - 8);
+      if (selected.type.startsWith('robot:')) { nx = snapRobotGrid(nx); nz = snapRobotGrid(nz); }
       selected.body.position.set(nx, p.y, nz);
     }
   }
