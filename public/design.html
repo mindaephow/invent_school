@@ -127,7 +127,8 @@
   .mount-btn.active{background:var(--blueprint); border-color:var(--blueprint); color:#fff; font-weight:700;}
 
   .part-grid, .marker-grid{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;}
-  .part-card{text-align:center; background:var(--blueprint-soft); border-color:var(--blueprint-soft); font-weight:500; padding:8px 4px; font-size:12px; touch-action:none; user-select:none;}
+  .part-card{position:relative; text-align:center; background:var(--blueprint-soft); border-color:var(--blueprint-soft); font-weight:500; padding:8px 4px; font-size:12px; touch-action:none; user-select:none;}
+  .part-qty-badge{position:absolute; top:4px; right:4px; background:var(--blueprint); color:#fff; font-size:10px; font-weight:700; padding:1px 6px; border-radius:999px; line-height:1.5;}
   .part-card.locked{opacity:0.55; cursor:not-allowed; background:var(--panel); position:relative;}
   .part-card.locked::after{content:"다음 업데이트"; display:block; font-size:10px; color:var(--locked); margin-top:2px;}
   .part-note{font-size:12px; color:var(--ink-soft); margin-bottom:0;}
@@ -834,7 +835,8 @@
     const order = ROBOT_PART_GROUPS.map(g => g.title).concat('기타').filter(t => groups.has(t));
     const cardHtml = p => {
       const type = registerRobotPartDef(p);
-      return '<button class="part-card" data-type="' + esc(type) + '">' + robotPartIconHtml(p) + esc(p.name) + '</button>';
+      const qtyBadge = p.qty != null ? '<span class="part-qty-badge">' + esc(p.qty) + '개</span>' : '';
+      return '<button class="part-card" data-type="' + esc(type) + '">' + qtyBadge + robotPartIconHtml(p) + esc(p.name) + '</button>';
     };
     el.innerHTML = '<h2>' + volume + '권 부품</h2>' + order.map(title =>
       '<div class="part-group-title">' + esc(title) + '</div><div class="part-grid">' + groups.get(title).map(cardHtml).join('') + '</div>'
