@@ -1,8 +1,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>발명융합과학교실</title>
-<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css">
+<link rel="stylesheet" href="/fonts/pretendard/pretendardvariable-dynamic-subset.css">
 <style>
   :root{
     --bg:#F4F7FB;
@@ -626,9 +625,9 @@
   <div class="start-card" id="startBody"><p class="note">불러오는 중...</p></div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="/vendor/three.min.js"></script>
+<script src="/vendor/cannon.min.js"></script>
+<script src="/vendor/supabase.min.js"></script>
 <script src="db-shim.js"></script>
 <script src="design-parts.js"></script>
 <script src="design-sets.js"></script>
@@ -773,17 +772,36 @@
   })();
 
   // 관리자가 등록한 부품 카탈로그(이름·수량·색상·사이즈)를 선택된 카테고리·권 기준으로 보여준다.
-  // 실제 3D 모양은 아직 없어서 놓을 수 없는 참고용 카드(잠김 스타일)로만 표시한다.
+  // "사이즈" 글자(예: "10×50×5mm")에서 가로×세로×두께 숫자 3개를 뽑아 상자 모양으로 3D에 놓을 수 있게 등록한다.
+  // 볼트·기어·센서처럼 사이즈가 없거나 형태가 복잡한 부품은 정확한 모양 대신 작은 기본 상자로 대체한다(실제 생김새와 다를 수 있음).
   let robotPartsCache = [];
+  function parseRobotBoxDims(sizeStr){
+    if (!sizeStr) return null;
+    const m = sizeStr.match(/(\d+(?:\.\d+)?)\s*[×xX]\s*(\d+(?:\.\d+)?)\s*[×xX]\s*(\d+(?:\.\d+)?)/);
+    if (!m) return null;
+    const nums = [Number(m[1]), Number(m[2]), Number(m[3])].sort((a, b) => b - a);
+    return { w: nums[0], d: nums[1], h: Math.max(nums[2], 2) };
+  }
+  const ROBOT_COLOR_HEX = { '화이트': '#F2F4F8', '레드': '#E1493F', '블랙': '#2B2F36', '회색': '#9CA5AF', '그레이': '#9CA5AF' };
+  function registerRobotPartDef(p){
+    const type = 'robot:' + p.id;
+    if (!PART_DEFS[type]) {
+      const dims = parseRobotBoxDims(p.size) || { w: 20, h: 12, d: 20 };
+      PART_DEFS[type] = { label: p.name, w: dims.w, h: dims.h, d: dims.d, color: (p.color && ROBOT_COLOR_HEX[p.color]) || null };
+    }
+    return type;
+  }
   function renderVolumeParts(categoryId, volume){
     const el = document.getElementById('volumePartsPalette');
     if (!el) return;
-    const items = robotPartsCache.filter(p => p.category === categoryId && (p.volume == null || p.volume === volume));
+    const items = robotPartsCache.filter(p => p.category === categoryId && (p.volume == null || Number(p.volume) === Number(volume)));
     if (!items.length) { el.innerHTML = '<p class="part-note">아직 등록된 부품이 없어요. 곧 준비할게요!</p>'; return; }
     el.innerHTML = '<h2>' + volume + '권 부품</h2><div class="part-grid">' + items.map(p => {
+      const type = registerRobotPartDef(p);
       const sub = [p.size, p.color, (p.qty != null ? p.qty + '개' : '')].filter(Boolean).join(' · ');
-      return '<button class="part-card locked" disabled><span class="part-icon locked-icon"></span>' + (p.icon ? p.icon + ' ' : '') + esc(p.name) + (sub ? '<br><small>' + esc(sub) + '</small>' : '') + '</button>';
-    }).join('') + '</div><p class="part-note">아직 3D로 놓을 순 없고, 어떤 부품이 있는지 참고만 할 수 있어요.</p>';
+      return '<button class="part-card" data-type="' + esc(type) + '">' + (p.icon ? p.icon + ' ' : '') + esc(p.name) + (sub ? '<br><small>' + esc(sub) + '</small>' : '') + '</button>';
+    }).join('') + '</div><p class="part-note">부품을 누르거나 3D 화면으로 끌어서 놓아보세요. 실제 부품 생김새와는 다를 수 있어요.</p>';
+    el.querySelectorAll('.part-card').forEach(wirePartCard);
   }
   window.__renderVolumeParts = renderVolumeParts;
   async function loadRobotPartsFromDb(){
@@ -795,6 +813,8 @@
       if (!res.ok) return;
       const rows = await res.json();
       robotPartsCache = (rows || []).map(r => ({ id: r.id, name: r.data && r.data.name, icon: r.data && r.data.icon, category: r.data && r.data.category, volume: r.data && r.data.volume, qty: r.data && r.data.qty, color: r.data && r.data.color, size: r.data && r.data.size }));
+      // 저장된 프로젝트를 불러올 때 restoreParts가 즉시 PART_DEFS를 찾을 수 있도록, 화면에 아직 안 띄운 권까지 전부 미리 등록해 둔다.
+      robotPartsCache.forEach(registerRobotPartDef);
       const picker = document.querySelector('.lesson-picker');
       if (picker) {
         const sels = picker.querySelectorAll('select');
@@ -986,6 +1006,7 @@
   function defOf(p){ const d = PART_DEFS[p.type]; return (p.type === 'pin' && p.len) ? Object.assign({}, d, { h: p.len }) : d; }
 
   function partColor(type){
+    if (PART_DEFS[type] && PART_DEFS[type].color) return PART_DEFS[type].color;
     if (isPillarType(type)) return cssVar('--pillar');
     if (type === 'hinge') return cssVar('--hinge');
     if (type === 'tape') return cssVar('--tape');
@@ -1678,8 +1699,7 @@
 
   let holePick = null; // { type, panel } — optional "타공판 → 구멍" precision placement, started from the modal
 
-  document.querySelectorAll('.part-grid .part-card:not(.locked)').forEach(btn => {
-    const type = btn.dataset.type;
+  function wirePartCard(btn){
     btn.addEventListener('pointerdown', (e) => {
       if (playing) return;
       cardDrag = { type: btn.dataset.type, startX: e.clientX, startY: e.clientY, moved: false };
@@ -1690,7 +1710,8 @@
       moveGhost(e.clientX, e.clientY);
       e.preventDefault();
     });
-  });
+  }
+  document.querySelectorAll('.part-grid .part-card:not(.locked)').forEach(wirePartCard);
   window.addEventListener('pointermove', (e) => {
     if (!cardDrag) return;
     const dx = e.clientX - cardDrag.startX, dy = e.clientY - cardDrag.startY;
@@ -3044,9 +3065,11 @@
     }
   });
 
-  function openProject(id, data){
+  async function openProject(id, data){
     project = { id, data };
     nameInput.value = data.name || '';
+    // 로봇 부품은 PART_DEFS가 DB에서 채워져야 복원되므로, 불러오기 전에 먼저 기다린다(안 그러면 저장했던 로봇 부품이 사라져 보인다).
+    await loadRobotCategoriesFromDb().then(loadRobotPartsFromDb);
     restoreParts(data.parts || [], data);
     lastSavedKey = projectKey();
     pbStudent.textContent = student.name + (mode === 'teacher' ? ' 선생님' : ' 학생');
@@ -3059,7 +3082,6 @@
     lastActivity = Date.now();
     refreshSubmitBtn();
     setStatus(data.parts && data.parts.length ? '저장된 작업을 불러왔어요. 이어서 만들어보세요.' : '부품을 배치하고 재생을 눌러보세요.', null);
-    loadRobotCategoriesFromDb().then(loadRobotPartsFromDb);
   }
 
   // ----- 로그인 화면 -----
@@ -3260,6 +3282,8 @@
     let rating = (fb.data && fb.data.data && fb.data.data.rating) || 0;
     let fbId = fb.data ? fb.data.id : null;
 
+    // 학생이 놓은 로봇 부품이 화면에 보이려면 PART_DEFS가 먼저 채워져 있어야 한다.
+    await loadRobotCategoriesFromDb().then(loadRobotPartsFromDb);
     restoreParts(pr.data.parts || [], pr.data);
     startOverlay.hidden = true;
     projectBar.hidden = true;
