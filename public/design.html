@@ -1078,12 +1078,14 @@
     const rule = ROBOT_PART_GROUPS.find(r => r.test(n));
     return rule ? rule.title : '기타';
   }
-  // 프레임 카드를 길이(이름 속 숫자) 순으로 늘어놓는다 — 2열 그리드에서 1행→2행→3행 순으로 훑을 때 크기순이 되도록.
-  // 90도·135도·반원 같은 "특수 프레임"은 길이가 아니라 각도/모양이 이름의 숫자라서 곧은 프레임들 사이에 숫자로 끼워 넣으면 안 되고,
-  // 항상 맨 뒤로 뺀다("N프레임"처럼 순수 숫자+프레임 이름만 길이 취급).
+  // 프레임 카드를 폭(너비)·길이 순으로 늘어놓는다 — 이름의 숫자는 "폭 한 자리 + 길이"를 그냥 이어붙인 것이라
+  // (예: 115=폭1×길이15, 315=폭3×길이15), 이걸 하나의 수로 통째로 비교하면 같은 폭 계열끼리 안 붙고 엉뚱한 자리로
+  // 튄다(115가 19 다음이 아니라 59와 215 사이로 감). 첫 자리를 폭, 나머지를 길이로 쪼개 폭 먼저·길이 나중 순으로 비교해야
+  // 같은 폭 계열(15·17·19·115처럼) 안에서 길이순으로 붙는다.
+  // 90도·135도·반원 같은 "특수 프레임"은 이름에 숫자가 있어도 폭·길이가 아니라 각도/모양이라 이 비교에서 빼고 맨 뒤로 보낸다.
   function frameSortKey(name){
-    const m = (name || '').match(/^(\d+)프레임$/);
-    return m ? Number(m[1]) : Infinity;
+    const m = (name || '').match(/^(\d)(\d+)프레임$/);
+    return m ? [Number(m[1]), Number(m[2])] : [Infinity, Infinity];
   }
   // N권을 고르면 1권부터 N권까지 등록된 부품을 다 합쳐서 보여준다(큐보 2권을 만들려면 1권 부품도 있어야 하는 것과 같은 구조).
   // 같은 이름의 부품이 여러 권에 걸쳐 등록돼 있으면 하나로 합치고 수량은 더한다. 대표로 쓰는 부품(id·이미지)은 가장 낮은 권의 것으로 고정해서,
@@ -1122,7 +1124,10 @@
       if (!groups.has(title)) groups.set(title, []);
       groups.get(title).push(p);
     });
-    if (groups.has('프레임')) groups.get('프레임').sort((a, b) => frameSortKey(a.name) - frameSortKey(b.name));
+    if (groups.has('프레임')) groups.get('프레임').sort((a, b) => {
+      const ka = frameSortKey(a.name), kb = frameSortKey(b.name);
+      return ka[0] - kb[0] || ka[1] - kb[1];
+    });
     const order = ROBOT_PART_GROUPS.map(g => g.title).concat('기타').filter(t => groups.has(t));
     const cardHtml = p => {
       const type = registerRobotPartDef(p);
