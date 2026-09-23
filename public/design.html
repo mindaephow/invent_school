@@ -2192,7 +2192,10 @@
       // 전체를 바운딩박스 가운데로 옮겨서 선택·회전 기준점이 자연스럽게 부품 한가운데에 오게 한다.
       mesh = new THREE.Group();
       const c = partColor(type);
-      const rad = (180 - def.bendDeg) * Math.PI / 180;
+      // 팔 두 개가 코너에서 뻗어나가는 방향 사이의 각도 = bendDeg 그 자체다(참고 사진 구멍 좌표로 직접 검산: 135도 프레임은
+      // 두 팔 방향 벡터 사이각이 정확히 135°, 90도 프레임은 90° — "180-bendDeg"를 쓰면 135도 프레임에서 45°짜리 뾰족한
+      // 쐐기 모양이 나와 버린다(90도는 180-90=90이라 우연히 안 틀려 보였을 뿐).
+      const rad = def.bendDeg * Math.PI / 180;
       const seg1 = new THREE.Mesh(new THREE.BoxGeometry(def.arm1, def.h, def.armWidth), robotPlateMaterials(def.arm1, def.armWidth, c));
       seg1.position.set(def.arm1 / 2, 0, 0);
       mesh.add(seg1);
