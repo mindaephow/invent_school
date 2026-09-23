@@ -870,6 +870,8 @@
           def.ringR = ringR;
           def.armWidth = 10; // 실측 데이터가 없어 한 줄 구멍 폭(10mm)으로 가정
           def.w = ringR * 2; def.h = 5; def.d = ringR * 2;
+          const holeCountM = (p.size || '').match(/구멍\s*(\d+)\s*개/);
+          def.holeCount = holeCountM ? Number(holeCountM[1]) : 9;
         } else if (bendDeg) {
           // 팔 길이가 따로 안 적혀 있으면(예: 90도 프레임), 정확히 직각으로 굽은 꼴이라 바운딩박스 자체가 팔 길이와 같다
           const arms = parseBendArmsMM(p.size) || [dims.w, dims.d];
@@ -1360,6 +1362,48 @@
     const tex = makePillarTexture(partColor('pillar'));
     tex.repeat.set(w / GRID_UNIT, 1);
     return new THREE.MeshStandardMaterial({ map: tex, color: 0xffffff });
+  }
+
+  // 로봇 프레임·브라켓 구멍 텍스처 — 등록된 참고 사진과 같은 10mm 피치(골드버그 타공판의 절반)에, 구멍 둘레에
+  // 살짝 튀어나온 링(보스)까지 그려서 사진 속 "구멍 뚫린 금속판" 느낌을 낸다. 한 칸(10mm)이 텍스처 한 장.
+  const ROBOT_HOLE_PITCH_MM = 10;
+  function makeRobotFrameTexture(baseColorHex){
+    const c = document.createElement('canvas');
+    c.width = 64; c.height = 64;
+    const g = c.getContext('2d');
+    g.fillStyle = baseColorHex;
+    g.fillRect(0, 0, 64, 64);
+    // 보스(구멍 둘레 살짝 튀어나온 링) — 참고 사진의 radialGradient 느낌을 그대로 흉내
+    const boss = g.createRadialGradient(26, 22, 2, 32, 32, 27);
+    boss.addColorStop(0, '#ffffff');
+    boss.addColorStop(0.55, baseColorHex);
+    boss.addColorStop(1, 'rgba(0,0,0,0.25)');
+    g.fillStyle = boss;
+    g.beginPath(); g.arc(32, 32, 27, 0, Math.PI * 2); g.fill();
+    // 구멍(뚫린 검은 구멍) — 보스 한가운데, 참고 사진 비율(구멍 반지름 ≈ 피치의 28%)
+    const holeR = 64 * 0.28;
+    const hole = g.createRadialGradient(29, 29, 1, 32, 32, holeR);
+    hole.addColorStop(0, '#3a3a3a');
+    hole.addColorStop(1, '#0a0a0a');
+    g.fillStyle = hole;
+    g.beginPath(); g.arc(32, 32, holeR, 0, Math.PI * 2); g.fill();
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    return tex;
+  }
+  // w,d(mm) 크기의 판 윗면에 10mm 피치로 구멍을 반복해서 채운 재질 — BoxGeometry 앞면(+Y)에 쓴다.
+  function makeRobotFrameMaterial(w, d, colorHex){
+    const tex = makeRobotFrameTexture(colorHex);
+    tex.repeat.set(Math.max(1, w / ROBOT_HOLE_PITCH_MM), Math.max(1, d / ROBOT_HOLE_PITCH_MM));
+    return new THREE.MeshStandardMaterial({ map: tex, color: 0xffffff });
+  }
+  // 프레임/브라켓 한 조각(flat/flat/구멍뚫린윗면/살짝어두운아랫면/flat/flat)짜리 재질 배열 — BoxGeometry 면 순서 +X -X +Y -Y +Z -Z
+  function robotPlateMaterials(w, d, colorHex){
+    const flat = new THREE.MeshStandardMaterial({ color: colorHex });
+    const holed = makeRobotFrameMaterial(w, d, colorHex);
+    const holedBottom = new THREE.MeshStandardMaterial({ map: holed.map, color: BOTTOM_TINT });
+    return [flat, flat, holed, holedBottom, flat, flat];
   }
 
   let selectionOutline = null;
@@ -2140,17 +2184,19 @@
         peg.position.set(sg * BASKET_PEG_CX, 0, 0);
         mesh.add(peg);
       });
+    } else if (rk === 'frame') {
+      // 곧은 프레임: 등록된 사진처럼 윗면에 구멍이 10mm 간격으로 뚫려 보이는 판.
+      mesh = new THREE.Mesh(new THREE.BoxGeometry(def.w, def.h, def.d), robotPlateMaterials(def.w, def.d, partColor(type)));
     } else if (rk === 'frameBent') {
-      // 꺾인 프레임: 팔 두 개를 등록된 각도로 이어붙인다(예: 135°는 두 팔 사이가 135°). 전체를 바운딩박스 가운데로 옮겨서
-      // 선택·회전 기준점이 자연스럽게 부품 한가운데에 오게 한다.
+      // 꺾인 프레임: 팔 두 개를 등록된 각도로 이어붙인다(예: 135°는 두 팔 사이가 135°). 각 팔 윗면에도 구멍을 뚫는다.
+      // 전체를 바운딩박스 가운데로 옮겨서 선택·회전 기준점이 자연스럽게 부품 한가운데에 오게 한다.
       mesh = new THREE.Group();
       const c = partColor(type);
-      const segMat = new THREE.MeshStandardMaterial({ color: c });
       const rad = (180 - def.bendDeg) * Math.PI / 180;
-      const seg1 = new THREE.Mesh(new THREE.BoxGeometry(def.arm1, def.h, def.armWidth), segMat);
+      const seg1 = new THREE.Mesh(new THREE.BoxGeometry(def.arm1, def.h, def.armWidth), robotPlateMaterials(def.arm1, def.armWidth, c));
       seg1.position.set(def.arm1 / 2, 0, 0);
       mesh.add(seg1);
-      const seg2 = new THREE.Mesh(new THREE.BoxGeometry(def.arm2, def.h, def.armWidth), segMat);
+      const seg2 = new THREE.Mesh(new THREE.BoxGeometry(def.arm2, def.h, def.armWidth), robotPlateMaterials(def.arm2, def.armWidth, c));
       seg2.position.set(Math.cos(rad) * def.arm2 / 2, 0, Math.sin(rad) * def.arm2 / 2);
       seg2.rotation.y = -rad;
       mesh.add(seg2);
@@ -2159,19 +2205,21 @@
       mesh.children.forEach(m => { m.position.x -= cx; m.position.z -= cz; });
     } else if (rk === 'bracket') {
       // ㄴ자 앵글 브라켓: 바닥에 눕는 판(arm1) + 그 끝에서 위로 서는 판(arm2, 두 판 모두 두께 h, 폭 armWidth) — 코너가 원점.
+      // 두 판 다 바깥쪽 면(+Y 방향, 세운 판은 세워지면서 그 면이 앞을 보게 된다)에 구멍을 뚫는다.
       // 바운딩박스 가운데(x는 arm1의 반, y는 arm2의 반)로 옮겨서 선택·회전 기준점이 부품 한가운데에 오게 한다.
       mesh = new THREE.Group();
       const c = partColor(type);
-      const segMat = new THREE.MeshStandardMaterial({ color: c });
-      const base = new THREE.Mesh(new THREE.BoxGeometry(def.arm1, def.h, def.armWidth), segMat);
+      const base = new THREE.Mesh(new THREE.BoxGeometry(def.arm1, def.h, def.armWidth), robotPlateMaterials(def.arm1, def.armWidth, c));
       base.position.set(def.arm1 / 2, 0, 0);
       mesh.add(base);
-      const wall = new THREE.Mesh(new THREE.BoxGeometry(def.h, def.h2, def.armWidth), segMat);
+      const wallMat = robotPlateMaterials(def.armWidth, def.h2, c); // BoxGeometry(def.h, def.h2, def.armWidth): +Y면은 이 판의 얇은 위쪽 끝이라 구멍은 옆면(+Z, index4)에 그린다
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(def.h, def.h2, def.armWidth), [wallMat[0], wallMat[0], wallMat[0], wallMat[0], wallMat[2], wallMat[3]]);
       wall.position.set(0, def.h2 / 2, 0);
       mesh.add(wall);
       mesh.children.forEach(m => { m.position.x -= def.arm1 / 2; m.position.y -= def.h2 / 2; });
     } else if (rk === 'frameRing') {
       // 반원프레임: 실제로 둥근 부품이라 곧은 상자로는 안 맞아서 반원(토러스)으로 만든다.
+      // 등록된 사진처럼 호를 따라 구멍 자리를 작은 어두운 원판으로 찍어 보여준다(토러스 표면엔 사각 텍스처를 못 씌우므로).
       // 최상위 메쉬에 직접 회전을 주면 매 프레임 물리 바디의 회전값(0)으로 덮어써지므로, 다른 모양들처럼 Group으로 감싸고
       // 자식 메쉬에 회전을 줘서 바닥에 눕게 만든다.
       mesh = new THREE.Group();
@@ -2179,6 +2227,15 @@
       const torus = new THREE.Mesh(new THREE.TorusGeometry(def.ringR, Math.max(2, def.h / 2), 8, 28, Math.PI), new THREE.MeshStandardMaterial({ color: c }));
       torus.rotation.x = -Math.PI / 2;
       mesh.add(torus);
+      const holeCount = def.holeCount || 9;
+      const holeMat = new THREE.MeshBasicMaterial({ color: 0x0a0a0a });
+      for (let i = 0; i < holeCount; i++) {
+        const ang = Math.PI * (i / (holeCount - 1)); // 0(한쪽 끝)~180도(반대쪽 끝) 반원을 따라 고르게
+        const dot = new THREE.Mesh(new THREE.CircleGeometry(def.ringR * 0.09, 16), holeMat);
+        dot.rotation.x = -Math.PI / 2;
+        dot.position.set(Math.cos(ang) * def.ringR, def.h / 2 + 0.3, -Math.sin(ang) * def.ringR);
+        mesh.add(dot);
+      }
     } else if (rk === 'wheel') {
       // 바퀴: 타이어(바깥 원기둥) + 림(안쪽, 살짝 밝은 색 원기둥) — 어디에 끼워지는지 알아볼 정도로만
       mesh = new THREE.Group();
