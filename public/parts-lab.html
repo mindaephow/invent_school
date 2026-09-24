@@ -46,6 +46,11 @@ h4{margin:4px 0}
 .modalHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
 .modalHead h4{margin:0;font-size:15px;}
 .modalHead button{border:none;background:none;font-size:18px;line-height:1;cursor:pointer;color:#888;}
+.specBlock{background:#fff;border:1px solid #ddd;border-radius:8px;padding:10px 14px;margin-top:6px;max-width:640px;}
+.specBlock h5{margin:0 0 6px;font-size:13px;color:#555;}
+.specTable{border-collapse:collapse;font-size:12px;width:100%;}
+.specTable th{text-align:left;color:#888;font-weight:600;padding:3px 10px 3px 0;white-space:nowrap;vertical-align:top;}
+.specTable td{padding:3px 0;color:#222;}
 #sketchPanel{width:520px; flex:none; margin-top:10px;}
 #sketchPanel .imgWrap{width:500px; height:500px;}
 #sketchPanel canvas.overlay{position:absolute; top:0; left:0; background:transparent; cursor:default; pointer-events:none;}
@@ -98,6 +103,7 @@ h4{margin:4px 0}
 </div>
 <div class="section-note">확정된 스타일(구멍 모양·블라인드 홀·안쪽 코너선)의 기준입니다. 아래 "수정할 부품"을 이 모습과 비교하면서 고치세요. "🔍 부품 고르기"로 다른 등록 부품을 추가로 불러와 비교할 수도 있어요.</div>
 <div class="row" id="compareArea"></div>
+<div id="compareSpec"></div>
 <div class="row">
   <div class="col"><h4>90도 프레임 (위)</h4><div class="imgWrap"><canvas id="refFrameTop" width="300" height="300"></canvas></div><div class="dims">실측 30×30×5mm(팔 길이×팔 길이×두께) · 구멍 여백5mm·피치10mm · 보어 φ2.8(턱 φ4.3)</div></div>
   <div class="col"><h4>90도 프레임 (정면)</h4><div class="imgWrap"><canvas id="refFrameFront" width="300" height="300"></canvas></div><div class="dims">실측 30×30×5mm(팔 길이×팔 길이×두께) · 구멍 여백5mm·피치10mm · 보어 φ2.8(턱 φ4.3)</div></div>
@@ -108,7 +114,8 @@ h4{margin:4px 0}
   <div class="section-title">수정할 부품</div>
   <button id="editPartPickBtn" type="button" class="pickBtn">🔍 부품 고르기</button>
 </div>
-<div id="editArea"><div class="placeholder">"🔍 부품 고르기" 버튼으로 부품을 선택하면 여기에 3D 모델(위/정면/뒷면)과 수정 칸이 나타납니다.</div></div>
+<div class="section-note">"🔍 부품 고르기"로 부품을 선택하면 여기에 3D 모델(위/정면/뒷면)과 수정 칸이 나타납니다.</div>
+<div id="editArea"></div>
 
 <div class="row">
   <div class="col"><h4>1열브라켓 (위)</h4><div class="imgWrap"><canvas id="refBracketTop" width="300" height="300"></canvas></div><div class="dims">구멍 여백5mm·피치10mm·팔당 3개, 모서리쪽=블라인드 홀</div></div>
@@ -727,11 +734,13 @@ h4{margin:4px 0}
     ];
   }
   // 프레임 꼭짓점/측정 모서리 — 등록된 SVG 윤곽선(outline)을 그대로 사용(각도 추측 금지 원칙과 동일)
+  // Y=0(바닥)~depth(윗면) — geo.translate(-cxR,0,-cyR)로 부품을 바닥 위에 놓은 것과 같은 좌표계여야 함
+  // (사용자 지적: "바닥아래로 내려가 있어서" — 예전엔 -depth/2~depth/2로 절반이 바닥 아래에 있었음).
   function frameVertices(outline, cx, cy, depth){
     const pts = [];
     outline.forEach(p => {
-      pts.push(new THREE.Vector3(p.x-cx, -depth/2, p.y-cy));
-      pts.push(new THREE.Vector3(p.x-cx, depth/2, p.y-cy));
+      pts.push(new THREE.Vector3(p.x-cx, 0, p.y-cy));
+      pts.push(new THREE.Vector3(p.x-cx, depth, p.y-cy));
     });
     return pts;
   }
@@ -741,14 +750,14 @@ h4{margin:4px 0}
     const n = outline.length;
     for (let i=0;i<n;i++){
       const a = outline[i], b = outline[(i+1)%n];
-      const p1 = new THREE.Vector3(a.x-cx, depth/2, a.y-cy);
-      const p2 = new THREE.Vector3(b.x-cx, depth/2, b.y-cy);
+      const p1 = new THREE.Vector3(a.x-cx, depth, a.y-cy);
+      const p2 = new THREE.Vector3(b.x-cx, depth, b.y-cy);
       const dir = p2.clone().sub(p1).normalize();
       const outward = new THREE.Vector3(-dir.z, 0, dir.x).multiplyScalar(2);
       defs.push({ p1, p2, offset: outward, color: LINE, name: '변' + (i+1) + ' 길이' });
     }
     const v0 = outline[0];
-    defs.push({ p1: new THREE.Vector3(v0.x-cx, -depth/2, v0.y-cy), p2: new THREE.Vector3(v0.x-cx, depth/2, v0.y-cy), offset: new THREE.Vector3(2,0,2), color: LINE, name:'두께' });
+    defs.push({ p1: new THREE.Vector3(v0.x-cx, 0, v0.y-cy), p2: new THREE.Vector3(v0.x-cx, depth, v0.y-cy), offset: new THREE.Vector3(2,0,2), color: LINE, name:'두께' });
     return defs;
   }
 
@@ -831,14 +840,16 @@ h4{margin:4px 0}
     renderer.setSize(300,300,false);
     const scene = baseScene();
     const camera = orthoCam(40);
-    camera.position.set(camPos[0],camPos[1],camPos[2]); camera.lookAt(0,0,0);
+    camera.position.set(camPos[0],camPos[1],camPos[2]); camera.lookAt(0,2.5,0);
     new THREE.TextureLoader().load(dataUri, tex => {
       tex.repeat.set(1/50,1/50); tex.offset.set(0,1);
       const shape = new THREE.Shape();
       outline.forEach((p,i)=>{ if(i===0) shape.moveTo(p.x,-p.y); else shape.lineTo(p.x,-p.y); });
       shape.closePath();
       const geo = new THREE.ExtrudeGeometry(shape, { depth:5, bevelEnabled:false });
-      geo.rotateX(-Math.PI/2); geo.translate(-cxR, -2.5, -cyR);
+      // Y는 안 옮김(0~5 그대로) — 바닥(모눈종이, Y=0) 위에 놓이게 함. 예전 geo.center()는 Y도 가운데(-2.5~2.5)로
+      // 옮겨서 부품 절반이 바닥 아래로 파묻혀 있었음(사용자 지적: "돌리니까 바닥아래로 내려가 있어서").
+      geo.rotateX(-Math.PI/2); geo.translate(-cxR, 0, -cyR);
       const mesh = new THREE.Mesh(geo, [new THREE.MeshBasicMaterial({ map: tex }), new THREE.MeshStandardMaterial({ color:0xc7cbd1 })]);
       addEdgeOutline(mesh, 0xc7cbd1);
       const ci = findConcaveVertex(outline);
@@ -848,14 +859,14 @@ h4{margin:4px 0}
         const nlen = Math.hypot(lx,lz) || 1;
         const nx = lx/nlen*0.15, nz = lz/nlen*0.15;
         const line = new THREE.Line(
-          new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(lx+nx,-2.5,lz+nz), new THREE.Vector3(lx+nx,2.5,lz+nz)]),
+          new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(lx+nx,0,lz+nz), new THREE.Vector3(lx+nx,5,lz+nz)]),
           new THREE.LineBasicMaterial({ color: darken(0xc7cbd1,0.55) })
         );
         mesh.add(line);
       }
       scene.add(mesh);
       renderer.render(scene, camera);
-      const controls = setupOrbit(renderer, scene, camera, [0,0,0]);
+      const controls = setupOrbit(renderer, scene, camera, [0,2.5,0]);
       const zoomBox = addZoomButtons(canvas, () => ({ camera, controls }));
       attachFullToolkit(canvas, {
         scene, camera, controls, mesh, target: scene, zoomBox,
@@ -933,7 +944,10 @@ h4{margin:4px 0}
     renderer.render(scene, camera);
     const controls = setupOrbit(renderer, scene, camera, [0,0,0]);
     const zoomBox = addZoomButtons(canvas, () => ({ camera, controls }));
-    attachFullToolkit(canvas, { scene, camera, controls, mesh:null, target: scene, zoomBox });
+    // 다른 칸과 똑같이 지우기/돌려보기/꼭지점 잇기/가이드 버튼이 다 있어야 함(사용자 지적: "2번슷은 왜
+    // 기능이 다 없어???") — 물품(메쉬)은 없어도 격자 모서리에 기본 점 4개를 놔둬서 도구 자체는 쓸 수 있게 함.
+    const gridCorners = [-20,20].flatMap(x => [-20,20].map(z => new THREE.Vector3(x, 0, z)));
+    attachFullToolkit(canvas, { scene, camera, controls, mesh:null, target: scene, zoomBox, vertexPoints: gridCorners, edgeDefs: [] });
   }
   // 세 부품(위/정면/뒷면 — 왼쪽에서 오른쪽 순서)을 나란히 보여줌(사용자 지시: "기본 샷이 위/정면/뒷면").
   // 확정된 렌더링 결과를 캡처하면서 치수를 이미지 위에 직접 적어넣음 — 숫자를 따로 보관하지 않고
@@ -1069,6 +1083,47 @@ h4{margin:4px 0}
   }
   function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
+  // 부품을 불러오면 그 아래에 알고 있는 스펙을 전부 표시 — 등록 정보(이름·과목·수량·색상)부터 브라켓/프레임
+  // 각각의 실제 치수까지(사용자 지시: "부품을 가져오면 이 아래쪽에 부품의 모든 스펙을 다 표시해줘").
+  function buildSpecHtml(p, computedRows){
+    const rows = [
+      ['이름', p.name || '-'],
+      ['과목', p.subject || '-'],
+      ['분류', p.category || '-'],
+      ['권', p.volume != null ? p.volume + '권' : '-'],
+      ['수량', p.qty != null ? p.qty + '개' : '-'],
+      ['색상', p.color || '-'],
+      ...computedRows,
+      ['사이즈 문자열(size, 호환용)', p.size || '-'],
+    ];
+    return '<div class="specBlock"><h5>부품 스펙 전체</h5><table class="specTable">' +
+      rows.map(([k,v]) => '<tr><th>' + esc(k) + '</th><td>' + esc(String(v)) + '</td></tr>').join('') +
+      '</table></div>';
+  }
+  function bracketSpecRows(arm1, arm2, armWidth){
+    const inner1 = Math.max(arm1-armWidth,0), inner2 = Math.max(arm2-armWidth,0);
+    return [
+      ['외측 팔1 길이', arm1 + 'mm'],
+      ['외측 팔2 길이', arm2 + 'mm'],
+      ['내측 팔1 길이', inner1 + 'mm'],
+      ['내측 팔2 길이', inner2 + 'mm'],
+      ['두께/폭', armWidth + 'mm'],
+      ['높이(Y)', '10mm(고정)'],
+      ['구멍 배치', '여백5mm · 피치10mm · 팔당 3개 · 모서리쪽=블라인드 홀(관통 안 됨)'],
+    ];
+  }
+  function frameSpecRows(svg, outline){
+    const rows = [];
+    if (outline) {
+      const xs = outline.map(o=>o.x), ys = outline.map(o=>o.y);
+      rows.push(['바운딩박스', Math.round(Math.max(...xs)-Math.min(...xs)) + '×' + Math.round(Math.max(...ys)-Math.min(...ys)) + 'mm']);
+    }
+    rows.push(['두께', '5mm(고정)']);
+    const holes = parseSvgMaskHoleCenters(svg);
+    rows.push(['구멍 수', holes.length ? holes.length + '개(등록된 이미지 기준)' : '등록된 이미지에서 못 읽음']);
+    return rows;
+  }
+
   // ===== 부품 고르기 모달 — "비교 대상 부품"과 "수정할 부품" 양쪽에서 같은 모달을 재사용
   // (사용자 지시: "비교부품대상 오른쪽에 [부품고르기] 버튼... 수정할부품 오른쪽에 [부품고르기]버튼") =====
   let pickerModalCallback = null;
@@ -1099,7 +1154,8 @@ h4{margin:4px 0}
   function loadPartForCompare(p){
     const isBracket = /브라켓/.test(p.name);
     const area = document.getElementById('compareArea');
-    area.innerHTML = '';
+    const specEl = document.getElementById('compareSpec');
+    area.innerHTML = ''; specEl.innerHTML = '';
     const mk = (label) => {
       const col = document.createElement('div'); col.className = 'col';
       col.innerHTML = '<h4>' + esc(p.name) + ' (' + label + ')</h4><div class="imgWrap"></div><div class="dims"></div>';
@@ -1117,9 +1173,15 @@ h4{margin:4px 0}
       const inner1 = Math.max(arm1-armWidth,0), inner2 = Math.max(arm2-armWidth,0);
       const dimsText = '외측 팔1 ' + arm1 + 'mm · 외측 팔2 ' + arm2 + 'mm · 내측 팔1 ' + inner1 + 'mm · 내측 팔2 ' + inner2 + 'mm · 두께/폭 ' + armWidth + 'mm';
       shot1.dims.textContent = shot2.dims.textContent = shot3.dims.textContent = dimsText;
+      specEl.innerHTML = buildSpecHtml(p, bracketSpecRows(arm1, arm2, armWidth));
     } else {
       const svg = p.imageSvg || p.imageSvgDiagonal;
-      if (!svg) { shot1.dims.textContent = shot2.dims.textContent = '등록된 이미지가 없어서 실제 모양을 그릴 수 없어요.'; renderEmptyPanel(shot3.canvas); return; }
+      if (!svg) {
+        shot1.dims.textContent = shot2.dims.textContent = '등록된 이미지가 없어서 실제 모양을 그릴 수 없어요.';
+        renderEmptyPanel(shot3.canvas);
+        specEl.innerHTML = buildSpecHtml(p, []);
+        return;
+      }
       renderFramePanel(shot1.canvas, svg, [0,150,0.001]);
       renderFramePanel(shot2.canvas, svg, [70,90,110]);
       renderEmptyPanel(shot3.canvas);
@@ -1129,6 +1191,7 @@ h4{margin:4px 0}
         ? '바운딩박스 ' + Math.round(Math.max(...outline.map(o=>o.x))-Math.min(...outline.map(o=>o.x))) + '×' + Math.round(Math.max(...outline.map(o=>o.y))-Math.min(...outline.map(o=>o.y))) + 'mm'
         : '등록된 이미지에서 윤곽선을 못 읽었어요.';
       shot1.dims.textContent = shot2.dims.textContent = dimsText;
+      specEl.innerHTML = buildSpecHtml(p, frameSpecRows(svg, outline));
     }
   }
 
@@ -1171,6 +1234,8 @@ h4{margin:4px 0}
     }
     area.appendChild(row);
     area.appendChild(panel);
+    const specEl = document.createElement('div');
+    area.appendChild(specEl);
     const imgWrap1 = col1.querySelector('.imgWrap'), dimsEl01 = col1.querySelector('#editDims1');
     const imgWrap2 = col2.querySelector('.imgWrap'), dimsEl02 = col2.querySelector('#editDims2');
     const imgWrap3 = col3 ? col3.querySelector('.imgWrap') : null, dimsEl03 = col3 ? col3.querySelector('#editDims3') : null;
@@ -1202,9 +1267,15 @@ h4{margin:4px 0}
         const inner1 = Math.max(arm1 - armWidth, 0), inner2 = Math.max(arm2 - armWidth, 0);
         const dimsText = '외측 팔1 ' + arm1 + 'mm · 외측 팔2 ' + arm2 + 'mm · 내측 팔1 ' + inner1 + 'mm · 내측 팔2 ' + inner2 + 'mm · 두께/폭 ' + armWidth + 'mm · 구멍 여백5mm·피치10mm';
         dimsEl1.textContent = dimsText; dimsEl2.textContent = dimsText; if (dimsEl3) dimsEl3.textContent = dimsText;
+        specEl.innerHTML = buildSpecHtml(p, bracketSpecRows(arm1, arm2, armWidth));
       } else {
         const svg = p.imageSvg || p.imageSvgDiagonal;
-        if (!svg) { dimsEl1.textContent = dimsEl2.textContent = '등록된 이미지가 없어서 실제 모양을 그릴 수 없어요. 관리자 화면에서 이미지부터 등록해주세요.'; if (dimsEl3) dimsEl3.textContent = ''; return; }
+        if (!svg) {
+          dimsEl1.textContent = dimsEl2.textContent = '등록된 이미지가 없어서 실제 모양을 그릴 수 없어요. 관리자 화면에서 이미지부터 등록해주세요.';
+          if (dimsEl3) dimsEl3.textContent = '';
+          specEl.innerHTML = buildSpecHtml(p, []);
+          return;
+        }
         renderFramePanel(canvas1, svg, [0,150,0.001]); // 위
         renderFramePanel(canvas2, svg, [70,90,110]); // 정면
         if (canvas3) { renderEmptyPanel(canvas3); if (dimsEl3) dimsEl3.textContent = '앞뒤가 대칭인 얇은 판이라 표시할 샷이 없어요.'; }
@@ -1217,6 +1288,7 @@ h4{margin:4px 0}
           dimsText = '등록된 이미지에서 윤곽선을 못 읽었어요(색이 #d5d8dc인 도형이 있어야 함).';
         }
         dimsEl1.textContent = dimsText; dimsEl2.textContent = dimsText;
+        specEl.innerHTML = buildSpecHtml(p, frameSpecRows(svg, outline));
       }
     }
     document.getElementById('redrawBtn').addEventListener('click', redraw);
