@@ -132,11 +132,15 @@ h4{margin:4px 0}
 <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
 <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="db-shim.js"></script>
 <script>
 (function(){
   const SUPABASE_URL = 'https://brfeszcyjsaprbakqsjl.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_0Nsga8WVTqBcBS6kcUytrg_UB-1FtnK';
-  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { storageKey: 'ivs-teacher-auth' } });
+  // index.html/design.html은 세션을 일부러 sessionStorage에 저장함(공유 태블릿에서 로그인이 남지 않게) —
+  // 여기서 그냥 createClient를 쓰면 기본값인 localStorage를 봐서 같은 계정으로 로그인해도 세션을 못 찾음
+  // (사용자 지적: "관리자라 버튼을 클릭한건데?" — 버튼은 보였는데 정작 이 페이지는 세션을 못 읽던 버그).
+  const sb = createSupabaseDb(SUPABASE_URL, SUPABASE_KEY, { storageKey: 'ivs-teacher-auth' });
 
   // ===== 공용 렌더 도구 (_compare_all.html에서 확정한 것과 동일한 함수) =====
   function darken(hex, factor){
