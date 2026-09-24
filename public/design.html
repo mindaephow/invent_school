@@ -496,6 +496,10 @@
       <section class="roadmap">
         <p class="roadmap-note">골드버그 장치 수업은 유치원부터 대학생까지 난이도를 조절해서 진행할 수 있어요. 바닥·벽·천장 마운트는 실제 3D 공간에서만 말이 되기 때문에, 화면을 돌려가며 구조를 확인하는 방식으로 만들었어요.</p>
       </section>
+
+      <section class="side-group" id="partsLabSection" hidden>
+        <button id="partsLabBtn" class="ghost" type="button" style="width:100%;">🛠 부품 수리실</button>
+      </section>
     </aside>
 
     <main class="stage">
@@ -797,6 +801,11 @@
       empty.id = 'volumePartsPalette';
       empty.innerHTML = '<p class="part-note">아직 등록된 부품이 없어요. 곧 준비할게요!</p>';
       sidebar.appendChild(empty);
+      // "🛠 부품 수리실" 섹션은 정적 HTML에서 이 팔레트보다 앞에 있어서 그대로 두면 팔레트 위쪽에 걸림 —
+      // 팔레트를 다 만든 뒤 사이드바 맨 끝으로 다시 옮겨서(appendChild는 이미 있는 자식을 이동시킴)
+      // 부품 목록 맨 아래에 오게 한다(사용자 지적: "맨아래 부품수리실 버튼이 왜 없어?").
+      const partsLabSection = document.getElementById('partsLabSection');
+      if (partsLabSection) sidebar.appendChild(partsLabSection);
     }
   })();
 
@@ -4098,8 +4107,24 @@
     return true;
   }
 
+  // 부품 수리실 버튼 — 본사 관리자(role==='admin')로 로그인했을 때만 보임(학생/선생님 로그인 흐름과는 무관하게
+  // 독립적으로 세션을 확인). 90도 프레임/1열브라켓 같은 부품의 실제 3D 모양(구멍·코너선 등)을 다듬어서
+  // ivs_part_catalog의 size/이미지를 바로 고쳐 쓰는 도구로 연결한다.
+  async function checkPartsLabAccess(){
+    try {
+      const { data: { session } } = await tdb.auth.getSession();
+      const isAdmin = !!(session && session.user.app_metadata && session.user.app_metadata.role === 'admin');
+      if (!isAdmin) return;
+      const section = document.getElementById('partsLabSection');
+      if (section) section.hidden = false;
+      const btn = document.getElementById('partsLabBtn');
+      if (btn) btn.addEventListener('click', () => { window.open('parts-lab.html', '_blank'); });
+    } catch (e) { /* 세션 없으면 그냥 버튼 숨김 상태 유지 */ }
+  }
+
   // 같은 탭에서 새로고침한 경우: 아직 로그인되어 있으면 바로 프로젝트 화면으로
   (async function boot(){
+    checkPartsLabAccess();
     const reviewId = new URLSearchParams(location.search).get('review');
     if (reviewId && await startReview(reviewId)) return;
     const { data: { session } } = await db.auth.getSession();

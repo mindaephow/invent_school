@@ -91,10 +91,30 @@ async function listTeachers(sb) {
 
 const PART_SUBJECTS = ['goldberg', 'robot', 'aviation']
 
+// 부품 수리실에서 확정한 정확한 치수(외측 팔1/팔2/두께) — 자유 텍스트 size 문자열을 매번 다시 해석하지 않고
+// 이 숫자를 그대로 저장해서 불러올 때마다 항상 똑같이 재현되게 함(사용자 지적: "불러올때마다 달라서 불편해").
+function parseSpec(body) {
+  const spec = body && body.spec
+  if (!spec || typeof spec !== 'object') return null
+  const armLen1 = Number(spec.armLen1), armLen2 = Number(spec.armLen2), armWidth = Number(spec.armWidth)
+  if (![armLen1, armLen2, armWidth].every((n) => Number.isFinite(n) && n > 0)) return null
+  return { armLen1, armLen2, armWidth }
+}
+
+// 확정된 렌더링 결과를 실제 이미지로도 같이 저장 — 숫자(spec)만이 아니라 눈으로 보이는 모습 자체를 남겨서
+// 나중에 누가 다시 보더라도 재해석 없이 바로 확인 가능하게 함(사용자 지시: "설계도 보면 모든사람들이 다
+// 알지?? 그렇게 저장을 하라고" / "수치랑 모든걸 저장하라고").
+function parseSnapshot(body) {
+  const snap = body && body.snapshot
+  if (typeof snap !== 'string' || !snap.startsWith('data:image/')) return null
+  if (snap.length > 2_000_000) return null // 대략 1.5MB 넘는 이미지는 거절(비정상 입력 방지)
+  return snap
+}
+
 async function listParts(sb) {
   const { data, error } = await sb.from('ivs_part_catalog').select('id, data, created_at').order('created_at', { ascending: true })
   if (error) throw new Error(error.message)
-  return (data || []).map((r) => ({ id: r.id, name: r.data?.name || '', icon: r.data?.icon || '', subject: r.data?.subject || '', category: r.data?.category || '', volume: r.data?.volume ?? null, qty: r.data?.qty ?? null, color: r.data?.color || '', size: r.data?.size || '', imageSvg: r.data?.image_svg || '', imageSvgDiagonal: r.data?.image_svg_diagonal || '', primaryImage: r.data?.primary_image === 'diagonal' ? 'diagonal' : 'front', createdAt: r.created_at }))
+  return (data || []).map((r) => ({ id: r.id, name: r.data?.name || '', icon: r.data?.icon || '', subject: r.data?.subject || '', category: r.data?.category || '', volume: r.data?.volume ?? null, qty: r.data?.qty ?? null, color: r.data?.color || '', size: r.data?.size || '', imageSvg: r.data?.image_svg || '', imageSvgDiagonal: r.data?.image_svg_diagonal || '', primaryImage: r.data?.primary_image === 'diagonal' ? 'diagonal' : 'front', spec: r.data?.spec || null, snapshot: r.data?.snapshot || null, createdAt: r.created_at }))
 }
 
 async function listRobotCategories(sb) {
@@ -189,11 +209,13 @@ export async function POST(request) {
       const imageSvg = String(body.imageSvg || '').trim()
       const imageSvgDiagonal = String(body.imageSvgDiagonal || '').trim()
       const primaryImage = body.primaryImage === 'diagonal' ? 'diagonal' : 'front'
+      const spec = parseSpec(body)
+      const snapshot = parseSnapshot(body)
       if (!name) return json({ error: '부품 이름을 입력해주세요.' }, 400)
       if (!PART_SUBJECTS.includes(subject)) return json({ error: '과목을 선택해주세요.' }, 400)
       if (qty != null && (!Number.isInteger(qty) || qty < 1)) return json({ error: '수량은 1 이상 정수로 입력해주세요.' }, 400)
       if (volume != null && (!Number.isInteger(volume) || volume < 1)) return json({ error: '권은 1 이상 정수로 입력해주세요.' }, 400)
-      const { error } = await sb.from('ivs_part_catalog').insert({ data: { name, icon, subject, category: category || null, volume, qty, color: color || null, size: size || null, image_svg: imageSvg || null, image_svg_diagonal: imageSvgDiagonal || null, primary_image: primaryImage, createdAt: Date.now() } })
+      const { error } = await sb.from('ivs_part_catalog').insert({ data: { name, icon, subject, category: category || null, volume, qty, color: color || null, size: size || null, image_svg: imageSvg || null, image_svg_diagonal: imageSvgDiagonal || null, primary_image: primaryImage, spec, snapshot, createdAt: Date.now() } })
       if (error) throw new Error(error.message)
       return json({ ok: true, parts: await listParts(sb) })
     }
@@ -214,6 +236,8 @@ export async function POST(request) {
       const imageSvg = String(body.imageSvg || '').trim()
       const imageSvgDiagonal = String(body.imageSvgDiagonal || '').trim()
       const primaryImage = body.primaryImage === 'diagonal' ? 'diagonal' : 'front'
+      const spec = parseSpec(body)
+      const snapshot = parseSnapshot(body)
       if (!name) return json({ error: '부품 이름을 입력해주세요.' }, 400)
       if (!PART_SUBJECTS.includes(subject)) return json({ error: '과목을 선택해주세요.' }, 400)
       if (qty != null && (!Number.isInteger(qty) || qty < 1)) return json({ error: '수량은 1 이상 정수로 입력해주세요.' }, 400)
@@ -222,7 +246,11 @@ export async function POST(request) {
       if (fetchErr) throw new Error(fetchErr.message)
       if (!existing) return json({ error: '부품을 찾을 수 없어요.' }, 404)
       const createdAt = existing.data?.createdAt ?? Date.now()
-      const { error } = await sb.from('ivs_part_catalog').update({ data: { name, icon, subject, category: category || null, volume, qty, color: color || null, size: size || null, image_svg: imageSvg || null, image_svg_diagonal: imageSvgDiagonal || null, primary_image: primaryImage, createdAt } }).eq('id', partId)
+      // spec/snapshot을 안 보내면(예: 다른 화면에서 저장) 기존 값을 그대로 유지 — 부품 수리실에서 한 번
+      // 확정해둔 정확한 치수·이미지가 다른 저장 경로 때문에 사라지지 않게 함.
+      const nextSpec = spec || existing.data?.spec || null
+      const nextSnapshot = snapshot || existing.data?.snapshot || null
+      const { error } = await sb.from('ivs_part_catalog').update({ data: { name, icon, subject, category: category || null, volume, qty, color: color || null, size: size || null, image_svg: imageSvg || null, image_svg_diagonal: imageSvgDiagonal || null, primary_image: primaryImage, spec: nextSpec, snapshot: nextSnapshot, createdAt } }).eq('id', partId)
       if (error) throw new Error(error.message)
       return json({ ok: true, parts: await listParts(sb) })
     }

@@ -1,0 +1,1260 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>부품 수리실</title>
+<style>
+body{background:#eef1f4;font-family:sans-serif;padding:10px;margin:0}
+.topbar{background:#fff;border-bottom:1px solid #ddd;padding:10px 14px;display:flex;align-items:center;gap:10px;}
+.topbar h3{margin:0;font-size:16px;}
+.topbar a{color:#2b6be0;text-decoration:none;font-size:13px;}
+#gate{padding:60px 20px;text-align:center;color:#666;}
+#app{display:none;padding:14px;}
+.row{display:flex;gap:24px;flex-wrap:wrap}
+.col{width:320px}
+canvas{border:1px solid #999}
+h4{margin:4px 0}
+.imgWrap{position:relative;width:300px;height:300px;}
+.dims{font-size:11px;color:#555;margin-top:4px;line-height:1.4;}
+.section-title{font-size:18px;font-weight:700;margin:22px 0 6px;}
+.section-note{font-size:13px;color:#555;margin-bottom:10px;}
+.importBar{background:#fff;border:1px solid #ddd;border-radius:8px;padding:10px;margin-bottom:14px;}
+.tabRow{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;}
+.tabRow button{padding:6px 12px;border-radius:999px;border:1px solid #ccc;background:#fff;cursor:pointer;font-size:12px;}
+.tabRow button.on{background:#2b6be0;color:#fff;border-color:#2b6be0;}
+.partList{display:flex;flex-wrap:wrap;gap:6px;max-height:160px;overflow:auto;}
+.partList button{padding:6px 10px;border:1px solid #ccc;border-radius:6px;background:#f7f8fa;cursor:pointer;font-size:12px;text-align:left;}
+.partList button.on{background:#fff8dd;border-color:#e0c56a;}
+.partList button .sz{display:block;color:#888;font-size:10px;}
+.editPanel{background:#fff;border:1px solid #ddd;border-radius:8px;padding:12px;margin-top:10px;max-width:320px;}
+.editPanel label{display:block;font-size:12px;color:#555;margin-top:8px;}
+.editPanel input{width:100%;box-sizing:border-box;padding:6px;font-size:13px;margin-top:2px;}
+.editPanel button{margin-top:12px;padding:8px 14px;border-radius:6px;border:1px solid #2b6be0;background:#2b6be0;color:#fff;cursor:pointer;font-size:13px;}
+.editPanel .msg{font-size:12px;margin-top:8px;}
+.editPanel .msg.err{color:#c0392b;}
+.editPanel .msg.ok{color:#2bb34a;}
+.placeholder{color:#888;font-size:13px;padding:20px;border:1px dashed #ccc;border-radius:8px;background:#fff;max-width:300px;}
+.zoomCtrl{position:absolute;right:4px;bottom:4px;display:grid;grid-template-columns:22px 22px 22px 22px;gap:3px;z-index:5;}
+.zoomCtrl button{width:22px;height:22px;padding:0;font-size:13px;line-height:1;border-radius:4px;cursor:pointer;}
+#app{display:none;}
+#app.shown{display:block;}
+#sketchSection{margin-bottom:18px;}
+.collapseToggle{padding:7px 14px;border-radius:6px;border:1px solid #ccc;background:#fff;cursor:pointer;font-size:13px;}
+.section-title-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:22px 0 0;}
+.section-title-row .section-title{margin:0;}
+.pickBtn{padding:6px 12px;border-radius:999px;border:1px solid #2b6be0;background:#fff;color:#2b6be0;cursor:pointer;font-size:12px;white-space:nowrap;}
+.modalOverlay{position:fixed;inset:0;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;z-index:100;}
+.modalOverlay[hidden]{display:none;}
+.modalBox{background:#fff;border-radius:10px;padding:16px;width:380px;max-height:74vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,0.25);}
+.modalHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.modalHead h4{margin:0;font-size:15px;}
+.modalHead button{border:none;background:none;font-size:18px;line-height:1;cursor:pointer;color:#888;}
+#sketchPanel{width:520px; flex:none; margin-top:10px;}
+#sketchPanel .imgWrap{width:500px; height:500px;}
+#sketchPanel canvas.overlay{position:absolute; top:0; left:0; background:transparent; cursor:default; pointer-events:none;}
+#sketchPanel .btnRow{margin-top:6px; display:flex; gap:6px;}
+#sketchPanel .btnRow button{padding:6px 10px; font-size:12px; border-radius:6px; border:1px solid #ccc; background:#fff; cursor:pointer;}
+#sketchPanel .btnRow button.on{background:#2b6be0;color:#fff;border-color:#2b6be0;}
+.overlay{position:absolute;top:0;left:0;background:transparent;cursor:crosshair;}
+.btnRow{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;}
+.btnRow button{padding:5px 9px;font-size:11px;border-radius:6px;border:1px solid #ccc;background:#fff;cursor:pointer;}
+.modeBtn.on{background:#2b6be0;color:#fff;border-color:#2b6be0;}
+.vertexBtn.on{background:#c0392b;color:#fff;border-color:#c0392b;}
+.guideBtn.on{background:#2bb34a;color:#fff;border-color:#2bb34a;}
+.dimInput{display:none;margin-top:4px;font-size:11px;gap:4px;align-items:center;flex-wrap:wrap;background:#fff8dd;border:1px solid #e0c56a;border-radius:4px;padding:4px;}
+.dimInput.show{display:flex;}
+.dimInput .dimHint{width:100%;color:#7a5a00;}
+.dimInput input{width:55px;font-size:12px;}
+.vertexPanel{display:none;margin-top:4px;font-size:11px;gap:6px;align-items:center;flex-wrap:wrap;background:#eef2ff;border:1px solid #b9c4e8;border-radius:4px;padding:4px;}
+.vertexPanel.show{display:flex;}
+.vmodeBtn.on{background:#555;color:#fff;border-color:#555;}
+.guidePanel{display:none;margin-top:4px;font-size:11px;gap:6px;align-items:center;flex-wrap:wrap;background:#eafaf0;border:1px solid #a6d9bb;border-radius:4px;padding:4px;}
+.guidePanel.show{display:flex;}
+.gmodeBtn.on{background:#2bb34a;color:#fff;border-color:#2bb34a;}
+.hguideInput{display:none;margin-top:4px;font-size:11px;gap:4px;align-items:center;flex-wrap:wrap;background:#eafaf0;border:1px solid #a6d9bb;border-radius:4px;padding:4px;}
+.hguideInput.show{display:flex;}
+.hguideInput .hguideHint{width:100%;color:#1d6b3d;}
+.hguideInput input{width:55px;font-size:12px;}
+</style>
+</head>
+<body>
+<div class="topbar"><h3>🛠 부품 수리실</h3><a href="design.html">← 설계 화면으로</a></div>
+<div id="gate">확인 중...</div>
+<div id="app">
+<div id="mainCol">
+
+<div id="sketchSection">
+  <button id="sketchToggle" type="button" class="collapseToggle">▶ 스케치북 (펼치기)</button>
+  <div id="sketchPanel" hidden>
+    <div class="section-note">간단한 3D 낙서 공간이에요. 빈 곳을 드래그하면 돌려보기, 휠로 확대/축소, 그 위에 마우스로 바로 그릴 수 있어요.</div>
+    <div class="imgWrap">
+      <canvas id="sketch3d" width="500" height="500"></canvas>
+      <canvas id="sketchOverlay" class="overlay" width="500" height="500"></canvas>
+    </div>
+    <div class="btnRow"><button id="sketchDrawToggle" type="button">✏️ 그리기</button><button id="sketchClear" type="button">지우기</button></div>
+  </div>
+</div>
+
+<div class="section-title-row">
+  <div class="section-title">비교 대상 부품 (이해를 도울 부품)</div>
+  <button id="compareRefPickBtn" type="button" class="pickBtn">🔍 부품 고르기</button>
+</div>
+<div class="section-note">확정된 스타일(구멍 모양·블라인드 홀·안쪽 코너선)의 기준입니다. 아래 "수정할 부품"을 이 모습과 비교하면서 고치세요. "🔍 부품 고르기"로 다른 등록 부품을 추가로 불러와 비교할 수도 있어요.</div>
+<div class="row" id="compareArea"></div>
+<div class="row">
+  <div class="col"><h4>90도 프레임 (위)</h4><div class="imgWrap"><canvas id="refFrameTop" width="300" height="300"></canvas></div><div class="dims">실측 30×30×5mm(팔 길이×팔 길이×두께) · 구멍 여백5mm·피치10mm · 보어 φ2.8(턱 φ4.3)</div></div>
+  <div class="col"><h4>90도 프레임 (정면)</h4><div class="imgWrap"><canvas id="refFrameFront" width="300" height="300"></canvas></div><div class="dims">실측 30×30×5mm(팔 길이×팔 길이×두께) · 구멍 여백5mm·피치10mm · 보어 φ2.8(턱 φ4.3)</div></div>
+  <div class="col"><h4>90도 프레임 (뒷면)</h4><div class="imgWrap"><canvas id="refFrameBack" width="300" height="300"></canvas></div><div class="dims">&nbsp;</div></div>
+</div>
+
+<div class="section-title-row">
+  <div class="section-title">수정할 부품</div>
+  <button id="editPartPickBtn" type="button" class="pickBtn">🔍 부품 고르기</button>
+</div>
+<div id="editArea"><div class="placeholder">"🔍 부품 고르기" 버튼으로 부품을 선택하면 여기에 3D 모델(위/정면/뒷면)과 수정 칸이 나타납니다.</div></div>
+
+<div class="row">
+  <div class="col"><h4>1열브라켓 (위)</h4><div class="imgWrap"><canvas id="refBracketTop" width="300" height="300"></canvas></div><div class="dims">구멍 여백5mm·피치10mm·팔당 3개, 모서리쪽=블라인드 홀</div></div>
+  <div class="col"><h4>1열브라켓 (정면)</h4><div class="imgWrap"><canvas id="refBracketFront" width="300" height="300"></canvas></div><div class="dims">구멍 여백5mm·피치10mm·팔당 3개, 모서리쪽=블라인드 홀</div></div>
+  <div class="col"><h4>1열브라켓 (뒷면)</h4><div class="imgWrap"><canvas id="refBracketBack" width="300" height="300"></canvas></div><div class="dims">구멍 여백5mm·피치10mm·팔당 3개, 모서리쪽=블라인드 홀(앞면과 대칭)</div></div>
+</div>
+
+</div>
+
+<div id="pickerModal" class="modalOverlay" hidden>
+  <div class="modalBox">
+    <div class="modalHead"><h4 id="pickerModalTitle">부품 고르기</h4><button id="pickerModalClose" type="button">✕</button></div>
+    <div class="tabRow" id="modalSubjectTabs">
+      <button data-subject="goldberg" class="on">골드버그</button>
+      <button data-subject="robot">로봇</button>
+      <button data-subject="aviation">항공</button>
+    </div>
+    <div class="partList" id="modalPartList"><span style="color:#888;font-size:12px;">불러오는 중...</span></div>
+  </div>
+</div>
+<script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+(function(){
+  const SUPABASE_URL = 'https://brfeszcyjsaprbakqsjl.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_0Nsga8WVTqBcBS6kcUytrg_UB-1FtnK';
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { storageKey: 'ivs-teacher-auth' } });
+
+  // ===== 공용 렌더 도구 (_compare_all.html에서 확정한 것과 동일한 함수) =====
+  function darken(hex, factor){
+    const r = Math.floor(((hex >> 16) & 255) * factor);
+    const g = Math.floor(((hex >> 8) & 255) * factor);
+    const b = Math.floor((hex & 255) * factor);
+    return (r << 16) | (g << 8) | b;
+  }
+  function addEdgeOutline(mesh, baseColorHex, factor){
+    const edgesGeo = new THREE.EdgesGeometry(mesh.geometry, 1);
+    const edgesMat = new THREE.LineBasicMaterial({ color: darken(baseColorHex, factor || 0.55) });
+    mesh.add(new THREE.LineSegments(edgesGeo, edgesMat));
+  }
+  function makeBossTexture(light, mid, dark, ringColor){
+    const size = 128;
+    const canvas = document.createElement('canvas');
+    canvas.width = size; canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    const cx = size / 2, cy = size / 2, r = size / 2;
+    const grad = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.44, r * 0.05, cx, cy, r);
+    grad.addColorStop(0, light); grad.addColorStop(0.55, mid); grad.addColorStop(1, dark);
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = ringColor;
+    ctx.lineWidth = size * 0.03;
+    ctx.beginPath(); ctx.arc(cx, cy, r * (2.8 / 4.3), 0, Math.PI * 2); ctx.stroke();
+    return new THREE.CanvasTexture(canvas);
+  }
+  const winTex = makeBossTexture('#ffffff','#dfe2e6','#a9aeb5','#7d8288');
+  const winMat = new THREE.MeshBasicMaterial({ map: winTex, side: THREE.DoubleSide });
+  function makeDashedCircle(x, y, z, rotY, radius){
+    const segs = 32, pts = [];
+    for (let i = 0; i <= segs; i++) { const t = (i / segs) * Math.PI * 2; pts.push(new THREE.Vector3(Math.cos(t) * radius, Math.sin(t) * radius, 0)); }
+    const geo = new THREE.BufferGeometry().setFromPoints(pts);
+    const line = new THREE.Line(geo, new THREE.LineDashedMaterial({ color: 0x7d8288, dashSize: 1.2, gapSize: 0.9 }));
+    line.computeLineDistances();
+    line.rotation.y = rotY; line.position.set(x, y, z);
+    return line;
+  }
+  function makeHole(scene, x, y, z, rotY, blind){
+    if (blind) { scene.add(makeDashedCircle(x, y, z, rotY, 4.3)); return; }
+    const win = new THREE.Mesh(new THREE.CircleGeometry(4.3, 20), winMat);
+    win.rotation.y = rotY; win.position.set(x, y, z);
+    scene.add(win);
+  }
+  const spinnables = [];
+  function setupOrbit(renderer, scene, camera, target){
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.target.set(target[0], target[1], target[2]);
+    controls.enableDamping = true; controls.dampingFactor = 0.08;
+    controls.update();
+    spinnables.push({ renderer, scene, camera, controls });
+    return controls;
+  }
+  (function animateAll(){
+    requestAnimationFrame(animateAll);
+    spinnables.forEach(s => { s.controls.update(); s.renderer.render(s.scene, s.camera); });
+  })();
+  function baseScene(){
+    const scene = new THREE.Scene();
+    scene.add(new THREE.AmbientLight(0xffffff,1));
+    const dl = new THREE.DirectionalLight(0xffffff,0.5); dl.position.set(700,1400,800); scene.add(dl);
+    // 모든 3D 패널이 스케치북과 같은 모습(모눈종이 배경 + X/Y/Z축)을 갖도록 여기서 공통으로 추가
+    // (사용자 지시: "사각형 하나하나가 스케치북의 모습을 하고 있어야해").
+    scene.add(new THREE.GridHelper(200, 20, 0xc7cbd1, 0xe6e8eb));
+    scene.add(new THREE.AxesHelper(50));
+    return scene;
+  }
+  function orthoCam(d){ return new THREE.OrthographicCamera(-d, d, d, -d, 0.1, 6000); }
+
+  // ===== C:\Users\user\Downloads\발명학교-부품작업\_compare_all.html (883줄, 진짜 최신/확정본)의 인터랙티브
+  // 도구 전체를 그대로 옮겨온 것 — invent_school/public 안에 있던 오래된 사본(683줄)을 참고했다가 검은
+  // 텍스처 등 버그를 겪어서, 사용자가 알려준 진짜 경로 기준으로 다시 맞춤. 로직은 원본과 동일하게 유지하고
+  // (30×30×5 고정값 대신 arm1/arm2/armWidth·outline 파라미터를 받도록만) 일반화함 =====
+  function makeTextSprite(text, color){
+    const fontSize = 46;
+    const c = document.createElement('canvas');
+    const cctx = c.getContext('2d');
+    cctx.font = `bold ${fontSize}px sans-serif`;
+    const w = Math.ceil(cctx.measureText(text).width) + 24;
+    const h = Math.ceil(fontSize * 1.5);
+    c.width = w; c.height = h;
+    cctx.font = `bold ${fontSize}px sans-serif`;
+    cctx.fillStyle = 'rgba(255,255,255,0.88)';
+    cctx.fillRect(0, 0, w, h);
+    cctx.strokeStyle = color; cctx.lineWidth = 3; cctx.strokeRect(1.5, 1.5, w - 3, h - 3);
+    cctx.fillStyle = color; cctx.textAlign = 'center'; cctx.textBaseline = 'middle';
+    cctx.fillText(text, w / 2, h / 2 + 2);
+    const tex = new THREE.CanvasTexture(c);
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, depthWrite: false }));
+    sprite.renderOrder = 999;
+    const worldH = 3.4;
+    sprite.scale.set(worldH * (w / h), worldH, 1);
+    return sprite;
+  }
+  function addGuideline3D(target, p1, p2, offset, colorHex){
+    const mat = new THREE.LineBasicMaterial({ color: colorHex });
+    const a = p1.clone().add(offset), b = p2.clone().add(offset);
+    const objs = [];
+    [[p1, a], [p2, b], [a, b]].forEach(([s, e]) => {
+      const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([s, e]), mat);
+      line.renderOrder = 998;
+      target.add(line);
+      objs.push(line);
+    });
+    return { objs, mid: a.clone().add(b).multiplyScalar(0.5) };
+  }
+  function addLabelAt3D(target, position, text, colorHex){
+    const color = '#' + colorHex.toString(16).padStart(6, '0');
+    const sprite = makeTextSprite(text + 'mm', color);
+    sprite.position.copy(position);
+    target.add(sprite);
+    return sprite;
+  }
+  function addMeasurableEdges(target, defs){
+    return defs.map(d => {
+      const mat = new THREE.LineBasicMaterial({ color: d.color, transparent: true, opacity: 0.45 });
+      const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([d.p1, d.p2]), mat);
+      line.userData = d;
+      line.renderOrder = 997;
+      target.add(line);
+      return line;
+    });
+  }
+  // 모서리를 클릭 → 안내선 표시 → 입력칸에 mm 입력 → 확정 라벨. 다시 클릭하면 확정된 치수 삭제(토글).
+  // 꼭지점 잇기/가이드 모드 중엔 치수 클릭이 끼어들지 않게 stateFlags로 막음(원본의 stateOf(id) 가드와 동일).
+  function wireEdgePicking(canvas, camera, target, edges, dimRow, stateFlags){
+    if (!edges || !edges.length || !dimRow) return;
+    const hint = dimRow.querySelector('.dimHint');
+    const input = dimRow.querySelector('input');
+    const okBtn = dimRow.querySelector('button');
+    const raycaster = new THREE.Raycaster();
+    raycaster.params.Line.threshold = 1.5;
+    const committed = new Map();
+    let pending = null;
+    function cancelPending(){
+      if (pending) { pending.guideline.objs.forEach(o => o.parent.remove(o)); pending = null; }
+      dimRow.classList.remove('show'); input.value = '';
+    }
+    function confirmPending(){
+      if (!pending || !input.value.trim()) return;
+      pending.guideline.objs.forEach(o => o.parent.remove(o));
+      const edge = pending.edge;
+      const g = addGuideline3D(target, edge.userData.p1, edge.userData.p2, edge.userData.offset, edge.userData.color);
+      const sprite = addLabelAt3D(target, g.mid, input.value.trim(), edge.userData.color);
+      committed.set(edge, [...g.objs, sprite]);
+      edge.material.opacity = 1;
+      pending = null; dimRow.classList.remove('show'); input.value = '';
+    }
+    okBtn.addEventListener('click', confirmPending);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') confirmPending(); });
+    canvas.addEventListener('click', e => {
+      if (stateFlags && (stateFlags.vertex || stateFlags.guide)) return;
+      const r = canvas.getBoundingClientRect();
+      const mouse = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+      raycaster.setFromCamera(mouse, camera);
+      const hit = raycaster.intersectObjects(edges, false)[0];
+      if (!hit) return;
+      const edge = hit.object;
+      if (committed.has(edge)) {
+        committed.get(edge).forEach(o => o.parent.remove(o));
+        committed.delete(edge);
+        edge.material.opacity = 0.45;
+        return;
+      }
+      cancelPending();
+      const g = addGuideline3D(target, edge.userData.p1, edge.userData.p2, edge.userData.offset, edge.userData.color);
+      pending = { edge, guideline: g };
+      hint.textContent = edge.userData.name + ' — 실제 크기(mm)?';
+      dimRow.classList.add('show');
+      input.focus();
+    });
+  }
+  // 꼭짓점 마커 — 보이는 작은 점(dot, depthTest 켜둠: 꺼두면 가려진 반대쪽 점이 앞면을 뚫고 비쳐 보임) +
+  // 판정용 큰 투명 구(hit, depthTest 꺼서 손으로 부정확하게 눌러도 항상 인식되게)
+  function makeVertexMarker(scene, pos, size){
+    const dot = new THREE.Mesh(new THREE.SphereGeometry(1,12,12), new THREE.MeshBasicMaterial({ color:0x555555, transparent:true, opacity:0 }));
+    dot.position.copy(pos); dot.scale.setScalar(size); scene.add(dot);
+    const hit = new THREE.Mesh(new THREE.SphereGeometry(3,10,10), new THREE.MeshBasicMaterial({ transparent:true, opacity:0, depthTest:false }));
+    hit.position.copy(pos); hit.userData.dot = dot; hit.renderOrder = 999; scene.add(hit);
+    return hit;
+  }
+  function createVertexState(scene, initialPoints){
+    const state = { markers:[], lines:[], selected:null, mode:'connect', size:0.5, active:false, history:[], future:[] };
+    initialPoints.forEach(p => state.markers.push(makeVertexMarker(scene, p, state.size)));
+    // 대략적인 중심(꼭짓점 평균) — 연결선을 표면 바깥쪽으로 살짝 띄우는 기준점.
+    state.centroid = initialPoints.reduce((a, p) => a.add(p), new THREE.Vector3()).multiplyScalar(1 / initialPoints.length);
+    return state;
+  }
+  // 연결선을 표면에 딱 붙여 그리면 depthTest 때문에 표면과 z-fighting(깜빡임)이 남 — 중심에서 바깥쪽으로
+  // 살짝(0.3mm) 밀어서 표면 위로 띄워 그림.
+  function nudgeOutward(point, center, amt){
+    const dir = new THREE.Vector3().subVectors(point, center);
+    if (dir.lengthSq() < 1e-6) return point.clone();
+    return point.clone().add(dir.normalize().multiplyScalar(amt));
+  }
+  // 되돌리기(이전)/다시하기(이후) — 점 추가·삭제, 선 연결·해제를 undo/redo 쌍으로 기록해두고 그대로 되감음/다시함.
+  function pushHistory(state, action){ state.history.push(action); state.future = []; }
+  function undoVertex(state){ const a = state.history.pop(); if (!a) return; a.undo(); state.future.push(a); }
+  function redoVertex(state){ const a = state.future.pop(); if (!a) return; a.redo(); state.history.push(a); }
+  function setVertexActive(state, active){
+    state.active = active;
+    state.markers.forEach(m => m.userData.dot.material.opacity = active ? 1 : 0);
+    if (!active && state.selected) {
+      state.selected.userData.dot.material.color.set(0x555555);
+      state.selected.userData.dot.scale.setScalar(state.size);
+      state.selected = null;
+    }
+  }
+  // 꼭지점 잇기 — 연결(기본, 두 점을 순서대로 클릭하면 실선으로 이음, 선택된 점은 항상 크기 1로 하이라이트) /
+  // 추가(모델 위 클릭 지점에 새 점) / 삭제(점을 클릭해서 지움, 이어진 선도 같이 지움). 전부 undo/redo 기록됨.
+  function wireVertexPicking(canvas, camera, scene, mesh, state){
+    const raycaster = new THREE.Raycaster();
+    const findLine = (a,b) => state.lines.find(L => (L.a===a && L.b===b) || (L.a===b && L.b===a));
+    canvas.addEventListener('click', e => {
+      if (!state.active) return;
+      const r = canvas.getBoundingClientRect();
+      const mouse = new THREE.Vector2(((e.clientX-r.left)/r.width)*2-1, -((e.clientY-r.top)/r.height)*2+1);
+      raycaster.setFromCamera(mouse, camera);
+
+      if (state.mode === 'add') {
+        const hit = mesh ? raycaster.intersectObject(mesh, false)[0] : null;
+        if (hit) {
+          const marker = makeVertexMarker(scene, hit.point, state.size);
+          marker.userData.dot.material.opacity = 1;
+          state.markers.push(marker);
+          pushHistory(state, {
+            undo: () => {
+              scene.remove(marker); scene.remove(marker.userData.dot);
+              const i = state.markers.indexOf(marker);
+              if (i >= 0) state.markers.splice(i, 1);
+              if (state.selected === marker) state.selected = null;
+            },
+            redo: () => { scene.add(marker); scene.add(marker.userData.dot); state.markers.push(marker); }
+          });
+        }
+        return;
+      }
+      const hitV = raycaster.intersectObjects(state.markers, false)[0];
+      if (!hitV) return;
+      const m = hitV.object;
+
+      if (state.mode === 'delete') {
+        const removedLines = state.lines.filter(L => L.a === m || L.b === m);
+        removedLines.forEach(L => L.line.parent.remove(L.line));
+        state.lines = state.lines.filter(L => !removedLines.includes(L));
+        scene.remove(m); scene.remove(m.userData.dot);
+        const idx = state.markers.indexOf(m);
+        if (idx >= 0) state.markers.splice(idx, 1);
+        if (state.selected === m) state.selected = null;
+        pushHistory(state, {
+          undo: () => {
+            scene.add(m); scene.add(m.userData.dot);
+            state.markers.splice(idx, 0, m);
+            removedLines.forEach(L => scene.add(L.line));
+            state.lines.push(...removedLines);
+          },
+          redo: () => {
+            removedLines.forEach(L => L.line.parent && L.line.parent.remove(L.line));
+            state.lines = state.lines.filter(L => !removedLines.includes(L));
+            scene.remove(m); scene.remove(m.userData.dot);
+            const i2 = state.markers.indexOf(m);
+            if (i2 >= 0) state.markers.splice(i2, 1);
+            if (state.selected === m) state.selected = null;
+          }
+        });
+        return;
+      }
+      // connect 모드
+      if (state.selected === m) {
+        m.userData.dot.material.color.set(0x555555);
+        m.userData.dot.scale.setScalar(state.size);
+        state.selected = null;
+        return;
+      }
+      if (!state.selected) {
+        state.selected = m;
+        m.userData.dot.material.color.set(0xc0392b);
+        m.userData.dot.scale.setScalar(1);
+        return;
+      }
+      m.userData.dot.material.color.set(0xc0392b);
+      m.userData.dot.scale.setScalar(1);
+      const first = state.selected;
+      setTimeout(() => {
+        const existing = findLine(first, m);
+        if (existing) {
+          existing.line.parent.remove(existing.line);
+          state.lines = state.lines.filter(L => L !== existing);
+          pushHistory(state, {
+            undo: () => { scene.add(existing.line); state.lines.push(existing); },
+            redo: () => { existing.line.parent && existing.line.parent.remove(existing.line); state.lines = state.lines.filter(L => L !== existing); }
+          });
+        } else {
+          const p1 = nudgeOutward(first.position, state.centroid, 0.3);
+          const p2 = nudgeOutward(m.position, state.centroid, 0.3);
+          const geo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+          const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color:0x333333 }));
+          scene.add(line);
+          const entry = { a: first, b: m, line };
+          state.lines.push(entry);
+          pushHistory(state, {
+            undo: () => { line.parent && line.parent.remove(line); state.lines = state.lines.filter(L => L !== entry); },
+            redo: () => { scene.add(line); state.lines.push(entry); }
+          });
+        }
+        first.userData.dot.material.color.set(0x555555);
+        first.userData.dot.scale.setScalar(state.size);
+        m.userData.dot.material.color.set(0x555555);
+        m.userData.dot.scale.setScalar(state.size);
+      }, 220);
+      state.selected = null;
+    });
+  }
+  // 가이드 — "선그리기"(꼭짓점에서 눌러 마우스를 움직이면 점선이 따라오다 다시 클릭하면 확정, 길이는 드래그한
+  // 만큼) / "사이즈"(그려둔 가이드선 두 개를 골라 mm 입력하면 그 사이에 크기 표시). 2D 오버레이에 그림.
+  function wireGuidePicking(canvas, overlay, camera, vstate, hguideRow){
+    const state = { active:false, mode:'draw', lines:[], selected:null, pendingPair:null, nextId:1 };
+    const ctx = overlay.getContext('2d');
+    const raycaster = new THREE.Raycaster();
+    const hint = hguideRow.querySelector('.hguideHint');
+    const input = hguideRow.querySelector('input');
+    const okBtn = hguideRow.querySelector('button');
+
+    const preview = document.createElement('canvas');
+    preview.width = overlay.width; preview.height = overlay.height;
+    Object.assign(preview.style, { position:'absolute', top:'0', left:'0', pointerEvents:'none' });
+    overlay.parentElement.appendChild(preview);
+    const pctx = preview.getContext('2d');
+
+    function toOverlayXY(clientX, clientY){
+      const r = canvas.getBoundingClientRect();
+      return { x: (clientX - r.left) * (overlay.width / r.width), y: (clientY - r.top) * (overlay.height / r.height) };
+    }
+    function drawLine(context, L, color){
+      context.save(); context.strokeStyle = color || '#2b6be0'; context.setLineDash([6,4]); context.lineWidth = 1.5;
+      context.beginPath();
+      if (L.orientation === 'h') { context.moveTo(L.a, L.pos); context.lineTo(L.b, L.pos); }
+      else { context.moveTo(L.pos, L.a); context.lineTo(L.pos, L.b); }
+      context.stroke(); context.restore();
+    }
+    function cancelPending(){ state.selected=null; state.pendingPair=null; hguideRow.classList.remove('show'); input.value=''; }
+    function midpointFor(l1,l2){
+      if (l1.orientation==='h' && l2.orientation==='h') return { x:((l1.a+l1.b)/2+(l2.a+l2.b)/2)/2, y:(l1.pos+l2.pos)/2 };
+      if (l1.orientation==='v' && l2.orientation==='v') return { x:(l1.pos+l2.pos)/2, y:((l1.a+l1.b)/2+(l2.a+l2.b)/2)/2 };
+      const h = l1.orientation==='h'?l1:l2, v = l1.orientation==='v'?l1:l2;
+      return { x: v.pos, y: h.pos };
+    }
+    function confirmSize(){
+      if (!state.pendingPair || !input.value.trim()) return;
+      const [l1,l2] = state.pendingPair;
+      const mid = midpointFor(l1,l2);
+      ctx.save(); ctx.fillStyle='#2b6be0'; ctx.font='bold 13px sans-serif'; ctx.textAlign='center';
+      ctx.fillText(input.value.trim()+'mm', mid.x, mid.y+4); ctx.restore();
+      cancelPending();
+    }
+    okBtn.addEventListener('click', confirmSize);
+    input.addEventListener('keydown', e => { if (e.key==='Enter') confirmSize(); });
+
+    let pendingStart=null, moveHandler=null;
+    function lineFor(p0,p1,id){
+      const horizontal = Math.abs(p1.x-p0.x) >= Math.abs(p1.y-p0.y);
+      return horizontal
+        ? { id, orientation:'h', pos:p0.y, a:Math.min(p0.x,p1.x), b:Math.max(p0.x,p1.x) }
+        : { id, orientation:'v', pos:p0.x, a:Math.min(p0.y,p1.y), b:Math.max(p0.y,p1.y) };
+    }
+    canvas.addEventListener('click', e => {
+      if (!state.active) return;
+      if (state.mode === 'draw'){
+        if (!pendingStart){
+          const r = canvas.getBoundingClientRect();
+          const mouse = new THREE.Vector2(((e.clientX-r.left)/r.width)*2-1, -((e.clientY-r.top)/r.height)*2+1);
+          raycaster.setFromCamera(mouse, camera);
+          const hit = raycaster.intersectObjects(vstate.markers, false)[0];
+          if (!hit) return;
+          pendingStart = toOverlayXY(e.clientX, e.clientY);
+          moveHandler = ev => {
+            const p1 = toOverlayXY(ev.clientX, ev.clientY);
+            pctx.clearRect(0,0,preview.width,preview.height);
+            drawLine(pctx, lineFor(pendingStart, p1));
+          };
+          window.addEventListener('mousemove', moveHandler);
+          return;
+        }
+        const p1 = toOverlayXY(e.clientX, e.clientY);
+        pctx.clearRect(0,0,preview.width,preview.height);
+        const L = lineFor(pendingStart, p1, state.nextId++);
+        drawLine(ctx, L);
+        state.lines.push(L);
+        window.removeEventListener('mousemove', moveHandler);
+        moveHandler = null; pendingStart = null;
+        return;
+      }
+      const p = toOverlayXY(e.clientX, e.clientY);
+      let nearest=null, bestDist=8;
+      state.lines.forEach(L => {
+        const d = L.orientation==='h' ? Math.abs(L.pos-p.y) : Math.abs(L.pos-p.x);
+        if (d<bestDist){ bestDist=d; nearest=L; }
+      });
+      if (!nearest) return;
+      if (state.selected && state.selected.id===nearest.id){ cancelPending(); return; }
+      if (!state.selected){ state.selected=nearest; drawLine(ctx, nearest, '#c0392b'); return; }
+      state.pendingPair = [state.selected, nearest];
+      hint.textContent = '두 가이드선 사이 크기(mm)?';
+      hguideRow.classList.add('show');
+      input.focus();
+    });
+    return state;
+  }
+  // 캔버스 위에 자유롭게 낙서(스크리블) — 오버레이가 기본 상태(어떤 도구도 안 켜졌을 때)일 때만 마우스로 그려짐
+  function attachScribble(overlay, toolbar){
+    const ctx = overlay.getContext('2d');
+    ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.strokeStyle = '#111111';
+    let drawing = false;
+    function pos(e){ const r = overlay.getBoundingClientRect(); return { x:(e.clientX-r.left)*(overlay.width/r.width), y:(e.clientY-r.top)*(overlay.height/r.height) }; }
+    overlay.addEventListener('pointerdown', e => { drawing = true; const p = pos(e); ctx.beginPath(); ctx.moveTo(p.x,p.y); });
+    overlay.addEventListener('pointermove', e => { if (!drawing) return; const p = pos(e); ctx.lineTo(p.x,p.y); ctx.stroke(); });
+    window.addEventListener('pointerup', () => { drawing = false; });
+    toolbar.querySelector('.clearBtn').addEventListener('click', () => ctx.clearRect(0,0,overlay.width,overlay.height));
+  }
+  // 확대(➕)/축소(➖) — 정투영(orthographic) 카메라는 거리 개념이 없어서 camera.zoom을 바꿔야 실제로 확대/축소됨
+  // (원본 zoomEntry와 동일한 분기 — parts-lab.html의 모든 패널이 orthoCam이라 이 분기가 항상 타는 경로).
+  function addZoomButtons(canvas, getCamCtr){
+    const wrap = canvas.parentElement;
+    const box = document.createElement('div');
+    box.className = 'zoomCtrl';
+    box.innerHTML = '<button class="zi" title="확대">➕</button><button class="zo" title="축소">➖</button>';
+    wrap.appendChild(box);
+    function zoom(factor){
+      const { camera, controls } = getCamCtr();
+      if (camera.isOrthographicCamera) {
+        camera.zoom = Math.min(Math.max(camera.zoom / factor, 0.3), 6);
+        camera.updateProjectionMatrix();
+      } else {
+        const dir = new THREE.Vector3().subVectors(camera.position, controls.target);
+        const d = Math.min(Math.max(dir.length() * factor, 20), 1500);
+        dir.setLength(d);
+        camera.position.copy(controls.target).add(dir);
+      }
+      controls.update();
+    }
+    box.querySelector('.zi').addEventListener('click', () => zoom(1/1.2));
+    box.querySelector('.zo').addEventListener('click', () => zoom(1.2));
+    return box;
+  }
+  // 프레임/브라켓 등 어떤 부품이든 렌더 후 이 함수 하나로 낙서+돌려보기 토글+꼭지점 잇기(+되돌리기/다시하기)+
+  // 가이드+모서리 치수까지 전부 붙임
+  function attachFullToolkit(canvas, opts){
+    const { scene, camera, controls, mesh, vertexPoints, edgeDefs, zoomBox } = opts;
+    const target = opts.target || scene;
+    controls.enabled = false; // 원본과 동일: 기본은 그리기(낙서) 모드
+
+    const wrap = canvas.parentElement;
+    const overlay = document.createElement('canvas');
+    overlay.className = 'overlay';
+    overlay.width = 300; overlay.height = 300;
+    wrap.appendChild(overlay);
+
+    const toolbar = document.createElement('div');
+    toolbar.className = 'btnRow';
+    toolbar.innerHTML = '<button type="button" class="clearBtn">지우기</button><button type="button" class="modeBtn">🔄 돌려보기</button>' +
+      (vertexPoints ? '<button type="button" class="vertexBtn">🔗 꼭지점 잇기</button><button type="button" class="guideBtn">📏 가이드</button>' : '');
+    wrap.insertAdjacentElement('afterend', toolbar);
+    let lastEl = toolbar, dimRow = null, vertexPanel = null, guidePanel = null, hguideRow = null;
+
+    if (edgeDefs && edgeDefs.length) {
+      dimRow = document.createElement('div');
+      dimRow.className = 'dimInput';
+      dimRow.innerHTML = '<span class="dimHint"></span><input type="text" placeholder="mm"><button type="button">확인</button>';
+      lastEl.insertAdjacentElement('afterend', dimRow);
+      lastEl = dimRow;
+    }
+    if (vertexPoints) {
+      vertexPanel = document.createElement('div');
+      vertexPanel.className = 'vertexPanel';
+      vertexPanel.innerHTML = '<label>점 크기 <input type="number" class="vsize" min="0.3" max="1" step="0.1" value="0.5"></label>' +
+        '<button type="button" class="vmodeBtn on" data-mode="connect">연결</button><button type="button" class="vmodeBtn" data-mode="add">추가</button><button type="button" class="vmodeBtn" data-mode="delete">삭제</button>' +
+        '<button type="button" class="vertexDoneBtn">완료</button>';
+      lastEl.insertAdjacentElement('afterend', vertexPanel);
+      lastEl = vertexPanel;
+      guidePanel = document.createElement('div');
+      guidePanel.className = 'guidePanel';
+      guidePanel.innerHTML = '<button type="button" class="gmodeBtn on" data-mode="draw">선그리기</button><button type="button" class="gmodeBtn" data-mode="size">사이즈</button>';
+      lastEl.insertAdjacentElement('afterend', guidePanel);
+      lastEl = guidePanel;
+      hguideRow = document.createElement('div');
+      hguideRow.className = 'hguideInput';
+      hguideRow.innerHTML = '<span class="hguideHint"></span><input type="text" placeholder="mm"><button type="button">확인</button>';
+      lastEl.insertAdjacentElement('afterend', hguideRow);
+      lastEl = hguideRow;
+    }
+
+    attachScribble(overlay, toolbar);
+    const stateFlags = { rotate:false, vertex:false, guide:false };
+    function syncOverlay(){ overlay.style.pointerEvents = (stateFlags.rotate || stateFlags.vertex || stateFlags.guide) ? 'none' : 'auto'; }
+    syncOverlay();
+
+    const modeBtn = toolbar.querySelector('.modeBtn');
+    modeBtn.addEventListener('click', () => {
+      const turningOn = !controls.enabled;
+      controls.enabled = turningOn;
+      stateFlags.rotate = turningOn;
+      syncOverlay();
+      modeBtn.classList.toggle('on', turningOn);
+      modeBtn.textContent = turningOn ? '✏️ 그리기로' : '🔄 돌려보기';
+    });
+
+    if (edgeDefs && edgeDefs.length) {
+      const measurableEdges = addMeasurableEdges(target, edgeDefs);
+      wireEdgePicking(canvas, camera, target, measurableEdges, dimRow, stateFlags);
+    }
+    if (vertexPoints) {
+      const vstate = createVertexState(target, vertexPoints);
+      wireVertexPicking(canvas, camera, target, mesh, vstate);
+      const gstate = wireGuidePicking(canvas, overlay, camera, vstate, hguideRow);
+      function syncGuideVertexVisibility(){
+        const showDots = gstate.active && gstate.mode === 'draw';
+        vstate.markers.forEach(m => m.userData.dot.material.opacity = (showDots || vstate.active) ? 1 : 0);
+      }
+      function syncVertexPanelVisibility(){
+        vertexPanel.classList.toggle('show', vstate.active || (gstate.active && gstate.mode === 'draw'));
+      }
+      const vertexBtn = toolbar.querySelector('.vertexBtn');
+      vertexBtn.addEventListener('click', () => {
+        const turningOn = !vstate.active;
+        setVertexActive(vstate, turningOn);
+        stateFlags.vertex = turningOn;
+        syncOverlay(); syncGuideVertexVisibility(); syncVertexPanelVisibility();
+        vertexBtn.classList.toggle('on', turningOn);
+      });
+      vertexPanel.querySelector('.vertexDoneBtn').addEventListener('click', () => { if (vstate.active) vertexBtn.click(); });
+      vertexPanel.querySelectorAll('.vmodeBtn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          vstate.mode = btn.dataset.mode;
+          vertexPanel.querySelectorAll('.vmodeBtn').forEach(b => b.classList.toggle('on', b===btn));
+        });
+      });
+      vertexPanel.querySelector('.vsize').addEventListener('input', e => {
+        const v = parseFloat(e.target.value);
+        if (!isFinite(v)) return;
+        vstate.size = Math.min(Math.max(v, 0.3), 1);
+        vstate.markers.forEach(m => { if (m !== vstate.selected) m.userData.dot.scale.setScalar(vstate.size); });
+      });
+      const guideBtn = toolbar.querySelector('.guideBtn');
+      guideBtn.addEventListener('click', () => {
+        gstate.active = !gstate.active;
+        stateFlags.guide = gstate.active;
+        syncOverlay(); syncGuideVertexVisibility(); syncVertexPanelVisibility();
+        guideBtn.classList.toggle('on', gstate.active);
+        guidePanel.classList.toggle('show', gstate.active);
+      });
+      guidePanel.querySelectorAll('.gmodeBtn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          gstate.mode = btn.dataset.mode;
+          guidePanel.querySelectorAll('.gmodeBtn').forEach(b => b.classList.toggle('on', b===btn));
+          syncGuideVertexVisibility(); syncVertexPanelVisibility();
+        });
+      });
+      if (zoomBox) {
+        const undoBtn = document.createElement('button'); undoBtn.type='button'; undoBtn.title='되돌리기(이전)'; undoBtn.textContent='↶';
+        const redoBtn = document.createElement('button'); redoBtn.type='button'; redoBtn.title='다시하기(이후)'; redoBtn.textContent='↷';
+        zoomBox.appendChild(undoBtn); zoomBox.appendChild(redoBtn);
+        undoBtn.addEventListener('click', () => undoVertex(vstate));
+        redoBtn.addEventListener('click', () => redoVertex(vstate));
+      }
+    }
+  }
+  // 브라켓 꼭짓점/측정 모서리 — arm1×arm2×armWidth 파라미터에 맞춰 일반화(_compare_all.html의 30×30×5 고정값 대신)
+  function bracketVertices(arm1, arm2, armWidth){
+    const outline2D = [[0,0],[arm1,0],[arm1,armWidth],[armWidth,armWidth],[armWidth,arm2],[0,arm2]];
+    const pts = [];
+    [0,10].forEach(y => outline2D.forEach(([x,z]) => pts.push(new THREE.Vector3(x,y,z))));
+    return pts;
+  }
+  function bracketEdgeDefs(arm1, arm2, armWidth){
+    const LINE = 0x555555;
+    return [
+      { p1:new THREE.Vector3(0,0,armWidth), p2:new THREE.Vector3(arm1,0,armWidth), offset:new THREE.Vector3(0,-2,2), color:LINE, name:'가로 팔(바깥쪽) 길이' },
+      { p1:new THREE.Vector3(armWidth,10,armWidth), p2:new THREE.Vector3(arm1,10,armWidth), offset:new THREE.Vector3(0,2,2), color:LINE, name:'가로 팔(안쪽) 길이 — 포켓 쪽' },
+      { p1:new THREE.Vector3(armWidth,0,0), p2:new THREE.Vector3(armWidth,0,arm2), offset:new THREE.Vector3(2,-2,0), color:LINE, name:'세로 팔(바깥쪽) 길이' },
+      { p1:new THREE.Vector3(armWidth,10,armWidth), p2:new THREE.Vector3(armWidth,10,arm2), offset:new THREE.Vector3(2,2,0), color:LINE, name:'세로 팔(안쪽) 길이 — 포켓 쪽' },
+      { p1:new THREE.Vector3(arm1,0,0), p2:new THREE.Vector3(arm1,10,0), offset:new THREE.Vector3(2.5,0,-2), color:LINE, name:'높이(Y)' },
+      { p1:new THREE.Vector3(arm1,0,0), p2:new THREE.Vector3(arm1,0,armWidth), offset:new THREE.Vector3(2.5,-2,0), color:LINE, name:'두께(폭)' },
+    ];
+  }
+  // 프레임 꼭짓점/측정 모서리 — 등록된 SVG 윤곽선(outline)을 그대로 사용(각도 추측 금지 원칙과 동일)
+  function frameVertices(outline, cx, cy, depth){
+    const pts = [];
+    outline.forEach(p => {
+      pts.push(new THREE.Vector3(p.x-cx, -depth/2, p.y-cy));
+      pts.push(new THREE.Vector3(p.x-cx, depth/2, p.y-cy));
+    });
+    return pts;
+  }
+  function frameEdgeDefs(outline, cx, cy, depth){
+    const LINE = 0x555555;
+    const defs = [];
+    const n = outline.length;
+    for (let i=0;i<n;i++){
+      const a = outline[i], b = outline[(i+1)%n];
+      const p1 = new THREE.Vector3(a.x-cx, depth/2, a.y-cy);
+      const p2 = new THREE.Vector3(b.x-cx, depth/2, b.y-cy);
+      const dir = p2.clone().sub(p1).normalize();
+      const outward = new THREE.Vector3(-dir.z, 0, dir.x).multiplyScalar(2);
+      defs.push({ p1, p2, offset: outward, color: LINE, name: '변' + (i+1) + ' 길이' });
+    }
+    const v0 = outline[0];
+    defs.push({ p1: new THREE.Vector3(v0.x-cx, -depth/2, v0.y-cy), p2: new THREE.Vector3(v0.x-cx, depth/2, v0.y-cy), offset: new THREE.Vector3(2,0,2), color: LINE, name:'두께' });
+    return defs;
+  }
+
+  // ===== 90도 프레임 SVG 아웃라인/구멍 파서 — design.html의 parseSvgPlateOutline·parseSvgMaskHoleCenters와 같은 방식
+  // (이름/각도를 추측해서 다시 계산하지 않고, 등록된 그림의 실제 좌표를 그대로 읽음 — "135도 프레임" 버그 교훈) =====
+  function parseSvgMaskHoleCenters(svg){
+    if (!svg) return [];
+    const m = svg.match(/<mask[^>]*>([\s\S]*?)<\/mask>/);
+    const src = m ? m[1] : '';
+    return [...src.matchAll(/<circle[^>]*\bcx="(-?[\d.]+)"[^>]*\bcy="(-?[\d.]+)"/g)].map(mm => ({ x: Number(mm[1]), y: Number(mm[2]) }));
+  }
+  function svgArcToPoints(x1,y1,rx,largeArcFlag,sweepFlag,x2,y2,segments){
+    const mx=(x1+x2)/2, my=(y1+y2)/2, dx=(x2-x1)/2, dy=(y2-y1)/2, d=Math.hypot(dx,dy);
+    let r=rx; if (d>r) r=d;
+    const h=Math.sqrt(Math.max(0,r*r-d*d));
+    const sign=(largeArcFlag===sweepFlag)?-1:1;
+    const ux=d?-dy/d:0, uy=d?dx/d:0;
+    const cx=mx+sign*h*ux, cy=my+sign*h*uy;
+    const a1=Math.atan2(y1-cy,x1-cx); let a2=Math.atan2(y2-cy,x2-cx);
+    if (sweepFlag===1 && a2<a1) a2+=Math.PI*2;
+    if (sweepFlag===0 && a2>a1) a2-=Math.PI*2;
+    const pts=[];
+    for (let i=1;i<=segments;i++){ const a=a1+(a2-a1)*(i/segments); pts.push({x:cx+r*Math.cos(a), y:cy+r*Math.sin(a)}); }
+    return pts;
+  }
+  function parseSvgPathPoints(d){
+    const cmds=[...d.matchAll(/([MLAZ])\s*([^MLAZ]*)/g)];
+    const pts=[]; let cur={x:0,y:0};
+    cmds.forEach(([,cmd,argsStr])=>{
+      const nums=(argsStr.match(/-?[\d.]+/g)||[]).map(Number);
+      if (cmd==='M'||cmd==='L'){ for (let i=0;i+1<nums.length;i+=2){ cur={x:nums[i],y:nums[i+1]}; pts.push(cur); } }
+      else if (cmd==='A'){ for (let i=0;i+6<nums.length;i+=7){ const [rx,,,largeArc,sweep,ex,ey]=nums.slice(i,i+7); pts.push(...svgArcToPoints(cur.x,cur.y,rx,largeArc,sweep,ex,ey,16)); cur={x:ex,y:ey}; } }
+    });
+    return pts;
+  }
+  function parseSvgPlateOutline(svg){
+    if (!svg) return null;
+    const m = svg.match(/<(polygon|path)\b[^>]*\bfill="#d5d8dc"[^>]*>/);
+    if (!m) return null;
+    const tag = m[0];
+    if (m[1]==='polygon'){
+      const ptsAttr = tag.match(/\bpoints="([^"]+)"/);
+      if (!ptsAttr) return null;
+      const nums=(ptsAttr[1].match(/-?[\d.]+/g)||[]).map(Number);
+      const pts=[]; for (let i=0;i+1<nums.length;i+=2) pts.push({x:nums[i],y:nums[i+1]});
+      return pts.length>=3?pts:null;
+    }
+    const dAttr = tag.match(/\bd="([^"]+)"/);
+    if (!dAttr) return null;
+    const pts = parseSvgPathPoints(dAttr[1]);
+    return pts.length>=3?pts:null;
+  }
+  // 윤곽선 점들 중 "오목한(concave)" 꼭짓점 찾기 — 부호 있는 다각형 면적으로 방향을 구한 뒤, 방향과 반대로 꺾이는 점.
+  function findConcaveVertex(pts){
+    let area = 0;
+    for (let i=0;i<pts.length;i++){ const a=pts[i], b=pts[(i+1)%pts.length]; area += a.x*b.y - b.x*a.y; }
+    const ccw = area > 0;
+    for (let i=0;i<pts.length;i++){
+      const prev = pts[(i-1+pts.length)%pts.length], cur = pts[i], next = pts[(i+1)%pts.length];
+      const cross = (cur.x-prev.x)*(next.y-cur.y) - (cur.y-prev.y)*(next.x-cur.x);
+      const isConcave = ccw ? cross < 0 : cross > 0;
+      if (isConcave) return i;
+    }
+    return -1;
+  }
+
+  // ===== 참고(비교 대상) 패널 — 90도 프레임 + 1열브라켓, 고정 =====
+  const SVG_90 = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50" width="200" height="200"><defs><clipPath id="clip90ref"><path d="M10,10 L40,10 L40,20 L20,20 L20,40 L10,40 Z"/></clipPath><radialGradient id="boss90ref" cx="35%" cy="28%" r="80%"><stop offset="0%" stop-color="#ffffff"/><stop offset="55%" stop-color="#dfe2e6"/><stop offset="100%" stop-color="#a9aeb5"/></radialGradient><mask id="mask90ref" maskUnits="userSpaceOnUse" x="0" y="0" width="50" height="50"><rect x="0" y="0" width="50" height="50" fill="#fff"/><circle cx="15" cy="15" r="2.8" fill="#000"/><circle cx="15" cy="25" r="2.8" fill="#000"/><circle cx="15" cy="35" r="2.8" fill="#000"/><circle cx="25" cy="15" r="2.8" fill="#000"/><circle cx="35" cy="15" r="2.8" fill="#000"/></mask></defs><g mask="url(#mask90ref)"><path d="M10,10 L40,10 L40,20 L20,20 L20,40 L10,40 Z" fill="#d5d8dc" stroke="#9aa0a8" stroke-width="0.6"/><g clip-path="url(#clip90ref)"><circle cx="15" cy="15" r="4.3" fill="url(#boss90ref)" stroke="#7d8288" stroke-width="0.35"/><circle cx="15" cy="25" r="4.3" fill="url(#boss90ref)" stroke="#7d8288" stroke-width="0.35"/><circle cx="15" cy="35" r="4.3" fill="url(#boss90ref)" stroke="#7d8288" stroke-width="0.35"/><circle cx="25" cy="15" r="4.3" fill="url(#boss90ref)" stroke="#7d8288" stroke-width="0.35"/><circle cx="35" cy="15" r="4.3" fill="url(#boss90ref)" stroke="#7d8288" stroke-width="0.35"/></g></g></svg>`;
+  function renderFramePanel(canvas, svg, camPos){
+    camPos = camPos || [70,90,110];
+    const outline = parseSvgPlateOutline(svg) || [{x:10,y:10},{x:40,y:10},{x:40,y:20},{x:20,y:20},{x:20,y:40},{x:10,y:40}];
+    const xs = outline.map(p=>p.x), ys = outline.map(p=>p.y);
+    const cx = (Math.min(...xs)+Math.max(...xs))/2, cy = (Math.min(...ys)+Math.max(...ys))/2;
+    // 스케치북 배경 모눈종이가 10mm 한 칸이라, 도형의 실제 기하학적 중심(cx,cy — 10 단위가 아닐 수 있음)
+    // 대신 가장 가까운 10mm 배수로 반올림해서 맞춰야 부품 모서리가 격자선 위에 정확히 놓임
+    // (사용자 지적: "베이스 스케치북 이 한칸에 10MM 인거지? 그럼 라인을 맞춰서 배치를 해야 할꼬 아니야").
+    const cxR = Math.round(cx/10)*10, cyR = Math.round(cy/10)*10;
+    const dataUri = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true, preserveDrawingBuffer:true });
+    renderer.setSize(300,300,false);
+    const scene = baseScene();
+    const camera = orthoCam(40);
+    camera.position.set(camPos[0],camPos[1],camPos[2]); camera.lookAt(0,0,0);
+    new THREE.TextureLoader().load(dataUri, tex => {
+      tex.repeat.set(1/50,1/50); tex.offset.set(0,1);
+      const shape = new THREE.Shape();
+      outline.forEach((p,i)=>{ if(i===0) shape.moveTo(p.x,-p.y); else shape.lineTo(p.x,-p.y); });
+      shape.closePath();
+      const geo = new THREE.ExtrudeGeometry(shape, { depth:5, bevelEnabled:false });
+      geo.rotateX(-Math.PI/2); geo.translate(-cxR, -2.5, -cyR);
+      const mesh = new THREE.Mesh(geo, [new THREE.MeshBasicMaterial({ map: tex }), new THREE.MeshStandardMaterial({ color:0xc7cbd1 })]);
+      addEdgeOutline(mesh, 0xc7cbd1);
+      const ci = findConcaveVertex(outline);
+      if (ci >= 0) {
+        const p = outline[ci];
+        const lx = p.x - cxR, lz = p.y - cyR;
+        const nlen = Math.hypot(lx,lz) || 1;
+        const nx = lx/nlen*0.15, nz = lz/nlen*0.15;
+        const line = new THREE.Line(
+          new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(lx+nx,-2.5,lz+nz), new THREE.Vector3(lx+nx,2.5,lz+nz)]),
+          new THREE.LineBasicMaterial({ color: darken(0xc7cbd1,0.55) })
+        );
+        mesh.add(line);
+      }
+      scene.add(mesh);
+      renderer.render(scene, camera);
+      const controls = setupOrbit(renderer, scene, camera, [0,0,0]);
+      const zoomBox = addZoomButtons(canvas, () => ({ camera, controls }));
+      attachFullToolkit(canvas, {
+        scene, camera, controls, mesh, target: scene, zoomBox,
+        vertexPoints: frameVertices(outline, cxR, cyR, 5),
+        edgeDefs: frameEdgeDefs(outline, cxR, cyR, 5)
+      });
+    });
+  }
+  function renderBracketPanel(canvas, arm1, arm2, armWidth, camPos){
+    camPos = camPos || [70,90,110];
+    // preserveDrawingBuffer: 저장할 때 이 캔버스를 실제 이미지로 캡처(toDataURL)해서 같이 저장하기 위함
+    // (사용자 지시: "설계도 보면 모든사람들이 다 알지?? 그렇게 저장을 하라고" — 숫자만이 아니라 확정된 실제
+    // 모습 이미지 자체를 남겨서, 나중에 누가/어떤 세션이 다시 봐도 재해석 없이 바로 확인할 수 있게 함).
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true, preserveDrawingBuffer:true });
+    renderer.setSize(300,300,false);
+    const scene = baseScene();
+    const camera = orthoCam(40);
+    camera.position.set(camPos[0],camPos[1],camPos[2]);
+    const ctr = [arm1/2, armWidth/2, arm1/2];
+    camera.lookAt(ctr[0],ctr[1],ctr[2]);
+    const shape = new THREE.Shape();
+    shape.moveTo(0,0); shape.lineTo(arm1,0); shape.lineTo(arm1,-armWidth);
+    shape.lineTo(armWidth,-armWidth); shape.lineTo(armWidth,-arm2); shape.lineTo(0,-arm2);
+    shape.closePath();
+    const geo = new THREE.ExtrudeGeometry(shape, { depth:10, bevelEnabled:false });
+    geo.rotateX(-Math.PI/2);
+    const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color:0xf2ead9 }));
+    addEdgeOutline(mesh, 0xf2ead9);
+    const bNudge = 0.15/Math.SQRT2;
+    mesh.add(new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(armWidth+bNudge,0,armWidth+bNudge), new THREE.Vector3(armWidth+bNudge,10,armWidth+bNudge)]),
+      new THREE.LineBasicMaterial({ color: darken(0xf2ead9,0.55) })
+    ));
+    scene.add(mesh);
+    // 숫자 입력칸(팔1/팔2)만으로는 실제 모델에서 어느 쪽이 팔1이고 어느 쪽이 팔2인지 알 수 없어서
+    // (사용자 지적: "팔1은 어디고 팔2는 어디야???") 각 팔 끝에 라벨을 직접 붙여서 눈으로 바로 구분되게 함.
+    const label1 = makeTextSprite('팔1', '#2b6be0');
+    label1.position.set(arm1 * 0.6, 14, armWidth/2);
+    scene.add(label1);
+    const label2 = makeTextSprite('팔2', '#c0392b');
+    label2.position.set(armWidth/2, 14, arm2 * 0.6);
+    scene.add(label2);
+    // 구멍: 여백5·피치10, 팔당 3개, 코너쪽(팔 끝에서 가장 가까운 첫 구멍)=블라인드, 앞면+뒷면 둘 다 있어야 함
+    // (원본 발명학교-부품작업\_compare_all.html의 buildBracketScene과 비교해서 발견한 버그 수정:
+    // 사용자 지적 "저기 그려진 구멍은 맞아???" — 높이는 armWidth/2가 아니라 항상 높이(10)의 절반인 고정값
+    // 5여야 하고(원본 예시에서 armWidth가 우연히 5였을 뿐), 뒷면 구멍 세트가 통째로 빠져 있었음)
+    const holeY = 5; // 높이(Y)=10 고정이므로 항상 그 절반
+    const positions = [5,15,25].filter(p => p < arm1 - 2);
+    positions.forEach((p,i) => {
+      makeHole(scene, p, holeY, armWidth+0.05, 0, i===0);      // 정면
+      makeHole(scene, p, holeY, -0.05, Math.PI, i===0);        // 뒷면
+    });
+    const positions2 = [5,15,25].filter(p => p < arm2 - 2);
+    positions2.forEach((p,i) => {
+      makeHole(scene, armWidth+0.05, holeY, p, Math.PI/2, i===0);   // 정면
+      makeHole(scene, -0.05, holeY, p, -Math.PI/2, i===0);          // 뒷면
+    });
+    renderer.render(scene, camera);
+    const controls = setupOrbit(renderer, scene, camera, ctr);
+    const zoomBox = addZoomButtons(canvas, () => ({ camera, controls }));
+    attachFullToolkit(canvas, {
+      scene, camera, controls, mesh, target: scene, zoomBox,
+      vertexPoints: bracketVertices(arm1, arm2, armWidth),
+      edgeDefs: bracketEdgeDefs(arm1, arm2, armWidth)
+    });
+  }
+  // 보여줄 샷이 없을 때도 칸 자체는 항상 스케치북과 같은 모습(모눈종이+축)으로 있고, 안에 물품(메쉬)만
+  // 없으면 됨(사용자 지시: "사각형 스케치북은 항상 있고 안에 물품만 없으면 됨").
+  function renderEmptyPanel(canvas){
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true });
+    renderer.setSize(300,300,false);
+    const scene = baseScene();
+    const camera = orthoCam(40);
+    camera.position.set(70,90,110); camera.lookAt(0,0,0);
+    renderer.render(scene, camera);
+    const controls = setupOrbit(renderer, scene, camera, [0,0,0]);
+    const zoomBox = addZoomButtons(canvas, () => ({ camera, controls }));
+    attachFullToolkit(canvas, { scene, camera, controls, mesh:null, target: scene, zoomBox });
+  }
+  // 세 부품(위/정면/뒷면 — 왼쪽에서 오른쪽 순서)을 나란히 보여줌(사용자 지시: "기본 샷이 위/정면/뒷면").
+  // 확정된 렌더링 결과를 캡처하면서 치수를 이미지 위에 직접 적어넣음 — 숫자를 따로 보관하지 않고
+  // "그림 자체"에 박아 넣어야 나중에 누가 봐도(사람이든 다른 세션이든) 멋대로 다르게 해석할 수 없음
+  // (사용자 지시: "설계도에 수치를 다 적어서 저장... 멋대로 해석을 할수가 없게").
+  function captureAnnotatedSnapshot(canvas, labelLines){
+    const out = document.createElement('canvas');
+    out.width = canvas.width; out.height = canvas.height;
+    const ctx = out.getContext('2d');
+    ctx.drawImage(canvas, 0, 0);
+    ctx.font = 'bold 13px sans-serif';
+    ctx.textBaseline = 'top';
+    let y = 6;
+    labelLines.forEach(line => {
+      const w = ctx.measureText(line).width;
+      ctx.fillStyle = 'rgba(255,255,255,0.88)';
+      ctx.fillRect(4, y - 2, w + 8, 16);
+      ctx.fillStyle = '#111';
+      ctx.fillText(line, 8, y);
+      y += 17;
+    });
+    return out.toDataURL('image/png');
+  }
+  function bracketBackCamPos(arm1, arm2){ return [-4/3*arm1, 90, -2*arm2]; }
+  function bracketTopCamPos(arm1){ return [arm1/2+0.001, 200, arm1/2]; }
+  renderFramePanel(document.getElementById('refFrameTop'), SVG_90, [0,150,0.001]);
+  renderFramePanel(document.getElementById('refFrameFront'), SVG_90, [70,90,110]);
+  // 프레임은 앞뒤가 사실상 대칭인 얇은 판이라 "뒷면"에 새로 보여줄 게 없어서 빈 칸으로 둠
+  // (사용자 지시: "없으면 비워져 있으면 되는거야" / "사각형 스케치북은 항상 있고 안에 물품만 없으면 됨")
+  renderEmptyPanel(document.getElementById('refFrameBack'));
+  renderBracketPanel(document.getElementById('refBracketTop'), 30, 30, 5, bracketTopCamPos(30));
+  renderBracketPanel(document.getElementById('refBracketFront'), 30, 30, 5, [70,90,110]);
+  renderBracketPanel(document.getElementById('refBracketBack'), 30, 30, 5, bracketBackCamPos(30,30));
+
+  // ===== 스케치북 (오른쪽 패널) — 빈 곳 드래그=회전, 휠=확대/축소, "그리기" 켜면 그 위에 자유롭게 낙서 =====
+  function initSketchbook(){
+    const canvas = document.getElementById('sketch3d');
+    const overlay = document.getElementById('sketchOverlay');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true });
+    renderer.setSize(500,500,false);
+    const scene = baseScene(); // 모눈종이 배경 + X/Y/Z축은 baseScene()이 공통으로 넣어줌
+    const camera = orthoCam(120);
+    camera.position.set(150,150,150);
+    camera.lookAt(0,0,0);
+    renderer.render(scene, camera);
+    const controls = setupOrbit(renderer, scene, camera, [0,0,0]);
+    addZoomButtons(canvas, () => ({ camera, controls }));
+
+    const ctx = overlay.getContext('2d');
+    ctx.strokeStyle = '#2b6be0'; ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    let drawMode = false, drawing = false, last = null;
+    function posOf(e){
+      const rect = overlay.getBoundingClientRect();
+      return { x: (e.clientX - rect.left) * (overlay.width / rect.width), y: (e.clientY - rect.top) * (overlay.height / rect.height) };
+    }
+    overlay.addEventListener('mousedown', e => { if (!drawMode) return; drawing = true; last = posOf(e); });
+    window.addEventListener('mousemove', e => {
+      if (!drawing) return;
+      const p = posOf(e);
+      ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(p.x, p.y); ctx.stroke();
+      last = p;
+    });
+    window.addEventListener('mouseup', () => { drawing = false; });
+
+    const drawBtn = document.getElementById('sketchDrawToggle');
+    drawBtn.addEventListener('click', () => {
+      drawMode = !drawMode;
+      overlay.style.pointerEvents = drawMode ? 'auto' : 'none';
+      overlay.style.cursor = drawMode ? 'crosshair' : 'default';
+      drawBtn.textContent = drawMode ? '🔄 돌려보기로' : '✏️ 그리기';
+      drawBtn.classList.toggle('on', drawMode);
+    });
+    document.getElementById('sketchClear').addEventListener('click', () => {
+      ctx.clearRect(0, 0, overlay.width, overlay.height);
+    });
+  }
+
+  // ===== 관리자 확인 =====
+  (async function gate(){
+    const { data: { session } } = await sb.auth.getSession();
+    const isAdmin = !!(session && session.user.app_metadata && session.user.app_metadata.role === 'admin');
+    if (!isAdmin) {
+      document.getElementById('gate').textContent = '본사 관리자만 볼 수 있어요. index.html에서 관리자로 로그인한 뒤 다시 열어주세요.';
+      return;
+    }
+    document.getElementById('gate').style.display = 'none';
+    document.getElementById('app').classList.add('shown');
+    initSketchbook();
+    initImporter(session.access_token);
+  })();
+
+  // ===== 부품 가져오기 =====
+  let allParts = [];
+  let curSubject = 'goldberg';
+  async function adminApi(payload, token){
+    const res = await fetch('/api/admin', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization:'Bearer '+token }, body: JSON.stringify(payload) });
+    const data = await res.json().catch(()=>({}));
+    if (!res.ok) throw new Error(data.error || '요청을 처리하지 못했어요.');
+    return data;
+  }
+  async function initImporter(token){
+    window.__accessToken = token;
+    try {
+      const data = await adminApi({ action:'list_parts' }, token);
+      allParts = data.parts || [];
+    } catch (e) {
+      document.getElementById('modalPartList').textContent = '부품을 못 불러왔어요: ' + e.message;
+      return;
+    }
+    document.getElementById('modalSubjectTabs').addEventListener('click', e => {
+      const btn = e.target.closest('button[data-subject]');
+      if (!btn) return;
+      curSubject = btn.dataset.subject;
+      document.querySelectorAll('#modalSubjectTabs button').forEach(b => b.classList.toggle('on', b===btn));
+      renderModalPartList();
+    });
+    renderModalPartList();
+  }
+  function renderModalPartList(){
+    const el = document.getElementById('modalPartList');
+    const items = allParts.filter(p => p.subject === curSubject && /프레임|브라켓/.test(p.name||''));
+    if (!items.length) { el.innerHTML = '<span style="color:#888;font-size:12px;">이 갈래엔 프레임/브라켓 부품이 없어요.</span>'; return; }
+    el.innerHTML = '';
+    items.forEach(p => {
+      const btn = document.createElement('button');
+      btn.innerHTML = esc(p.name) + '<span class="sz">' + esc(p.size||'') + '</span>';
+      btn.addEventListener('click', () => {
+        closePickerModal();
+        if (pickerModalCallback) pickerModalCallback(p);
+      });
+      el.appendChild(btn);
+    });
+  }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  // ===== 부품 고르기 모달 — "비교 대상 부품"과 "수정할 부품" 양쪽에서 같은 모달을 재사용
+  // (사용자 지시: "비교부품대상 오른쪽에 [부품고르기] 버튼... 수정할부품 오른쪽에 [부품고르기]버튼") =====
+  let pickerModalCallback = null;
+  function openPickerModal(title, onPick){
+    document.getElementById('pickerModalTitle').textContent = title;
+    pickerModalCallback = onPick;
+    document.getElementById('pickerModal').hidden = false;
+    renderModalPartList();
+  }
+  function closePickerModal(){
+    document.getElementById('pickerModal').hidden = true;
+    pickerModalCallback = null;
+  }
+  document.getElementById('pickerModalClose').addEventListener('click', closePickerModal);
+  document.getElementById('pickerModal').addEventListener('click', e => { if (e.target.id === 'pickerModal') closePickerModal(); });
+  document.getElementById('compareRefPickBtn').addEventListener('click', () => openPickerModal('비교 대상 부품 고르기', loadPartForCompare));
+  document.getElementById('editPartPickBtn').addEventListener('click', () => openPickerModal('수정할 부품 고르기', loadPartForEdit));
+
+  // 스케치북은 평소엔 접어두고 필요할 때만 펼침(사용자 지시: "필요할때만 펼쳐서 하면되 평소엔 접어놔줘")
+  document.getElementById('sketchToggle').addEventListener('click', () => {
+    const panel = document.getElementById('sketchPanel');
+    const open = panel.hidden;
+    panel.hidden = !open;
+    document.getElementById('sketchToggle').textContent = open ? '▼ 스케치북 (접기)' : '▶ 스케치북 (펼치기)';
+  });
+
+  // "비교 대상 부품"도 모달로 고른 부품 하나를 위/정면/뒷면 3컷으로 보여줌(기본은 90도프레임+1열브라켓 예시)
+  function loadPartForCompare(p){
+    const isBracket = /브라켓/.test(p.name);
+    const area = document.getElementById('compareArea');
+    area.innerHTML = '';
+    const mk = (label) => {
+      const col = document.createElement('div'); col.className = 'col';
+      col.innerHTML = '<h4>' + esc(p.name) + ' (' + label + ')</h4><div class="imgWrap"></div><div class="dims"></div>';
+      area.appendChild(col);
+      return { canvas: (() => { const c = document.createElement('canvas'); c.width = 300; c.height = 300; col.querySelector('.imgWrap').appendChild(c); return c; })(), dims: col.querySelector('.dims') };
+    };
+    const shot1 = mk('위'), shot2 = mk('정면'), shot3 = mk('뒷면');
+    if (isBracket) {
+      const spec = p.spec || {};
+      const m = String(p.size||'').match(/(\d+(?:\.\d+)?)\s*[×xX]\s*(\d+(?:\.\d+)?)\s*[×xX]\s*(\d+(?:\.\d+)?)/);
+      const arm1 = spec.armLen1 || (m ? Number(m[1]) : 30), arm2 = spec.armLen2 || (m ? Number(m[2]) : 30), armWidth = spec.armWidth || (m ? Number(m[3]) : 10);
+      renderBracketPanel(shot1.canvas, arm1, arm2, armWidth, bracketTopCamPos(arm1));
+      renderBracketPanel(shot2.canvas, arm1, arm2, armWidth, [70,90,110]);
+      renderBracketPanel(shot3.canvas, arm1, arm2, armWidth, bracketBackCamPos(arm1, arm2));
+      const inner1 = Math.max(arm1-armWidth,0), inner2 = Math.max(arm2-armWidth,0);
+      const dimsText = '외측 팔1 ' + arm1 + 'mm · 외측 팔2 ' + arm2 + 'mm · 내측 팔1 ' + inner1 + 'mm · 내측 팔2 ' + inner2 + 'mm · 두께/폭 ' + armWidth + 'mm';
+      shot1.dims.textContent = shot2.dims.textContent = shot3.dims.textContent = dimsText;
+    } else {
+      const svg = p.imageSvg || p.imageSvgDiagonal;
+      if (!svg) { shot1.dims.textContent = shot2.dims.textContent = '등록된 이미지가 없어서 실제 모양을 그릴 수 없어요.'; renderEmptyPanel(shot3.canvas); return; }
+      renderFramePanel(shot1.canvas, svg, [0,150,0.001]);
+      renderFramePanel(shot2.canvas, svg, [70,90,110]);
+      renderEmptyPanel(shot3.canvas);
+      shot3.dims.textContent = '앞뒤가 대칭인 얇은 판이라 표시할 샷이 없어요.';
+      const outline = parseSvgPlateOutline(svg);
+      const dimsText = outline
+        ? '바운딩박스 ' + Math.round(Math.max(...outline.map(o=>o.x))-Math.min(...outline.map(o=>o.x))) + '×' + Math.round(Math.max(...outline.map(o=>o.y))-Math.min(...outline.map(o=>o.y))) + 'mm'
+        : '등록된 이미지에서 윤곽선을 못 읽었어요.';
+      shot1.dims.textContent = shot2.dims.textContent = dimsText;
+    }
+  }
+
+  function loadPartForEdit(p){
+    const isBracket = /브라켓/.test(p.name);
+    const area = document.getElementById('editArea');
+    area.innerHTML = '';
+    const row = document.createElement('div'); row.className = 'row';
+    // 비교 대상 부품과 같은 방식으로 위/정면/뒷면 3컷을 왼쪽→오른쪽 순서로 보여줌(사용자 지시:
+    // "기본 샷이 위/정면/뒷면(왼쪽에서 오른쪽으로 나란히)"). 프레임은 뒷면에 보여줄 게 없어서 빈 칸으로 둠.
+    const col1 = document.createElement('div'); col1.className = 'col';
+    col1.innerHTML = '<h4>' + esc(p.name) + ' (위)</h4><div class="imgWrap"></div><div class="dims" id="editDims1"></div>';
+    const col2 = document.createElement('div'); col2.className = 'col';
+    col2.innerHTML = '<h4>' + esc(p.name) + ' (정면)</h4><div class="imgWrap"></div><div class="dims" id="editDims2"></div>';
+    const col3 = document.createElement('div'); col3.className = 'col';
+    col3.innerHTML = '<h4>' + esc(p.name) + ' (뒷면)</h4><div class="imgWrap"></div><div class="dims" id="editDims3"></div>';
+    row.appendChild(col1); row.appendChild(col2); row.appendChild(col3);
+    const panel = document.createElement('div');
+    panel.className = 'editPanel';
+    // 예전엔 "30×30×10" 같은 자유 텍스트 size 문자열을 매번 정규식으로 다시 해석해서 그렸는데, 형식이
+    // 조금만 달라도(mm 유무, × vs x 등) 다르게 해석돼서 불러올 때마다 결과가 달라졌음(사용자 지적: "불러올
+    // 때마다 병신같이 하니까"). 브라켓은 숫자 입력칸 3개로 바꾸고, 그 정확한 숫자를 data.spec에 저장해서
+    // 이후로는 항상 그 숫자 그대로 재현되게 함(문자열 파싱은 spec이 아직 없는 옛 부품의 초기값에만 씀).
+    if (isBracket) {
+      const sizeMatch = String(p.size||'').match(/(\d+(?:\.\d+)?)\s*[×xX]\s*(\d+(?:\.\d+)?)\s*[×xX]\s*(\d+(?:\.\d+)?)/);
+      const initArm1 = p.spec ? p.spec.armLen1 : (sizeMatch ? Number(sizeMatch[1]) : 30);
+      const initArm2 = p.spec ? p.spec.armLen2 : (sizeMatch ? Number(sizeMatch[2]) : 30);
+      const initArmWidth = p.spec ? p.spec.armWidth : (sizeMatch ? Number(sizeMatch[3]) : 10);
+      panel.innerHTML = '<label>팔1 외측 길이(mm)<input type="number" id="editArm1" value="' + initArm1 + '" min="1" step="0.5"></label>' +
+        '<label>팔2 외측 길이(mm)<input type="number" id="editArm2" value="' + initArm2 + '" min="1" step="0.5"></label>' +
+        '<label>두께/폭(mm)<input type="number" id="editArmWidth" value="' + initArmWidth + '" min="1" step="0.5"></label>' +
+        '<button id="redrawBtn" type="button" style="background:#fff;color:#2b6be0;">다시 그리기</button> ' +
+        '<button id="saveBtn" type="button">저장(등록/설계도에 반영)</button>' +
+        '<div class="msg" id="editMsg"></div>';
+    } else {
+      panel.innerHTML = '<label>사이즈 문자열 (size, 참고용 표시)<input type="text" id="editSize" value="' + esc(p.size||'') + '"></label>' +
+        '<button id="redrawBtn" type="button" style="background:#fff;color:#2b6be0;">다시 그리기</button> ' +
+        '<button id="saveBtn" type="button">저장(등록/설계도에 반영)</button>' +
+        '<div class="msg" id="editMsg"></div>';
+    }
+    area.appendChild(row);
+    area.appendChild(panel);
+    const imgWrap1 = col1.querySelector('.imgWrap'), dimsEl01 = col1.querySelector('#editDims1');
+    const imgWrap2 = col2.querySelector('.imgWrap'), dimsEl02 = col2.querySelector('#editDims2');
+    const imgWrap3 = col3 ? col3.querySelector('.imgWrap') : null, dimsEl03 = col3 ? col3.querySelector('#editDims3') : null;
+
+    function freshWrap(imgWrap, dimsEl0){
+      // 이전 redraw()가 imgWrap 뒤에 붙여둔 오버레이/툴바(꼭지점·가이드 패널 등) 잔재를 먼저 정리
+      let sib = imgWrap.nextElementSibling;
+      while (sib && sib !== dimsEl0) { const rm = sib; sib = sib.nextElementSibling; rm.remove(); }
+      imgWrap.innerHTML = '';
+      const freshCanvas = document.createElement('canvas');
+      freshCanvas.width = 300; freshCanvas.height = 300;
+      imgWrap.appendChild(freshCanvas);
+      return freshCanvas;
+    }
+    function redraw(){
+      const canvas1 = freshWrap(imgWrap1, dimsEl01);
+      const canvas2 = freshWrap(imgWrap2, dimsEl02);
+      const canvas3 = imgWrap3 ? freshWrap(imgWrap3, dimsEl03) : null;
+      const dimsEl1 = document.getElementById('editDims1'), dimsEl2 = document.getElementById('editDims2');
+      const dimsEl3 = document.getElementById('editDims3');
+      if (isBracket) {
+        // 자유 텍스트를 다시 해석하지 않고, 숫자 입력칸의 정확한 값을 그대로 씀(항상 똑같이 재현됨)
+        const arm1 = Number(document.getElementById('editArm1').value) || 30;
+        const arm2 = Number(document.getElementById('editArm2').value) || 30;
+        const armWidth = Number(document.getElementById('editArmWidth').value) || 10;
+        renderBracketPanel(canvas1, arm1, arm2, armWidth, bracketTopCamPos(arm1)); // 위
+        renderBracketPanel(canvas2, arm1, arm2, armWidth, [70,90,110]); // 정면
+        if (canvas3) renderBracketPanel(canvas3, arm1, arm2, armWidth, bracketBackCamPos(arm1, arm2)); // 뒷면
+        const inner1 = Math.max(arm1 - armWidth, 0), inner2 = Math.max(arm2 - armWidth, 0);
+        const dimsText = '외측 팔1 ' + arm1 + 'mm · 외측 팔2 ' + arm2 + 'mm · 내측 팔1 ' + inner1 + 'mm · 내측 팔2 ' + inner2 + 'mm · 두께/폭 ' + armWidth + 'mm · 구멍 여백5mm·피치10mm';
+        dimsEl1.textContent = dimsText; dimsEl2.textContent = dimsText; if (dimsEl3) dimsEl3.textContent = dimsText;
+      } else {
+        const svg = p.imageSvg || p.imageSvgDiagonal;
+        if (!svg) { dimsEl1.textContent = dimsEl2.textContent = '등록된 이미지가 없어서 실제 모양을 그릴 수 없어요. 관리자 화면에서 이미지부터 등록해주세요.'; if (dimsEl3) dimsEl3.textContent = ''; return; }
+        renderFramePanel(canvas1, svg, [0,150,0.001]); // 위
+        renderFramePanel(canvas2, svg, [70,90,110]); // 정면
+        if (canvas3) { renderEmptyPanel(canvas3); if (dimsEl3) dimsEl3.textContent = '앞뒤가 대칭인 얇은 판이라 표시할 샷이 없어요.'; }
+        const outline = parseSvgPlateOutline(svg);
+        let dimsText;
+        if (outline) {
+          const xs = outline.map(o=>o.x), ys = outline.map(o=>o.y);
+          dimsText = '등록된 이미지 실측 기준 · 바운딩박스 ' + Math.round(Math.max(...xs)-Math.min(...xs)) + '×' + Math.round(Math.max(...ys)-Math.min(...ys)) + 'mm';
+        } else {
+          dimsText = '등록된 이미지에서 윤곽선을 못 읽었어요(색이 #d5d8dc인 도형이 있어야 함).';
+        }
+        dimsEl1.textContent = dimsText; dimsEl2.textContent = dimsText;
+      }
+    }
+    document.getElementById('redrawBtn').addEventListener('click', redraw);
+    document.getElementById('saveBtn').addEventListener('click', async () => {
+      const msg = document.getElementById('editMsg');
+      msg.className = 'msg'; msg.textContent = '저장 중...';
+      // 브라켓은 숫자 입력칸 값을 spec으로 저장(항상 재현되는 정확한 치수) + 그 숫자를 이미지 위에 직접
+      // 적어넣은 스냅샷도 같이 저장(사용자 지시: "수치랑 모든걸 저장하라고") + 다른 화면 호환용 size 문자열도 맞춰줌
+      let size = p.size || '', spec = null, snapshot = null;
+      if (isBracket) {
+        const arm1 = Number(document.getElementById('editArm1').value) || 30;
+        const arm2 = Number(document.getElementById('editArm2').value) || 30;
+        const armWidth = Number(document.getElementById('editArmWidth').value) || 10;
+        spec = { armLen1: arm1, armLen2: arm2, armWidth };
+        size = arm1 + '×' + arm2 + '×' + armWidth;
+        const inner1 = Math.max(arm1-armWidth,0), inner2 = Math.max(arm2-armWidth,0);
+        const frontCanvas = imgWrap2.querySelector('canvas');
+        if (frontCanvas) {
+          snapshot = captureAnnotatedSnapshot(frontCanvas, [
+            '외측 팔1 ' + arm1 + 'mm · 외측 팔2 ' + arm2 + 'mm',
+            '내측 팔1 ' + inner1 + 'mm · 내측 팔2 ' + inner2 + 'mm',
+            '두께/폭 ' + armWidth + 'mm'
+          ]);
+        }
+      } else {
+        size = document.getElementById('editSize').value;
+      }
+      try {
+        await adminApi({
+          action: 'update_part', partId: p.id,
+          name: p.name, icon: p.icon, subject: p.subject, category: p.category||'', volume: p.volume||'',
+          qty: p.qty, color: p.color, size, spec, snapshot,
+          imageSvg: p.imageSvg, imageSvgDiagonal: p.imageSvgDiagonal, primaryImage: p.primaryImage || 'front'
+        }, window.__accessToken);
+        p.size = size; p.spec = spec; if (snapshot) p.snapshot = snapshot;
+        msg.className = 'msg ok'; msg.textContent = '저장했어요. 치수가 이미지에 적힌 채로 저장돼서 다음에 불러올 때도 항상 똑같이 재현돼요.';
+      } catch (e) {
+        msg.className = 'msg err'; msg.textContent = '저장 실패: ' + e.message;
+      }
+    });
+    redraw();
+  }
+})();
+</script>
+</body></html>
