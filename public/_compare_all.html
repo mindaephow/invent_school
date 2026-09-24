@@ -286,7 +286,7 @@ const vertexMarkersByCanvas = {}; // canvasId -> marker mesh 배열, "꼭지점 
 function addVertexMarkers(target, points){
   // 평소엔 안 보임(opacity=0) — "🔗 꼭지점 잇기" 버튼을 눌러야 보이게 전환됨(아래 모드 버튼 로직).
   return points.map(p => {
-    const m = new THREE.Mesh(new THREE.SphereGeometry(2.5,12,12), new THREE.MeshBasicMaterial({ color:0x555555, transparent:true, opacity:0, depthTest:false }));
+    const m = new THREE.Mesh(new THREE.SphereGeometry(1,12,12), new THREE.MeshBasicMaterial({ color:0x555555, transparent:true, opacity:0, depthTest:false }));
     m.position.copy(p);
     m.renderOrder = 999;
     target.add(m);
