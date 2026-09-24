@@ -89,6 +89,52 @@ function renderFrame(canvasId, camPos){
 renderFrame('top', [0,150,0.001]);
 renderFrame('angle', [70,90,110]);
 
+// 부품 위에 직접 치수를 표시(캡션 텍스트만으론 "서로 이해"가 안 된다는 지적 — 실제 모서리 옆에 숫자를 붙임)
+function makeTextSprite(text, color){
+  const fontSize = 46;
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.font = `bold ${fontSize}px sans-serif`;
+  const w = Math.ceil(ctx.measureText(text).width) + 24;
+  const h = Math.ceil(fontSize * 1.5);
+  canvas.width = w; canvas.height = h;
+  ctx.font = `bold ${fontSize}px sans-serif`;
+  ctx.fillStyle = 'rgba(255,255,255,0.88)';
+  ctx.fillRect(0, 0, w, h);
+  ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.strokeRect(1.5, 1.5, w - 3, h - 3);
+  ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(text, w / 2, h / 2 + 2);
+  const tex = new THREE.CanvasTexture(canvas);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, depthWrite: false }));
+  sprite.renderOrder = 999;
+  const worldH = 3.4;
+  sprite.scale.set(worldH * (w / h), worldH, 1);
+  return sprite;
+}
+function addDim(target, p1, p2, offset, label, colorHex){
+  const color = '#' + colorHex.toString(16).padStart(6, '0');
+  const mat = new THREE.LineBasicMaterial({ color: colorHex, depthTest: false });
+  const a = p1.clone().add(offset), b = p2.clone().add(offset);
+  [[p1, a], [p2, b], [a, b]].forEach(([s, e]) => {
+    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([s, e]), mat);
+    line.renderOrder = 998;
+    target.add(line);
+  });
+  const sprite = makeTextSprite(label, color);
+  sprite.position.copy(a.clone().add(b).multiplyScalar(0.5));
+  target.add(sprite);
+}
+function addBracketDimensions(target){
+  const RED = 0xc0392b;
+  // armA 길이(X=30mm) — 앞면(z=5) 아래쪽으로 내밀어 표시
+  addDim(target, new THREE.Vector3(0,0,5), new THREE.Vector3(30,0,5), new THREE.Vector3(0,-2,2), '30mm', RED);
+  // armB 길이(Z=30mm) — armB 앞면(x=5) 아래쪽으로 내밀어 표시
+  addDim(target, new THREE.Vector3(5,0,0), new THREE.Vector3(5,0,30), new THREE.Vector3(2,-2,0), '30mm', RED);
+  // 높이(Y=10mm) — armA 먼 쪽 끝(x=30)에 표시
+  addDim(target, new THREE.Vector3(30,0,0), new THREE.Vector3(30,10,0), new THREE.Vector3(2.5,0,-2), '높이10', RED);
+  // 복도/두께(Z=5mm) — 같은 끝(x=30)에 표시
+  addDim(target, new THREE.Vector3(30,0,0), new THREE.Vector3(30,0,5), new THREE.Vector3(2.5,-2,0), '두께5', RED);
+}
 function buildBracketScene(){
   const scene = new THREE.Scene();
   scene.add(new THREE.AmbientLight(0xffffff,1));
@@ -127,6 +173,7 @@ function buildBracketScene(){
   makeWindow(-0.05, 5, 5, -Math.PI/2, true);
   makeWindow(-0.05, 5, 15, -Math.PI/2, false);
   makeWindow(-0.05, 5, 25, -Math.PI/2, false);
+  addBracketDimensions(scene);
   return scene;
 }
 function renderBracket(canvasId, camPos){
@@ -153,6 +200,7 @@ function buildBracketGroup(){
   const armB = new THREE.Mesh(new THREE.BoxGeometry(5,10,30), mat); // 높이(Y)=10, 복도(X)=5, 길이(Z)=30(위 renderBracket과 동일 — 예전엔 20으로 짧게 잘못 그려져 있던 걸 여기서도 30으로 맞춤)
   armB.position.set(2.5,5,15);
   g.add(armB);
+  addBracketDimensions(g);
   return g;
 }
 function addAxisArrows(scene, len){
