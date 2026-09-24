@@ -104,6 +104,12 @@ function parseSpec(body) {
   // 구멍 번호(위에서 본 모습 기준 왼→오=숫자·위→아래=소문자, 브라켓은 정면A/뒷면B도 붙음) — 부품 수리실에서
   // 계산해서 넘겨준 값을 그대로 저장. 브라켓이 아닌 부품(프레임 등)도 팔 치수 없이 이 값만 올 수 있음.
   if (holeLabels) result.holeLabels = holeLabels
+  // 여백·피치·구멍 반지름·두께 — 예전엔 코드에만 하드코딩돼 있고 저장은 안 됐음(사용자 지적: "구멍사이즈
+  // 피치 테두리 간격 높이... 저장한게 없으니 뭐가 맞는지 알아?"). 부품 수리실이 계산해서 넘겨주면 그대로 저장.
+  ;['thickness', 'margin', 'pitch', 'boreRadius', 'maxHolesPerArm'].forEach((key) => {
+    const n = Number(spec[key])
+    if (Number.isFinite(n) && n > 0) result[key] = n
+  })
   return result
 }
 

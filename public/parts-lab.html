@@ -187,9 +187,20 @@ h4{margin:4px 0}
     line.rotation.y = rotY; line.position.set(x, y, z);
     return line;
   }
+  // 사용자 지적: "구멍사이즈 피치 테두리 간격 높이... 저장한게 없으니 뭐가 맞는지 알아?" — 이 숫자들이 코드
+  // 안에만 하드코딩돼 있고 spec에는 안 들어가 있었음. 이름 붙인 함수로 빼서(function 선언 — makeHole처럼
+  // 렌더 호출보다 앞선 곳에서도 항상 값이 있어야 해서 const 대신 씀) spec 저장 시 그대로 같이 기록한다.
+  function bracketMargin(){ return 5; }        // 코너에서 첫 구멍까지 여백(mm)
+  function bracketPitch(){ return 10; }        // 구멍 간격(mm)
+  function bracketMaxHoles(){ return 3; }      // 팔 하나당 최대 구멍 수
+  function bracketBoreRadius(){ return 4.3; }  // 구멍 반지름(mm)
+  function bracketThickness(){ return 10; }    // 높이(Y, mm) — holeY는 항상 이 절반
+  function bracketHolePositions(){
+    return Array.from({ length: bracketMaxHoles() }, (_, i) => bracketMargin() + i * bracketPitch());
+  }
   function makeHole(scene, x, y, z, rotY, blind){
-    if (blind) { scene.add(makeDashedCircle(x, y, z, rotY, 4.3)); return; }
-    const win = new THREE.Mesh(new THREE.CircleGeometry(4.3, 20), winMat);
+    if (blind) { scene.add(makeDashedCircle(x, y, z, rotY, bracketBoreRadius())); return; }
+    const win = new THREE.Mesh(new THREE.CircleGeometry(bracketBoreRadius(), 20), winMat);
     win.rotation.y = rotY; win.position.set(x, y, z);
     scene.add(win);
   }
@@ -913,7 +924,7 @@ h4{margin:4px 0}
     shape.moveTo(0,0); shape.lineTo(arm1,0); shape.lineTo(arm1,-armWidth);
     shape.lineTo(armWidth,-armWidth); shape.lineTo(armWidth,-arm2); shape.lineTo(0,-arm2);
     shape.closePath();
-    const geo = new THREE.ExtrudeGeometry(shape, { depth:10, bevelEnabled:false });
+    const geo = new THREE.ExtrudeGeometry(shape, { depth:bracketThickness(), bevelEnabled:false });
     geo.rotateX(-Math.PI/2);
     const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color:0xf2ead9 }));
     addEdgeOutline(mesh, 0xf2ead9);
@@ -935,7 +946,7 @@ h4{margin:4px 0}
     // (원본 발명학교-부품작업\_compare_all.html의 buildBracketScene과 비교해서 발견한 버그 수정:
     // 사용자 지적 "저기 그려진 구멍은 맞아???" — 높이는 armWidth/2가 아니라 항상 높이(10)의 절반인 고정값
     // 5여야 하고(원본 예시에서 armWidth가 우연히 5였을 뿐), 뒷면 구멍 세트가 통째로 빠져 있었음)
-    const holeY = 5; // 높이(Y)=10 고정이므로 항상 그 절반
+    const holeY = bracketThickness() / 2; // holeY는 항상 두께의 절반
     // 구멍 번호(위 기준 위→아래=소문자·왼→오=숫자, 예: a2-A, 정면A·뒷면B)는 스펙 표에 항상 목록으로 나오고, "위" 샷에서는
     // 구멍마다 라벨을 다 박지 않고(사용자 지시: "위에 1 2 3으로 적혀있고 왼쪽에 a b c만 적혀있으면 되") 표 좌표축처럼
     // 위쪽엔 칸 번호(1,2,3...), 왼쪽엔 줄 문자(a,b,c...)만 한 번씩 표시함 — bracketHoleGeom이 makeHole과 같은
@@ -943,6 +954,8 @@ h4{margin:4px 0}
     const holeGeoms = bracketHoleGeom(arm1, arm2, armWidth);
     holeGeoms.forEach((h) => makeHole(scene, h.x, holeY, h.z, h.rot, h.blind));
     if (showHoleLabels) {
+      // bracketTopCamPos가 프레임의 위 카메라와 같은 축 방향(epsilon을 z에 둠)을 쓰므로 프레임과 완전히
+      // 같은 방식으로 계산: 숫자는 x(왼→오)를 따라 위쪽 가장자리에, 문자는 z(위→아래)를 따라 왼쪽 가장자리에.
       const { xs, zs } = gridAxes(holeGeoms);
       const minX = Math.min(...xs), minZ = Math.min(...zs);
       xs.forEach((x,i) => {
@@ -1004,7 +1017,11 @@ h4{margin:4px 0}
     return out.toDataURL('image/png');
   }
   function bracketBackCamPos(arm1, arm2){ return [-4/3*arm1, 90, -2*arm2]; }
-  function bracketTopCamPos(arm1){ return [arm1/2+0.001, 200, arm1/2]; }
+  // 사용자 지시: "기본셋팅할때 x,y,z축 자체를 원래데로 셋팅을 해" — 카메라 좌우 흔들림(epsilon)을 x가 아니라
+  // z에 둬서, 프레임의 위 카메라([0,150,0.001] — epsilon이 z)와 화면 축 방향을 똑같이 맞춤. 이전엔 epsilon이
+  // x에 있어서 브라켓만 위/정면 화면이 90도 돌아간 것처럼 보였고, 그걸 라벨 코드에서 억지로 축을 바꿔
+  // 보정했었음 — 이제 카메라 자체를 맞췄으니 그 보정은 필요 없어짐.
+  function bracketTopCamPos(arm1){ return [arm1/2, 200, arm1/2+0.001]; }
   renderFramePanel(document.getElementById('refFrameTop'), SVG_90, [0,150,0.001], true);
   renderFramePanel(document.getElementById('refFrameFront'), SVG_90, [70,90,110]);
   // 프레임은 앞뒤가 사실상 대칭인 얇은 판이라 "뒷면"에 새로 보여줄 게 없어서 빈 칸으로 둠
@@ -1153,8 +1170,8 @@ h4{margin:4px 0}
   // renderBracketPanel의 makeHole 호출과 똑같은 좌표·회전·블라인드 여부를 데이터로 미리 뽑아둠 — 시각(3D 모델)과
   // 데이터(스펙 표·저장값)가 서로 다른 좌표를 쓰다가 어긋나는 일이 없게 한 곳에서만 계산.
   function bracketHoleGeom(arm1, arm2, armWidth){
-    const positions1 = [5,15,25].filter(p => p < arm1 - 2);
-    const positions2 = [5,15,25].filter(p => p < arm2 - 2);
+    const positions1 = bracketHolePositions().filter(p => p < arm1 - 2);
+    const positions2 = bracketHolePositions().filter(p => p < arm2 - 2);
     const holes = [];
     positions1.forEach((p,i) => {
       holes.push({ x:p, z:armWidth, face:'A', rot:0, blind:i===0 });
@@ -1177,8 +1194,11 @@ h4{margin:4px 0}
       ['내측 팔1 길이', inner1 + 'mm'],
       ['내측 팔2 길이', inner2 + 'mm'],
       ['두께/폭', armWidth + 'mm'],
-      ['높이(Y)', '10mm(고정)'],
-      ['구멍 배치', '여백5mm · 피치10mm · 팔당 3개 · 모서리쪽=블라인드 홀(관통 안 됨)'],
+      ['높이(Y)', bracketThickness() + 'mm(고정)'],
+      ['구멍 여백(코너~첫 구멍)', bracketMargin() + 'mm'],
+      ['구멍 피치(간격)', bracketPitch() + 'mm'],
+      ['구멍 반지름', bracketBoreRadius() + 'mm'],
+      ['팔당 최대 구멍 수', bracketMaxHoles() + '개(모서리쪽 1개=블라인드 홀, 관통 안 됨)'],
       ['구멍 번호(위 기준 위→아래=소문자·왼→오=숫자, 예: a2-A, 정면A·뒷면B)', bracketHoleLabels(arm1, arm2, armWidth).join(', ')],
     ];
   }
@@ -1375,7 +1395,12 @@ h4{margin:4px 0}
         const arm1 = Number(document.getElementById('editArm1').value) || 30;
         const arm2 = Number(document.getElementById('editArm2').value) || 30;
         const armWidth = Number(document.getElementById('editArmWidth').value) || 10;
-        spec = { armLen1: arm1, armLen2: arm2, armWidth, holeLabels: bracketHoleLabels(arm1, arm2, armWidth) };
+        spec = {
+          armLen1: arm1, armLen2: arm2, armWidth,
+          thickness: bracketThickness(), margin: bracketMargin(), pitch: bracketPitch(),
+          boreRadius: bracketBoreRadius(), maxHolesPerArm: bracketMaxHoles(),
+          holeLabels: bracketHoleLabels(arm1, arm2, armWidth)
+        };
         size = arm1 + '×' + arm2 + '×' + armWidth;
         const inner1 = Math.max(arm1-armWidth,0), inner2 = Math.max(arm2-armWidth,0);
         const frontCanvas = imgWrap2.querySelector('canvas');
