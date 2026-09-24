@@ -1499,7 +1499,7 @@ h4{margin:4px 0}
       msg.className = 'msg'; msg.textContent = '저장 중...';
       // 브라켓은 숫자 입력칸 값을 spec으로 저장(항상 재현되는 정확한 치수) + 그 숫자를 이미지 위에 직접
       // 적어넣은 스냅샷도 같이 저장(사용자 지시: "수치랑 모든걸 저장하라고") + 다른 화면 호환용 size 문자열도 맞춰줌
-      let size = p.size || '', spec = null, snapshot = null;
+      let size = p.size || '', spec = null, snapshot = null, dimLines = [];
       if (isBracket) {
         const arm1 = Number(document.getElementById('editArm1').value) || 30;
         const arm2 = Number(document.getElementById('editArm2').value) || 30;
@@ -1512,14 +1512,11 @@ h4{margin:4px 0}
         };
         size = arm1 + '×' + arm2 + '×' + armWidth;
         const inner1 = Math.max(arm1-armWidth,0), inner2 = Math.max(arm2-armWidth,0);
-        const frontCanvas = imgWrap2.querySelector('canvas');
-        if (frontCanvas) {
-          snapshot = captureAnnotatedSnapshot(frontCanvas, [
-            '외측 팔1 ' + arm1 + 'mm · 외측 팔2 ' + arm2 + 'mm',
-            '내측 팔1 ' + inner1 + 'mm · 내측 팔2 ' + inner2 + 'mm',
-            '두께/폭 ' + armWidth + 'mm'
-          ]);
-        }
+        dimLines = [
+          '외측 팔1 ' + arm1 + 'mm · 외측 팔2 ' + arm2 + 'mm',
+          '내측 팔1 ' + inner1 + 'mm · 내측 팔2 ' + inner2 + 'mm',
+          '두께/폭 ' + armWidth + 'mm'
+        ];
       } else {
         size = document.getElementById('editSize').value;
         const svg = p.imageSvg || p.imageSvgDiagonal;
@@ -1527,16 +1524,25 @@ h4{margin:4px 0}
           const holes = parseSvgMaskHoleCenters(svg);
           if (holes.length) spec = { holeLabels: gridHoleLabels(holes.map(h => ({ x:h.x, z:h.y }))) };
         }
+        dimLines = [size];
       }
+      // 사용자 지시: "위에서 본거 정면 뒷면 모두 저장하고 스샷도 다 저장해놔, 불러올때 항상 똑같이" — 세 칸
+      // (위/정면/뒷면) 캔버스를 각각 캡처해서 함께 저장. 브라켓의 기존 단일 snapshot(정면)은 호환용으로 유지.
+      const snapshots = {};
+      [['top', imgWrap1], ['front', imgWrap2], ['back', imgWrap3]].forEach(([key, wrap]) => {
+        const c = wrap && wrap.querySelector('canvas');
+        if (c) snapshots[key] = captureAnnotatedSnapshot(c, dimLines);
+      });
+      snapshot = snapshots.front || null;
       try {
         await adminApi({
           action: 'update_part', partId: p.id,
           name: p.name, icon: p.icon, subject: p.subject, category: p.category||'', volume: p.volume||'',
-          qty: p.qty, color: p.color, size, spec, snapshot,
+          qty: p.qty, color: p.color, size, spec, snapshot, snapshots,
           imageSvg: p.imageSvg, imageSvgDiagonal: p.imageSvgDiagonal, primaryImage: p.primaryImage || 'front'
         }, window.__accessToken);
-        p.size = size; p.spec = spec; if (snapshot) p.snapshot = snapshot;
-        msg.className = 'msg ok'; msg.textContent = '저장했어요. 치수가 이미지에 적힌 채로 저장돼서 다음에 불러올 때도 항상 똑같이 재현돼요.';
+        p.size = size; p.spec = spec; if (snapshot) p.snapshot = snapshot; if (Object.keys(snapshots).length) p.snapshots = snapshots;
+        msg.className = 'msg ok'; msg.textContent = '저장했어요. 위/정면/뒷면 모두 이미지로 저장돼서 다음에 불러올 때도 항상 똑같이 재현돼요.';
       } catch (e) {
         msg.className = 'msg err'; msg.textContent = '저장 실패: ' + e.message;
       }
