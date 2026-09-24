@@ -285,13 +285,22 @@ function bracketVertices(){
   return pts;
 }
 const vertexStateByCanvas = {}; // canvasId -> {markers, lines, selected, mode, size, active}
+// 각 꼭짓점은 두 개의 겹친 구로 이뤄짐: 눈에 보이는 작은 점(dot, 슬라이더로 크기 조절)과
+// 그보다 훨씬 큰 투명한 판정용 구(hit, 항상 고정 크기) — 실제로 손으로 정확히 점을 못 맞혀도
+// 클릭이 인식되게 하기 위함(사용자 지적: "선택해도 확인이 안되고 점선도 안따라 오는데").
+// state.markers에는 hit이 들어가고, hit.userData.dot으로 화면에 보이는 점을 찾아 색/투명도를 바꾼다.
 function makeVertexMarker(scene, pos, size){
-  const m = new THREE.Mesh(new THREE.SphereGeometry(1,12,12), new THREE.MeshBasicMaterial({ color:0x555555, transparent:true, opacity:0, depthTest:false }));
-  m.position.copy(pos);
-  m.scale.setScalar(size);
-  m.renderOrder = 999;
-  scene.add(m);
-  return m;
+  const dot = new THREE.Mesh(new THREE.SphereGeometry(1,12,12), new THREE.MeshBasicMaterial({ color:0x555555, transparent:true, opacity:0, depthTest:false }));
+  dot.position.copy(pos);
+  dot.scale.setScalar(size);
+  dot.renderOrder = 999;
+  scene.add(dot);
+  const hit = new THREE.Mesh(new THREE.SphereGeometry(3,10,10), new THREE.MeshBasicMaterial({ transparent:true, opacity:0, depthTest:false }));
+  hit.position.copy(pos);
+  hit.userData.dot = dot;
+  hit.renderOrder = 999;
+  scene.add(hit);
+  return hit;
 }
 function createVertexState(scene, initialPoints){
   const state = { markers:[], lines:[], selected:null, mode:'connect', size:1, active:false };
@@ -300,8 +309,8 @@ function createVertexState(scene, initialPoints){
 }
 function setVertexActive(state, active){
   state.active = active;
-  state.markers.forEach(m => m.material.opacity = active ? 1 : 0);
-  if (!active && state.selected) { state.selected.material.color.set(0x555555); state.selected = null; }
+  state.markers.forEach(m => m.userData.dot.material.opacity = active ? 1 : 0);
+  if (!active && state.selected) { state.selected.userData.dot.material.color.set(0x555555); state.selected = null; }
 }
 // 꼭지점 잇기 — 연결(기본, 두 점을 순서대로 클릭하면 점선으로 이음) / 추가(모델 위 클릭한 자리에 새 점 생성) /
 // 삭제(점을 클릭해서 지움, 그 점에 이어진 선도 같이 지움) 세 가지 모드, 점 크기는 슬라이더로 조절.
@@ -330,14 +339,15 @@ function wireVertexPicking(canvasId, camera, scene, mesh, state){
         return true;
       });
       scene.remove(m);
+      scene.remove(m.userData.dot);
       const i = state.markers.indexOf(m);
       if (i >= 0) state.markers.splice(i, 1);
       if (state.selected === m) state.selected = null;
       return;
     }
     // connect 모드: 꼭지점 선택 → 다음 꼭지점 선택 → 그 사이를 점선으로 연결(같은 두 점 다시 클릭하면 삭제)
-    if (state.selected === m) { m.material.color.set(0x555555); state.selected = null; return; }
-    if (!state.selected) { state.selected = m; m.material.color.set(0xc0392b); return; }
+    if (state.selected === m) { m.userData.dot.material.color.set(0x555555); state.selected = null; return; }
+    if (!state.selected) { state.selected = m; m.userData.dot.material.color.set(0xc0392b); return; }
     const existing = findLine(state.selected, m);
     if (existing) {
       existing.line.parent.remove(existing.line);
@@ -350,7 +360,7 @@ function wireVertexPicking(canvasId, camera, scene, mesh, state){
       scene.add(line);
       state.lines.push({ a: state.selected, b: m, line });
     }
-    state.selected.material.color.set(0x555555);
+    state.selected.userData.dot.material.color.set(0x555555);
     state.selected = null;
   });
 }
@@ -419,41 +429,49 @@ function wireGuidePicking(canvasId, camera, vstate){
   okBtn.addEventListener('click', confirmSize);
   input.addEventListener('keydown', e => { if (e.key === 'Enter') confirmSize(); });
 
-  canvas.addEventListener('pointerdown', e => {
-    if (!state.active || state.mode !== 'draw') return;
-    const r = canvas.getBoundingClientRect();
-    const mouse = new THREE.Vector2(((e.clientX-r.left)/r.width)*2-1, -((e.clientY-r.top)/r.height)*2+1);
-    raycaster.setFromCamera(mouse, camera);
-    const hit = raycaster.intersectObjects(vstate.markers, false)[0];
-    if (!hit) return;
-    const p0 = toOverlayXY(e.clientX, e.clientY);
-    const onMove = ev => {
-      const p1 = toOverlayXY(ev.clientX, ev.clientY);
-      const horizontal = Math.abs(p1.x - p0.x) >= Math.abs(p1.y - p0.y);
+  // 선그리기: 드래그(누른 채 유지)가 아니라 클릭-이동-클릭 방식 — 꼭짓점을 한 번 클릭하면 그때부터
+  // 마우스 버튼을 누르지 않고 움직여도 점선이 계속 따라오다가, 다시 한 번 클릭하면 그 자리에서 확정됨
+  // (사용자 지적: "점선이 따라오고 마우스를 클릭해 방향 결정이 나는거 아니야???").
+  let pendingStart = null;
+  let moveHandler = null;
+  function lineFor(p0, p1, id){
+    const horizontal = Math.abs(p1.x - p0.x) >= Math.abs(p1.y - p0.y);
+    return horizontal
+      ? { id, orientation:'h', pos:p0.y, a:Math.min(p0.x,p1.x), b:Math.max(p0.x,p1.x) }
+      : { id, orientation:'v', pos:p0.x, a:Math.min(p0.y,p1.y), b:Math.max(p0.y,p1.y) };
+  }
+  canvas.addEventListener('click', e => {
+    if (!state.active) return;
+
+    if (state.mode === 'draw') {
+      if (!pendingStart) {
+        const r = canvas.getBoundingClientRect();
+        const mouse = new THREE.Vector2(((e.clientX-r.left)/r.width)*2-1, -((e.clientY-r.top)/r.height)*2+1);
+        raycaster.setFromCamera(mouse, camera);
+        const hit = raycaster.intersectObjects(vstate.markers, false)[0];
+        if (!hit) return;
+        pendingStart = toOverlayXY(e.clientX, e.clientY);
+        moveHandler = ev => {
+          const p1 = toOverlayXY(ev.clientX, ev.clientY);
+          pctx.clearRect(0, 0, preview.width, preview.height);
+          drawLine(pctx, lineFor(pendingStart, p1));
+        };
+        window.addEventListener('mousemove', moveHandler);
+        return;
+      }
+      // 두 번째 클릭: 지금 마우스 위치로 확정
+      const p1 = toOverlayXY(e.clientX, e.clientY);
       pctx.clearRect(0, 0, preview.width, preview.height);
-      const L = horizontal
-        ? { orientation:'h', pos:p0.y, a:Math.min(p0.x,p1.x), b:Math.max(p0.x,p1.x) }
-        : { orientation:'v', pos:p0.x, a:Math.min(p0.y,p1.y), b:Math.max(p0.y,p1.y) };
-      drawLine(pctx, L);
-    };
-    const onUp = ev => {
-      const p1 = toOverlayXY(ev.clientX, ev.clientY);
-      pctx.clearRect(0, 0, preview.width, preview.height);
-      const horizontal = Math.abs(p1.x - p0.x) >= Math.abs(p1.y - p0.y);
-      const L = horizontal
-        ? { id:state.nextId++, orientation:'h', pos:p0.y, a:Math.min(p0.x,p1.x), b:Math.max(p0.x,p1.x) }
-        : { id:state.nextId++, orientation:'v', pos:p0.x, a:Math.min(p0.y,p1.y), b:Math.max(p0.y,p1.y) };
+      const L = lineFor(pendingStart, p1, state.nextId++);
       drawLine(ctx, L);
       state.lines.push(L);
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-    };
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-  });
+      window.removeEventListener('mousemove', moveHandler);
+      moveHandler = null;
+      pendingStart = null;
+      return;
+    }
 
-  canvas.addEventListener('click', e => {
-    if (!state.active || state.mode !== 'size') return;
+    // 사이즈 모드: 그려둔 가로/세로 가이드선 중 클릭 위치와 가까운 것을 고름
     const p = toOverlayXY(e.clientX, e.clientY);
     let nearest = null, bestDist = 8;
     state.lines.forEach(L => {
@@ -587,7 +605,7 @@ document.querySelectorAll('.vsize').forEach(inp => {
     const vstate = vertexStateByCanvas[id];
     if (!vstate) return;
     vstate.size = parseFloat(inp.value);
-    vstate.markers.forEach(m => m.scale.setScalar(vstate.size));
+    vstate.markers.forEach(m => m.userData.dot.scale.setScalar(vstate.size));
   });
 });
 // 가이드 버튼(꼭지점 잇기 오른쪽) — 패널에서 선그리기/사이즈 모드 선택
@@ -595,7 +613,7 @@ function syncGuideVertexVisibility(id){
   const gstate = guideStateByCanvas[id], vstate = vertexStateByCanvas[id];
   if (!gstate || !vstate) return;
   const showDots = gstate.active && gstate.mode === 'draw';
-  vstate.markers.forEach(m => m.material.opacity = (showDots || vstate.active) ? 1 : 0);
+  vstate.markers.forEach(m => m.userData.dot.material.opacity = (showDots || vstate.active) ? 1 : 0);
 }
 document.querySelectorAll('.guideBtn').forEach(btn => {
   btn.addEventListener('click', () => {
