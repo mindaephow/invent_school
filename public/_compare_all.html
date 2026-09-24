@@ -59,6 +59,18 @@ function animateAll(){
 }
 requestAnimationFrame(animateAll);
 
+// 부품색상보다 살짝 진한 색으로 모서리 테두리 라인을 그려 형태 경계를 또렷하게(사용자 제안, 2026-09-24)
+function darken(hex, factor){
+  const r = Math.floor(((hex >> 16) & 255) * factor);
+  const g = Math.floor(((hex >> 8) & 255) * factor);
+  const b = Math.floor((hex & 255) * factor);
+  return (r << 16) | (g << 8) | b;
+}
+function addEdgeOutline(mesh, baseColorHex, factor){
+  const edgesGeo = new THREE.EdgesGeometry(mesh.geometry, 1);
+  const edgesMat = new THREE.LineBasicMaterial({ color: darken(baseColorHex, factor || 0.55) });
+  mesh.add(new THREE.LineSegments(edgesGeo, edgesMat));
+}
 function renderFrame(canvasId, camPos){
   const canvas = document.getElementById(canvasId);
   const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true, preserveDrawingBuffer:true });
@@ -81,6 +93,7 @@ function renderFrame(canvasId, camPos){
     const sideMat = new THREE.MeshStandardMaterial({ color: 0xc7cbd1 });
     const topMat = new THREE.MeshBasicMaterial({ map: tex, transparent:true });
     const mesh = new THREE.Mesh(geo, [topMat, sideMat]);
+    addEdgeOutline(mesh, 0xc7cbd1);
     scene.add(mesh);
     renderer.render(scene, camera);
     setupOrbit(canvasId, renderer, scene, camera, [0,0,0]);
@@ -214,9 +227,11 @@ function buildBracketScene(){
   // 90도 프레임과 똑같이 팔 길이는 30mm씩(진짜 길이 그대로), 코너에서 5x5 정사각형으로 겹침(프레임의 10x10 겹침과 같은 방식, 복도=5라서 5x5).
   const armA = new THREE.Mesh(new THREE.BoxGeometry(30,10,5), mat); // 높이(Y)=10, 복도(Z)=5, 길이(X)=30(90도 프레임과 동일)
   armA.position.set(15,5,2.5);
+  addEdgeOutline(armA, 0xf2ead9);
   scene.add(armA);
   const armB = new THREE.Mesh(new THREE.BoxGeometry(5,10,30), mat); // 높이(Y)=10, 복도(X)=5, 길이(Z)=30(90도 프레임과 동일, armA와 코너에서 5x5 겹침)
   armB.position.set(2.5,5,15);
+  addEdgeOutline(armB, 0xf2ead9);
   scene.add(armB);
 
   // 창문(구멍) — 90도 프레임과 똑같은 간격: 팔 끝에서 여백 5mm, 피치 10mm, 팔당 3개(5,15,25 위치).
@@ -268,9 +283,11 @@ function buildBracketGroup(){
   const g = new THREE.Group();
   const armA = new THREE.Mesh(new THREE.BoxGeometry(30,10,5), mat); // 높이(Y)=10, 복도(Z)=5
   armA.position.set(15,5,2.5);
+  addEdgeOutline(armA, 0xc7cbd1);
   g.add(armA);
   const armB = new THREE.Mesh(new THREE.BoxGeometry(5,10,30), mat); // 높이(Y)=10, 복도(X)=5, 길이(Z)=30(위 renderBracket과 동일 — 예전엔 20으로 짧게 잘못 그려져 있던 걸 여기서도 30으로 맞춤)
   armB.position.set(2.5,5,15);
+  addEdgeOutline(armB, 0xc7cbd1);
   g.add(armB);
   g.userData.edges = addMeasurableEdges(g, bracketEdgeDefs());
   return g;
