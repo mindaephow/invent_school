@@ -862,6 +862,73 @@
     const m = svg.match(/<rect[^>]*\bx="(-?[\d.]+)"[^>]*\by="(-?[\d.]+)"[^>]*\bwidth="([\d.]+)"[^>]*\bheight="([\d.]+)"[^>]*\brx="/);
     return m ? { x: Number(m[1]), y: Number(m[2]), w: Number(m[3]), h: Number(m[4]) } : null;
   }
+  // 꺾인(90도·135도) · 반원 프레임은 판 테두리가 사각형이 아니라(ㄱ자 / 부채꼴 띠) rect 하나로 못 잡는다 — 이런 svg는
+  // 금속판 부분을 <polygon points="..."> 또는 <path d="M.. L.. A.. Z"> 하나로 그리는데, 색이 항상 "#d5d8dc"라
+  // 이 색을 가진 도형 하나를 찾아 그 윤곽선 좌표를 그대로 뽑아내면(호는 여러 선분으로 잘게 쪼개서) 실제 판 모양을
+  // 그대로 만들 수 있다 — viewBox 전체 사각형이 아니라 진짜 윤곽만 상자로 깎으니 빈 자리에 옆면 색이 삐져나오지 않는다.
+  function svgArcToPoints(x1, y1, rx, largeArcFlag, sweepFlag, x2, y2, segments){
+    // x-axis-rotation은 이 데이터에서 항상 0, rx=ry(원호)만 나온다 — SVG 표준 endpoint-to-center 변환(단순화판).
+    const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+    const dx = (x2 - x1) / 2, dy = (y2 - y1) / 2;
+    const d = Math.hypot(dx, dy);
+    let r = rx;
+    if (d > r) r = d; // 이론상 안 맞는 반지름이면 최소한 이어지게 보정
+    const h = Math.sqrt(Math.max(0, r * r - d * d));
+    const sign = (largeArcFlag === sweepFlag) ? -1 : 1;
+    const ux = d ? -dy / d : 0, uy = d ? dx / d : 0; // 현(chord)에 수직인 단위벡터
+    const cx = mx + sign * h * ux, cy = my + sign * h * uy;
+    const a1 = Math.atan2(y1 - cy, x1 - cx);
+    let a2 = Math.atan2(y2 - cy, x2 - cx);
+    if (sweepFlag === 1 && a2 < a1) a2 += Math.PI * 2;
+    if (sweepFlag === 0 && a2 > a1) a2 -= Math.PI * 2;
+    const pts = [];
+    for (let i = 1; i <= segments; i++) {
+      const a = a1 + (a2 - a1) * (i / segments);
+      pts.push({ x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) });
+    }
+    return pts;
+  }
+  function parseSvgPathPoints(d){
+    const cmds = [...d.matchAll(/([MLAZ])\s*([^MLAZ]*)/g)];
+    const pts = [];
+    let cur = { x: 0, y: 0 };
+    cmds.forEach(([, cmd, argsStr]) => {
+      const nums = (argsStr.match(/-?[\d.]+/g) || []).map(Number);
+      if (cmd === 'M' || cmd === 'L') {
+        for (let i = 0; i + 1 < nums.length; i += 2) {
+          cur = { x: nums[i], y: nums[i + 1] };
+          pts.push(cur);
+        }
+      } else if (cmd === 'A') {
+        for (let i = 0; i + 6 < nums.length; i += 7) {
+          const [rx, , , largeArc, sweep, ex, ey] = nums.slice(i, i + 7);
+          const arcPts = svgArcToPoints(cur.x, cur.y, rx, largeArc, sweep, ex, ey, 16);
+          pts.push(...arcPts);
+          cur = { x: ex, y: ey };
+        }
+      }
+      // Z: 닫기만 하면 되고 별도 점은 안 넣음(마지막 점이 이미 시작점과 같음)
+    });
+    return pts;
+  }
+  function parseSvgPlateOutline(svg){
+    if (!svg) return null;
+    const m = svg.match(/<(polygon|path)\b[^>]*\bfill="#d5d8dc"[^>]*>/);
+    if (!m) return null;
+    const tag = m[0];
+    if (m[1] === 'polygon') {
+      const ptsAttr = tag.match(/\bpoints="([^"]+)"/);
+      if (!ptsAttr) return null;
+      const nums = (ptsAttr[1].match(/-?[\d.]+/g) || []).map(Number);
+      const pts = [];
+      for (let i = 0; i + 1 < nums.length; i += 2) pts.push({ x: nums[i], y: nums[i + 1] });
+      return pts.length >= 3 ? pts : null;
+    }
+    const dAttr = tag.match(/\bd="([^"]+)"/);
+    if (!dAttr) return null;
+    const pts = parseSvgPathPoints(dAttr[1]);
+    return pts.length >= 3 ? pts : null;
+  }
   // 세 점을 지나는 원의 중심·반지름 — 구멍들이 원 위에 있는지(반원프레임 등) 확인할 때 쓴다.
   function circumcircle(a, b, c){
     const d = 2 * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y));
@@ -966,6 +1033,7 @@
           def.w = ringR * 2; def.h = 5; def.d = ringR * 2;
           const holeCountM = (p.size || '').match(/구멍\s*(\d+)\s*개/);
           def.holeCount = holeCountM ? Number(holeCountM[1]) : (svgHoles.length || 9);
+          def.svgOutline = parseSvgPlateOutline(svgSrc);
         } else if (bendDeg) {
           // 팔 길이가 따로 안 적혀 있으면(예: 90도 프레임), 정확히 직각으로 굽은 꼴이라 바운딩박스 자체가 팔 길이와 같다
           const arms = parseBendArmsMM(p.size) || [dims.w, dims.d];
@@ -974,6 +1042,7 @@
           def.arm1 = arms[0];
           def.arm2 = arms[1];
           def.armWidth = 10; // 실측 데이터가 없어 한 줄 구멍 폭(10mm)으로 가정
+          def.svgOutline = parseSvgPlateOutline(svgSrc);
         } else {
           const holes = parseHoleGrid(p.size);
           def.shapeKind = 'frame';
@@ -2267,18 +2336,37 @@
       // 상자 크기가 잡혀 실제 치수와 안 맞고 찌그러진다 — 그런 갈래는 아래 갈래별 손조립 코드로 내려간다.
       const tex = robotSvgTexture(def.svg);
       const sideMat = new THREE.MeshStandardMaterial({ color: partColor(type) });
-      let w = def.planeW || def.w, d = def.planeD || def.d, topMat;
-      if (rk === 'frame' && def.svgPlateRect) {
-        // 곧은 프레임: viewBox 전체(여백 포함)로 상자를 만들면 실제 판보다 커져서, 옆면 색이 이미지 없는
-        // 여백 자리로 리본처럼 삐져나온다. 상자는 실측 치수(def.w×def.d)로 만들고, 텍스처는 그 실측 사각형이
-        // 그려진 부분만 잘라서(반복 없이 그 영역만) 씌운다 — 위아래 여백이 서로 달라도(대칭이 아니어도) 맞는다.
-        const rect = def.svgPlateRect, vbW = def.planeW, vbH = def.planeD;
-        tex.repeat.set(rect.w / vbW, rect.h / vbH);
-        tex.offset.set(rect.x / vbW, 1 - (rect.y + rect.h) / vbH);
-        w = def.w; d = def.d;
+      if ((rk === 'frameBent' || rk === 'frameRing') && def.svgOutline) {
+        // 꺾인·반원 프레임: 테두리가 사각형이 아니라서(ㄱ자/부채꼴) 상자로는 안 맞는다. svg에서 뽑아낸 실제
+        // 판 윤곽(def.svgOutline, svg 좌표 그대로)으로 THREE.Shape를 만들어 그 모양 그대로 깎아 두께를 준다.
+        // ExtrudeGeometry의 기본 UV는 도형의 (x,y) 좌표를 그대로 쓰므로, 텍스처를 viewBox 크기(vbW×vbH)로
+        // 나눠 0~1로 맞추기만 하면(곧은 프레임처럼 자르기·비율 계산 없이) 이미지가 정확히 그 모양 위에 맞물린다.
+        // y를 뒤집어 넣는 이유: rotateX(-90°) 이후 world -Z가 svg의 +y 방향이 되도록(다른 프레임들과 같은 좌우/위아래가 되도록) 맞추기 위함 — 135도·반원프레임으로 대조 검증됨.
+        const shape = new THREE.Shape();
+        def.svgOutline.forEach((p, i) => { if (i === 0) shape.moveTo(p.x, -p.y); else shape.lineTo(p.x, -p.y); });
+        shape.closePath();
+        const geo = new THREE.ExtrudeGeometry(shape, { depth: def.h, bevelEnabled: false });
+        geo.rotateX(-Math.PI / 2);
+        geo.center();
+        const vbW = def.planeW, vbH = def.planeD;
+        tex.repeat.set(1 / vbW, 1 / vbH);
+        tex.offset.set(0, 1);
+        const topMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true });
+        mesh = new THREE.Mesh(geo, [topMat, sideMat]); // ExtrudeGeometry material group 순서: 0=앞뒤 캡(위/아래 면), 1=옆면 — 반대로 하면 이미지가 옆면에 붙는다
+      } else {
+        let w = def.planeW || def.w, d = def.planeD || def.d, topMat;
+        if (rk === 'frame' && def.svgPlateRect) {
+          // 곧은 프레임: viewBox 전체(여백 포함)로 상자를 만들면 실제 판보다 커져서, 옆면 색이 이미지 없는
+          // 여백 자리로 리본처럼 삐져나온다. 상자는 실측 치수(def.w×def.d)로 만들고, 텍스처는 그 실측 사각형이
+          // 그려진 부분만 잘라서(반복 없이 그 영역만) 씌운다 — 위아래 여백이 서로 달라도(대칭이 아니어도) 맞는다.
+          const rect = def.svgPlateRect, vbW = def.planeW, vbH = def.planeD;
+          tex.repeat.set(rect.w / vbW, rect.h / vbH);
+          tex.offset.set(rect.x / vbW, 1 - (rect.y + rect.h) / vbH);
+          w = def.w; d = def.d;
+        }
+        topMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true });
+        mesh = new THREE.Mesh(new THREE.BoxGeometry(w, def.h, d), [sideMat, sideMat, topMat, sideMat, sideMat, sideMat]); // +X -X +Y -Y +Z -Z
       }
-      topMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true });
-      mesh = new THREE.Mesh(new THREE.BoxGeometry(w, def.h, d), [sideMat, sideMat, topMat, sideMat, sideMat, sideMat]); // +X -X +Y -Y +Z -Z
     } else if (isStraightType(type)) {
       mesh = new THREE.Group();
       const rampMat = new THREE.MeshStandardMaterial({ color: partColor('straight') });
