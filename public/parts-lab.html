@@ -953,15 +953,18 @@ h4{margin:4px 0}
       }
       scene.add(mesh);
       if (frameAxes.xs.length || frameAxes.zs.length) {
+        // 사용자 지적: "가로,세로 넘버링은 한칸에 하나임" — 실제 mm 좌표가 아니라 칸 번호를 균등한 간격
+        // (피치)으로 배치해서 표처럼 보이게 함(브라켓의 축 라벨과 같은 방식).
         const minX = Math.min(...frameAxes.xs), minZ = Math.min(...frameAxes.zs);
+        const cell = bracketPitch();
         frameAxes.xs.forEach((x,i) => {
           const sprite = makeTextSprite(String(i+1), '#2b6be0', 2.4);
-          sprite.position.set(x - cxR, 6, (minZ - 6) - cyR);
+          sprite.position.set((minX + i * cell) - cxR, 6, (minZ - 6) - cyR);
           scene.add(sprite);
         });
         frameAxes.zs.forEach((z,j) => {
           const sprite = makeTextSprite(String.fromCharCode(97 + j), '#2b6be0', 2.4);
-          sprite.position.set((minX - 6) - cxR, 6, z - cyR);
+          sprite.position.set((minX - 6) - cxR, 6, (minZ + j * cell) - cyR);
           scene.add(sprite);
         });
       }
@@ -1027,16 +1030,19 @@ h4{margin:4px 0}
     if (showHoleLabels) {
       // bracketTopCamPos가 프레임의 위 카메라와 같은 축 방향(epsilon을 z에 둠)을 쓰므로 프레임과 완전히
       // 같은 방식으로 계산: 숫자는 x(왼→오)를 따라 위쪽 가장자리에, 문자는 z(위→아래)를 따라 왼쪽 가장자리에.
+      // 사용자 지적: "가로,세로 넘버링은 한칸에 하나임" — 실제 mm 좌표(칸 간격이 armWidth 때문에 들쭉날쭉)가
+      // 아니라 칸 번호(인덱스)를 균등한 간격(피치)으로 배치해서 표처럼 보이게 함.
       const { xs, zs } = gridAxes(holeGeoms);
       const minX = Math.min(...xs), minZ = Math.min(...zs);
+      const cell = bracketPitch();
       xs.forEach((x,i) => {
         const sprite = makeTextSprite(String(i+1), '#2b6be0', 2.4);
-        sprite.position.set(x, holeY + 5, minZ - 6);
+        sprite.position.set(minX + i * cell, holeY + 5, minZ - 6);
         scene.add(sprite);
       });
       zs.forEach((z,j) => {
         const sprite = makeTextSprite(String.fromCharCode(97 + j), '#2b6be0', 2.4);
-        sprite.position.set(minX - 6, holeY + 5, z);
+        sprite.position.set(minX - 6, holeY + 5, minZ + j * cell);
         scene.add(sprite);
       });
     }
@@ -1099,15 +1105,15 @@ h4{margin:4px 0}
   // (사용자 지시: "없으면 비워져 있으면 되는거야" / "사각형 스케치북은 항상 있고 안에 물품만 없으면 됨")
   renderEmptyPanel(document.getElementById('refFrameBack'));
   // 사용자 지시: "db에 자리 만들어서 저장하고 불러오라고" — 참고 브라켓 치수도 코드에 30,30,5로 박아두지 않고
-  // ivs_bracket_standards에서 불러온 값을 씀. 로드 전엔 bracketStandards의 fallback으로 먼저 그리고,
-  // 로드가 끝나면 실제 DB 값으로 다시 그려서 항상 DB가 최종 정답이 되게 함.
+  // ivs_bracket_standards에서 불러온 값을 씀. renderBracketPanel(→attachFullToolkit)은 다시 부르면 버튼
+  // 줄이 정리 없이 새로 쌓이므로(사용자 지적: "하단에 버튼이 중복으로 들어가있음"), fallback으로 먼저 그렸다가
+  // DB 값으로 또 그리지 않고 — DB 로드를 기다린 뒤 딱 한 번만 그린다.
   function drawRefBracket(){
     const { refArmLen1:a1, refArmLen2:a2, refArmWidth:aw } = bracketStandards;
     renderBracketPanel(document.getElementById('refBracketTop'), a1, a2, aw, bracketTopCamPos(a1), true);
     renderBracketPanel(document.getElementById('refBracketFront'), a1, a2, aw, [70,90,110]);
     renderBracketPanel(document.getElementById('refBracketBack'), a1, a2, aw, bracketBackCamPos(a1,a2));
   }
-  drawRefBracket();
   loadBracketStandards().then(drawRefBracket);
 
   // ===== 스케치북 (오른쪽 패널) — 빈 곳 드래그=회전, 휠=확대/축소, "그리기" 켜면 그 위에 자유롭게 낙서 =====
