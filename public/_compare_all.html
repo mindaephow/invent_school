@@ -219,20 +219,32 @@ function wireEdgePicking(canvasId, camera, scene, edges){
     input.focus();
   });
 }
+// 1열브라켓 몸체 — 예전엔 armA/armB 상자 두 개를 겹쳐서 만들었는데, 그러면 각 상자의 테두리선이
+// 서로 독립적으로 그려져서 ① 코너에서 이제는 안 보여야 할 안쪽 선이 그대로 남아 튀어나오고(사용자 지적:
+// "크로스를 넘어가는 부분") ② 정작 코너의 진짜 꺾이는 세로선은 어느 쪽 상자에도 없어서 안 그려짐(사용자
+// 지적: "꺾어지는곳 세로선이 없자나"). 90도 프레임처럼 ㄱ자 하나를 통째로 Shape+Extrude로 만들면 이 문제가
+// 근본적으로 해결됨(진짜 하나의 도형이라 테두리(EdgesGeometry)도 실제 윤곽선만 정확히 나옴).
+function buildBracketMesh(colorHex){
+  const shape = new THREE.Shape();
+  shape.moveTo(0,0);
+  shape.lineTo(30,0);
+  shape.lineTo(30,-5);
+  shape.lineTo(5,-5);
+  shape.lineTo(5,-30);
+  shape.lineTo(0,-30);
+  shape.closePath();
+  const geo = new THREE.ExtrudeGeometry(shape, { depth:10, bevelEnabled:false }); // 높이(Y)=10
+  geo.rotateX(-Math.PI/2); // (x,y,z)->(x,depth,-y) : 결과 X=0~30, Y=0~10(높이), Z=0~30 — armA/armB·창문·치수선 좌표와 그대로 호환
+  const mat = new THREE.MeshStandardMaterial({ color: colorHex });
+  const mesh = new THREE.Mesh(geo, mat);
+  addEdgeOutline(mesh, colorHex);
+  return mesh;
+}
 function buildBracketScene(){
   const scene = new THREE.Scene();
   scene.add(new THREE.AmbientLight(0xffffff,1));
   const dl = new THREE.DirectionalLight(0xffffff,0.5); dl.position.set(700,1400,800); scene.add(dl);
-  const mat = new THREE.MeshStandardMaterial({ color: 0xf2ead9 }); // 아이보리 — 흰색은 창문(검은 점)과 대비가 잘 안 보여서 변경
-  // 90도 프레임과 똑같이 팔 길이는 30mm씩(진짜 길이 그대로), 코너에서 5x5 정사각형으로 겹침(프레임의 10x10 겹침과 같은 방식, 복도=5라서 5x5).
-  const armA = new THREE.Mesh(new THREE.BoxGeometry(30,10,5), mat); // 높이(Y)=10, 복도(Z)=5, 길이(X)=30(90도 프레임과 동일)
-  armA.position.set(15,5,2.5);
-  addEdgeOutline(armA, 0xf2ead9);
-  scene.add(armA);
-  const armB = new THREE.Mesh(new THREE.BoxGeometry(5,10,30), mat); // 높이(Y)=10, 복도(X)=5, 길이(Z)=30(90도 프레임과 동일, armA와 코너에서 5x5 겹침)
-  armB.position.set(2.5,5,15);
-  addEdgeOutline(armB, 0xf2ead9);
-  scene.add(armB);
+  scene.add(buildBracketMesh(0xf2ead9)); // 아이보리 — 흰색은 창문(검은 점)과 대비가 잘 안 보여서 변경
 
   // 창문(구멍) — 90도 프레임과 똑같은 간격: 팔 끝에서 여백 5mm, 피치 10mm, 팔당 3개(5,15,25 위치).
   // "반쪽창"은 도형을 자르는 게 아니라 블라인드 홀(끝까지 안 뚫리고 중간에 막힌 구멍) — 모양은 똑같은 원이고 색만 다르게 표시.
@@ -279,16 +291,8 @@ renderBracket('bracketBack', [-40,90,-60]); // 뒷면(반대쪽에서)
 
 // 대각선 없는 정투영(orthographic) 뷰 3개 — 축 화살표(빨강X/초록Y/파랑Z) 포함
 function buildBracketGroup(){
-  const mat = new THREE.MeshStandardMaterial({ color: 0xc7cbd1 });
   const g = new THREE.Group();
-  const armA = new THREE.Mesh(new THREE.BoxGeometry(30,10,5), mat); // 높이(Y)=10, 복도(Z)=5
-  armA.position.set(15,5,2.5);
-  addEdgeOutline(armA, 0xc7cbd1);
-  g.add(armA);
-  const armB = new THREE.Mesh(new THREE.BoxGeometry(5,10,30), mat); // 높이(Y)=10, 복도(X)=5, 길이(Z)=30(위 renderBracket과 동일 — 예전엔 20으로 짧게 잘못 그려져 있던 걸 여기서도 30으로 맞춤)
-  armB.position.set(2.5,5,15);
-  addEdgeOutline(armB, 0xc7cbd1);
-  g.add(armB);
+  g.add(buildBracketMesh(0xc7cbd1));
   g.userData.edges = addMeasurableEdges(g, bracketEdgeDefs());
   return g;
 }
