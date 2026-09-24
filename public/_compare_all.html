@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>90도 프레임 + 브라켓 비교(전체)</title>
+<style>body{background:#eef1f4;font-family:sans-serif;padding:10px} .row{display:flex;gap:24px;flex-wrap:wrap} .col{width:320px} canvas{border:1px solid #999} h4{margin:4px 0} #memo{width:300px;height:120px;font-size:14px;padding:6px;} .imgWrap{position:relative;width:300px;height:300px;} .overlay{position:absolute;top:0;left:0;background:transparent;cursor:crosshair;} .clearBtn{margin-top:4px;font-size:11px;}</style>
+</head>
+<body>
+<h3>90도 프레임 (정상) + 1열브라켓(눕힘, 높이=10) — 전부 한 페이지에</h3>
+<p style="font-size:13px;color:#555">각 그림 위에 마우스로 직접 그릴 수 있습니다(그림 위에 바로 표시). 각 그림 아래 "지우기"로 그 그림의 낙서만 지울 수 있어요.</p>
+<div class="row">
+  <div class="col"><h4>90도 프레임 원본 아이콘</h4><div class="imgWrap"><div id="icon"></div><canvas class="overlay" data-target="icon" width="300" height="300"></canvas></div><button class="clearBtn" data-clear="icon">지우기</button></div>
+  <div class="col"><h4>90도 프레임 3D(위에서)</h4><div class="imgWrap"><canvas id="top" width="300" height="300"></canvas><canvas class="overlay" data-target="top" width="300" height="300"></canvas></div><button class="clearBtn" data-clear="top">지우기</button></div>
+  <div class="col"><h4>90도 프레임 3D(각도)</h4><div class="imgWrap"><canvas id="angle" width="300" height="300"></canvas><canvas class="overlay" data-target="angle" width="300" height="300"></canvas></div><button class="clearBtn" data-clear="angle">지우기</button></div>
+  <div class="col"><h4>1열브라켓, 눕힘, 높이(Y)=10 (정면)</h4><div class="imgWrap"><canvas id="bracket" width="300" height="300"></canvas><canvas class="overlay" data-target="bracket" width="300" height="300"></canvas></div><button class="clearBtn" data-clear="bracket">지우기</button></div>
+  <div class="col"><h4>1열브라켓, 뒷면</h4><div class="imgWrap"><canvas id="bracketBack" width="300" height="300"></canvas><canvas class="overlay" data-target="bracketBack" width="300" height="300"></canvas></div><button class="clearBtn" data-clear="bracketBack">지우기</button></div>
+  <div class="col">
+    <h4>메모</h4>
+    <textarea id="memo" placeholder="여기에 메모 적어주세요"></textarea>
+  </div>
+</div>
+<h3 style="margin-top:30px">브라켓 — 대각선 없이 축 하나씩 딱 맞춰 본 정투영(orthographic) 뷰</h3>
+<p style="font-size:13px;color:#555">각도 없이 정면으로만 봐서, 화면의 가로·세로가 그대로 그 축입니다. 빨강=X, 초록=Y, 파랑=Z 화살표로 방향 표시.</p>
+<div class="row">
+  <div class="col"><h4>위에서(Y축 방향으로 내려다봄) — 화면 가로=X, 화면 세로=Z</h4><div class="imgWrap"><canvas id="orthoTop" width="300" height="300"></canvas><canvas class="overlay" data-target="orthoTop" width="300" height="300"></canvas></div><button class="clearBtn" data-clear="orthoTop">지우기</button></div>
+  <div class="col"><h4>정면에서(Z축 방향으로 봄) — 화면 가로=X, 화면 세로=Y</h4><div class="imgWrap"><canvas id="orthoFront" width="300" height="300"></canvas><canvas class="overlay" data-target="orthoFront" width="300" height="300"></canvas></div><button class="clearBtn" data-clear="orthoFront">지우기</button></div>
+  <div class="col"><h4>옆에서(X축 방향으로 봄) — 화면 가로=Z, 화면 세로=Y</h4><div class="imgWrap"><canvas id="orthoSide" width="300" height="300"></canvas><canvas class="overlay" data-target="orthoSide" width="300" height="300"></canvas></div><button class="clearBtn" data-clear="orthoSide">지우기</button></div>
+</div>
+<script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+<script>
+const SVG_90 = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50" width="200" height="200"><defs><clipPath id="clip90do"><path d="M10,10 L40,10 L40,20 L20,20 L20,40 L10,40 Z"/></clipPath><radialGradient id="boss90do" cx="35%" cy="28%" r="80%"><stop offset="0%" stop-color="#ffffff"/><stop offset="55%" stop-color="#dfe2e6"/><stop offset="100%" stop-color="#a9aeb5"/></radialGradient><mask id="mask90do" maskUnits="userSpaceOnUse" x="0" y="0" width="50" height="50"><rect x="0" y="0" width="50" height="50" fill="#fff"/><circle cx="15" cy="15" r="2.8" fill="#000"/><circle cx="15" cy="25" r="2.8" fill="#000"/><circle cx="15" cy="35" r="2.8" fill="#000"/><circle cx="25" cy="15" r="2.8" fill="#000"/><circle cx="35" cy="15" r="2.8" fill="#000"/></mask></defs><g mask="url(#mask90do)"><path d="M10,10 L40,10 L40,20 L20,20 L20,40 L10,40 Z" fill="#d5d8dc" stroke="#9aa0a8" stroke-width="0.6"/><g clip-path="url(#clip90do)"><circle cx="15" cy="15" r="4.3" fill="url(#boss90do)" stroke="#7d8288" stroke-width="0.35"/><circle cx="15" cy="25" r="4.3" fill="url(#boss90do)" stroke="#7d8288" stroke-width="0.35"/><circle cx="15" cy="35" r="4.3" fill="url(#boss90do)" stroke="#7d8288" stroke-width="0.35"/><circle cx="25" cy="15" r="4.3" fill="url(#boss90do)" stroke="#7d8288" stroke-width="0.35"/><circle cx="35" cy="15" r="4.3" fill="url(#boss90do)" stroke="#7d8288" stroke-width="0.35"/></g></g><circle cx="15" cy="15" r="2.8" fill="none" stroke="#7d8288" stroke-width="0.5"/><circle cx="15" cy="25" r="2.8" fill="none" stroke="#7d8288" stroke-width="0.5"/><circle cx="15" cy="35" r="2.8" fill="none" stroke="#7d8288" stroke-width="0.5"/><circle cx="25" cy="15" r="2.8" fill="none" stroke="#7d8288" stroke-width="0.5"/><circle cx="35" cy="15" r="2.8" fill="none" stroke="#7d8288" stroke-width="0.5"/></svg>`;
+document.getElementById('icon').innerHTML = SVG_90.replace(/width="[^"]*"/,'width="260"').replace(/height="[^"]*"/,'height="260"');
+
+function parseOutline(svg){
+  const m = svg.match(/<(polygon|path)\b[^>]*\bfill="#d5d8dc"[^>]*>/);
+  const dAttr = m[0].match(/\bd="([^"]+)"/);
+  const nums = (dAttr[1].match(/-?[\d.]+/g) || []).map(Number);
+  const pts = [];
+  for (let i=0;i+1<nums.length;i+=2) pts.push({x:nums[i], y:nums[i+1]});
+  return pts;
+}
+const outline = parseOutline(SVG_90);
+const vbW = 50, vbH = 50;
+const dataUri = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(SVG_90)));
+
+function renderFrame(canvasId, camPos){
+  const canvas = document.getElementById(canvasId);
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true, preserveDrawingBuffer:true });
+  renderer.setSize(300,300,false);
+  const scene = new THREE.Scene();
+  scene.add(new THREE.AmbientLight(0xffffff,1));
+  const dl = new THREE.DirectionalLight(0xffffff,0.5); dl.position.set(700,1400,800); scene.add(dl);
+  const camera = new THREE.PerspectiveCamera(35,1,1,6000);
+  camera.position.set(...camPos);
+  camera.lookAt(0,0,0);
+  new THREE.TextureLoader().load(dataUri, (tex) => {
+    tex.repeat.set(1/vbW, 1/vbH);
+    tex.offset.set(0,1);
+    const shape = new THREE.Shape();
+    outline.forEach((p,i)=>{ if(i===0) shape.moveTo(p.x,-p.y); else shape.lineTo(p.x,-p.y); });
+    shape.closePath();
+    const geo = new THREE.ExtrudeGeometry(shape, { depth:5, bevelEnabled:false });
+    geo.rotateX(-Math.PI/2);
+    geo.center();
+    const sideMat = new THREE.MeshStandardMaterial({ color: 0xc7cbd1 });
+    const topMat = new THREE.MeshBasicMaterial({ map: tex, transparent:true });
+    const mesh = new THREE.Mesh(geo, [topMat, sideMat]);
+    scene.add(mesh);
+    renderer.render(scene, camera);
+  });
+}
+renderFrame('top', [0,150,0.001]);
+renderFrame('angle', [70,90,110]);
+
+function renderBracket(canvasId, camPos){
+  const canvas = document.getElementById(canvasId);
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true });
+  renderer.setSize(300,300,false);
+  const scene = new THREE.Scene();
+  scene.add(new THREE.AmbientLight(0xffffff,1));
+  const dl = new THREE.DirectionalLight(0xffffff,0.5); dl.position.set(700,1400,800); scene.add(dl);
+  const camera = new THREE.PerspectiveCamera(35,1,1,6000);
+  camera.position.set(camPos[0], camPos[1], camPos[2]);
+  camera.lookAt(15,5,15);
+  const mat = new THREE.MeshStandardMaterial({ color: 0xf2ead9 }); // 아이보리 — 흰색은 창문(검은 점)과 대비가 잘 안 보여서 변경
+  // 90도 프레임과 똑같이 팔 길이는 30mm씩(진짜 길이 그대로), 코너에서 5x5 정사각형으로 겹침(프레임의 10x10 겹침과 같은 방식, 복도=5라서 5x5).
+  const armA = new THREE.Mesh(new THREE.BoxGeometry(30,10,5), mat); // 높이(Y)=10, 복도(Z)=5, 길이(X)=30(90도 프레임과 동일)
+  armA.position.set(15,5,2.5);
+  scene.add(armA);
+  const armB = new THREE.Mesh(new THREE.BoxGeometry(5,10,30), mat); // 높이(Y)=10, 복도(X)=5, 길이(Z)=30(90도 프레임과 동일, armA와 코너에서 5x5 겹침)
+  armB.position.set(2.5,5,15);
+  scene.add(armB);
+
+  // 창문(구멍) — 90도 프레임과 똑같은 간격: 팔 끝에서 여백 5mm, 피치 10mm, 팔당 3개(5,15,25 위치).
+  // "반쪽창"은 도형을 자르는 게 아니라 블라인드 홀(끝까지 안 뚫리고 중간에 막힌 구멍) — 모양은 똑같은 원이고 색만 다르게 표시.
+  const winMat = new THREE.MeshBasicMaterial({ color: 0x1a1a1a, side: THREE.DoubleSide }); // 관통 구멍: 짙은 색
+  const blindMat = new THREE.MeshBasicMaterial({ color: 0x9aa1ab, side: THREE.DoubleSide }); // 블라인드 홀: 옅은 회색(막혀 있음을 표시)
+  function makeWindow(x, y, z, rotY, blind){
+    const win = new THREE.Mesh(new THREE.CircleGeometry(1.5, 20), blind ? blindMat : winMat);
+    win.rotation.y = rotY; win.position.set(x, y, z);
+    scene.add(win);
+  }
+  // armA 정면(Z=5.05): 여백5·피치10 → X=5(코너쪽, 블라인드 홀),15(관통),25(관통)
+  makeWindow(5, 5, 5.05, 0, true);
+  makeWindow(15, 5, 5.05, 0, false);
+  makeWindow(25, 5, 5.05, 0, false);
+  // armA 뒷면(Z=-0.05): 정면과 똑같은 패턴
+  makeWindow(5, 5, -0.05, Math.PI, true);
+  makeWindow(15, 5, -0.05, Math.PI, false);
+  makeWindow(25, 5, -0.05, Math.PI, false);
+  // armB 정면(X=5.05): 여백5·피치10 → Z=5(코너쪽, 블라인드 홀),15(관통),25(관통)
+  makeWindow(5.05, 5, 5, Math.PI/2, true);
+  makeWindow(5.05, 5, 15, Math.PI/2, false);
+  makeWindow(5.05, 5, 25, Math.PI/2, false);
+  // armB 뒷면(X=-0.05): 정면과 똑같은 패턴
+  makeWindow(-0.05, 5, 5, -Math.PI/2, true);
+  makeWindow(-0.05, 5, 15, -Math.PI/2, false);
+  makeWindow(-0.05, 5, 25, -Math.PI/2, false);
+
+  renderer.render(scene, camera);
+}
+renderBracket('bracket', [70,90,110]); // 정면
+renderBracket('bracketBack', [-40,90,-60]); // 뒷면(반대쪽에서)
+
+// 대각선 없는 정투영(orthographic) 뷰 3개 — 축 화살표(빨강X/초록Y/파랑Z) 포함
+function buildBracketGroup(){
+  const mat = new THREE.MeshStandardMaterial({ color: 0xc7cbd1 });
+  const g = new THREE.Group();
+  const armA = new THREE.Mesh(new THREE.BoxGeometry(30,10,5), mat); // 높이(Y)=10, 복도(Z)=5
+  armA.position.set(15,5,2.5);
+  g.add(armA);
+  const armB = new THREE.Mesh(new THREE.BoxGeometry(5,10,20), mat); // 높이(Y)=10, 복도(X)=5
+  armB.position.set(2.5,5,15);
+  g.add(armB);
+  return g;
+}
+function addAxisArrows(scene, len){
+  scene.add(new THREE.ArrowHelper(new THREE.Vector3(1,0,0), new THREE.Vector3(0,0,0), len, 0xe03b2b, len*0.15, len*0.08)); // X 빨강
+  scene.add(new THREE.ArrowHelper(new THREE.Vector3(0,1,0), new THREE.Vector3(0,0,0), len, 0x2bb34a, len*0.15, len*0.08)); // Y 초록
+  scene.add(new THREE.ArrowHelper(new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,0), len, 0x2b6be0, len*0.15, len*0.08)); // Z 파랑
+}
+function renderOrtho(canvasId, eye, up){
+  const canvas = document.getElementById(canvasId);
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true });
+  renderer.setSize(300,300,false);
+  const scene = new THREE.Scene();
+  scene.add(new THREE.AmbientLight(0xffffff,1));
+  const dl = new THREE.DirectionalLight(0xffffff,0.6); dl.position.set(700,1400,800); scene.add(dl);
+  scene.add(buildBracketGroup());
+  addAxisArrows(scene, 15);
+  const d = 40; // 카메라 시야 반폭(mm)
+  const camera = new THREE.OrthographicCamera(-d, d, d, -d, 0.1, 2000);
+  camera.position.set(eye[0], eye[1], eye[2]);
+  camera.up.set(up[0], up[1], up[2]);
+  camera.lookAt(15, 5, 15); // 브라켓 대략 중심을 바라봄(축 원점 0,0,0 기준으로 그린 화살표도 같이 보이게 살짝 비켜서 봄)
+  renderer.render(scene, camera);
+}
+renderOrtho('orthoTop', [15, 500, 15.001], [0,0,-1]);   // Y축 위에서 내려다봄
+renderOrtho('orthoFront', [15, 5, 500], [0,1,0]);        // Z축 방향에서 정면으로
+renderOrtho('orthoSide', [500, 5, 15], [0,1,0]);         // X축 방향에서 옆에서
+
+// 그림판: 마우스로 자유롭게 그리기
+// 각 그림 위 투명 오버레이에 직접 그리기
+document.querySelectorAll('canvas.overlay').forEach(ov => {
+  const ctx = ov.getContext('2d');
+  ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.strokeStyle = '#111111'; // 검정 — X축 빨간 화살표와 안 헷갈리게
+  let drawing = false;
+  function pos(e){ const r = ov.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+  ov.addEventListener('pointerdown', e => { drawing = true; const p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); });
+  ov.addEventListener('pointermove', e => { if (!drawing) return; const p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); });
+  window.addEventListener('pointerup', () => { drawing = false; });
+});
+document.querySelectorAll('.clearBtn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const ov = document.querySelector('canvas.overlay[data-target="' + btn.dataset.clear + '"]');
+    ov.getContext('2d').clearRect(0, 0, ov.width, ov.height);
+  });
+});
+</script>
+</body></html>
