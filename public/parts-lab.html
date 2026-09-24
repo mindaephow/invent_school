@@ -187,14 +187,29 @@ h4{margin:4px 0}
     line.rotation.y = rotY; line.position.set(x, y, z);
     return line;
   }
-  // 사용자 지적: "구멍사이즈 피치 테두리 간격 높이... 저장한게 없으니 뭐가 맞는지 알아?" — 이 숫자들이 코드
-  // 안에만 하드코딩돼 있고 spec에는 안 들어가 있었음. 이름 붙인 함수로 빼서(function 선언 — makeHole처럼
-  // 렌더 호출보다 앞선 곳에서도 항상 값이 있어야 해서 const 대신 씀) spec 저장 시 그대로 같이 기록한다.
-  function bracketMargin(){ return 5; }        // 코너에서 첫 구멍까지 여백(mm)
-  function bracketPitch(){ return 10; }        // 구멍 간격(mm)
-  function bracketMaxHoles(){ return 3; }      // 팔 하나당 최대 구멍 수
-  function bracketBoreRadius(){ return 4.3; }  // 구멍 반지름(mm)
-  function bracketThickness(){ return 10; }    // 높이(Y, mm) — holeY는 항상 이 절반
+  // 사용자 지시: "db에 자리 만들어서 저장하고 불러오라고" — 이 숫자들을 코드에 하드코딩해두지 말고 ivs_bracket_standards
+  // 테이블(1행, id='default')에서 불러와 씀. loadBracketStandards()가 페이지 로드 시 한 번 값을 채워 넣고,
+  // 그 전까지는 이 fallback 값으로 동작(디폴트도 DB의 기본값과 동일하게 맞춰둠).
+  const bracketStandards = { margin:5, pitch:10, maxHolesPerArm:3, boreRadius:4.3, thickness:10, refArmLen1:30, refArmLen2:30, refArmWidth:5 };
+  async function loadBracketStandards(){
+    try {
+      const { data, error } = await sb.from('ivs_bracket_standards').select('*').eq('id','default').single();
+      if (error || !data) return;
+      bracketStandards.margin = Number(data.margin);
+      bracketStandards.pitch = Number(data.pitch);
+      bracketStandards.maxHolesPerArm = Number(data.max_holes_per_arm);
+      bracketStandards.boreRadius = Number(data.bore_radius);
+      bracketStandards.thickness = Number(data.thickness);
+      bracketStandards.refArmLen1 = Number(data.ref_arm_len1);
+      bracketStandards.refArmLen2 = Number(data.ref_arm_len2);
+      bracketStandards.refArmWidth = Number(data.ref_arm_width);
+    } catch (e) { /* DB에 테이블이 아직 없으면 위 fallback 값으로 동작 */ }
+  }
+  function bracketMargin(){ return bracketStandards.margin; }        // 코너에서 첫 구멍까지 여백(mm)
+  function bracketPitch(){ return bracketStandards.pitch; }          // 구멍 간격(mm)
+  function bracketMaxHoles(){ return bracketStandards.maxHolesPerArm; } // 팔 하나당 최대 구멍 수
+  function bracketBoreRadius(){ return bracketStandards.boreRadius; }   // 구멍 반지름(mm)
+  function bracketThickness(){ return bracketStandards.thickness; }     // 높이(Y, mm) — holeY는 항상 이 절반
   function bracketHolePositions(){
     return Array.from({ length: bracketMaxHoles() }, (_, i) => bracketMargin() + i * bracketPitch());
   }
@@ -1083,9 +1098,17 @@ h4{margin:4px 0}
   // 프레임은 앞뒤가 사실상 대칭인 얇은 판이라 "뒷면"에 새로 보여줄 게 없어서 빈 칸으로 둠
   // (사용자 지시: "없으면 비워져 있으면 되는거야" / "사각형 스케치북은 항상 있고 안에 물품만 없으면 됨")
   renderEmptyPanel(document.getElementById('refFrameBack'));
-  renderBracketPanel(document.getElementById('refBracketTop'), 30, 30, 5, bracketTopCamPos(30), true);
-  renderBracketPanel(document.getElementById('refBracketFront'), 30, 30, 5, [70,90,110]);
-  renderBracketPanel(document.getElementById('refBracketBack'), 30, 30, 5, bracketBackCamPos(30,30));
+  // 사용자 지시: "db에 자리 만들어서 저장하고 불러오라고" — 참고 브라켓 치수도 코드에 30,30,5로 박아두지 않고
+  // ivs_bracket_standards에서 불러온 값을 씀. 로드 전엔 bracketStandards의 fallback으로 먼저 그리고,
+  // 로드가 끝나면 실제 DB 값으로 다시 그려서 항상 DB가 최종 정답이 되게 함.
+  function drawRefBracket(){
+    const { refArmLen1:a1, refArmLen2:a2, refArmWidth:aw } = bracketStandards;
+    renderBracketPanel(document.getElementById('refBracketTop'), a1, a2, aw, bracketTopCamPos(a1), true);
+    renderBracketPanel(document.getElementById('refBracketFront'), a1, a2, aw, [70,90,110]);
+    renderBracketPanel(document.getElementById('refBracketBack'), a1, a2, aw, bracketBackCamPos(a1,a2));
+  }
+  drawRefBracket();
+  loadBracketStandards().then(drawRefBracket);
 
   // ===== 스케치북 (오른쪽 패널) — 빈 곳 드래그=회전, 휠=확대/축소, "그리기" 켜면 그 위에 자유롭게 낙서 =====
   function initSketchbook(){
