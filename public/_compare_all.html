@@ -274,6 +274,57 @@ function buildBracketScene(){
   scene.userData.edges = addMeasurableEdges(scene, bracketEdgeDefs());
   return scene;
 }
+// 꼭지점과 꼭지점을 이어 선 긋기(사용자 요청, 2026-09-24) — 자동 치수선과는 별개로,
+// 사용자가 원하는 두 점을 직접 골라 확인용 선을 그을 수 있게 함.
+function bracketVertices(){
+  const outline2D = [[0,0],[30,0],[30,5],[5,5],[5,30],[0,30]]; // ㄱ자 윤곽선 꼭지점(x,z)
+  const pts = [];
+  [0,10].forEach(y => outline2D.forEach(([x,z]) => pts.push(new THREE.Vector3(x,y,z))));
+  return pts;
+}
+function addVertexMarkers(target, points){
+  // 점은 화면에 그리지 않음(클릭 판정용으로만 존재) — 첫 번째 점을 고르는 동안만 잠깐 보이게 함(아래 wireVertexPicking).
+  return points.map(p => {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(1.2,12,12), new THREE.MeshBasicMaterial({ color:0xc0392b, transparent:true, opacity:0, depthTest:false }));
+    m.position.copy(p);
+    m.renderOrder = 999;
+    target.add(m);
+    return m;
+  });
+}
+function wireVertexPicking(canvasId, camera, scene, markers){
+  if (!markers || !markers.length) return;
+  const canvas = document.getElementById(canvasId);
+  const raycaster = new THREE.Raycaster();
+  let selected = null;
+  const lines = new Map(); // "i-j" -> line
+  const keyOf = (a,b) => { const ia = markers.indexOf(a), ib = markers.indexOf(b); return ia < ib ? ia+'-'+ib : ib+'-'+ia; };
+  canvas.addEventListener('click', e => {
+    const r = canvas.getBoundingClientRect();
+    const mouse = new THREE.Vector2(((e.clientX-r.left)/r.width)*2-1, -((e.clientY-r.top)/r.height)*2+1);
+    raycaster.setFromCamera(mouse, camera);
+    const hit = raycaster.intersectObjects(markers, false)[0];
+    if (!hit) return;
+    const m = hit.object;
+    if (selected === m) { m.material.opacity = 0; selected = null; return; }
+    if (!selected) { selected = m; m.material.opacity = 1; return; } // 고르는 동안만 잠깐 보임
+    const k = keyOf(selected, m);
+    if (lines.has(k)) {
+      lines.get(k).parent.remove(lines.get(k));
+      lines.delete(k);
+    } else {
+      // 가이드선(점선) — 실제 모서리가 아니라 사용자가 직접 확인용으로 이은 선이라는 걸 구분
+      const geo = new THREE.BufferGeometry().setFromPoints([selected.position, m.position]);
+      const line = new THREE.Line(geo, new THREE.LineDashedMaterial({ color:0x333333, dashSize:1.5, gapSize:1, depthTest:false }));
+      line.computeLineDistances();
+      line.renderOrder = 998;
+      scene.add(line);
+      lines.set(k, line);
+    }
+    selected.material.opacity = 0;
+    selected = null;
+  });
+}
 function renderBracket(canvasId, camPos){
   const canvas = document.getElementById(canvasId);
   const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true });
@@ -285,6 +336,7 @@ function renderBracket(canvasId, camPos){
   renderer.render(scene, camera);
   setupOrbit(canvasId, renderer, scene, camera, [15,5,15]);
   wireEdgePicking(canvasId, camera, scene, scene.userData.edges);
+  wireVertexPicking(canvasId, camera, scene, addVertexMarkers(scene, bracketVertices()));
 }
 renderBracket('bracket', [70,90,110]); // 정면
 renderBracket('bracketBack', [-40,90,-60]); // 뒷면(반대쪽에서)
@@ -319,6 +371,7 @@ function renderOrtho(canvasId, eye, up){
   renderer.render(scene, camera);
   setupOrbit(canvasId, renderer, scene, camera, [15,5,15]);
   wireEdgePicking(canvasId, camera, scene, group.userData.edges);
+  wireVertexPicking(canvasId, camera, scene, addVertexMarkers(scene, bracketVertices()));
 }
 renderOrtho('orthoTop', [15, 500, 15.001], [0,0,-1]);   // Y축 위에서 내려다봄
 renderOrtho('orthoFront', [15, 5, 500], [0,1,0]);        // Z축 방향에서 정면으로
