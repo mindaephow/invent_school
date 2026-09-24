@@ -110,6 +110,14 @@ function parseSpec(body) {
     const n = Number(spec[key])
     if (Number.isFinite(n) && n > 0) result[key] = n
   })
+  // 라벨 문자열뿐 아니라 그 좌표(x,z,face)도 저장(사용자 지시: "넘버링 좌표도/구멍좌표도 모두 부품내역에
+  // 다 저장해") — 각 항목이 {label, x, z, face} 형태인지만 검증.
+  if (Array.isArray(spec.holeCoords)) {
+    const holeCoords = spec.holeCoords
+      .filter((h) => h && typeof h === 'object' && typeof h.label === 'string' && Number.isFinite(Number(h.x)) && Number.isFinite(Number(h.z)))
+      .map((h) => ({ label: h.label, x: Number(h.x), z: Number(h.z), face: typeof h.face === 'string' ? h.face : null }))
+    if (holeCoords.length) result.holeCoords = holeCoords
+  }
   return result
 }
 
