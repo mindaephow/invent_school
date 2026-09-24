@@ -1253,9 +1253,16 @@ h4{margin:4px 0}
       zs: [...new Set(holes.map(h => gridRnd(h.z)))].sort((a,b) => a-b)
     };
   }
+  // 사용자 지적: "왜 소문자 부분이 엉망으로 들어가있어?" — makeHole 호출 순서 그대로 나열해서 같은 줄(row)인
+  // 구멍끼리도 뒤섞여 보였음. 줄(a,b,c...)→칸(1,2,3...) 순서로 정렬해서 사람이 읽기 좋게 만듦.
   function gridHoleLabels(holes){
     const { xs, zs } = gridAxes(holes);
-    return holes.map(h => String.fromCharCode(97 + zs.indexOf(gridRnd(h.z))) + (xs.indexOf(gridRnd(h.x)) + 1) + (h.face ? '-' + h.face : ''));
+    const rowOf = (h) => zs.indexOf(gridRnd(h.z));
+    const colOf = (h) => xs.indexOf(gridRnd(h.x));
+    return holes
+      .slice()
+      .sort((a, b) => rowOf(a) - rowOf(b) || colOf(a) - colOf(b) || (a.face || '').localeCompare(b.face || ''))
+      .map(h => String.fromCharCode(97 + rowOf(h)) + (colOf(h) + 1) + (h.face ? '-' + h.face : ''));
   }
   // renderBracketPanel의 makeHole 호출과 똑같은 좌표·회전·블라인드 여부를 데이터로 미리 뽑아둠 — 시각(3D 모델)과
   // 데이터(스펙 표·저장값)가 서로 다른 좌표를 쓰다가 어긋나는 일이 없게 한 곳에서만 계산.
@@ -1274,7 +1281,16 @@ h4{margin:4px 0}
       holes.push({ x:arm1-armWidth, z:p, face:'A', rot:-Math.PI/2, blind:i===0 });
       holes.push({ x:arm1, z:p, face:'B', rot:Math.PI/2, blind:i===0 });
     });
-    return holes;
+    // 여백(margin)과 두께(armWidth)가 같은 값이면(예: 둘 다 5mm) 팔1·팔2의 "코너에서 가장 가까운 구멍"이
+    // 완전히 같은 자리에 겹침 — 실제로 구멍이 2개가 아니라 1개이므로 좌표+면이 같은 건 하나만 남김
+    // (사용자 지적: "번호가 뒤죽박죽" — 실제 원인이 이 겹침이었음).
+    const seen = new Set();
+    return holes.filter(h => {
+      const key = gridRnd(h.x) + ',' + gridRnd(h.z) + ',' + h.face;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   }
   function bracketHoleLabels(arm1, arm2, armWidth){
     return gridHoleLabels(bracketHoleGeom(arm1, arm2, armWidth));
