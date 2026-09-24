@@ -431,43 +431,65 @@ function wireGuidePicking(canvasId, camera, vstate){
 
   // 선그리기: 드래그(누른 채 유지)가 아니라 클릭-이동-클릭 방식 — 꼭짓점을 한 번 클릭하면 그때부터
   // 마우스 버튼을 누르지 않고 움직여도 점선이 계속 따라오다가, 다시 한 번 클릭하면 그 자리에서 확정됨
-  // (사용자 지적: "점선이 따라오고 마우스를 클릭해 방향 결정이 나는거 아니야???").
+  // (사용자 지적: "점선이 따라오고 마우스를 클릭해 방향 결정이 나는거 아니야???"). 길이는 마우스가 어디
+  // 있든 항상 실측 10mm 고정(사용자 지시: "10MM로 정하자") — 마우스는 방향(수평/수직 + 좌우/상하)만 정하고,
+  // 실제 길이는 카메라 기준 "오른쪽/위" 벡터로 10mm를 화면 픽셀로 환산해서 사용.
   let pendingStart = null;
+  let pendingStart3D = null;
   let moveHandler = null;
-  function lineFor(p0, p1, id){
-    const horizontal = Math.abs(p1.x - p0.x) >= Math.abs(p1.y - p0.y);
-    return horizontal
-      ? { id, orientation:'h', pos:p0.y, a:Math.min(p0.x,p1.x), b:Math.max(p0.x,p1.x) }
-      : { id, orientation:'v', pos:p0.x, a:Math.min(p0.y,p1.y), b:Math.max(p0.y,p1.y) };
+  function projectToOverlay(p3d){
+    const v = p3d.clone().project(camera);
+    return { x: (v.x*0.5+0.5)*overlay.width, y: (-v.y*0.5+0.5)*overlay.height };
   }
+  function pxPerTenMm(point3D){
+    const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0).normalize();
+    const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1).normalize();
+    const p0 = projectToOverlay(point3D);
+    const pr = projectToOverlay(point3D.clone().addScaledVector(right, 10));
+    const pu = projectToOverlay(point3D.clone().addScaledVector(up, 10));
+    return { h: Math.hypot(pr.x-p0.x, pr.y-p0.y), v: Math.hypot(pu.x-p0.x, pu.y-p0.y) };
+  }
+  function lineFor(p0, p1, px, id){
+    const dx = p1.x - p0.x, dy = p1.y - p0.y;
+    const horizontal = Math.abs(dx) >= Math.abs(dy);
+    if (horizontal) return { id, orientation:'h', pos:p0.y, a: dx>=0?p0.x:p0.x-px.h, b: dx>=0?p0.x+px.h:p0.x };
+    return { id, orientation:'v', pos:p0.x, a: dy>=0?p0.y:p0.y-px.v, b: dy>=0?p0.y+px.v:p0.y };
+  }
+  let confirmHandler = null;
   canvas.addEventListener('click', e => {
     if (!state.active) return;
 
     if (state.mode === 'draw') {
-      if (!pendingStart) {
-        const r = canvas.getBoundingClientRect();
-        const mouse = new THREE.Vector2(((e.clientX-r.left)/r.width)*2-1, -((e.clientY-r.top)/r.height)*2+1);
-        raycaster.setFromCamera(mouse, camera);
-        const hit = raycaster.intersectObjects(vstate.markers, false)[0];
-        if (!hit) return;
-        pendingStart = toOverlayXY(e.clientX, e.clientY);
-        moveHandler = ev => {
-          const p1 = toOverlayXY(ev.clientX, ev.clientY);
-          pctx.clearRect(0, 0, preview.width, preview.height);
-          drawLine(pctx, lineFor(pendingStart, p1));
-        };
-        window.addEventListener('mousemove', moveHandler);
-        return;
-      }
-      // 두 번째 클릭: 지금 마우스 위치로 확정
-      const p1 = toOverlayXY(e.clientX, e.clientY);
-      pctx.clearRect(0, 0, preview.width, preview.height);
-      const L = lineFor(pendingStart, p1, state.nextId++);
-      drawLine(ctx, L);
-      state.lines.push(L);
-      window.removeEventListener('mousemove', moveHandler);
-      moveHandler = null;
-      pendingStart = null;
+      if (pendingStart) return; // 진행 중엔 아래 window 리스너(confirmHandler)가 처리 — 캔버스 밖 클릭도 확정되게
+      const r = canvas.getBoundingClientRect();
+      const mouse = new THREE.Vector2(((e.clientX-r.left)/r.width)*2-1, -((e.clientY-r.top)/r.height)*2+1);
+      raycaster.setFromCamera(mouse, camera);
+      const hit = raycaster.intersectObjects(vstate.markers, false)[0];
+      if (!hit) return;
+      pendingStart = toOverlayXY(e.clientX, e.clientY);
+      pendingStart3D = hit.point.clone();
+      moveHandler = ev => {
+        const p1 = toOverlayXY(ev.clientX, ev.clientY);
+        pctx.clearRect(0, 0, preview.width, preview.height);
+        drawLine(pctx, lineFor(pendingStart, p1, pxPerTenMm(pendingStart3D)));
+      };
+      confirmHandler = ev => {
+        // 두 번째 클릭(캔버스 밖이어도 상관없음): 방향(수평/수직 + 좌우/상하)만 지금 마우스 위치로 확정, 길이는 항상 10mm
+        ev.stopPropagation(); // 캔버스 자체의 click 리스너가 같은 클릭을 "첫 클릭"으로 또 처리하지 않게
+        const p1 = toOverlayXY(ev.clientX, ev.clientY);
+        pctx.clearRect(0, 0, preview.width, preview.height);
+        const L = lineFor(pendingStart, p1, pxPerTenMm(pendingStart3D), state.nextId++);
+        drawLine(ctx, L);
+        state.lines.push(L);
+        window.removeEventListener('mousemove', moveHandler);
+        window.removeEventListener('click', confirmHandler, true);
+        moveHandler = null;
+        confirmHandler = null;
+        pendingStart = null;
+        pendingStart3D = null;
+      };
+      window.addEventListener('mousemove', moveHandler);
+      window.addEventListener('click', confirmHandler, true);
       return;
     }
 

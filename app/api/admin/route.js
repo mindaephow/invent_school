@@ -98,7 +98,12 @@ function parseSpec(body) {
   if (!spec || typeof spec !== 'object') return null
   const armLen1 = Number(spec.armLen1), armLen2 = Number(spec.armLen2), armWidth = Number(spec.armWidth)
   if (![armLen1, armLen2, armWidth].every((n) => Number.isFinite(n) && n > 0)) return null
-  return { armLen1, armLen2, armWidth }
+  const result = { armLen1, armLen2, armWidth }
+  // 구멍 번호(정면A/뒷면B, 팔1=a/팔2=b, 코너부터 1·2·3) — 부품 수리실에서 계산해서 넘겨준 값을 그대로 저장
+  if (Array.isArray(spec.holeLabels) && spec.holeLabels.every((s) => typeof s === 'string')) {
+    result.holeLabels = spec.holeLabels
+  }
+  return result
 }
 
 // 확정된 렌더링 결과를 실제 이미지로도 같이 저장 — 숫자(spec)만이 아니라 눈으로 보이는 모습 자체를 남겨서
