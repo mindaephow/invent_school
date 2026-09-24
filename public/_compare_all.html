@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>90도 프레임 + 브라켓 비교(전체)</title>
-<style>body{background:#eef1f4;font-family:sans-serif;padding:10px} .row{display:flex;gap:24px;flex-wrap:wrap} .col{width:320px} canvas{border:1px solid #999} h4{margin:4px 0} #memo{width:300px;height:120px;font-size:14px;padding:6px;} .imgWrap{position:relative;width:300px;height:300px;} .overlay{position:absolute;top:0;left:0;background:transparent;cursor:crosshair;} .btnRow{margin-top:4px;display:flex;gap:6px;} .btnRow button{font-size:11px;} .dims{font-size:11px;color:#555;margin-top:4px;line-height:1.4;} .modeBtn.on{background:#2b6be0;color:#fff;border-color:#2b6be0;} .vertexBtn.on{background:#c0392b;color:#fff;border-color:#c0392b;} .dimInput{display:none;margin-top:4px;font-size:11px;gap:4px;align-items:center;flex-wrap:wrap;background:#fff8dd;border:1px solid #e0c56a;border-radius:4px;padding:4px;} .dimInput.show{display:flex;} .dimInput .dimHint{width:100%;color:#7a5a00;} .dimInput input{width:55px;font-size:12px;} .vertexPanel{display:none;margin-top:4px;font-size:11px;gap:6px;align-items:center;flex-wrap:wrap;background:#eef2ff;border:1px solid #b9c4e8;border-radius:4px;padding:4px;} .vertexPanel.show{display:flex;} .vmodeBtn.on{background:#555;color:#fff;border-color:#555;}</style>
+<style>body{background:#eef1f4;font-family:sans-serif;padding:10px} .row{display:flex;gap:24px;flex-wrap:wrap} .col{width:320px} canvas{border:1px solid #999} h4{margin:4px 0} #memo{width:300px;height:120px;font-size:14px;padding:6px;} .imgWrap{position:relative;width:300px;height:300px;} .overlay{position:absolute;top:0;left:0;background:transparent;cursor:crosshair;} .btnRow{margin-top:4px;display:flex;gap:6px;} .btnRow button{font-size:11px;} .dims{font-size:11px;color:#555;margin-top:4px;line-height:1.4;} .modeBtn.on{background:#2b6be0;color:#fff;border-color:#2b6be0;} .vertexBtn.on{background:#c0392b;color:#fff;border-color:#c0392b;} .dimInput{display:none;margin-top:4px;font-size:11px;gap:4px;align-items:center;flex-wrap:wrap;background:#fff8dd;border:1px solid #e0c56a;border-radius:4px;padding:4px;} .dimInput.show{display:flex;} .dimInput .dimHint{width:100%;color:#7a5a00;} .dimInput input{width:55px;font-size:12px;} .vertexPanel{display:none;margin-top:4px;font-size:11px;gap:6px;align-items:center;flex-wrap:wrap;background:#eef2ff;border:1px solid #b9c4e8;border-radius:4px;padding:4px;} .vertexPanel.show{display:flex;} .vmodeBtn.on{background:#555;color:#fff;border-color:#555;} .guideBtn.on{background:#2bb34a;color:#fff;border-color:#2bb34a;}</style>
 </head>
 <body>
 <h3>90도 프레임 (정상) + 1열브라켓(눕힘, 높이=10) — 전부 한 페이지에</h3>
@@ -9,8 +9,8 @@
   <div class="col"><h4>90도 프레임 원본 아이콘</h4><div class="imgWrap"><div id="icon"></div><canvas class="overlay" data-target="icon" width="300" height="300"></canvas></div><div class="dims">실측 30×30×5mm(팔 길이×팔 길이×두께) · 구멍 여백5mm·피치10mm · 보어 φ2.8(턱 φ4.3)</div><div class="btnRow"><button class="clearBtn" data-clear="icon">지우기</button></div></div>
   <div class="col"><h4>90도 프레임 3D(위에서)</h4><div class="imgWrap"><canvas id="top" width="300" height="300"></canvas><canvas class="overlay" data-target="top" width="300" height="300"></canvas></div><div class="dims">실측 30×30×5mm(팔 길이×팔 길이×두께) · 구멍 여백5mm·피치10mm</div><div class="btnRow"><button class="clearBtn" data-clear="top">지우기</button><button class="modeBtn" data-target="top">🔄 돌려보기</button></div></div>
   <div class="col"><h4>90도 프레임 3D(각도)</h4><div class="imgWrap"><canvas id="angle" width="300" height="300"></canvas><canvas class="overlay" data-target="angle" width="300" height="300"></canvas></div><div class="dims">실측 30×30×5mm(팔 길이×팔 길이×두께) · 구멍 여백5mm·피치10mm</div><div class="btnRow"><button class="clearBtn" data-clear="angle">지우기</button><button class="modeBtn" data-target="angle">🔄 돌려보기</button></div></div>
-  <div class="col"><h4>1열브라켓, 눕힘, 높이(Y)=10 (정면)</h4><div class="imgWrap"><canvas id="bracket" width="300" height="300"></canvas><canvas class="overlay" data-target="bracket" width="300" height="300"></canvas></div><div class="dims">구멍 여백5mm·피치10mm·팔당 3개, 모서리쪽=블라인드 홀 · 안내선을 클릭해 크기를 확인/입력 · "🔗 꼭지점 잇기" 버튼을 누르면 점(꼭짓점)이 보이고, 두 점을 클릭하면 점선으로 이어짐</div><div class="btnRow"><button class="clearBtn" data-clear="bracket">지우기</button><button class="modeBtn" data-target="bracket">🔄 돌려보기</button><button class="vertexBtn" data-target="bracket">🔗 꼭지점 잇기</button></div><div class="dimInput" data-target="bracket"><span class="dimHint"></span><input type="text" placeholder="mm"><button>확인</button></div><div class="vertexPanel" data-target="bracket"><label>점 크기 <input type="range" class="vsize" data-target="bracket" min="0.3" max="2.5" step="0.1" value="1"></label><button class="vmodeBtn on" data-target="bracket" data-mode="connect">연결</button><button class="vmodeBtn" data-target="bracket" data-mode="add">추가</button><button class="vmodeBtn" data-target="bracket" data-mode="delete">삭제</button></div></div>
-  <div class="col"><h4>1열브라켓, 뒷면</h4><div class="imgWrap"><canvas id="bracketBack" width="300" height="300"></canvas><canvas class="overlay" data-target="bracketBack" width="300" height="300"></canvas></div><div class="dims">구멍 여백5mm·피치10mm·팔당 3개, 모서리쪽=블라인드 홀(앞면과 대칭) · 안내선을 클릭해 크기를 확인/입력 · "🔗 꼭지점 잇기" 버튼을 누르면 점(꼭짓점)이 보이고, 두 점을 클릭하면 점선으로 이어짐</div><div class="btnRow"><button class="clearBtn" data-clear="bracketBack">지우기</button><button class="modeBtn" data-target="bracketBack">🔄 돌려보기</button><button class="vertexBtn" data-target="bracketBack">🔗 꼭지점 잇기</button></div><div class="dimInput" data-target="bracketBack"><span class="dimHint"></span><input type="text" placeholder="mm"><button>확인</button></div><div class="vertexPanel" data-target="bracketBack"><label>점 크기 <input type="range" class="vsize" data-target="bracketBack" min="0.3" max="2.5" step="0.1" value="1"></label><button class="vmodeBtn on" data-target="bracketBack" data-mode="connect">연결</button><button class="vmodeBtn" data-target="bracketBack" data-mode="add">추가</button><button class="vmodeBtn" data-target="bracketBack" data-mode="delete">삭제</button></div></div>
+  <div class="col"><h4>1열브라켓, 눕힘, 높이(Y)=10 (정면)</h4><div class="imgWrap"><canvas id="bracket" width="300" height="300"></canvas><canvas class="overlay" data-target="bracket" width="300" height="300"></canvas></div><div class="dims">구멍 여백5mm·피치10mm·팔당 3개, 모서리쪽=블라인드 홀 · 안내선을 클릭해 크기를 확인/입력 · "🔗 꼭지점 잇기" 버튼을 누르면 점(꼭짓점)이 보이고, 두 점을 클릭하면 점선으로 이어짐</div><div class="btnRow"><button class="clearBtn" data-clear="bracket">지우기</button><button class="modeBtn" data-target="bracket">🔄 돌려보기</button><button class="vertexBtn" data-target="bracket">🔗 꼭지점 잇기</button><button class="guideBtn" data-target="bracket">📏 가이드</button></div><div class="dimInput" data-target="bracket"><span class="dimHint"></span><input type="text" placeholder="mm"><button>확인</button></div><div class="vertexPanel" data-target="bracket"><label>점 크기 <input type="range" class="vsize" data-target="bracket" min="0.3" max="2.5" step="0.1" value="1"></label><button class="vmodeBtn on" data-target="bracket" data-mode="connect">연결</button><button class="vmodeBtn" data-target="bracket" data-mode="add">추가</button><button class="vmodeBtn" data-target="bracket" data-mode="delete">삭제</button></div></div>
+  <div class="col"><h4>1열브라켓, 뒷면</h4><div class="imgWrap"><canvas id="bracketBack" width="300" height="300"></canvas><canvas class="overlay" data-target="bracketBack" width="300" height="300"></canvas></div><div class="dims">구멍 여백5mm·피치10mm·팔당 3개, 모서리쪽=블라인드 홀(앞면과 대칭) · 안내선을 클릭해 크기를 확인/입력 · "🔗 꼭지점 잇기" 버튼을 누르면 점(꼭짓점)이 보이고, 두 점을 클릭하면 점선으로 이어짐</div><div class="btnRow"><button class="clearBtn" data-clear="bracketBack">지우기</button><button class="modeBtn" data-target="bracketBack">🔄 돌려보기</button><button class="vertexBtn" data-target="bracketBack">🔗 꼭지점 잇기</button><button class="guideBtn" data-target="bracketBack">📏 가이드</button></div><div class="dimInput" data-target="bracketBack"><span class="dimHint"></span><input type="text" placeholder="mm"><button>확인</button></div><div class="vertexPanel" data-target="bracketBack"><label>점 크기 <input type="range" class="vsize" data-target="bracketBack" min="0.3" max="2.5" step="0.1" value="1"></label><button class="vmodeBtn on" data-target="bracketBack" data-mode="connect">연결</button><button class="vmodeBtn" data-target="bracketBack" data-mode="add">추가</button><button class="vmodeBtn" data-target="bracketBack" data-mode="delete">삭제</button></div></div>
   <div class="col">
     <h4>메모</h4>
     <textarea id="memo" placeholder="여기에 메모 적어주세요"></textarea>
@@ -19,9 +19,9 @@
 <h3 style="margin-top:30px">브라켓 — 대각선 없이 축 하나씩 딱 맞춰 본 정투영(orthographic) 뷰</h3>
 <p style="font-size:13px;color:#555">각도 없이 정면으로만 봐서, 화면의 가로·세로가 그대로 그 축입니다. 빨강=X, 초록=Y, 파랑=Z 화살표로 방향 표시. 이 뷰들도 "돌려보기"로 자유롭게 돌려볼 수 있습니다(처음 각도로 되돌아가려면 새로고침).</p>
 <div class="row">
-  <div class="col"><h4>위에서(Y축 방향으로 내려다봄) — 화면 가로=X, 화면 세로=Z</h4><div class="imgWrap"><canvas id="orthoTop" width="300" height="300"></canvas><canvas class="overlay" data-target="orthoTop" width="300" height="300"></canvas></div><div class="dims">안내선을 클릭해 크기를 확인/입력 · "🔗 꼭지점 잇기" 버튼을 누르면 점(꼭짓점)이 보이고, 두 점을 클릭하면 점선으로 이어짐</div><div class="btnRow"><button class="clearBtn" data-clear="orthoTop">지우기</button><button class="modeBtn" data-target="orthoTop">🔄 돌려보기</button><button class="vertexBtn" data-target="orthoTop">🔗 꼭지점 잇기</button></div><div class="dimInput" data-target="orthoTop"><span class="dimHint"></span><input type="text" placeholder="mm"><button>확인</button></div><div class="vertexPanel" data-target="orthoTop"><label>점 크기 <input type="range" class="vsize" data-target="orthoTop" min="0.3" max="2.5" step="0.1" value="1"></label><button class="vmodeBtn on" data-target="orthoTop" data-mode="connect">연결</button><button class="vmodeBtn" data-target="orthoTop" data-mode="add">추가</button><button class="vmodeBtn" data-target="orthoTop" data-mode="delete">삭제</button></div></div>
-  <div class="col"><h4>정면에서(Z축 방향으로 봄) — 화면 가로=X, 화면 세로=Y</h4><div class="imgWrap"><canvas id="orthoFront" width="300" height="300"></canvas><canvas class="overlay" data-target="orthoFront" width="300" height="300"></canvas></div><div class="dims">안내선을 클릭해 크기를 확인/입력 · "🔗 꼭지점 잇기" 버튼을 누르면 점(꼭짓점)이 보이고, 두 점을 클릭하면 점선으로 이어짐</div><div class="btnRow"><button class="clearBtn" data-clear="orthoFront">지우기</button><button class="modeBtn" data-target="orthoFront">🔄 돌려보기</button><button class="vertexBtn" data-target="orthoFront">🔗 꼭지점 잇기</button></div><div class="dimInput" data-target="orthoFront"><span class="dimHint"></span><input type="text" placeholder="mm"><button>확인</button></div><div class="vertexPanel" data-target="orthoFront"><label>점 크기 <input type="range" class="vsize" data-target="orthoFront" min="0.3" max="2.5" step="0.1" value="1"></label><button class="vmodeBtn on" data-target="orthoFront" data-mode="connect">연결</button><button class="vmodeBtn" data-target="orthoFront" data-mode="add">추가</button><button class="vmodeBtn" data-target="orthoFront" data-mode="delete">삭제</button></div></div>
-  <div class="col"><h4>옆에서(X축 방향으로 봄) — 화면 가로=Z, 화면 세로=Y</h4><div class="imgWrap"><canvas id="orthoSide" width="300" height="300"></canvas><canvas class="overlay" data-target="orthoSide" width="300" height="300"></canvas></div><div class="dims">안내선을 클릭해 크기를 확인/입력 · "🔗 꼭지점 잇기" 버튼을 누르면 점(꼭짓점)이 보이고, 두 점을 클릭하면 점선으로 이어짐</div><div class="btnRow"><button class="clearBtn" data-clear="orthoSide">지우기</button><button class="modeBtn" data-target="orthoSide">🔄 돌려보기</button><button class="vertexBtn" data-target="orthoSide">🔗 꼭지점 잇기</button></div><div class="dimInput" data-target="orthoSide"><span class="dimHint"></span><input type="text" placeholder="mm"><button>확인</button></div><div class="vertexPanel" data-target="orthoSide"><label>점 크기 <input type="range" class="vsize" data-target="orthoSide" min="0.3" max="2.5" step="0.1" value="1"></label><button class="vmodeBtn on" data-target="orthoSide" data-mode="connect">연결</button><button class="vmodeBtn" data-target="orthoSide" data-mode="add">추가</button><button class="vmodeBtn" data-target="orthoSide" data-mode="delete">삭제</button></div></div>
+  <div class="col"><h4>위에서(Y축 방향으로 내려다봄) — 화면 가로=X, 화면 세로=Z</h4><div class="imgWrap"><canvas id="orthoTop" width="300" height="300"></canvas><canvas class="overlay" data-target="orthoTop" width="300" height="300"></canvas></div><div class="dims">안내선을 클릭해 크기를 확인/입력 · "🔗 꼭지점 잇기" 버튼을 누르면 점(꼭짓점)이 보이고, 두 점을 클릭하면 점선으로 이어짐</div><div class="btnRow"><button class="clearBtn" data-clear="orthoTop">지우기</button><button class="modeBtn" data-target="orthoTop">🔄 돌려보기</button><button class="vertexBtn" data-target="orthoTop">🔗 꼭지점 잇기</button><button class="guideBtn" data-target="orthoTop">📏 가이드</button></div><div class="dimInput" data-target="orthoTop"><span class="dimHint"></span><input type="text" placeholder="mm"><button>확인</button></div><div class="vertexPanel" data-target="orthoTop"><label>점 크기 <input type="range" class="vsize" data-target="orthoTop" min="0.3" max="2.5" step="0.1" value="1"></label><button class="vmodeBtn on" data-target="orthoTop" data-mode="connect">연결</button><button class="vmodeBtn" data-target="orthoTop" data-mode="add">추가</button><button class="vmodeBtn" data-target="orthoTop" data-mode="delete">삭제</button></div></div>
+  <div class="col"><h4>정면에서(Z축 방향으로 봄) — 화면 가로=X, 화면 세로=Y</h4><div class="imgWrap"><canvas id="orthoFront" width="300" height="300"></canvas><canvas class="overlay" data-target="orthoFront" width="300" height="300"></canvas></div><div class="dims">안내선을 클릭해 크기를 확인/입력 · "🔗 꼭지점 잇기" 버튼을 누르면 점(꼭짓점)이 보이고, 두 점을 클릭하면 점선으로 이어짐</div><div class="btnRow"><button class="clearBtn" data-clear="orthoFront">지우기</button><button class="modeBtn" data-target="orthoFront">🔄 돌려보기</button><button class="vertexBtn" data-target="orthoFront">🔗 꼭지점 잇기</button><button class="guideBtn" data-target="orthoFront">📏 가이드</button></div><div class="dimInput" data-target="orthoFront"><span class="dimHint"></span><input type="text" placeholder="mm"><button>확인</button></div><div class="vertexPanel" data-target="orthoFront"><label>점 크기 <input type="range" class="vsize" data-target="orthoFront" min="0.3" max="2.5" step="0.1" value="1"></label><button class="vmodeBtn on" data-target="orthoFront" data-mode="connect">연결</button><button class="vmodeBtn" data-target="orthoFront" data-mode="add">추가</button><button class="vmodeBtn" data-target="orthoFront" data-mode="delete">삭제</button></div></div>
+  <div class="col"><h4>옆에서(X축 방향으로 봄) — 화면 가로=Z, 화면 세로=Y</h4><div class="imgWrap"><canvas id="orthoSide" width="300" height="300"></canvas><canvas class="overlay" data-target="orthoSide" width="300" height="300"></canvas></div><div class="dims">안내선을 클릭해 크기를 확인/입력 · "🔗 꼭지점 잇기" 버튼을 누르면 점(꼭짓점)이 보이고, 두 점을 클릭하면 점선으로 이어짐</div><div class="btnRow"><button class="clearBtn" data-clear="orthoSide">지우기</button><button class="modeBtn" data-target="orthoSide">🔄 돌려보기</button><button class="vertexBtn" data-target="orthoSide">🔗 꼭지점 잇기</button><button class="guideBtn" data-target="orthoSide">📏 가이드</button></div><div class="dimInput" data-target="orthoSide"><span class="dimHint"></span><input type="text" placeholder="mm"><button>확인</button></div><div class="vertexPanel" data-target="orthoSide"><label>점 크기 <input type="range" class="vsize" data-target="orthoSide" min="0.3" max="2.5" step="0.1" value="1"></label><button class="vmodeBtn on" data-target="orthoSide" data-mode="connect">연결</button><button class="vmodeBtn" data-target="orthoSide" data-mode="add">추가</button><button class="vmodeBtn" data-target="orthoSide" data-mode="delete">삭제</button></div></div>
 </div>
 <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
 <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -354,6 +354,38 @@ function wireVertexPicking(canvasId, camera, scene, mesh, state){
     state.selected = null;
   });
 }
+// 가이드(자유 두 점 잇기) — 꼭지점에 안 갇히고 모델 표면 아무 곳이나 클릭해 점선을 그음(사용자 요청: "꼭지점 잇기 오른쪽에 가이드 버튼")
+const guideStateByCanvas = {}; // canvasId -> {active, pending, pendingDot}
+function wireGuidePicking(canvasId, camera, scene, mesh){
+  const state = { active:false, pending:null, pendingDot:null };
+  guideStateByCanvas[canvasId] = state;
+  const canvas = document.getElementById(canvasId);
+  const raycaster = new THREE.Raycaster();
+  canvas.addEventListener('click', e => {
+    if (!state.active) return;
+    const r = canvas.getBoundingClientRect();
+    const mouse = new THREE.Vector2(((e.clientX-r.left)/r.width)*2-1, -((e.clientY-r.top)/r.height)*2+1);
+    raycaster.setFromCamera(mouse, camera);
+    const hit = raycaster.intersectObject(mesh, false)[0];
+    if (!hit) return;
+    if (!state.pending) {
+      state.pending = hit.point.clone();
+      state.pendingDot = new THREE.Mesh(new THREE.SphereGeometry(1,10,10), new THREE.MeshBasicMaterial({ color:0xc0392b, depthTest:false }));
+      state.pendingDot.position.copy(state.pending);
+      state.pendingDot.renderOrder = 999;
+      scene.add(state.pendingDot);
+      return;
+    }
+    const geo = new THREE.BufferGeometry().setFromPoints([state.pending, hit.point]);
+    const line = new THREE.Line(geo, new THREE.LineDashedMaterial({ color:0x333333, dashSize:1.5, gapSize:1, depthTest:false }));
+    line.computeLineDistances();
+    line.renderOrder = 998;
+    scene.add(line);
+    scene.remove(state.pendingDot);
+    state.pending = null;
+    state.pendingDot = null;
+  });
+}
 function renderBracket(canvasId, camPos){
   const canvas = document.getElementById(canvasId);
   const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true });
@@ -368,6 +400,7 @@ function renderBracket(canvasId, camPos){
   const vState = createVertexState(scene, bracketVertices());
   vertexStateByCanvas[canvasId] = vState;
   wireVertexPicking(canvasId, camera, scene, scene.userData.mesh, vState);
+  wireGuidePicking(canvasId, camera, scene, scene.userData.mesh);
 }
 renderBracket('bracket', [70,90,110]); // 정면
 renderBracket('bracketBack', [-40,90,-60]); // 뒷면(반대쪽에서)
@@ -407,18 +440,19 @@ function renderOrtho(canvasId, eye, up){
   const vState2 = createVertexState(scene, bracketVertices());
   vertexStateByCanvas[canvasId] = vState2;
   wireVertexPicking(canvasId, camera, scene, group.userData.mesh, vState2);
+  wireGuidePicking(canvasId, camera, scene, group.userData.mesh);
 }
 renderOrtho('orthoTop', [15, 500, 15.001], [0,0,-1]);   // Y축 위에서 내려다봄
 renderOrtho('orthoFront', [15, 5, 500], [0,1,0]);        // Z축 방향에서 정면으로
 renderOrtho('orthoSide', [500, 5, 15], [0,1,0]);         // X축 방향에서 옆에서
 
-// 패널별 상태(돌려보기 on/off, 꼭지점 잇기 on/off) — 오버레이는 둘 중 하나라도 켜지면 클릭이 아래 캔버스로 통과해야 함
-const panelState = {}; // canvasId -> {rotate, vertex}
-function stateOf(id){ return panelState[id] || (panelState[id] = { rotate:false, vertex:false }); }
+// 패널별 상태(돌려보기/꼭지점 잇기/가이드 on-off) — 오버레이는 셋 중 하나라도 켜지면 클릭이 아래 캔버스로 통과해야 함
+const panelState = {}; // canvasId -> {rotate, vertex, guide}
+function stateOf(id){ return panelState[id] || (panelState[id] = { rotate:false, vertex:false, guide:false }); }
 function syncOverlay(id){
   const overlay = document.querySelector('canvas.overlay[data-target="' + id + '"]');
   const st = stateOf(id);
-  overlay.style.pointerEvents = (st.rotate || st.vertex) ? 'none' : 'auto';
+  overlay.style.pointerEvents = (st.rotate || st.vertex || st.guide) ? 'none' : 'auto';
 }
 // 돌려보기 ⇄ 그리기 모드 전환 버튼
 document.querySelectorAll('.modeBtn').forEach(btn => {
@@ -466,6 +500,23 @@ document.querySelectorAll('.vsize').forEach(inp => {
     if (!vstate) return;
     vstate.size = parseFloat(inp.value);
     vstate.markers.forEach(m => m.scale.setScalar(vstate.size));
+  });
+});
+// 가이드 버튼(꼭지점 잇기 오른쪽) — 꼭짓점 목록에 안 갇히고 모델 표면 아무 곳이나 두 점 클릭해 점선을 그음
+document.querySelectorAll('.guideBtn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const id = btn.dataset.target;
+    const gstate = guideStateByCanvas[id];
+    if (!gstate) return;
+    gstate.active = !gstate.active;
+    stateOf(id).guide = gstate.active;
+    syncOverlay(id);
+    btn.classList.toggle('on', gstate.active);
+    if (!gstate.active && gstate.pendingDot) {
+      gstate.pendingDot.parent.remove(gstate.pendingDot);
+      gstate.pendingDot = null;
+      gstate.pending = null;
+    }
   });
 });
 
