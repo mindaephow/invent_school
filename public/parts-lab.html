@@ -826,7 +826,7 @@ h4{margin:4px 0}
 
   // ===== 참고(비교 대상) 패널 — 90도 프레임 + 1열브라켓, 고정 =====
   const SVG_90 = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50" width="200" height="200"><defs><clipPath id="clip90ref"><path d="M10,10 L40,10 L40,20 L20,20 L20,40 L10,40 Z"/></clipPath><radialGradient id="boss90ref" cx="35%" cy="28%" r="80%"><stop offset="0%" stop-color="#ffffff"/><stop offset="55%" stop-color="#dfe2e6"/><stop offset="100%" stop-color="#a9aeb5"/></radialGradient><mask id="mask90ref" maskUnits="userSpaceOnUse" x="0" y="0" width="50" height="50"><rect x="0" y="0" width="50" height="50" fill="#fff"/><circle cx="15" cy="15" r="2.8" fill="#000"/><circle cx="15" cy="25" r="2.8" fill="#000"/><circle cx="15" cy="35" r="2.8" fill="#000"/><circle cx="25" cy="15" r="2.8" fill="#000"/><circle cx="35" cy="15" r="2.8" fill="#000"/></mask></defs><g mask="url(#mask90ref)"><path d="M10,10 L40,10 L40,20 L20,20 L20,40 L10,40 Z" fill="#d5d8dc" stroke="#9aa0a8" stroke-width="0.6"/><g clip-path="url(#clip90ref)"><circle cx="15" cy="15" r="4.3" fill="url(#boss90ref)" stroke="#7d8288" stroke-width="0.35"/><circle cx="15" cy="25" r="4.3" fill="url(#boss90ref)" stroke="#7d8288" stroke-width="0.35"/><circle cx="15" cy="35" r="4.3" fill="url(#boss90ref)" stroke="#7d8288" stroke-width="0.35"/><circle cx="25" cy="15" r="4.3" fill="url(#boss90ref)" stroke="#7d8288" stroke-width="0.35"/><circle cx="35" cy="15" r="4.3" fill="url(#boss90ref)" stroke="#7d8288" stroke-width="0.35"/></g></g></svg>`;
-  function renderFramePanel(canvas, svg, camPos){
+  function renderFramePanel(canvas, svg, camPos, showHoleLabels){
     camPos = camPos || [70,90,110];
     const outline = parseSvgPlateOutline(svg) || [{x:10,y:10},{x:40,y:10},{x:40,y:20},{x:20,y:20},{x:20,y:40},{x:10,y:40}];
     const xs = outline.map(p=>p.x), ys = outline.map(p=>p.y);
@@ -835,6 +835,10 @@ h4{margin:4px 0}
     // 대신 가장 가까운 10mm 배수로 반올림해서 맞춰야 부품 모서리가 격자선 위에 정확히 놓임
     // (사용자 지적: "베이스 스케치북 이 한칸에 10MM 인거지? 그럼 라인을 맞춰서 배치를 해야 할꼬 아니야").
     const cxR = Math.round(cx/10)*10, cyR = Math.round(cy/10)*10;
+    // 구멍 번호(위 기준 위→아래=소문자·왼→오=숫자, 예: a2) — 앞뒤가 대칭인 얇은 판이라 정면A/뒷면B 구분 없이 한 번만 매김.
+    // 등록된 svg의 실제 구멍 좌표(parseSvgMaskHoleCenters)를 그대로 써서 계산·표시하므로 이름으로 추측하지 않는다.
+    const holeCenters = showHoleLabels ? parseSvgMaskHoleCenters(svg) : [];
+    const frameHoleLabels = showHoleLabels ? gridHoleLabels(holeCenters.map(h => ({ x:h.x, z:h.y }))) : [];
     const dataUri = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
     const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true, preserveDrawingBuffer:true });
     renderer.setSize(300,300,false);
@@ -865,6 +869,11 @@ h4{margin:4px 0}
         mesh.add(line);
       }
       scene.add(mesh);
+      holeCenters.forEach((h,i) => {
+        const sprite = makeTextSprite(frameHoleLabels[i], '#2b6be0', 2.4);
+        sprite.position.set(h.x - cxR, 6, h.y - cyR);
+        scene.add(sprite);
+      });
       renderer.render(scene, camera);
       const controls = setupOrbit(renderer, scene, camera, [0,2.5,0]);
       const zoomBox = addZoomButtons(canvas, () => ({ camera, controls }));
@@ -875,7 +884,7 @@ h4{margin:4px 0}
       });
     });
   }
-  function renderBracketPanel(canvas, arm1, arm2, armWidth, camPos){
+  function renderBracketPanel(canvas, arm1, arm2, armWidth, camPos, showHoleLabels){
     camPos = camPos || [70,90,110];
     // preserveDrawingBuffer: 저장할 때 이 캔버스를 실제 이미지로 캡처(toDataURL)해서 같이 저장하기 위함
     // (사용자 지시: "설계도 보면 모든사람들이 다 알지?? 그렇게 저장을 하라고" — 숫자만이 아니라 확정된 실제
@@ -914,17 +923,18 @@ h4{margin:4px 0}
     // 사용자 지적 "저기 그려진 구멍은 맞아???" — 높이는 armWidth/2가 아니라 항상 높이(10)의 절반인 고정값
     // 5여야 하고(원본 예시에서 armWidth가 우연히 5였을 뿐), 뒷면 구멍 세트가 통째로 빠져 있었음)
     const holeY = 5; // 높이(Y)=10 고정이므로 항상 그 절반
-    // 구멍 번호(정면A/뒷면B, 팔1=a/팔2=b, 코너부터 1·2·3)는 데이터로만 계산/저장하고, 3D 모델 위 개별 표시는
-    // 안 함(사용자 지시: "각 구멍이 뭔지 표실할 필요없어") — 아래 스펙 표(bracketSpecRows)에서 목록으로만 보여줌.
-    const positions = [5,15,25].filter(p => p < arm1 - 2);
-    positions.forEach((p,i) => {
-      makeHole(scene, p, holeY, armWidth+0.05, 0, i===0);      // 정면
-      makeHole(scene, p, holeY, -0.05, Math.PI, i===0);        // 뒷면
-    });
-    const positions2 = [5,15,25].filter(p => p < arm2 - 2);
-    positions2.forEach((p,i) => {
-      makeHole(scene, armWidth+0.05, holeY, p, Math.PI/2, i===0);   // 정면
-      makeHole(scene, -0.05, holeY, p, -Math.PI/2, i===0);          // 뒷면
+    // 구멍 번호(위 기준 위→아래=소문자·왼→오=숫자, 예: a2-A, 정면A·뒷면B)는 스펙 표에 항상 목록으로 나오고, "위" 샷에서는
+    // 스케치북 위에도 직접 표시함(사용자 지시: "여기에 표시해봐") — bracketHoleGeom이 makeHole과 같은 좌표를 쓰므로
+    // 눈에 보이는 구멍 위치와 라벨 위치가 항상 일치한다.
+    const holeGeoms = bracketHoleGeom(arm1, arm2, armWidth);
+    const holeLabels = showHoleLabels ? gridHoleLabels(holeGeoms) : null;
+    holeGeoms.forEach((h,i) => {
+      makeHole(scene, h.x, holeY, h.z, h.rot, h.blind);
+      if (holeLabels) {
+        const sprite = makeTextSprite(holeLabels[i], h.face === 'A' ? '#2b6be0' : '#c0392b', 2.4);
+        sprite.position.set(h.x, holeY + 5, h.z);
+        scene.add(sprite);
+      }
     });
     renderer.render(scene, camera);
     const controls = setupOrbit(renderer, scene, camera, ctr);
@@ -975,12 +985,12 @@ h4{margin:4px 0}
   }
   function bracketBackCamPos(arm1, arm2){ return [-4/3*arm1, 90, -2*arm2]; }
   function bracketTopCamPos(arm1){ return [arm1/2+0.001, 200, arm1/2]; }
-  renderFramePanel(document.getElementById('refFrameTop'), SVG_90, [0,150,0.001]);
+  renderFramePanel(document.getElementById('refFrameTop'), SVG_90, [0,150,0.001], true);
   renderFramePanel(document.getElementById('refFrameFront'), SVG_90, [70,90,110]);
   // 프레임은 앞뒤가 사실상 대칭인 얇은 판이라 "뒷면"에 새로 보여줄 게 없어서 빈 칸으로 둠
   // (사용자 지시: "없으면 비워져 있으면 되는거야" / "사각형 스케치북은 항상 있고 안에 물품만 없으면 됨")
   renderEmptyPanel(document.getElementById('refFrameBack'));
-  renderBracketPanel(document.getElementById('refBracketTop'), 30, 30, 5, bracketTopCamPos(30));
+  renderBracketPanel(document.getElementById('refBracketTop'), 30, 30, 5, bracketTopCamPos(30), true);
   renderBracketPanel(document.getElementById('refBracketFront'), 30, 30, 5, [70,90,110]);
   renderBracketPanel(document.getElementById('refBracketBack'), 30, 30, 5, bracketBackCamPos(30,30));
 
@@ -1102,18 +1112,34 @@ h4{margin:4px 0}
       rows.map(([k,v]) => '<tr><th>' + esc(k) + '</th><td>' + esc(String(v)) + '</td></tr>').join('') +
       '</table></div>';
   }
-  // 구멍 번호 규칙(사용자 지시: "2쪽은 위에서 아래로 소문자 a부터... 5쪽은... 숫자 1부터... 앞면 A 뒷면 B") —
-  // 브라켓은 팔이 2개(=2쪽 → a,b)·팔당 구멍이 3개(=코너부터 1,2,3)·면이 2개(정면A/뒷면B)라 이 규칙에 그대로 맞음.
-  function bracketHoleLabels(arm1, arm2, armWidth){
-    const positions = [5,15,25];
-    const arm1Holes = positions.filter(p => p < arm1 - 2);
-    const arm2Holes = positions.filter(p => p < arm2 - 2);
-    const labels = [];
-    ['A','B'].forEach(face => {
-      arm1Holes.forEach((p,i) => labels.push(face + 'a' + (i+1)));
-      arm2Holes.forEach((p,i) => labels.push(face + 'b' + (i+1)));
+  // 구멍 번호 규칙(사용자 지시): 위에서 본 모습 기준 — 왼→오(X축)로 숫자 1부터 매기고, 위→아래(Z축)로
+  // 소문자 a부터 매기고, 정면=대문자A·뒷면=대문자B. 팔 순서 같은 이름으로 추측하지 않고 3D에 실제로 찍는
+  // 구멍 좌표(x,z)를 그대로 넣어서 계산하므로, 팔 길이가 같은 대칭 부품이라도 실제 좌표가 서로 다른 자리라
+  // 라벨이 절대 겹치지 않는다(길이가 다르면 애초에 칸 수 자체가 달라서 더 안 겹침).
+  function gridHoleLabels(holes){
+    const rnd = (n) => Math.round(n * 10) / 10;
+    const xs = [...new Set(holes.map(h => rnd(h.x)))].sort((a,b) => a-b);
+    const zs = [...new Set(holes.map(h => rnd(h.z)))].sort((a,b) => a-b);
+    return holes.map(h => String.fromCharCode(97 + zs.indexOf(rnd(h.z))) + (xs.indexOf(rnd(h.x)) + 1) + (h.face ? '-' + h.face : ''));
+  }
+  // renderBracketPanel의 makeHole 호출과 똑같은 좌표·회전·블라인드 여부를 데이터로 미리 뽑아둠 — 시각(3D 모델)과
+  // 데이터(스펙 표·저장값)가 서로 다른 좌표를 쓰다가 어긋나는 일이 없게 한 곳에서만 계산.
+  function bracketHoleGeom(arm1, arm2, armWidth){
+    const positions1 = [5,15,25].filter(p => p < arm1 - 2);
+    const positions2 = [5,15,25].filter(p => p < arm2 - 2);
+    const holes = [];
+    positions1.forEach((p,i) => {
+      holes.push({ x:p, z:armWidth, face:'A', rot:0, blind:i===0 });
+      holes.push({ x:p, z:0, face:'B', rot:Math.PI, blind:i===0 });
     });
-    return labels;
+    positions2.forEach((p,i) => {
+      holes.push({ x:armWidth, z:p, face:'A', rot:Math.PI/2, blind:i===0 });
+      holes.push({ x:0, z:p, face:'B', rot:-Math.PI/2, blind:i===0 });
+    });
+    return holes;
+  }
+  function bracketHoleLabels(arm1, arm2, armWidth){
+    return gridHoleLabels(bracketHoleGeom(arm1, arm2, armWidth));
   }
   function bracketSpecRows(arm1, arm2, armWidth){
     const inner1 = Math.max(arm1-armWidth,0), inner2 = Math.max(arm2-armWidth,0);
@@ -1125,7 +1151,7 @@ h4{margin:4px 0}
       ['두께/폭', armWidth + 'mm'],
       ['높이(Y)', '10mm(고정)'],
       ['구멍 배치', '여백5mm · 피치10mm · 팔당 3개 · 모서리쪽=블라인드 홀(관통 안 됨)'],
-      ['구멍 번호(정면A·뒷면B, 팔1=a·팔2=b, 코너부터 1·2·3)', bracketHoleLabels(arm1, arm2, armWidth).join(', ')],
+      ['구멍 번호(위 기준 위→아래=소문자·왼→오=숫자, 예: a2-A, 정면A·뒷면B)', bracketHoleLabels(arm1, arm2, armWidth).join(', ')],
     ];
   }
   function frameSpecRows(svg, outline){
@@ -1137,6 +1163,9 @@ h4{margin:4px 0}
     rows.push(['두께', '5mm(고정)']);
     const holes = parseSvgMaskHoleCenters(svg);
     rows.push(['구멍 수', holes.length ? holes.length + '개(등록된 이미지 기준)' : '등록된 이미지에서 못 읽음']);
+    if (holes.length) {
+      rows.push(['구멍 번호(위 기준 위→아래=소문자·왼→오=숫자, 예: a2)', gridHoleLabels(holes.map(h => ({ x:h.x, z:h.y }))).join(', ')]);
+    }
     return rows;
   }
 
@@ -1183,7 +1212,7 @@ h4{margin:4px 0}
       const spec = p.spec || {};
       const m = String(p.size||'').match(/(\d+(?:\.\d+)?)\s*[×xX]\s*(\d+(?:\.\d+)?)\s*[×xX]\s*(\d+(?:\.\d+)?)/);
       const arm1 = spec.armLen1 || (m ? Number(m[1]) : 30), arm2 = spec.armLen2 || (m ? Number(m[2]) : 30), armWidth = spec.armWidth || (m ? Number(m[3]) : 10);
-      renderBracketPanel(shot1.canvas, arm1, arm2, armWidth, bracketTopCamPos(arm1));
+      renderBracketPanel(shot1.canvas, arm1, arm2, armWidth, bracketTopCamPos(arm1), true);
       renderBracketPanel(shot2.canvas, arm1, arm2, armWidth, [70,90,110]);
       renderBracketPanel(shot3.canvas, arm1, arm2, armWidth, bracketBackCamPos(arm1, arm2));
       const inner1 = Math.max(arm1-armWidth,0), inner2 = Math.max(arm2-armWidth,0);
@@ -1198,7 +1227,7 @@ h4{margin:4px 0}
         specEl.innerHTML = buildSpecHtml(p, []);
         return;
       }
-      renderFramePanel(shot1.canvas, svg, [0,150,0.001]);
+      renderFramePanel(shot1.canvas, svg, [0,150,0.001], true);
       renderFramePanel(shot2.canvas, svg, [70,90,110]);
       renderEmptyPanel(shot3.canvas);
       shot3.dims.textContent = '앞뒤가 대칭인 얇은 판이라 표시할 샷이 없어요.';
@@ -1277,7 +1306,7 @@ h4{margin:4px 0}
         const arm1 = Number(document.getElementById('editArm1').value) || 30;
         const arm2 = Number(document.getElementById('editArm2').value) || 30;
         const armWidth = Number(document.getElementById('editArmWidth').value) || 10;
-        renderBracketPanel(canvas1, arm1, arm2, armWidth, bracketTopCamPos(arm1)); // 위
+        renderBracketPanel(canvas1, arm1, arm2, armWidth, bracketTopCamPos(arm1), true); // 위
         renderBracketPanel(canvas2, arm1, arm2, armWidth, [70,90,110]); // 정면
         if (canvas3) renderBracketPanel(canvas3, arm1, arm2, armWidth, bracketBackCamPos(arm1, arm2)); // 뒷면
         const inner1 = Math.max(arm1 - armWidth, 0), inner2 = Math.max(arm2 - armWidth, 0);
@@ -1292,7 +1321,7 @@ h4{margin:4px 0}
           specEl.innerHTML = buildSpecHtml(p, []);
           return;
         }
-        renderFramePanel(canvas1, svg, [0,150,0.001]); // 위
+        renderFramePanel(canvas1, svg, [0,150,0.001], true); // 위
         renderFramePanel(canvas2, svg, [70,90,110]); // 정면
         if (canvas3) { renderEmptyPanel(canvas3); if (dimsEl3) dimsEl3.textContent = '앞뒤가 대칭인 얇은 판이라 표시할 샷이 없어요.'; }
         const outline = parseSvgPlateOutline(svg);
@@ -1331,6 +1360,11 @@ h4{margin:4px 0}
         }
       } else {
         size = document.getElementById('editSize').value;
+        const svg = p.imageSvg || p.imageSvgDiagonal;
+        if (svg) {
+          const holes = parseSvgMaskHoleCenters(svg);
+          if (holes.length) spec = { holeLabels: gridHoleLabels(holes.map(h => ({ x:h.x, z:h.y }))) };
+        }
       }
       try {
         await adminApi({
