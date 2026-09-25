@@ -4113,7 +4113,10 @@
       const section = document.getElementById('partsLabSection');
       if (section) section.hidden = false;
       const btn = document.getElementById('partsLabBtn');
-      if (btn) btn.addEventListener('click', () => { window.open('parts-lab.html', '_blank'); });
+      // 지금 보고 있던 과목(로봇/골드버그/항공)을 넘겨줘야 부품 수리실의 "← 설계 화면으로"가 같은 과목으로
+      // 돌아간다 — 안 넘기면 항상 골드버그로 돌아가던 버그(사용자: "설계도로 가면 로봇설계도로 가야하는데
+      // 골드버그 설계도로 가고 있음").
+      if (btn) btn.addEventListener('click', () => { window.open('parts-lab.html?subject=' + encodeURIComponent(SUBJECT), '_blank'); });
     } catch (e) { /* 세션 없으면 그냥 버튼 숨김 상태 유지 */ }
   }
 
