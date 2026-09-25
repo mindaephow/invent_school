@@ -102,7 +102,7 @@ h4{margin:4px 0}
 </style>
 </head>
 <body>
-<div class="topbar"><h3>🛠 부품 수리실</h3><a href="design.html" id="backToDesignLink">← 설계 화면으로</a></div>
+<div class="topbar"><h3>🛠 부품 수리실 <span id="subjectBadge" class="section-note" style="font-weight:400;"></span></h3><a href="design.html" id="backToDesignLink">← 설계 화면으로</a></div>
 <div id="gate">확인 중...</div>
 <div id="app">
 <div id="mainCol">
@@ -1341,6 +1341,12 @@ h4{margin:4px 0}
   let curSubject = PARTS_LAB_SUBJECTS.includes(incomingSubject) ? incomingSubject : 'goldberg';
   document.getElementById('backToDesignLink').href = 'design.html' + (PARTS_LAB_SUBJECTS.includes(incomingSubject) ? '?subject=' + incomingSubject : '');
   document.querySelectorAll('#modalSubjectTabs button[data-subject]').forEach((b) => b.classList.toggle('on', b.dataset.subject === curSubject));
+  // 뒤로가기 링크만 보고는 어느 과목에서 왔는지 알기 어렵다는 지적(사용자: "여기 네비에 이전에 어디에서
+  // 왔는지를 표시를 하면 되는거 아니야?") — 제목 옆에 과목 이름을 그대로 보여준다.
+  const PART_SUBJECT_LABEL = { goldberg: '골드버그', robot: '로봇', aviation: '항공' };
+  if (PARTS_LAB_SUBJECTS.includes(incomingSubject)) {
+    document.getElementById('subjectBadge').textContent = '(' + PART_SUBJECT_LABEL[incomingSubject] + '에서 옴)';
+  }
   async function adminApi(payload, token){
     const res = await fetch('/api/admin', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization:'Bearer '+token }, body: JSON.stringify(payload) });
     const data = await res.json().catch(()=>({}));
