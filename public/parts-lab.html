@@ -48,6 +48,15 @@ h4{margin:4px 0}
 .modalHead button{border:none;background:none;font-size:18px;line-height:1;cursor:pointer;color:#888;}
 .specBlock{background:#fff;border:1px solid #ddd;border-radius:8px;padding:10px 14px;margin-top:6px;max-width:640px;}
 .specBlock h5{margin:0 0 6px;font-size:13px;color:#555;}
+.shotThumbRow{display:flex;gap:8px;margin-bottom:10px;}
+.shotThumbBtn{width:64px;padding:4px;border:1px solid #ccc;border-radius:6px;background:#f7f8fa;cursor:pointer;font-size:10px;color:#666;display:flex;flex-direction:column;align-items:center;gap:3px;}
+.shotThumbBtn.has{cursor:zoom-in;background:#fff;border-color:#2b6be0;}
+.shotThumbBtn.has:hover{background:#eef4ff;}
+.shotThumbBtn img{width:56px;height:56px;object-fit:contain;background:#fafafa;border-radius:3px;}
+.shotThumbBtn.empty{cursor:default;color:#bbb;}
+.shotThumbBtn.empty .none{width:56px;height:56px;display:flex;align-items:center;justify-content:center;border:1px dashed #ddd;border-radius:3px;font-size:16px;color:#ccc;}
+.shotViewBox{width:auto;max-width:90vw;}
+.shotViewBox img{display:block;max-width:100%;max-height:78vh;}
 .specTable{border-collapse:collapse;font-size:12px;width:100%;}
 .specTable th{text-align:left;color:#888;font-weight:600;padding:3px 10px 3px 0;white-space:nowrap;vertical-align:top;}
 .specTable td{padding:3px 0;color:#222;}
@@ -136,6 +145,13 @@ h4{margin:4px 0}
       <button data-subject="aviation">항공</button>
     </div>
     <div class="partList" id="modalPartList"><span style="color:#888;font-size:12px;">불러오는 중...</span></div>
+  </div>
+</div>
+
+<div id="shotViewModal" class="modalOverlay" hidden>
+  <div class="modalBox shotViewBox">
+    <div class="modalHead"><h4 id="shotViewTitle">스샷</h4><button id="shotViewClose" type="button">✕</button></div>
+    <img id="shotViewImg" alt="">
   </div>
 </div>
 <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
@@ -758,6 +774,13 @@ h4{margin:4px 0}
       const part = allParts.find(pp => pp.name === partName);
       if (!part) { alert('다운로드는 됐어요. ("' + partName + '" 이름의 부품을 카탈로그에서 못 찾아서 DB 저장은 건너뛰었어요)'); return; }
 
+      // 이미 저장된 스샷이 있으면 그냥 덮어쓰지 않고 먼저 물어봄(사용자 지시: "저장이 되어있을때는 스샷을
+      // 클릭하면 DB에도 저장을 할껀지 안할껀지 선택을 하게").
+      if (part.snapshots && part.snapshots[slot]) {
+        const ok = confirm('이미 저장된 "' + label + '" 스샷이 있어요. DB에 덮어쓸까요?\n(다운로드는 이미 됐어요)');
+        if (!ok) return;
+      }
+
       const prevText = shotBtn.textContent;
       shotBtn.disabled = true; shotBtn.textContent = '저장 중...';
       try {
@@ -1282,6 +1305,19 @@ h4{margin:4px 0}
 
   // 부품을 불러오면 그 아래에 알고 있는 스펙을 전부 표시 — 등록 정보(이름·과목·수량·색상)부터 브라켓/프레임
   // 각각의 실제 치수까지(사용자 지시: "부품을 가져오면 이 아래쪽에 부품의 모든 스펙을 다 표시해줘").
+  // 저장된 스샷 3칸(위/정면/뒷면)을 있으면 썸네일로, 없으면 빈 칸으로 보여줌(사용자 지시: "부품스펙에
+  // 해당스샷이 있는지 없는지더 표시를 해줘 썸네일로, 썸네일 클릭하면 모달띄어서 확인할수 있게").
+  function shotThumbRowHtml(p){
+    const snaps = p.snapshots || {};
+    return '<div class="shotThumbRow">' + [['top','위'],['front','정면'],['back','뒷면']].map(([slot,label]) => {
+      const url = snaps[slot];
+      if (url) {
+        const shotLabel = (p.name || '부품') + ' (' + label + ')';
+        return '<button type="button" class="shotThumbBtn has" data-label="' + esc(shotLabel) + '"><img src="' + url + '" alt=""><span>' + label + '</span></button>';
+      }
+      return '<button type="button" class="shotThumbBtn empty" disabled><span class="none">✕</span><span>' + label + ' 없음</span></button>';
+    }).join('') + '</div>';
+  }
   function buildSpecHtml(p, computedRows){
     const rows = [
       ['이름', p.name || '-'],
@@ -1293,7 +1329,7 @@ h4{margin:4px 0}
       ...computedRows,
       ['사이즈 문자열(size, 호환용)', p.size || '-'],
     ];
-    return '<div class="specBlock"><h5>부품 스펙 전체</h5><table class="specTable">' +
+    return '<div class="specBlock"><h5>부품 스펙 전체</h5>' + shotThumbRowHtml(p) + '<table class="specTable">' +
       rows.map(([k,v]) => '<tr><th>' + esc(k) + '</th><td>' + esc(String(v)) + '</td></tr>').join('') +
       '</table></div>';
   }
@@ -1416,6 +1452,24 @@ h4{margin:4px 0}
   document.getElementById('pickerModal').addEventListener('click', e => { if (e.target.id === 'pickerModal') closePickerModal(); });
   document.getElementById('compareRefPickBtn').addEventListener('click', () => openPickerModal('비교 대상 부품 고르기', loadPartForCompare));
   document.getElementById('editPartPickBtn').addEventListener('click', () => openPickerModal('수정할 부품 고르기', loadPartForEdit));
+
+  // 부품스펙에 저장된 스샷을 썸네일로 보여주고(사용자 지시: "부품스펙에 해당스샷이 있는지 없는지더 표시를
+  // 해줘 썸네일로"), 클릭하면 원본 크기로 볼 수 있는 모달. buildSpecHtml이 매번 innerHTML로 새로 그려지므로
+  // 썸네일마다 리스너를 다시 붙이지 않고, document에 한 번만 위임 리스너를 둔다.
+  function openShotView(title, src){
+    document.getElementById('shotViewTitle').textContent = title;
+    document.getElementById('shotViewImg').src = src;
+    document.getElementById('shotViewModal').hidden = false;
+  }
+  function closeShotView(){ document.getElementById('shotViewModal').hidden = true; }
+  document.getElementById('shotViewClose').addEventListener('click', closeShotView);
+  document.getElementById('shotViewModal').addEventListener('click', e => { if (e.target.id === 'shotViewModal') closeShotView(); });
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('.shotThumbBtn.has');
+    if (!btn) return;
+    const img = btn.querySelector('img');
+    if (img) openShotView(btn.dataset.label || '스샷', img.src);
+  });
 
   // 스케치북은 평소엔 접어두고 필요할 때만 펼침(사용자 지시: "필요할때만 펼쳐서 하면되 평소엔 접어놔줘")
   document.getElementById('sketchToggle').addEventListener('click', () => {
