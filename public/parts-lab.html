@@ -1417,9 +1417,9 @@ h4{margin:4px 0}
       ['색상', p.color || '-'],
       ...computedRows,
     ];
-    // "사이즈 문자열"은 spec이 생기기 전에 쓰던 자유 텍스트라 spec이 채워지면 같은 정보를 중복으로 또
-    // 보여줄 뿐 — spec이 없을 때만 참고용으로 보여준다(사용자 지시: "사이즈도 다시해=> 족같은정보 빼고").
-    if (!(p.spec && p.spec.armLen1 != null) && p.size) rows.push(['사이즈 문자열(size, 호환용)', p.size]);
+    // "사이즈 문자열"은 spec이 생기기 전에 쓰던 자유 텍스트라 구조화된 spec과 같은 무게로 보여주면 중복
+    // 처럼 보임 — 항상 "참고"로만 붙인다(사용자 지시: "그럼 참고로 빼").
+    if (p.size) rows.push(['참고(사이즈 문자열)', p.size]);
     return '<div class="specBlock" data-part-id="' + esc(p.id) + '"><div class="specBlockHead"><h5>부품 스펙 전체</h5>' + editBtnHtml + '</div>' + shotThumbRowHtml(p) + '<table class="specTable">' +
       rows.map(([k,v]) => '<tr><th>' + esc(k) + '</th><td>' + esc(String(v)) + '</td></tr>').join('') +
       '</table></div>';
