@@ -8,12 +8,13 @@
 // 같은 Next.js 프로젝트·같은 Vercel 배포 안에 들어있다 (static HTML은
 // public/에 두고, Next.js가 라우팅 없이 그대로 서빙).
 //
-// 노출 툴 8개:
+// 노출 툴 9개:
 //   - list_tables       : Supabase DB 테이블 목록 조회
 //   - get_rows          : 임의 테이블 행 조회 (필터·검색·정렬·페이징)
 //   - upsert_row        : 임의 테이블 행 추가·수정
 //   - delete_row        : 임의 테이블 행 삭제 (되돌릴 수 없음)
 //   - update_part_spec  : ivs_part_catalog 한 행의 data.spec만 부분 수정 (image_svg·snapshot(s) 등 큰 필드는 서버에서 기존 값 유지)
+//   - update_part_image : ivs_part_catalog 한 행의 image_svg/image_svg_diagonal만 부분 수정 (다른 필드는 서버에서 기존 값 유지)
 //   - run_sql           : SQL 직접 실행 (위험 DDL 자동 차단, run_sql_query RPC 필요)
 //   - list_github_files : GitHub 저장소(mindaephow/invent_school) 경로별 파일 목록 조회
 //   - get_github_file   : GitHub 저장소 특정 파일 내용 조회
@@ -231,6 +232,29 @@ const baseHandler = createMcpHandler(
         const { error: updErr } = await sb.from('ivs_part_catalog').update({ data: nextData }).eq('id', partId)
         if (updErr) return { content: [{ type: 'text', text: `❌ ${updErr.message}` }], isError: true }
         return { content: [{ type: 'text', text: `✅ [ivs_part_catalog] id="${partId}" (${existing.data?.name || ''}) spec 갱신 완료\n${JSON.stringify(spec, null, 2)}` }] }
+      }
+    )
+
+    server.registerTool(
+      'update_part_image',
+      {
+        title: '부품 image_svg/image_svg_diagonal 부분 수정',
+        description: 'update_part_image — ivs_part_catalog 한 행의 image_svg(정면용 도면)와 image_svg_diagonal(대각선용, 생략하면 image_svg와 동일하게 채움)만 교체한다. name·spec·snapshot(s) 등 다른 필드는 서버에서 기존 값을 그대로 읽어 유지하므로 다시 보낼 필요 없다.',
+        inputSchema: {
+          partId: z.string().describe('ivs_part_catalog 행 id'),
+          imageSvg: z.string().describe('새 image_svg 전체 SVG 마크업 문자열'),
+          imageSvgDiagonal: z.string().optional().describe('새 image_svg_diagonal. 생략하면 imageSvg와 같은 값을 씀'),
+        },
+      },
+      async ({ partId, imageSvg, imageSvgDiagonal }) => {
+        const sb = getSupabase()
+        const { data: existing, error: getErr } = await sb.from('ivs_part_catalog').select('data').eq('id', partId).maybeSingle()
+        if (getErr) return { content: [{ type: 'text', text: `❌ ${getErr.message}` }], isError: true }
+        if (!existing) return { content: [{ type: 'text', text: `❌ id="${partId}" 부품을 찾을 수 없음` }], isError: true }
+        const nextData = { ...existing.data, image_svg: imageSvg, image_svg_diagonal: imageSvgDiagonal || imageSvg }
+        const { error: updErr } = await sb.from('ivs_part_catalog').update({ data: nextData }).eq('id', partId)
+        if (updErr) return { content: [{ type: 'text', text: `❌ ${updErr.message}` }], isError: true }
+        return { content: [{ type: 'text', text: `✅ [ivs_part_catalog] id="${partId}" (${existing.data?.name || ''}) image_svg 갱신 완료` }] }
       }
     )
 
