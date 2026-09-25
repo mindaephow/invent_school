@@ -1333,6 +1333,7 @@ h4{margin:4px 0}
 
   // ===== 부품 가져오기 =====
   let allParts = [];
+  let categoryNames = {}; // id -> 이름, "분류"에 UUID 대신 보여주기 위함(사용자 지적: "ui 정리가 필요해 보여")
   let curSubject = 'goldberg';
   async function adminApi(payload, token){
     const res = await fetch('/api/admin', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization:'Bearer '+token }, body: JSON.stringify(payload) });
@@ -1349,6 +1350,11 @@ h4{margin:4px 0}
       document.getElementById('modalPartList').textContent = '부품을 못 불러왔어요: ' + e.message;
       return;
     }
+    try {
+      const catData = await adminApi({ action:'list_robot_categories' }, token);
+      categoryNames = {};
+      (catData.categories || []).forEach(c => { categoryNames[c.id] = c.name; });
+    } catch (e) { /* 실패해도 UUID로 대체 표시되니 치명적이지 않음 */ }
     document.getElementById('modalSubjectTabs').addEventListener('click', e => {
       const btn = e.target.closest('button[data-subject]');
       if (!btn) return;
@@ -1397,7 +1403,7 @@ h4{margin:4px 0}
     const rows = [
       ['이름', p.name || '-'],
       ['과목', p.subject || '-'],
-      ['분류', p.category || '-'],
+      ['분류', p.category ? (categoryNames[p.category] || p.category) : '-'],
       ['권', p.volume != null ? p.volume + '권' : '-'],
       ['수량', p.qty != null ? p.qty + '개' : '-'],
       ['색상', p.color || '-'],
