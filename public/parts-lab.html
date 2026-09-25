@@ -60,7 +60,8 @@ h4{margin:4px 0}
 .seGridCell.on{background:#2b6be0;border-color:#1a4fa0;color:#fff;font-weight:700;}
 .seGridAxis{font-size:10px;color:#888;text-align:center;}
 .shotThumbRow{display:flex;gap:8px;margin-bottom:10px;}
-.shotThumbBtn{width:64px;padding:4px;border:1px solid #ccc;border-radius:6px;background:#f7f8fa;cursor:pointer;font-size:10px;color:#666;display:flex;flex-direction:column;align-items:center;gap:3px;}
+.shotThumbBtn{width:84px;padding:4px;border:1px solid #ccc;border-radius:6px;background:#f7f8fa;cursor:pointer;font-size:10px;color:#666;display:flex;flex-direction:column;align-items:center;gap:3px;}
+.shotThumbBtn em{font-style:normal;font-size:10px;color:#2b6be0;text-align:center;line-height:1.3;}
 .shotThumbBtn.has{cursor:zoom-in;background:#fff;border-color:#2b6be0;}
 .shotThumbBtn.has:hover{background:#eef4ff;}
 .shotThumbBtn img{width:56px;height:56px;object-fit:contain;background:#fafafa;border-radius:3px;}
@@ -1230,7 +1231,6 @@ h4{margin:4px 0}
   // 프레임은 앞뒤가 사실상 대칭인 얇은 판이라 "뒷면"에 새로 보여줄 게 없어서 빈 칸으로 둠
   // (사용자 지시: "없으면 비워져 있으면 되는거야" / "사각형 스케치북은 항상 있고 안에 물품만 없으면 됨")
   renderEmptyPanel(document.getElementById('refFrameBack'));
-  document.getElementById('refFrameSpecCol').innerHTML = specCoordColHtml(gridHoleLabelPairs(parseSvgMaskHoleCenters(SVG_90).map(h => ({ x:h.x, z:h.y }))));
   // 사용자 지시: "db에 자리 만들어서 저장하고 불러오라고" — 참고 브라켓 치수도 코드에 30,30,5로 박아두지 않고
   // ivs_bracket_standards에서 불러온 값을 씀. renderBracketPanel(→attachFullToolkit)은 다시 부르면 버튼
   // 줄이 정리 없이 새로 쌓이므로(사용자 지적: "하단에 버튼이 중복으로 들어가있음"), fallback으로 먼저 그렸다가
@@ -1240,7 +1240,6 @@ h4{margin:4px 0}
     renderBracketPanel(document.getElementById('refBracketTop'), a1, a2, aw, bracketTopCamPos(a1), true);
     renderBracketPanel(document.getElementById('refBracketFront'), a1, a2, aw, [70,90,110]);
     renderBracketPanel(document.getElementById('refBracketBack'), a1, a2, aw, bracketBackCamPos(a1,a2));
-    document.getElementById('refBracketSpecCol').innerHTML = specCoordColHtml(gridHoleLabelPairs(bracketHoleGeom(a1, a2, aw)));
     renderRefSpecCols();
   }
   loadBracketStandards().then(drawRefBracket);
@@ -1386,15 +1385,24 @@ h4{margin:4px 0}
   // 각각의 실제 치수까지(사용자 지시: "부품을 가져오면 이 아래쪽에 부품의 모든 스펙을 다 표시해줘").
   // 저장된 스샷 3칸(위/정면/뒷면)을 있으면 썸네일로, 없으면 빈 칸으로 보여줌(사용자 지시: "부품스펙에
   // 해당스샷이 있는지 없는지더 표시를 해줘 썸네일로, 썸네일 클릭하면 모달띄어서 확인할수 있게").
+  // 사용자 지적: "두께 5mm면 어디가 두께인지 알아???" — 표의 숫자와 썸네일이 따로 놀아서, 어느 뷰가
+  // 어느 치수를 보여주는지 안 보였음. 썸네일 밑에 그 뷰에서 실제로 보이는 치수를 짧게 붙여서 바로 연결되게 함.
   function shotThumbRowHtml(p){
     const snaps = p.snapshots || {};
+    const s = p.spec || {};
+    const dimCaption = {
+      top: (s.armLen1 != null && s.armLen2 != null) ? s.armLen1 + '×' + s.armLen2 + 'mm(가로×세로)' : '',
+      front: (s.thickness != null) ? '두께 ' + s.thickness + 'mm' : '',
+      back: '',
+    };
     return '<div class="shotThumbRow" data-part-id="' + esc(p.id) + '">' + [['top','위'],['front','정면'],['back','뒷면']].map(([slot,label]) => {
       const url = snaps[slot];
+      const cap = dimCaption[slot] ? '<em>' + esc(dimCaption[slot]) + '</em>' : '';
       if (url) {
         const shotLabel = (p.name || '부품') + ' (' + label + ')';
-        return '<button type="button" class="shotThumbBtn has" data-label="' + esc(shotLabel) + '"><img src="' + url + '" alt=""><span>' + label + '</span></button>';
+        return '<button type="button" class="shotThumbBtn has" data-label="' + esc(shotLabel) + '"><img src="' + url + '" alt=""><span>' + label + '</span>' + cap + '</button>';
       }
-      return '<button type="button" class="shotThumbBtn empty" disabled><span class="none">✕</span><span>' + label + ' 없음</span></button>';
+      return '<button type="button" class="shotThumbBtn empty" disabled><span class="none">✕</span><span>' + label + ' 없음</span>' + cap + '</button>';
     }).join('') + '</div>';
   }
   function buildSpecHtml(p, computedRows){
@@ -1429,16 +1437,6 @@ h4{margin:4px 0}
     document.querySelectorAll('.specBlock[data-part-id="' + p.id + '"]').forEach(block => {
       block.outerHTML = buildSpecHtml(p, computedRows);
     });
-  }
-  // 사용자 지시: "뒷면 오른쪽에 부품스펙이라고 적고 그아래 부품내역에 저장한 각 좌표 리스트 다 적는곳으로 추가"
-  // — 위/정면/뒷면 옆에 4번째 칸으로 붙는 구멍 좌표 목록(라벨+x+z+면).
-  function specCoordColHtml(pairs){
-    const body = pairs.length
-      ? '<table class="specTable"><tr><th>번호</th><th>x</th><th>z</th><th>면</th></tr>' +
-        pairs.map(p => '<tr><td>' + esc(p.label) + '</td><td>' + p.x + '</td><td>' + p.z + '</td><td>' + esc(p.face || '-') + '</td></tr>').join('') +
-        '</table>'
-      : '<div class="dims">저장된 구멍 좌표 없음</div>';
-    return '<h4>부품스펙</h4>' + body;
   }
   // 구멍 번호 규칙(사용자 지시): 위에서 본 모습 기준 — 왼→오(X축)로 숫자 1부터 매기고, 위→아래(Z축)로
   // 소문자 a부터 매기고, 정면=대문자A·뒷면=대문자B. 팔 순서 같은 이름으로 추측하지 않고 3D에 실제로 찍는
@@ -1716,18 +1714,16 @@ h4{margin:4px 0}
     const area = document.getElementById('compareArea');
     const specEl = document.getElementById('compareSpec');
     area.innerHTML = ''; specEl.innerHTML = '';
-    // 사용자 지시: "실측 30 X 30 이런내용 다 삭제하고, 뒷면 오른쪽에 부품스펙이라고 적고 그아래 부품내역에
-    // 저장한 각 좌표 리스트 다 적는곳으로 추가해줘" — 캔버스 밑 dims 캡션은 안 채우고(에러 안내만 예외),
-    // 뒷면 옆에 4번째 칸(부품스펙: 라벨+x+z+면 좌표 목록)을 붙임.
+    // "부품 스펙 전체"(buildSpecHtml, 아래 specEl)가 구멍 번호·치수를 이미 다 보여주므로, 위/정면/뒷면
+    // 옆에 좌표만 따로 나열하는 4번째 칸은 중복이라 없앰(사용자 지적: "이건 왜 아직 남아 있는거야???
+    // 아직도 쓰레기 정리 안하면서 코드 만들어?").
     const mk = (label) => {
       const col = document.createElement('div'); col.className = 'col';
       col.innerHTML = '<h4>' + esc(p.name) + ' (' + label + ')</h4><div class="imgWrap"></div><div class="dims"></div>';
       area.appendChild(col);
       return { canvas: (() => { const c = document.createElement('canvas'); c.width = 300; c.height = 300; col.querySelector('.imgWrap').appendChild(c); return c; })(), dims: col.querySelector('.dims') };
     };
-    const specCol = document.createElement('div'); specCol.className = 'col';
     const shot1 = mk('위'), shot2 = mk('정면'), shot3 = mk('뒷면');
-    area.appendChild(specCol);
     if (isBracket) {
       const spec = p.spec || {};
       const m = String(p.size||'').match(/(\d+(?:\.\d+)?)\s*[×xX]\s*(\d+(?:\.\d+)?)\s*[×xX]\s*(\d+(?:\.\d+)?)/);
@@ -1735,22 +1731,18 @@ h4{margin:4px 0}
       renderBracketPanel(shot1.canvas, arm1, arm2, armWidth, bracketTopCamPos(arm1), true);
       renderBracketPanel(shot2.canvas, arm1, arm2, armWidth, [70,90,110]);
       renderBracketPanel(shot3.canvas, arm1, arm2, armWidth, bracketBackCamPos(arm1, arm2));
-      specCol.innerHTML = specCoordColHtml(gridHoleLabelPairs(bracketHoleGeom(arm1, arm2, armWidth)));
       specEl.innerHTML = buildSpecHtml(p, bracketSpecRows(arm1, arm2, armWidth));
     } else {
       const svg = p.imageSvg || p.imageSvgDiagonal;
       if (!svg) {
         shot1.dims.textContent = shot2.dims.textContent = '등록된 이미지가 없어서 실제 모양을 그릴 수 없어요.';
         renderEmptyPanel(shot3.canvas);
-        specCol.innerHTML = specCoordColHtml([]);
         specEl.innerHTML = buildSpecHtml(p, []);
         return;
       }
       renderFramePanel(shot1.canvas, svg, [0,150,0.001], true);
       renderFramePanel(shot2.canvas, svg, [70,90,110]);
       renderEmptyPanel(shot3.canvas);
-      const frameHoles = parseSvgMaskHoleCenters(svg);
-      specCol.innerHTML = specCoordColHtml(gridHoleLabelPairs(frameHoles.map(h => ({ x:h.x, z:h.y }))));
       const outline = parseSvgPlateOutline(svg);
       if (!outline) shot1.dims.textContent = shot2.dims.textContent = '등록된 이미지에서 윤곽선을 못 읽었어요.';
       specEl.innerHTML = buildSpecHtml(p, frameSpecRows(svg, outline));
@@ -1770,9 +1762,7 @@ h4{margin:4px 0}
     col2.innerHTML = '<h4>' + esc(p.name) + ' (정면)</h4><div class="imgWrap"></div><div class="dims" id="editDims2"></div>';
     const col3 = document.createElement('div'); col3.className = 'col';
     col3.innerHTML = '<h4>' + esc(p.name) + ' (뒷면)</h4><div class="imgWrap"></div><div class="dims" id="editDims3"></div>';
-    // 사용자 지시: "뒷면 오른쪽에 부품스펙이라고 적고 그아래 부품내역에 저장한 각 좌표 리스트 다 적는곳으로 추가"
-    const col4 = document.createElement('div'); col4.className = 'col'; col4.id = 'editSpecCol';
-    row.appendChild(col1); row.appendChild(col2); row.appendChild(col3); row.appendChild(col4);
+    row.appendChild(col1); row.appendChild(col2); row.appendChild(col3);
     const panel = document.createElement('div');
     panel.className = 'editPanel';
     // 예전엔 "30×30×10" 같은 자유 텍스트 size 문자열을 매번 정규식으로 다시 해석해서 그렸는데, 형식이
@@ -1828,14 +1818,12 @@ h4{margin:4px 0}
         renderBracketPanel(canvas1, arm1, arm2, armWidth, bracketTopCamPos(arm1), true); // 위
         renderBracketPanel(canvas2, arm1, arm2, armWidth, [70,90,110]); // 정면
         if (canvas3) renderBracketPanel(canvas3, arm1, arm2, armWidth, bracketBackCamPos(arm1, arm2)); // 뒷면
-        col4.innerHTML = specCoordColHtml(gridHoleLabelPairs(bracketHoleGeom(arm1, arm2, armWidth)));
         specEl.innerHTML = buildSpecHtml(p, bracketSpecRows(arm1, arm2, armWidth));
       } else {
         const svg = p.imageSvg || p.imageSvgDiagonal;
         if (!svg) {
           dimsEl1.textContent = dimsEl2.textContent = '등록된 이미지가 없어서 실제 모양을 그릴 수 없어요. 관리자 화면에서 이미지부터 등록해주세요.';
           if (dimsEl3) dimsEl3.textContent = '';
-          col4.innerHTML = specCoordColHtml([]);
           specEl.innerHTML = buildSpecHtml(p, []);
           return;
         }
@@ -1844,7 +1832,6 @@ h4{margin:4px 0}
         if (canvas3) renderEmptyPanel(canvas3);
         const outline = parseSvgPlateOutline(svg);
         if (!outline) dimsEl1.textContent = dimsEl2.textContent = '등록된 이미지에서 윤곽선을 못 읽었어요(색이 #d5d8dc인 도형이 있어야 함).';
-        col4.innerHTML = specCoordColHtml(gridHoleLabelPairs(parseSvgMaskHoleCenters(svg).map(h => ({ x:h.x, z:h.y }))));
         specEl.innerHTML = buildSpecHtml(p, frameSpecRows(svg, outline));
       }
     }
