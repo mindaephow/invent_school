@@ -366,7 +366,7 @@
         </div>
         <div id="partVolumeWrap">
           <label>사용하는 권 (로봇만, 비우면 전체 공통)</label>
-          <p class="note" style="margin:2px 0 8px;">이 부품이 필요한 권과 그 권에서 필요한 수량을 추가하세요. 다음 권에도 같은 부품이 또 필요하면 새로 등록하지 말고 권을 하나 더 추가만 하면 돼요 — 아래에서 이름·이미지를 수정하면 모든 권에 한 번에 반영돼요.</p>
+          <p class="note" style="margin:2px 0 8px;">지금 새로 등록하는 부품이 필요한 권과 그 권에서 필요한 수량을 추가하세요. 이미 등록된 부품을 다른 권에도 쓰려면 여기서 다시 등록하지 말고, 아래 목록에서 그 부품의 "+ 다른 권에 등록" 버튼을 누르세요.</p>
           <div id="partVolumesList"></div>
           <button type="button" class="ghost" id="partVolumeAddBtn">+ 권 추가</button>
         </div>
@@ -1450,12 +1450,28 @@
   // 어느 권 목록에서 눌러도 같은 부품에 적용된다. displayQty는 그 권/누적 구간에서 필요한 수량만 표시용으로 바꿔치기.
   function partRowHtml(p, displayQty){
     const sub = [p.size, p.color, (displayQty != null ? displayQty + '개' : '')].filter(Boolean).join(' · ');
+    // "수정"은 이름·이미지·색상 같은 부품 자체를 고치는 버튼, "+ 다른 권에 등록"은 그 부품을 그대로 두고
+    // 권 하나만 더 배정하는 별개 동작 — 한 버튼에 두 역할을 같이 주면 헷갈린다는 지적(사용자: "수정버튼을
+    // 그역할로 하면 엄청 헷갈려")에 따라 완전히 분리했다.
+    const addVolBtn = `<button type="button" class="ghost" data-add-volume="${escapeHtml(p.id)}">+ 다른 권에 등록</button>`;
     const editBtn = `<button type="button" class="ghost" data-edit-part="${escapeHtml(p.id)}">수정</button>`;
     const delBtn = `<button type="button" class="ghost" data-delete-part="${escapeHtml(p.id)}">삭제</button>`;
     const primarySvg = p.primaryImage === 'diagonal' ? p.imageSvgDiagonal : p.imageSvg;
     const thumbSrc = uniquifySvgIds(primarySvg || p.imageSvg || p.imageSvgDiagonal, p.id);
     const thumb = thumbSrc ? `<button type="button" class="part-thumb" data-view-image="${escapeHtml(p.id)}">${thumbSrc}</button>` : '';
-    return `<div class="design-row" style="align-items:center;"><div class="item-main"><div class="item-title">${escapeHtml(p.icon ? p.icon + ' ' : '')}${escapeHtml(p.name)}</div><div class="item-sub">${escapeHtml(sub)}</div></div><div style="display:flex; align-items:center; gap:8px; flex:none;">${thumb}${editBtn}${delBtn}</div></div>`;
+    return `<div class="design-row" style="align-items:center;"><div class="item-main"><div class="item-title">${escapeHtml(p.icon ? p.icon + ' ' : '')}${escapeHtml(p.name)}</div><div class="item-sub">${escapeHtml(sub)}</div></div><div style="display:flex; align-items:center; gap:8px; flex:none; flex-wrap:wrap;">${thumb}${addVolBtn}${editBtn}${delBtn}</div></div>`;
+  }
+  // "+ 다른 권에 등록" 클릭 시 그 행 바로 아래 펼쳐지는 미니폼 — 권 번호·수량만 물어보고 부품의 다른 정보는
+  // 건드리지 않는다(등록 폼을 다시 열거나 "수정"을 누르게 하지 않기 위한, 이 동작 전용의 작고 뚜렷한 UI).
+  function volumeAddFormHtml(partId){
+    return `<div class="design-row" data-volume-add-form="${escapeHtml(partId)}" style="align-items:center; background:#f4f4f8; border-radius:8px; padding:8px 10px; margin:2px 0 6px; flex-wrap:wrap; gap:8px;">
+      <span class="item-sub" style="flex:none;">이 부품을 등록할 권</span>
+      <input type="number" min="1" step="1" class="qa-volume" placeholder="권" style="width:70px;" autocomplete="off">
+      <input type="number" min="1" step="1" class="qa-qty" placeholder="수량(선택)" style="width:110px;" autocomplete="off">
+      <button type="button" class="primary qa-save">등록</button>
+      <button type="button" class="ghost qa-cancel">취소</button>
+      <p class="note err qa-msg" hidden style="width:100%; margin:4px 0 0;"></p>
+    </div>`;
   }
   function partSectionHtml(title, rowsHtml){
     return `<details style="margin:10px 0;"><summary style="cursor:pointer; font-size:13px; font-weight:700; color:var(--ink-soft); padding:4px 0;">${escapeHtml(title)} <span style="font-weight:400;">(${rowsHtml.length}개 종류)</span></summary>${rowsHtml.join('')}</details>`;
@@ -1621,6 +1637,31 @@
         document.getElementById('imgModalBody').innerHTML = `<div class="img-modal-shots">${shots.join('')}</div>`;
         document.getElementById('imgModalBackdrop').hidden = false;
       }
+      return;
+    }
+    const cancelBtn = e.target.closest('.qa-cancel');
+    if (cancelBtn) { cancelBtn.closest('[data-volume-add-form]').remove(); return; }
+    const saveBtn = e.target.closest('.qa-save');
+    if (saveBtn) {
+      const wrap = saveBtn.closest('[data-volume-add-form]');
+      const partId = wrap.dataset.volumeAddForm;
+      const p = allParts.find((x) => x.id === partId);
+      const msg = wrap.querySelector('.qa-msg');
+      const volumeVal = wrap.querySelector('.qa-volume').value;
+      const qtyVal = wrap.querySelector('.qa-qty').value;
+      if (!p || volumeVal === '') { msg.textContent = '권 번호를 입력해주세요.'; msg.hidden = false; return; }
+      const nextVolumes = (p.volumes || []).filter((v) => Number(v.volume) !== Number(volumeVal));
+      nextVolumes.push({ volume: volumeVal, qty: qtyVal });
+      saveBtn.disabled = true; msg.hidden = true;
+      adminApi({ action: 'update_part', partId: p.id, name: p.name, icon: p.icon, subject: p.subject, category: p.category, volumes: nextVolumes, color: p.color, size: p.size, imageSvg: p.imageSvg, imageSvgDiagonal: p.imageSvgDiagonal, primaryImage: p.primaryImage })
+        .then(() => loadParts())
+        .catch((err) => { msg.textContent = err.message; msg.hidden = false; saveBtn.disabled = false; });
+      return;
+    }
+    const addVolBtn = e.target.closest('[data-add-volume]');
+    if (addVolBtn) {
+      document.querySelectorAll('[data-volume-add-form]').forEach((el) => el.remove());
+      addVolBtn.closest('.design-row').insertAdjacentHTML('afterend', volumeAddFormHtml(addVolBtn.dataset.addVolume));
       return;
     }
     const editBtn = e.target.closest('[data-edit-part]');
