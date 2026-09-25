@@ -113,20 +113,36 @@ h4{margin:4px 0}
 <div id="mainCol">
 
 <div id="sketchSection">
-  <button id="sketchToggle" type="button" class="collapseToggle">▶ 박스 에디터 (펼치기)</button>
+  <button id="sketchToggle" type="button" class="collapseToggle">▶ 도형 에디터 (펼치기)</button>
   <div id="boxEditorPanel" hidden>
-    <div class="section-note">박스 하나를 놓고 크기·위치를 숫자로 조절해서 모양을 만들어요. 새 부품을 구상하거나, 설명하거나, 기존 부품에 저장해둘 수 있어요.</div>
+    <div class="section-note">도형 하나를 놓고 크기·위치를 숫자로 조절해서 모양을 만들어요. 새 부품을 구상하거나, 설명하거나, 기존 부품에 저장해둘 수 있어요.</div>
     <div class="btnRow"><button id="boxTargetPickBtn" type="button">🔍 저장할 부품 고르기</button><span id="boxTargetLabel" class="section-note" style="margin:0;">선택 안 됨 — 저장 없이 그냥 볼 수도 있어요.</span></div>
     <div class="imgWrap">
       <canvas id="boxEditorCanvas" width="500" height="500"></canvas>
+    </div>
+    <div class="btnRow">
+      <label style="font-size:11px;color:#666;display:flex;flex-direction:column;gap:2px;">도형 종류
+        <select id="shapeType">
+          <option value="box">박스</option>
+          <option value="wheel">바퀴</option>
+          <option value="gear">톱니바퀴</option>
+        </select>
+      </label>
     </div>
     <div class="boxFields">
       <label>x(mm)<input type="number" id="boxX" value="0" step="1"></label>
       <label>y(mm)<input type="number" id="boxY" value="0" step="1"></label>
       <label>z(mm)<input type="number" id="boxZ" value="0" step="1"></label>
+    </div>
+    <div class="boxFields" id="boxOnlyFields">
       <label>가로 w(mm)<input type="number" id="boxW" value="30" min="1" step="1"></label>
       <label>높이 h(mm)<input type="number" id="boxH" value="10" min="1" step="1"></label>
       <label>세로 d(mm)<input type="number" id="boxD" value="30" min="1" step="1"></label>
+    </div>
+    <div class="boxFields" id="roundFields" hidden>
+      <label>반지름(mm)<input type="number" id="shapeRadius" value="20" min="1" step="1"></label>
+      <label>두께(mm)<input type="number" id="shapeWidth" value="10" min="1" step="1"></label>
+      <label id="teethField" hidden>톱니 수<input type="number" id="shapeTeeth" value="12" min="4" max="40" step="1"></label>
     </div>
     <div class="btnRow"><button id="boxRedrawBtn" type="button" style="background:#fff;color:#2b6be0;">다시 그리기</button><button id="boxSaveBtn" type="button" disabled>저장</button></div>
     <div class="msg" id="boxEditorMsg"></div>
@@ -1276,7 +1292,7 @@ h4{margin:4px 0}
     }
   }
 
-  // ===== 박스 에디터 (오른쪽 패널, 예전 자유낙서 스케치북 자리) =====
+  // ===== 도형 에디터 (오른쪽 패널, 예전 자유낙서 스케치북 자리) =====
   // 실제 로직은 parts-lab-box-editor.js로 분리했다(사용자 지시: "코드가 너무 길어지면 따로 분리해서
   // 불러오는게 어떨까?" — design.html이 design-parts.js 등을 분리해 쓰는 것과 같은 패턴). 그 파일이
   // 이 화면의 공용 헬퍼(baseScene 등)와 adminApi를 쓸 수 있도록 window.__partsLab에 필요한 만큼만 내보낸다.
@@ -1689,12 +1705,12 @@ h4{margin:4px 0}
     }
   });
 
-  // 박스 에디터는 평소엔 접어두고 필요할 때만 펼침(사용자 지시: "필요할때만 펼쳐서 하면되 평소엔 접어놔줘")
+  // 도형 에디터는 평소엔 접어두고 필요할 때만 펼침(사용자 지시: "필요할때만 펼쳐서 하면되 평소엔 접어놔줘")
   document.getElementById('sketchToggle').addEventListener('click', () => {
     const panel = document.getElementById('boxEditorPanel');
     const open = panel.hidden;
     panel.hidden = !open;
-    document.getElementById('sketchToggle').textContent = open ? '▼ 박스 에디터 (접기)' : '▶ 박스 에디터 (펼치기)';
+    document.getElementById('sketchToggle').textContent = open ? '▼ 도형 에디터 (접기)' : '▶ 도형 에디터 (펼치기)';
   });
 
   // "비교 대상 부품"도 모달로 고른 부품 하나를 위/정면/뒷면 3컷으로 보여줌(기본은 90도프레임+1열브라켓 예시)
