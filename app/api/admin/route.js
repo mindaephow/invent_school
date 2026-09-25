@@ -119,8 +119,16 @@ function parseSpec(body) {
   const armLen1 = Number(spec.armLen1), armLen2 = Number(spec.armLen2), armWidth = Number(spec.armWidth)
   const hasArmDims = [armLen1, armLen2, armWidth].every((n) => Number.isFinite(n) && n > 0)
   const holeLabels = Array.isArray(spec.holeLabels) && spec.holeLabels.every((s) => typeof s === 'string') ? spec.holeLabels : null
-  if (!hasArmDims && !holeLabels) return null
+  // 박스 에디터(부품 수리실 스케치북 자리) — 박스 하나 이상의 위치·크기를 그대로 저장. svg 없이도 이
+  // 숫자만으로 모양이 재현됨(브라켓의 armLen1/armLen2/armWidth와 같은 목적).
+  const boxes = Array.isArray(spec.boxes)
+    ? spec.boxes
+        .filter((b) => b && typeof b === 'object' && ['x', 'y', 'z', 'w', 'h', 'd'].every((k) => Number.isFinite(Number(b[k]))))
+        .map((b) => ({ x: Number(b.x), y: Number(b.y), z: Number(b.z), w: Number(b.w), h: Number(b.h), d: Number(b.d) }))
+    : []
+  if (!hasArmDims && !holeLabels && !boxes.length) return null
   const result = hasArmDims ? { armLen1, armLen2, armWidth } : {}
+  if (boxes.length) result.boxes = boxes
   // 구멍 번호(위에서 본 모습 기준 왼→오=숫자·위→아래=소문자, 브라켓은 정면A/뒷면B도 붙음) — 부품 수리실에서
   // 계산해서 넘겨준 값을 그대로 저장. 브라켓이 아닌 부품(프레임 등)도 팔 치수 없이 이 값만 올 수 있음.
   if (holeLabels) result.holeLabels = holeLabels

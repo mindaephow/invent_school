@@ -73,12 +73,17 @@ h4{margin:4px 0}
 .specTable{border-collapse:collapse;font-size:12px;width:100%;table-layout:fixed;}
 .specTable th{text-align:left;color:#888;font-weight:600;padding:3px 10px 3px 0;white-space:normal;word-break:keep-all;vertical-align:top;width:38%;}
 .specTable td{padding:3px 0;color:#222;word-break:break-all;}
-#sketchPanel{width:520px; flex:none; margin-top:10px;}
-#sketchPanel .imgWrap{width:500px; height:500px;}
-#sketchPanel canvas.overlay{position:absolute; top:0; left:0; background:transparent; cursor:default; pointer-events:none;}
-#sketchPanel .btnRow{margin-top:6px; display:flex; gap:6px;}
-#sketchPanel .btnRow button{padding:6px 10px; font-size:12px; border-radius:6px; border:1px solid #ccc; background:#fff; cursor:pointer;}
-#sketchPanel .btnRow button.on{background:#2b6be0;color:#fff;border-color:#2b6be0;}
+#boxEditorPanel{width:520px; flex:none; margin-top:10px;}
+#boxEditorPanel .imgWrap{width:500px; height:500px;}
+#boxEditorPanel .btnRow{margin-top:6px; display:flex; gap:6px; flex-wrap:wrap; align-items:center;}
+#boxEditorPanel .btnRow button{padding:6px 10px; font-size:12px; border-radius:6px; border:1px solid #ccc; background:#fff; cursor:pointer;}
+#boxEditorPanel .btnRow button.on{background:#2b6be0;color:#fff;border-color:#2b6be0;}
+#boxEditorPanel .boxFields{display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;}
+#boxEditorPanel .boxFields label{font-size:11px; color:#666; display:flex; flex-direction:column; gap:2px;}
+#boxEditorPanel .boxFields input{width:64px; font-size:12px; padding:4px 6px; border:1px solid #ccc; border-radius:5px;}
+#boxEditorPanel .msg{margin-top:6px; font-size:12px;}
+#boxEditorPanel .msg.ok{color:#1d7a3c;}
+#boxEditorPanel .msg.err{color:#c0392b;}
 .overlay{position:absolute;top:0;left:0;background:transparent;cursor:crosshair;}
 .btnRow{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;}
 .btnRow button{padding:5px 9px;font-size:11px;border-radius:6px;border:1px solid #ccc;background:#fff;cursor:pointer;}
@@ -108,14 +113,23 @@ h4{margin:4px 0}
 <div id="mainCol">
 
 <div id="sketchSection">
-  <button id="sketchToggle" type="button" class="collapseToggle">▶ 스케치북 (펼치기)</button>
-  <div id="sketchPanel" hidden>
-    <div class="section-note">간단한 3D 낙서 공간이에요. 빈 곳을 드래그하면 돌려보기, 휠로 확대/축소, 그 위에 마우스로 바로 그릴 수 있어요.</div>
+  <button id="sketchToggle" type="button" class="collapseToggle">▶ 박스 에디터 (펼치기)</button>
+  <div id="boxEditorPanel" hidden>
+    <div class="section-note">박스 하나를 놓고 크기·위치를 숫자로 조절해서 모양을 만들어요. 새 부품을 구상하거나, 설명하거나, 기존 부품에 저장해둘 수 있어요.</div>
+    <div class="btnRow"><button id="boxTargetPickBtn" type="button">🔍 저장할 부품 고르기</button><span id="boxTargetLabel" class="section-note" style="margin:0;">선택 안 됨 — 저장 없이 그냥 볼 수도 있어요.</span></div>
     <div class="imgWrap">
-      <canvas id="sketch3d" width="500" height="500"></canvas>
-      <canvas id="sketchOverlay" class="overlay" width="500" height="500"></canvas>
+      <canvas id="boxEditorCanvas" width="500" height="500"></canvas>
     </div>
-    <div class="btnRow"><button id="sketchDrawToggle" type="button">✏️ 그리기</button><button id="sketchPanToggle" type="button">✋ 이동</button><button id="sketchClear" type="button">지우기</button></div>
+    <div class="boxFields">
+      <label>x(mm)<input type="number" id="boxX" value="0" step="1"></label>
+      <label>y(mm)<input type="number" id="boxY" value="0" step="1"></label>
+      <label>z(mm)<input type="number" id="boxZ" value="0" step="1"></label>
+      <label>가로 w(mm)<input type="number" id="boxW" value="30" min="1" step="1"></label>
+      <label>높이 h(mm)<input type="number" id="boxH" value="10" min="1" step="1"></label>
+      <label>세로 d(mm)<input type="number" id="boxD" value="30" min="1" step="1"></label>
+    </div>
+    <div class="btnRow"><button id="boxRedrawBtn" type="button" style="background:#fff;color:#2b6be0;">다시 그리기</button><button id="boxSaveBtn" type="button" disabled>저장</button></div>
+    <div class="msg" id="boxEditorMsg"></div>
   </div>
 </div>
 
@@ -1262,59 +1276,15 @@ h4{margin:4px 0}
     }
   }
 
-  // ===== 스케치북 (오른쪽 패널) — 빈 곳 드래그=회전, 휠=확대/축소, "그리기" 켜면 그 위에 자유롭게 낙서 =====
-  function initSketchbook(){
-    const canvas = document.getElementById('sketch3d');
-    const overlay = document.getElementById('sketchOverlay');
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true });
-    renderer.setSize(500,500,false);
-    const scene = baseScene(); // 모눈종이 배경 + X/Y/Z축은 baseScene()이 공통으로 넣어줌
-    const camera = orthoCam(120);
-    camera.position.set(150,150,150);
-    camera.lookAt(0,0,0);
-    renderer.render(scene, camera);
-    const controls = setupOrbit(renderer, scene, camera, [0,0,0]);
-    addZoomButtons(canvas, () => ({ camera, controls }));
-
-    const ctx = overlay.getContext('2d');
-    ctx.strokeStyle = '#2b6be0'; ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    let drawMode = false, drawing = false, last = null;
-    function posOf(e){
-      const rect = overlay.getBoundingClientRect();
-      return { x: (e.clientX - rect.left) * (overlay.width / rect.width), y: (e.clientY - rect.top) * (overlay.height / rect.height) };
-    }
-    overlay.addEventListener('mousedown', e => { if (!drawMode) return; drawing = true; last = posOf(e); });
-    window.addEventListener('mousemove', e => {
-      if (!drawing) return;
-      const p = posOf(e);
-      ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(p.x, p.y); ctx.stroke();
-      last = p;
-    });
-    window.addEventListener('mouseup', () => { drawing = false; });
-
-    // 사용자 지시: "돌리기 오른쪽에 이동버튼 추가 => 모든곳에" — 스케치북도 그리기/이동/돌리기가 서로 배타적으로
-    // 하나만 켜지게 함(이동은 x,z만 움직이고 바닥 아래로는 못 내려감 — attachGroundPan 공통 로직 재사용).
-    let panMode = false;
-    const drawBtn = document.getElementById('sketchDrawToggle');
-    const panBtn = document.getElementById('sketchPanToggle');
-    function setSketchMode(mode){ // 'draw' | 'pan' | 'rotate'
-      drawMode = mode === 'draw'; panMode = mode === 'pan';
-      controls.enabled = mode === 'rotate';
-      overlay.style.pointerEvents = drawMode ? 'auto' : 'none';
-      overlay.style.cursor = drawMode ? 'crosshair' : 'default';
-      canvas.style.cursor = panMode ? 'grab' : '';
-      drawBtn.textContent = drawMode ? '🔄 돌리기로' : '✏️ 그리기';
-      drawBtn.classList.toggle('on', drawMode);
-      panBtn.textContent = panMode ? '🔄 돌리기로' : '✋ 이동';
-      panBtn.classList.toggle('on', panMode);
-    }
-    drawBtn.addEventListener('click', () => setSketchMode(drawMode ? 'rotate' : 'draw'));
-    panBtn.addEventListener('click', () => setSketchMode(panMode ? 'rotate' : 'pan'));
-    attachGroundPan(canvas, camera, controls, () => panMode);
-    document.getElementById('sketchClear').addEventListener('click', () => {
-      ctx.clearRect(0, 0, overlay.width, overlay.height);
-    });
-  }
+  // ===== 박스 에디터 (오른쪽 패널, 예전 자유낙서 스케치북 자리) =====
+  // 실제 로직은 parts-lab-box-editor.js로 분리했다(사용자 지시: "코드가 너무 길어지면 따로 분리해서
+  // 불러오는게 어떨까?" — design.html이 design-parts.js 등을 분리해 쓰는 것과 같은 패턴). 그 파일이
+  // 이 화면의 공용 헬퍼(baseScene 등)와 adminApi를 쓸 수 있도록 window.__partsLab에 필요한 만큼만 내보낸다.
+  window.__partsLab = {
+    baseScene, orthoCam, setupOrbit, addZoomButtons, addEdgeOutline,
+    openPickerModal, adminApi,
+    getAccessToken: () => window.__accessToken,
+  };
 
   // ===== 로그인 확인 =====
   // 사이드바 버튼은 본사 관리자에게만 보이지만(design.html의 checkPartsLabAccess), 이 페이지 자체는
@@ -1327,7 +1297,7 @@ h4{margin:4px 0}
     }
     document.getElementById('gate').style.display = 'none';
     document.getElementById('app').classList.add('shown');
-    initSketchbook();
+    if (window.initBoxEditor) window.initBoxEditor();
     initImporter(session.access_token);
   })();
 
@@ -1719,12 +1689,12 @@ h4{margin:4px 0}
     }
   });
 
-  // 스케치북은 평소엔 접어두고 필요할 때만 펼침(사용자 지시: "필요할때만 펼쳐서 하면되 평소엔 접어놔줘")
+  // 박스 에디터는 평소엔 접어두고 필요할 때만 펼침(사용자 지시: "필요할때만 펼쳐서 하면되 평소엔 접어놔줘")
   document.getElementById('sketchToggle').addEventListener('click', () => {
-    const panel = document.getElementById('sketchPanel');
+    const panel = document.getElementById('boxEditorPanel');
     const open = panel.hidden;
     panel.hidden = !open;
-    document.getElementById('sketchToggle').textContent = open ? '▼ 스케치북 (접기)' : '▶ 스케치북 (펼치기)';
+    document.getElementById('sketchToggle').textContent = open ? '▼ 박스 에디터 (접기)' : '▶ 박스 에디터 (펼치기)';
   });
 
   // "비교 대상 부품"도 모달로 고른 부품 하나를 위/정면/뒷면 3컷으로 보여줌(기본은 90도프레임+1열브라켓 예시)
@@ -1919,4 +1889,5 @@ h4{margin:4px 0}
   }
 })();
 </script>
+<script src="parts-lab-box-editor.js"></script>
 </body></html>
