@@ -48,6 +48,17 @@ h4{margin:4px 0}
 .modalHead button{border:none;background:none;font-size:18px;line-height:1;cursor:pointer;color:#888;}
 .specBlock{background:#fff;border:1px solid #ddd;border-radius:8px;padding:10px 14px;margin-top:6px;max-width:640px;}
 .specBlock h5{margin:0 0 6px;font-size:13px;color:#555;}
+.specBlockHead{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.specEditBtn{padding:4px 10px;border-radius:6px;border:1px solid #2b6be0;background:#fff;color:#2b6be0;cursor:pointer;font-size:11px;white-space:nowrap;}
+.specEditForm{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;}
+.specEditForm label{font-size:12px;color:#555;display:block;}
+.specEditForm input{width:100%;box-sizing:border-box;padding:6px;font-size:13px;margin-top:2px;}
+.specEditForm .full{grid-column:1 / -1;}
+.seGridTable{border-collapse:collapse;}
+.seGridTable td{padding:0;}
+.seGridCell{width:32px;height:32px;border:1px solid #ccc;background:#f7f8fa;cursor:pointer;font-size:14px;color:#bbb;}
+.seGridCell.on{background:#2b6be0;border-color:#1a4fa0;color:#fff;font-weight:700;}
+.seGridAxis{font-size:10px;color:#888;text-align:center;}
 .shotThumbRow{display:flex;gap:8px;margin-bottom:10px;}
 .shotThumbBtn{width:64px;padding:4px;border:1px solid #ccc;border-radius:6px;background:#f7f8fa;cursor:pointer;font-size:10px;color:#666;display:flex;flex-direction:column;align-items:center;gap:3px;}
 .shotThumbBtn.has{cursor:zoom-in;background:#fff;border-color:#2b6be0;}
@@ -152,6 +163,24 @@ h4{margin:4px 0}
   <div class="modalBox shotViewBox">
     <div class="modalHead"><h4 id="shotViewTitle">스샷</h4><button id="shotViewClose" type="button">✕</button></div>
     <img id="shotViewImg" alt="">
+  </div>
+</div>
+
+<div id="specEditModal" class="modalOverlay" hidden>
+  <div class="modalBox" style="width:460px;">
+    <div class="modalHead"><h4 id="specEditTitle">스펙 수정</h4><button id="specEditClose" type="button">✕</button></div>
+    <p class="note full" style="font-size:12px;color:#666;margin:0 0 8px;">칸을 눌러 구멍이 있는 자리를 표시하세요 — 격자 자체가 위에서 본 모양(방향 포함)이라 숫자만으로는 알 수 없는 걸 눈으로 바로 확인합니다.</p>
+    <div id="seGrid" style="margin-bottom:10px;"></div>
+    <form id="specEditForm" class="specEditForm">
+      <label>가로 칸 수<input type="number" id="seCols" min="1" max="8" step="1"></label>
+      <label>세로 칸 수<input type="number" id="seRows" min="1" max="8" step="1"></label>
+      <label>두께(Y, mm)<input type="number" id="seThickness" min="0.5" step="0.5"></label>
+      <label>구멍 여백(mm)<input type="number" id="seMargin" min="0" step="0.5"></label>
+      <label>구멍 피치(mm)<input type="number" id="sePitch" min="1" step="0.5"></label>
+      <label>구멍 반지름(mm)<input type="number" id="seBoreRadius" min="0.1" step="0.1"></label>
+      <p class="msg full" id="specEditMsg" style="font-size:12px;margin:0;" hidden></p>
+      <button type="submit" class="full" style="padding:8px 14px;border-radius:6px;border:1px solid #2b6be0;background:#2b6be0;color:#fff;cursor:pointer;font-size:13px;">저장</button>
+    </form>
   </div>
 </div>
 <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
@@ -979,6 +1008,25 @@ h4{margin:4px 0}
     }
     return -1;
   }
+  // 프레임 spec에 가로/세로/팔폭까지 다 채워 넣기 위한 자동 계산(사용자 지시: "스펙에 정리가 다 되어야해,
+  // 그래야 확인 체크들을 할수가 있지") — 사람이 입력하면 "어떤 게 왼쪽 팔?" 문제가 또 생기므로, 등록된
+  // 도면(outline)에서 그대로 뽑아낸다. armLen1/armLen2는 바운딩박스 가로/세로. armWidth(팔 폭)는 꺾인
+  // 지점(오목 꼭짓점)에서 바운딩박스 네 변까지 거리 중 가장 짧은 값 — ㄱ자 모양에서 그 값이 실제 팔 두께와
+  // 일치함(90도 프레임 30×30×5·팔폭10 예시로 검증). 오목 꼭짓점이 없는(꺾이지 않은) 곧은 판이면 armWidth는
+  // 구하지 않고 null로 둔다.
+  function deriveFrameArmDims(outline){
+    if (!outline || outline.length < 3) return { armLen1:null, armLen2:null, armWidth:null };
+    const xs = outline.map(o=>o.x), ys = outline.map(o=>o.y);
+    const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+    const armLen1 = Math.round((maxX-minX)*10)/10, armLen2 = Math.round((maxY-minY)*10)/10;
+    const ci = findConcaveVertex(outline);
+    let armWidth = null;
+    if (ci >= 0) {
+      const p = outline[ci];
+      armWidth = Math.round(Math.min(p.x-minX, maxX-p.x, p.y-minY, maxY-p.y) * 10) / 10;
+    }
+    return { armLen1, armLen2, armWidth };
+  }
 
   // ===== 참고(비교 대상) 패널 — 90도 프레임 + 1열브라켓, 고정 =====
   // 사용자 지시: "90도를 ㄱ자로 부품을 놔봐" — 꺾이는 지점이 왼쪽 위(Γ 모양)였던 걸 좌우로 뒤집어서 진짜
@@ -1193,8 +1241,26 @@ h4{margin:4px 0}
     renderBracketPanel(document.getElementById('refBracketFront'), a1, a2, aw, [70,90,110]);
     renderBracketPanel(document.getElementById('refBracketBack'), a1, a2, aw, bracketBackCamPos(a1,a2));
     document.getElementById('refBracketSpecCol').innerHTML = specCoordColHtml(gridHoleLabelPairs(bracketHoleGeom(a1, a2, aw)));
+    renderRefSpecCols();
   }
   loadBracketStandards().then(drawRefBracket);
+  // 위쪽 고정 참고 패널("90도 프레임"/"1열브라켓")도 실제 카탈로그에 같은 이름 부품이 있으면 좌표 표만
+  // 보여주던 걸 부품스펙 전체(썸네일·스펙수정 버튼 포함)로 업그레이드(사용자 지시: "부품 스펙에 표시가
+  // 되어야해 모든게 / 부품스펙에 지금 썸네일도 안 불러오고 있어"). allParts가 아직 안 왔으면 그냥 둔다
+  // (initImporter 끝에서, 그리고 drawRefBracket에서 한 번 더 호출해서 로드 순서 상관없이 반영됨).
+  function renderRefSpecCols(){
+    const frame90 = allParts.find(p => p.name === '90도 프레임');
+    if (frame90) {
+      const svg = frame90.imageSvg || frame90.imageSvgDiagonal;
+      document.getElementById('refFrameSpecCol').innerHTML = buildSpecHtml(frame90, frameSpecRows(svg, svg ? parseSvgPlateOutline(svg) : null));
+    }
+    const bracket1 = allParts.find(p => p.name === '1열브라켓');
+    if (bracket1) {
+      const s = bracket1.spec || {};
+      const a1 = s.armLen1 ?? bracketStandards.refArmLen1, a2 = s.armLen2 ?? bracketStandards.refArmLen2, aw = s.armWidth ?? bracketStandards.refArmWidth;
+      document.getElementById('refBracketSpecCol').innerHTML = buildSpecHtml(bracket1, bracketSpecRows(a1, a2, aw));
+    }
+  }
 
   // ===== 스케치북 (오른쪽 패널) — 빈 곳 드래그=회전, 휠=확대/축소, "그리기" 켜면 그 위에 자유롭게 낙서 =====
   function initSketchbook(){
@@ -1291,6 +1357,7 @@ h4{margin:4px 0}
       renderModalPartList();
     });
     renderModalPartList();
+    renderRefSpecCols();
   }
   function renderModalPartList(){
     const el = document.getElementById('modalPartList');
@@ -1325,6 +1392,8 @@ h4{margin:4px 0}
     }).join('') + '</div>';
   }
   function buildSpecHtml(p, computedRows){
+    const isBracket = /브라켓/.test(p.name || '');
+    const editBtnHtml = isBracket ? '' : '<button type="button" class="specEditBtn" data-part-id="' + esc(p.id) + '">✏️ 스펙 수정</button>';
     const rows = [
       ['이름', p.name || '-'],
       ['과목', p.subject || '-'],
@@ -1335,9 +1404,25 @@ h4{margin:4px 0}
       ...computedRows,
       ['사이즈 문자열(size, 호환용)', p.size || '-'],
     ];
-    return '<div class="specBlock"><h5>부품 스펙 전체</h5>' + shotThumbRowHtml(p) + '<table class="specTable">' +
+    return '<div class="specBlock" data-part-id="' + esc(p.id) + '"><div class="specBlockHead"><h5>부품 스펙 전체</h5>' + editBtnHtml + '</div>' + shotThumbRowHtml(p) + '<table class="specTable">' +
       rows.map(([k,v]) => '<tr><th>' + esc(k) + '</th><td>' + esc(String(v)) + '</td></tr>').join('') +
       '</table></div>';
+  }
+  // 부품스펙 오른쪽 "스펙 수정" 버튼 저장 후, 그 부품이 떠 있는 모든 .specBlock을 다시 그림(같은 부품이
+  // 비교/수정 칸 양쪽에 동시에 떠 있을 수 있음).
+  function refreshSpecBlocks(p){
+    const isBracket = /브라켓/.test(p.name || '');
+    let computedRows;
+    if (isBracket) {
+      const spec = p.spec || {};
+      computedRows = bracketSpecRows(spec.armLen1 || 30, spec.armLen2 || 30, spec.armWidth || 10);
+    } else {
+      const svg = p.imageSvg || p.imageSvgDiagonal;
+      computedRows = frameSpecRows(svg, svg ? parseSvgPlateOutline(svg) : null);
+    }
+    document.querySelectorAll('.specBlock[data-part-id="' + p.id + '"]').forEach(block => {
+      block.outerHTML = buildSpecHtml(p, computedRows);
+    });
   }
   // 사용자 지시: "뒷면 오른쪽에 부품스펙이라고 적고 그아래 부품내역에 저장한 각 좌표 리스트 다 적는곳으로 추가"
   // — 위/정면/뒷면 옆에 4번째 칸으로 붙는 구멍 좌표 목록(라벨+x+z+면).
@@ -1475,6 +1560,138 @@ h4{margin:4px 0}
     if (!btn) return;
     const img = btn.querySelector('img');
     if (img) openShotView(btn.dataset.label || '스샷', img.src);
+  });
+
+  // "✏️ 스펙 수정" — 부품스펙 오른쪽 버튼(사용자 지시: "부품스펙 오른쪽에 입력(수정) 버튼 만들고"). 숫자만
+  // 입력받고, 구멍 좌표(holeLabels/holeCoords)는 저장 시 부품 종류에 맞게 자동 계산해서 같이 저장한다 —
+  // image_svg·snapshot(s)은 손대지 않고 그대로 둔다(사용자 지적: "이미지는 올라가 있는데 왜 니가 올리려고
+  // 하고 지랄이야" — 이미 있는 이미지는 다시 보낼 필요 없음).
+  let specEditPartId = null;
+  let specEditGrid = []; // specEditGrid[row][col] = true/false — 눌러서 구멍 위치를 직접 표시(방향 애매함 없음)
+  function renderSeGrid(rows, cols){
+    let html = '<table class="seGridTable"><tr><td></td>';
+    for (let c=0;c<cols;c++) html += '<td class="seGridAxis">' + (c+1) + '</td>';
+    html += '</tr>';
+    for (let r=0;r<rows;r++){
+      html += '<tr><td class="seGridAxis">' + String.fromCharCode(97+r) + '</td>';
+      for (let c=0;c<cols;c++){
+        const on = !!(specEditGrid[r] && specEditGrid[r][c]);
+        html += '<td><button type="button" class="seGridCell' + (on?' on':'') + '" data-r="' + r + '" data-c="' + c + '">' + (on?'●':'') + '</button></td>';
+      }
+      html += '</tr>';
+    }
+    html += '</table>';
+    document.getElementById('seGrid').innerHTML = html;
+  }
+  function currentSeRowsCols(){
+    return { rows: Number(document.getElementById('seRows').value) || 1, cols: Number(document.getElementById('seCols').value) || 1 };
+  }
+  document.getElementById('seGrid').addEventListener('click', e => {
+    const btn = e.target.closest('.seGridCell');
+    if (!btn) return;
+    const r = Number(btn.dataset.r), c = Number(btn.dataset.c);
+    specEditGrid[r] = specEditGrid[r] || [];
+    specEditGrid[r][c] = !specEditGrid[r][c];
+    const { rows, cols } = currentSeRowsCols();
+    renderSeGrid(rows, cols);
+  });
+  document.getElementById('seRows').addEventListener('input', () => { const { rows, cols } = currentSeRowsCols(); renderSeGrid(rows, cols); });
+  document.getElementById('seCols').addEventListener('input', () => { const { rows, cols } = currentSeRowsCols(); renderSeGrid(rows, cols); });
+
+  function openSpecEdit(p){
+    specEditPartId = p.id;
+    document.getElementById('specEditTitle').textContent = '스펙 수정 — ' + (p.name || '');
+    const s = p.spec || {};
+    const margin = s.margin ?? 5, pitch = s.pitch ?? 10;
+    document.getElementById('seThickness').value = s.thickness ?? 5;
+    document.getElementById('seMargin').value = margin;
+    document.getElementById('sePitch').value = pitch;
+    document.getElementById('seBoreRadius').value = s.boreRadius ?? 1.4;
+    let rows = 3, cols = 3;
+    specEditGrid = [];
+    if (Array.isArray(s.holeCoords) && s.holeCoords.length) {
+      s.holeCoords.forEach(h => {
+        const c = Math.round((h.x - margin) / pitch), r = Math.round((h.z - margin) / pitch);
+        if (c >= 0 && r >= 0) {
+          rows = Math.max(rows, r+1); cols = Math.max(cols, c+1);
+          specEditGrid[r] = specEditGrid[r] || [];
+          specEditGrid[r][c] = true;
+        }
+      });
+    }
+    document.getElementById('seRows').value = rows;
+    document.getElementById('seCols').value = cols;
+    renderSeGrid(rows, cols);
+    document.getElementById('specEditMsg').hidden = true;
+    document.getElementById('specEditModal').hidden = false;
+  }
+  function closeSpecEdit(){ document.getElementById('specEditModal').hidden = true; specEditPartId = null; }
+  document.getElementById('specEditClose').addEventListener('click', closeSpecEdit);
+  document.getElementById('specEditModal').addEventListener('click', e => { if (e.target.id === 'specEditModal') closeSpecEdit(); });
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('.specEditBtn');
+    if (!btn) return;
+    const part = allParts.find(pp => pp.id === btn.dataset.partId);
+    if (!part) { alert('부품 목록을 다시 불러온 뒤 시도해주세요.'); return; }
+    openSpecEdit(part);
+  });
+  document.getElementById('specEditForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const part = allParts.find(pp => pp.id === specEditPartId);
+    const msg = document.getElementById('specEditMsg');
+    if (!part) { msg.textContent = '부품을 찾을 수 없어요.'; msg.hidden = false; return; }
+    const token = window.__accessToken;
+    if (!token) { msg.textContent = '로그인 세션이 없어요.'; msg.hidden = false; return; }
+    const { rows, cols } = currentSeRowsCols();
+    const thickness = Number(document.getElementById('seThickness').value) || 5;
+    const margin = Number(document.getElementById('seMargin').value) || 5;
+    const pitch = Number(document.getElementById('sePitch').value) || 10;
+    const boreRadius = Number(document.getElementById('seBoreRadius').value) || 1.4;
+
+    // 격자에서 켜진 칸만 실제 mm 좌표로 변환(x=여백+칸*피치, z=여백+줄*피치) — 방향은 격자를 누른 그대로라
+    // 애매할 수가 없음(사용자 지적: "방향... ㄱ 모르냐" — 숫자만으로 추측하던 방식이 문제였음).
+    const holesRaw = [];
+    for (let r=0;r<rows;r++) for (let c=0;c<cols;c++) if (specEditGrid[r] && specEditGrid[r][c]) holesRaw.push({ x: margin + c*pitch, z: margin + r*pitch });
+    if (!holesRaw.length) { msg.textContent = '구멍 칸을 최소 1개 이상 눌러서 표시해주세요.'; msg.hidden = false; return; }
+    const holePairs = gridHoleLabelPairs(holesRaw);
+    const maxHolesPerArm = Math.max(
+      ...Array.from({length:rows}, (_,r) => (specEditGrid[r]||[]).filter(Boolean).length),
+      ...Array.from({length:cols}, (_,c) => specEditGrid.filter(row => row && row[c]).length),
+      1
+    );
+
+    // armLen1/armLen2/armWidth(크기)는 사람이 또 입력하지 않고 등록된 이미지의 바운딩박스·꺾인 지점에서
+    // 그대로 계산(사용자 지시: "사이즈, 방향 크기 두께" 다 정리, 그리고 "왼쪽 팔?" 질문 자체가 안 나오게).
+    const svg = part.imageSvg || part.imageSvgDiagonal;
+    const outline = svg ? parseSvgPlateOutline(svg) : null;
+    const dims = outline ? deriveFrameArmDims(outline) : { armLen1:null, armLen2:null, armWidth:null };
+
+    const spec = {
+      armLen1: dims.armLen1, armLen2: dims.armLen2, armWidth: dims.armWidth,
+      thickness, margin, pitch, boreRadius, maxHolesPerArm,
+      holeLabels: holePairs.map(h => h.label),
+      holeCoords: holePairs,
+    };
+
+    const btn = e.target.querySelector('button[type="submit"]');
+    btn.disabled = true; msg.hidden = true;
+    try {
+      await adminApi({
+        action: 'update_part', partId: part.id,
+        name: part.name, icon: part.icon, subject: part.subject, category: part.category,
+        qty: part.qty, volume: part.volume, color: part.color, size: part.size,
+        imageSvg: part.imageSvg, imageSvgDiagonal: part.imageSvgDiagonal, primaryImage: part.primaryImage,
+        spec,
+      }, token);
+      part.spec = spec;
+      refreshSpecBlocks(part);
+      closeSpecEdit();
+    } catch (err) {
+      msg.textContent = err.message;
+      msg.hidden = false;
+    } finally {
+      btn.disabled = false;
+    }
   });
 
   // 스케치북은 평소엔 접어두고 필요할 때만 펼침(사용자 지시: "필요할때만 펼쳐서 하면되 평소엔 접어놔줘")

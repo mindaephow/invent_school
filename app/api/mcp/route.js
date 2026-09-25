@@ -8,11 +8,12 @@
 // 같은 Next.js 프로젝트·같은 Vercel 배포 안에 들어있다 (static HTML은
 // public/에 두고, Next.js가 라우팅 없이 그대로 서빙).
 //
-// 노출 툴 7개:
+// 노출 툴 8개:
 //   - list_tables       : Supabase DB 테이블 목록 조회
 //   - get_rows          : 임의 테이블 행 조회 (필터·검색·정렬·페이징)
 //   - upsert_row        : 임의 테이블 행 추가·수정
 //   - delete_row        : 임의 테이블 행 삭제 (되돌릴 수 없음)
+//   - update_part_spec  : ivs_part_catalog 한 행의 data.spec만 부분 수정 (image_svg·snapshot(s) 등 큰 필드는 서버에서 기존 값 유지)
 //   - run_sql           : SQL 직접 실행 (위험 DDL 자동 차단, run_sql_query RPC 필요)
 //   - list_github_files : GitHub 저장소(mindaephow/invent_school) 경로별 파일 목록 조회
 //   - get_github_file   : GitHub 저장소 특정 파일 내용 조회
@@ -212,6 +213,28 @@ const baseHandler = createMcpHandler(
     )
 
     server.registerTool(
+      'update_part_spec',
+      {
+        title: '부품 spec 부분 수정',
+        description: 'update_part_spec — ivs_part_catalog 한 행의 data.spec만 통째로 교체한다(armLen1/armLen2/armWidth/thickness/margin/pitch/boreRadius/maxHolesPerArm/holeLabels/holeCoords 등). image_svg·image_svg_diagonal·snapshot·snapshots 등 큰 이미지 필드는 서버에서 기존 값을 그대로 읽어 유지하므로 다시 보낼 필요 없다 — spec 숫자/좌표만 저장하고 싶을 때 upsert_row 대신 이걸 쓸 것.',
+        inputSchema: {
+          partId: z.string().describe('ivs_part_catalog 행 id'),
+          spec: z.record(z.any()).describe('덮어쓸 spec 객체 전체. 예: {"armLen1":30,"armLen2":30,"armWidth":10,"thickness":5,"margin":5,"pitch":10,"boreRadius":1.4,"holeLabels":["a1","a2"],"holeCoords":[{"label":"a1","x":15,"z":15,"face":null}]}'),
+        },
+      },
+      async ({ partId, spec }) => {
+        const sb = getSupabase()
+        const { data: existing, error: getErr } = await sb.from('ivs_part_catalog').select('data').eq('id', partId).maybeSingle()
+        if (getErr) return { content: [{ type: 'text', text: `❌ ${getErr.message}` }], isError: true }
+        if (!existing) return { content: [{ type: 'text', text: `❌ id="${partId}" 부품을 찾을 수 없음` }], isError: true }
+        const nextData = { ...existing.data, spec }
+        const { error: updErr } = await sb.from('ivs_part_catalog').update({ data: nextData }).eq('id', partId)
+        if (updErr) return { content: [{ type: 'text', text: `❌ ${updErr.message}` }], isError: true }
+        return { content: [{ type: 'text', text: `✅ [ivs_part_catalog] id="${partId}" (${existing.data?.name || ''}) spec 갱신 완료\n${JSON.stringify(spec, null, 2)}` }] }
+      }
+    )
+
+    server.registerTool(
       'run_sql',
       {
         title: 'SQL 직접 실행',
@@ -237,8 +260,9 @@ const baseHandler = createMcpHandler(
   {
     instructions:
       '발명학교(골드버그 출석부 + 3D 설계 도구) MCP 서버. ' +
-      'Supabase DB 직접 조회·수정 도구(list_tables/get_rows/upsert_row/delete_row/run_sql — ' +
-      'ivs_teachers/courses/students/records/curriculum/projects 테이블, 내용은 data jsonb에 있고 권한용 소유자 컬럼이 붙어 있음), ' +
+      'Supabase DB 직접 조회·수정 도구(list_tables/get_rows/upsert_row/delete_row/update_part_spec/run_sql — ' +
+      'ivs_teachers/courses/students/records/curriculum/projects 테이블, 내용은 data jsonb에 있고 권한용 소유자 컬럼이 붙어 있음). ' +
+      'ivs_part_catalog의 spec만 바꿀 땐 upsert_row(전체 교체) 대신 update_part_spec(부분 수정, 이미지 유지)을 쓸 것. ' +
       'GitHub 저장소(' + GITHUB_REPO + ') 파일 확인 도구(list_github_files/get_github_file)를 제공한다. ' +
       '선생님/수업/학생/출석기록/커리큘럼 데이터를 조회·수정하거나 index.html·design.html 코드를 확인할 때 이 서버의 도구를 사용한다.',
   },
