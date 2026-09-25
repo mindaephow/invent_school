@@ -1514,7 +1514,7 @@ h4{margin:4px 0}
       ['구멍 피치(간격)', bracketPitch() + 'mm'],
       ['구멍 반지름', bracketBoreRadius() + 'mm'],
       ['팔당 최대 구멍 수', bracketMaxHoles() + '개(모서리쪽 1개=블라인드 홀, 관통 안 됨)'],
-      ['구멍 번호(위 기준 위→아래=소문자·왼→오=숫자, 예: a2-A, 정면A·뒷면B)', bracketHoleLabels(arm1, arm2, armWidth).join(', ')],
+      ['구멍 번호', bracketHoleLabels(arm1, arm2, armWidth).join(', ')],
     ];
   }
   function frameSpecRows(svg, outline){
@@ -1527,7 +1527,7 @@ h4{margin:4px 0}
     const holes = parseSvgMaskHoleCenters(svg);
     rows.push(['구멍 수', holes.length ? holes.length + '개(등록된 이미지 기준)' : '등록된 이미지에서 못 읽음']);
     if (holes.length) {
-      rows.push(['구멍 번호(위 기준 위→아래=소문자·왼→오=숫자, 예: a2)', gridHoleLabels(holes.map(h => ({ x:h.x, z:h.y }))).join(', ')]);
+      rows.push(['구멍 번호', gridHoleLabels(holes.map(h => ({ x:h.x, z:h.y }))).join(', ')]);
     }
     return rows;
   }
