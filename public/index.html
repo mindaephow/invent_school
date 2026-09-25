@@ -1450,13 +1450,16 @@
   // 어느 권 목록에서 눌러도 같은 부품에 적용된다. displayQty는 그 권/누적 구간에서 필요한 수량만 표시용으로 바꿔치기.
   // actionable=false는 "N~M권 누적" 섹션용 — 여러 권의 수량을 합친 요약일 뿐이라 여기서 수정/삭제/권
   // 추가를 누르게 하면 혼란스럽다는 지적(사용자: "1권+2권에는 안나와야 하는거아니야?")에 따라 버튼을 뺀다.
-  function partRowHtml(p, displayQty, actionable){
+  // showAddVolume은 그 부품이 "최초로 등록된 권" 섹션에서만 true — 25프레임이 1/2/3권에 다 있으면
+  // "+ 다른 권에 등록"은 1권(최초 등록된 곳)에만 보이고 2·3권엔 안 보인다(사용자: "최초 부품에만").
+  function partRowHtml(p, displayQty, actionable, showAddVolume){
     if (actionable == null) actionable = true;
+    if (showAddVolume == null) showAddVolume = actionable;
     const sub = [p.size, p.color, (displayQty != null ? displayQty + '개' : '')].filter(Boolean).join(' · ');
     // "수정"은 이름·이미지·색상 같은 부품 자체를 고치는 버튼, "+ 다른 권에 등록"은 그 부품을 그대로 두고
     // 권 하나만 더 배정하는 별개 동작 — 한 버튼에 두 역할을 같이 주면 헷갈린다는 지적(사용자: "수정버튼을
     // 그역할로 하면 엄청 헷갈려")에 따라 완전히 분리했다.
-    const addVolBtn = actionable ? `<button type="button" class="ghost" data-add-volume="${escapeHtml(p.id)}">+ 다른 권에 등록</button>` : '';
+    const addVolBtn = (actionable && showAddVolume) ? `<button type="button" class="ghost" data-add-volume="${escapeHtml(p.id)}">+ 다른 권에 등록</button>` : '';
     const editBtn = actionable ? `<button type="button" class="ghost" data-edit-part="${escapeHtml(p.id)}">수정</button>` : '';
     const delBtn = actionable ? `<button type="button" class="ghost" data-delete-part="${escapeHtml(p.id)}">삭제</button>` : '';
     const primarySvg = p.primaryImage === 'diagonal' ? p.imageSvgDiagonal : p.imageSvg;
@@ -1502,10 +1505,17 @@
     let html = '';
     const volumes = Array.from(g.byVolume.keys()).sort((a, b) => a - b);
     if (g.noVolume.length) html += partSectionHtml(g.label + '-부품리스트', g.noVolume.map((p) => partRowHtml(p, null)));
+    // 부품별로 "최초 등록된 권"(가장 작은 권 번호)을 미리 구해둔다 — "+ 다른 권에 등록"을 그 권 섹션에서만 보여주기 위함.
+    const firstVolumeByPartId = new Map();
+    volumes.forEach((v) => {
+      g.byVolume.get(v).forEach((e) => {
+        if (!firstVolumeByPartId.has(e.part.id)) firstVolumeByPartId.set(e.part.id, v);
+      });
+    });
     const cumulative = new Map(); // partId -> { part, qty }
     volumes.forEach((v, i) => {
       const atVolume = g.byVolume.get(v); // [{ part, qty }]
-      html += partSectionHtml(g.label + v + '권-부품리스트', atVolume.map((e) => partRowHtml(e.part, e.qty)));
+      html += partSectionHtml(g.label + v + '권-부품리스트', atVolume.map((e) => partRowHtml(e.part, e.qty, true, firstVolumeByPartId.get(e.part.id) === v)));
       atVolume.forEach((e) => {
         const prev = cumulative.get(e.part.id);
         if (!prev) cumulative.set(e.part.id, { part: e.part, qty: e.qty || 0 });
