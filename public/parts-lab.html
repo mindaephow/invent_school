@@ -73,7 +73,7 @@ h4{margin:4px 0}
 .specTable{border-collapse:collapse;font-size:12px;width:100%;table-layout:fixed;}
 .specTable th{text-align:left;color:#888;font-weight:600;padding:3px 10px 3px 0;white-space:normal;word-break:keep-all;vertical-align:top;width:38%;}
 .specTable td{padding:3px 0;color:#222;word-break:break-all;}
-#boxEditorPanel{width:520px; flex:none; margin-top:10px;}
+#boxEditorPanel{width:760px; max-width:100%; flex:none; margin-top:10px;}
 #boxEditorPanel .imgWrap{width:500px; height:500px;}
 #boxEditorPanel .btnRow{margin-top:6px; display:flex; gap:6px; flex-wrap:wrap; align-items:center;}
 #boxEditorPanel .btnRow button{padding:6px 10px; font-size:12px; border-radius:6px; border:1px solid #ccc; background:#fff; cursor:pointer;}
@@ -122,35 +122,39 @@ h4{margin:4px 0}
       <button type="button" class="tfModeBtn" data-mode="scale">↔ 크기</button>
       <span class="section-note" style="margin:0;">캔버스 안 도형의 화살표/손잡이를 드래그해보세요.</span>
     </div>
-    <div class="imgWrap">
-      <canvas id="boxEditorCanvas" width="500" height="500"></canvas>
+    <div style="display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap;">
+      <div class="imgWrap">
+        <canvas id="boxEditorCanvas" width="500" height="500"></canvas>
+      </div>
+      <div style="flex:1; min-width:200px;">
+        <div class="btnRow" style="margin-top:0;">
+          <label style="font-size:11px;color:#666;display:flex;flex-direction:column;gap:2px;">도형 종류
+            <select id="shapeType">
+              <option value="box">박스</option>
+              <option value="wheel">바퀴</option>
+              <option value="gear">톱니바퀴</option>
+            </select>
+          </label>
+        </div>
+        <div class="boxFields">
+          <label>x(mm)<input type="number" id="boxX" value="0" step="1"></label>
+          <label>y(mm)<input type="number" id="boxY" value="0" step="1"></label>
+          <label>z(mm)<input type="number" id="boxZ" value="0" step="1"></label>
+        </div>
+        <div class="boxFields" id="boxOnlyFields">
+          <label>가로 w(mm)<input type="number" id="boxW" value="30" min="1" step="1"></label>
+          <label>높이 h(mm)<input type="number" id="boxH" value="10" min="1" step="1"></label>
+          <label>세로 d(mm)<input type="number" id="boxD" value="30" min="1" step="1"></label>
+        </div>
+        <div class="boxFields" id="roundFields" hidden>
+          <label>반지름(mm)<input type="number" id="shapeRadius" value="20" min="1" step="1"></label>
+          <label>두께(mm)<input type="number" id="shapeWidth" value="10" min="1" step="1"></label>
+          <label id="teethField" hidden>톱니 수<input type="number" id="shapeTeeth" value="12" min="4" max="40" step="1"></label>
+        </div>
+        <div class="btnRow"><button id="boxRedrawBtn" type="button" style="background:#fff;color:#2b6be0;">다시 그리기</button><button id="boxSaveBtn" type="button" disabled>저장</button></div>
+        <div class="msg" id="boxEditorMsg"></div>
+      </div>
     </div>
-    <div class="btnRow">
-      <label style="font-size:11px;color:#666;display:flex;flex-direction:column;gap:2px;">도형 종류
-        <select id="shapeType">
-          <option value="box">박스</option>
-          <option value="wheel">바퀴</option>
-          <option value="gear">톱니바퀴</option>
-        </select>
-      </label>
-    </div>
-    <div class="boxFields">
-      <label>x(mm)<input type="number" id="boxX" value="0" step="1"></label>
-      <label>y(mm)<input type="number" id="boxY" value="0" step="1"></label>
-      <label>z(mm)<input type="number" id="boxZ" value="0" step="1"></label>
-    </div>
-    <div class="boxFields" id="boxOnlyFields">
-      <label>가로 w(mm)<input type="number" id="boxW" value="30" min="1" step="1"></label>
-      <label>높이 h(mm)<input type="number" id="boxH" value="10" min="1" step="1"></label>
-      <label>세로 d(mm)<input type="number" id="boxD" value="30" min="1" step="1"></label>
-    </div>
-    <div class="boxFields" id="roundFields" hidden>
-      <label>반지름(mm)<input type="number" id="shapeRadius" value="20" min="1" step="1"></label>
-      <label>두께(mm)<input type="number" id="shapeWidth" value="10" min="1" step="1"></label>
-      <label id="teethField" hidden>톱니 수<input type="number" id="shapeTeeth" value="12" min="4" max="40" step="1"></label>
-    </div>
-    <div class="btnRow"><button id="boxRedrawBtn" type="button" style="background:#fff;color:#2b6be0;">다시 그리기</button><button id="boxSaveBtn" type="button" disabled>저장</button></div>
-    <div class="msg" id="boxEditorMsg"></div>
   </div>
 </div>
 
