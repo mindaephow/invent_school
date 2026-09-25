@@ -123,16 +123,34 @@ h4{margin:4px 0}
       <span class="section-note" style="margin:0;">캔버스 안 도형의 화살표/손잡이를 드래그해보세요.</span>
     </div>
     <div style="display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap;">
-      <div class="imgWrap">
-        <canvas id="boxEditorCanvas" width="500" height="500"></canvas>
+      <div>
+        <div class="imgWrap">
+          <canvas id="boxEditorCanvas" width="500" height="500"></canvas>
+        </div>
+        <div class="btnRow">
+          <button id="boxPreviewBtn" type="button" style="background:#fff;color:#2b6be0;">🧮 결과 미리보기(더하기·빼기 계산)</button>
+          <button id="boxBackToEditBtn" type="button" hidden>✏️ 편집으로 돌아가기</button>
+        </div>
       </div>
-      <div style="flex:1; min-width:200px;">
+      <div style="flex:1; min-width:220px;">
+        <div class="section-note" style="margin:0 0 6px;">도형 목록 — 맨 위가 기준(베이스), 그 아래는 순서대로 더하거나 뺍니다.</div>
+        <div id="shapeList" style="display:flex; flex-direction:column; gap:4px; margin-bottom:8px;"></div>
         <div class="btnRow" style="margin-top:0;">
+          <button id="shapeAddBtn" type="button">+ 도형 추가</button>
+          <button id="shapeDeleteBtn" type="button" style="background:#fff;color:#c0392b;">선택 도형 삭제</button>
+        </div>
+        <div class="btnRow">
           <label style="font-size:11px;color:#666;display:flex;flex-direction:column;gap:2px;">도형 종류
             <select id="shapeType">
               <option value="box">박스</option>
               <option value="wheel">바퀴</option>
               <option value="gear">톱니바퀴</option>
+            </select>
+          </label>
+          <label id="shapeOpField" style="font-size:11px;color:#666;display:flex;flex-direction:column;gap:2px;">연산
+            <select id="shapeOp">
+              <option value="add">➕ 더하기</option>
+              <option value="subtract">➖ 빼기(뚫기)</option>
             </select>
           </label>
         </div>
@@ -151,7 +169,7 @@ h4{margin:4px 0}
           <label>두께(mm)<input type="number" id="shapeWidth" value="10" min="1" step="1"></label>
           <label id="teethField" hidden>톱니 수<input type="number" id="shapeTeeth" value="12" min="4" max="40" step="1"></label>
         </div>
-        <div class="btnRow"><button id="boxRedrawBtn" type="button" style="background:#fff;color:#2b6be0;">다시 그리기</button><button id="boxSaveBtn" type="button" disabled>저장</button></div>
+        <div class="btnRow"><button id="boxRedrawBtn" type="button" style="background:#fff;color:#2b6be0;">이 도형에 적용</button><button id="boxSaveBtn" type="button" disabled>저장</button></div>
         <div class="msg" id="boxEditorMsg"></div>
       </div>
     </div>
@@ -226,9 +244,22 @@ h4{margin:4px 0}
 </div>
 <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
 <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-<script src="https://unpkg.com/three@0.128.0/examples/js/controls/TransformControls.js"></script>
 <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="db-shim.js"></script>
+<!-- 도형 에디터(parts-lab-box-editor.js) 전용 — 위 three@0.128(브라켓/프레임 화면이 씀)과는 완전히 분리된
+     최신 three.js + CSG(진짜 입체 더하기/빼기/뚫기) 스택. import map은 도형 에디터 모듈 안에서만 쓰이고
+     나머지 이 페이지 코드(전역 THREE)와는 서로 안 건드림 — 사용자 지시: "부품수리실만 이걸 사용하고
+     분리해서 만든다음 불러오는식으로". -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.186.1/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.186.1/examples/jsm/",
+    "three-mesh-bvh": "https://unpkg.com/three-mesh-bvh@0.9.15/src/index.js",
+    "three-bvh-csg": "https://unpkg.com/three-bvh-csg@0.0.18/src/index.js"
+  }
+}
+</script>
 <script>
 (function(){
   const SUPABASE_URL = 'https://brfeszcyjsaprbakqsjl.supabase.co';
@@ -1938,5 +1969,5 @@ h4{margin:4px 0}
   }
 })();
 </script>
-<script src="parts-lab-box-editor.js"></script>
+<script type="module" src="parts-lab-box-editor.js"></script>
 </body></html>
