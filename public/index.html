@@ -1450,22 +1450,25 @@
   // 어느 권 목록에서 눌러도 같은 부품에 적용된다. displayQty는 그 권/누적 구간에서 필요한 수량만 표시용으로 바꿔치기.
   // actionable=false는 "N~M권 누적" 섹션용 — 여러 권의 수량을 합친 요약일 뿐이라 여기서 수정/삭제/권
   // 추가를 누르게 하면 혼란스럽다는 지적(사용자: "1권+2권에는 안나와야 하는거아니야?")에 따라 버튼을 뺀다.
-  // showAddVolume은 그 부품이 "최초로 등록된 권" 섹션에서만 true — 25프레임이 1/2/3권에 다 있으면
-  // "+ 다른 권에 등록"은 1권(최초 등록된 곳)에만 보이고 2·3권엔 안 보인다(사용자: "최초 부품에만").
-  function partRowHtml(p, displayQty, actionable, showAddVolume){
+  // showAddVolume/isNewHere는 둘 다 "그 부품이 이 권에 처음 등록됐는지"를 나타낸다(같은 조건, 두 군데
+  // 쓰임만 다름) — 25프레임이 1/2/3권에 다 있으면 "+ 다른 권에 등록" 버튼과 "N권 신규" 표시 둘 다
+  // 최초 등록된 1권에만 뜨고, 2·3권엔 그 부품이 원래 1권부터 있던 거라 신규 표시가 없다(사용자:
+  // "최초 부품에만" / "2권에서만 추가된 부품에도 별도 표시를 해줘").
+  function partRowHtml(p, displayQty, actionable, isNewHere){
     if (actionable == null) actionable = true;
-    if (showAddVolume == null) showAddVolume = actionable;
+    if (isNewHere == null) isNewHere = actionable;
     const sub = [p.size, p.color, (displayQty != null ? displayQty + '개' : '')].filter(Boolean).join(' · ');
+    const newBadge = isNewHere ? `<span class="pill on" style="flex:none;">신규</span>` : '';
     // "수정"은 이름·이미지·색상 같은 부품 자체를 고치는 버튼, "+ 다른 권에 등록"은 그 부품을 그대로 두고
     // 권 하나만 더 배정하는 별개 동작 — 한 버튼에 두 역할을 같이 주면 헷갈린다는 지적(사용자: "수정버튼을
     // 그역할로 하면 엄청 헷갈려")에 따라 완전히 분리했다.
-    const addVolBtn = (actionable && showAddVolume) ? `<button type="button" class="ghost" data-add-volume="${escapeHtml(p.id)}">+ 다른 권에 등록</button>` : '';
+    const addVolBtn = (actionable && isNewHere) ? `<button type="button" class="ghost" data-add-volume="${escapeHtml(p.id)}">+ 다른 권에 등록</button>` : '';
     const editBtn = actionable ? `<button type="button" class="ghost" data-edit-part="${escapeHtml(p.id)}">수정</button>` : '';
     const delBtn = actionable ? `<button type="button" class="ghost" data-delete-part="${escapeHtml(p.id)}">삭제</button>` : '';
     const primarySvg = p.primaryImage === 'diagonal' ? p.imageSvgDiagonal : p.imageSvg;
     const thumbSrc = uniquifySvgIds(primarySvg || p.imageSvg || p.imageSvgDiagonal, p.id);
     const thumb = thumbSrc ? `<button type="button" class="part-thumb" data-view-image="${escapeHtml(p.id)}">${thumbSrc}</button>` : '';
-    return `<div class="design-row" style="align-items:center;"><div class="item-main"><div class="item-title">${escapeHtml(p.icon ? p.icon + ' ' : '')}${escapeHtml(p.name)}</div><div class="item-sub">${escapeHtml(sub)}</div></div><div style="display:flex; align-items:center; gap:8px; flex:none; flex-wrap:wrap;">${thumb}${addVolBtn}${editBtn}${delBtn}</div></div>`;
+    return `<div class="design-row" style="align-items:center;"><div class="item-main"><div class="item-title">${newBadge}${escapeHtml(p.icon ? p.icon + ' ' : '')}${escapeHtml(p.name)}</div><div class="item-sub">${escapeHtml(sub)}</div></div><div style="display:flex; align-items:center; gap:8px; flex:none; flex-wrap:wrap;">${thumb}${addVolBtn}${editBtn}${delBtn}</div></div>`;
   }
   // "+ 다른 권에 등록" 클릭 시 그 행 바로 아래 펼쳐지는 미니폼 — 권 번호·수량만 물어보고 부품의 다른 정보는
   // 건드리지 않는다(등록 폼을 다시 열거나 "수정"을 누르게 하지 않기 위한, 이 동작 전용의 작고 뚜렷한 UI).
@@ -1479,8 +1482,9 @@
       <p class="note err qa-msg" hidden style="width:100%; margin:4px 0 0;"></p>
     </div>`;
   }
-  function partSectionHtml(title, rowsHtml){
-    return `<details style="margin:10px 0;"><summary style="cursor:pointer; font-size:13px; font-weight:700; color:var(--ink-soft); padding:4px 0;">${escapeHtml(title)} <span style="font-weight:400;">(${rowsHtml.length}개 종류)</span></summary>${rowsHtml.join('')}</details>`;
+  function partSectionHtml(title, rowsHtml, newCount){
+    const newNote = newCount ? ` · 이 권에서 신규 ${newCount}개` : '';
+    return `<details style="margin:10px 0;"><summary style="cursor:pointer; font-size:13px; font-weight:700; color:var(--ink-soft); padding:4px 0;">${escapeHtml(title)} <span style="font-weight:400;">(${rowsHtml.length}개 종류${newNote})</span></summary>${rowsHtml.join('')}</details>`;
   }
   // 카테고리(예: 큐보) 단위로 묶고, 그 안에서 권별 섹션 + 맨 끝에 전체 권 합친 누적 섹션을 보여준다
   // (큐보 2권을 만들려면 1권 부품도 있어야 하는 것처럼, 뒤 권은 앞 권 부품 위에 쌓이는 구조라서)
@@ -1515,7 +1519,8 @@
     const cumulative = new Map(); // partId -> { part, qty }
     volumes.forEach((v, i) => {
       const atVolume = g.byVolume.get(v); // [{ part, qty }]
-      html += partSectionHtml(g.label + v + '권-부품리스트', atVolume.map((e) => partRowHtml(e.part, e.qty, true, firstVolumeByPartId.get(e.part.id) === v)));
+      const newCount = atVolume.filter((e) => firstVolumeByPartId.get(e.part.id) === v).length;
+      html += partSectionHtml(g.label + v + '권-부품리스트', atVolume.map((e) => partRowHtml(e.part, e.qty, true, firstVolumeByPartId.get(e.part.id) === v)), newCount);
       atVolume.forEach((e) => {
         const prev = cumulative.get(e.part.id);
         if (!prev) cumulative.set(e.part.id, { part: e.part, qty: e.qty || 0 });
