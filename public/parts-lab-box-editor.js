@@ -47,9 +47,12 @@ function initBoxEditor() {
   function currentType() { return document.getElementById('shapeType').value; }
   function syncFieldVisibility() {
     const type = currentType();
-    document.getElementById('boxOnlyFields').hidden = type !== 'box';
-    document.getElementById('roundFields').hidden = type === 'box';
-    document.getElementById('teethField').hidden = type !== 'gear';
+    // .hidden 속성 대신 style.display를 직접 건드린다 — .boxFields에 준 display:flex 규칙이
+    // [hidden]{display:none} 기본 규칙보다 CSS 명시도가 높아서, hidden만 켜서는 실제로 안 숨겨졌다
+    // (인라인 style은 항상 이겨서 확실히 숨겨짐).
+    document.getElementById('boxOnlyFields').style.display = type === 'box' ? 'flex' : 'none';
+    document.getElementById('roundFields').style.display = type === 'box' ? 'none' : 'flex';
+    document.getElementById('teethField').style.display = type === 'gear' ? 'flex' : 'none';
   }
   function readShapeInputs() {
     const type = currentType();
