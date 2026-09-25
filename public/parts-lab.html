@@ -819,7 +819,7 @@ h4{margin:4px 0}
         await adminApi({
           action: 'update_part', partId: part.id,
           name: part.name, icon: part.icon, subject: part.subject, category: part.category,
-          qty: part.qty, volume: part.volume, color: part.color, size: part.size,
+          volumes: part.volumes, color: part.color, size: part.size,
           imageSvg: part.imageSvg, imageSvgDiagonal: part.imageSvgDiagonal, primaryImage: part.primaryImage,
           snapshots,
         }, token);
@@ -1413,8 +1413,7 @@ h4{margin:4px 0}
       ['이름', p.name || '-'],
       ['과목', p.subject || '-'],
       ['분류', p.category ? (categoryNames[p.category] || p.category) : '-'],
-      ['권', p.volume != null ? p.volume + '권' : '-'],
-      ['수량', p.qty != null ? p.qty + '개' : '-'],
+      ['사용 권', (p.volumes && p.volumes.length) ? p.volumes.map(v => v.volume + '권' + (v.qty != null ? '(' + v.qty + '개)' : '')).join(', ') : '전체 공통'],
       ['색상', p.color || '-'],
       ...computedRows,
     ];
@@ -1693,7 +1692,7 @@ h4{margin:4px 0}
       await adminApi({
         action: 'update_part', partId: part.id,
         name: part.name, icon: part.icon, subject: part.subject, category: part.category,
-        qty: part.qty, volume: part.volume, color: part.color, size: part.size,
+        volumes: part.volumes, color: part.color, size: part.size,
         imageSvg: part.imageSvg, imageSvgDiagonal: part.imageSvgDiagonal, primaryImage: part.primaryImage,
         spec,
       }, token);
@@ -1894,8 +1893,8 @@ h4{margin:4px 0}
       try {
         await adminApi({
           action: 'update_part', partId: p.id,
-          name: p.name, icon: p.icon, subject: p.subject, category: p.category||'', volume: p.volume||'',
-          qty: p.qty, color: p.color, size, spec, snapshot, snapshots,
+          name: p.name, icon: p.icon, subject: p.subject, category: p.category||'', volumes: p.volumes||[],
+          color: p.color, size, spec, snapshot, snapshots,
           imageSvg: p.imageSvg, imageSvgDiagonal: p.imageSvgDiagonal, primaryImage: p.primaryImage || 'front'
         }, window.__accessToken);
         p.size = size; p.spec = spec; if (snapshot) p.snapshot = snapshot; if (Object.keys(snapshots).length) p.snapshots = snapshots;

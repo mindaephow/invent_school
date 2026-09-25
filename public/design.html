@@ -1176,23 +1176,18 @@
     return m ? [Number(m[1]), Number(m[2])] : [Infinity, Infinity];
   }
   // N권을 고르면 1권부터 N권까지 등록된 부품을 다 합쳐서 보여준다(큐보 2권을 만들려면 1권 부품도 있어야 하는 것과 같은 구조).
-  // 같은 이름의 부품이 여러 권에 걸쳐 등록돼 있으면 하나로 합치고 수량은 더한다. 대표로 쓰는 부품(id·이미지)은 가장 낮은 권의 것으로 고정해서,
-  // 어느 권 화면에서 보든 같은 부품은 항상 같은 종류로 취급되게 한다(재고 차감이 헷갈리지 않도록).
-  function mergeCumulativeParts(items){
-    const byName = new Map();
-    items.slice().sort((a, b) => (Number(a.volume) || 0) - (Number(b.volume) || 0)).forEach(p => {
-      const existing = byName.get(p.name);
-      if (!existing) {
-        byName.set(p.name, Object.assign({}, p, { qty: p.qty != null ? Number(p.qty) : null }));
-      } else {
-        if (p.qty != null) existing.qty = (existing.qty || 0) + Number(p.qty);
-        if (!existing.imageSvg && p.imageSvg) existing.imageSvg = p.imageSvg;
-        if (!existing.imageSvgDiagonal && p.imageSvgDiagonal) existing.imageSvgDiagonal = p.imageSvgDiagonal;
-        if (!existing.size && p.size) existing.size = p.size;
-        if (!existing.color && p.color) existing.color = p.color;
-      }
+  // 부품 하나는 이제 카탈로그에 한 번만 등록돼 있고 p.volumes(그 부품이 필요한 권·수량 목록)만 여러 개 가질 수 있으니,
+  // 이름으로 여러 행을 합칠 필요 없이 그 부품의 volumes 항목 중 이번 권 이하인 것만 수량을 더하면 된다.
+  function cumulativeQtyAtVolume(part, volume){
+    if (!Array.isArray(part.volumes) || !part.volumes.length) return null;
+    let sum = null;
+    part.volumes.forEach(v => {
+      if (Number(v.volume) <= Number(volume) && v.qty != null) sum = (sum || 0) + Number(v.qty);
     });
-    return [...byName.values()];
+    return sum;
+  }
+  function cumulativePartsAtVolume(rawItems, volume){
+    return rawItems.map(p => Object.assign({}, p, { qty: cumulativeQtyAtVolume(p, volume) }));
   }
   // 3D에 이미 놓은 개수만큼 빼고 남은 수량을 돌려준다(수량을 안 세는 부품이면 null).
   function robotPartRemaining(p, type){
@@ -1203,9 +1198,9 @@
   function renderVolumeParts(categoryId, volume){
     const el = document.getElementById('volumePartsPalette');
     if (!el) return;
-    const rawItems = robotPartsCache.filter(p => p.category === categoryId && (p.volume == null || Number(p.volume) <= Number(volume)));
+    const rawItems = robotPartsCache.filter(p => p.category === categoryId && (!p.volumes.length || p.volumes.some(v => Number(v.volume) <= Number(volume))));
     if (!rawItems.length) { el.innerHTML = '<p class="part-note">아직 등록된 부품이 없어요. 곧 준비할게요!</p>'; return; }
-    const items = mergeCumulativeParts(rawItems);
+    const items = cumulativePartsAtVolume(rawItems, volume);
     const groups = new Map();
     items.forEach(p => {
       const title = robotPartGroupTitle(p.name);
@@ -1244,8 +1239,8 @@
   function refreshRequiredList(categoryId, volume){
     const card = document.getElementById('requiredList');
     if (!card) return;
-    const rawItems = robotPartsCache.filter(p => p.category === categoryId && (p.volume == null || Number(p.volume) <= Number(volume)));
-    const trackable = mergeCumulativeParts(rawItems).filter(p => p.qty != null);
+    const rawItems = robotPartsCache.filter(p => p.category === categoryId && (!p.volumes.length || p.volumes.some(v => Number(v.volume) <= Number(volume))));
+    const trackable = cumulativePartsAtVolume(rawItems, volume).filter(p => p.qty != null);
     if (!trackable.length) { card.hidden = true; return; }
     card.hidden = false;
     let mismatchCount = 0;
@@ -1280,7 +1275,7 @@
       });
       if (!res.ok) return;
       const rows = await res.json();
-      robotPartsCache = (rows || []).map(r => ({ id: r.id, name: r.data && r.data.name, icon: r.data && r.data.icon, category: r.data && r.data.category, volume: r.data && r.data.volume, qty: r.data && r.data.qty, color: r.data && r.data.color, size: r.data && r.data.size, imageSvg: r.data && r.data.image_svg, imageSvgDiagonal: r.data && r.data.image_svg_diagonal, primaryImage: r.data && r.data.primary_image }));
+      robotPartsCache = (rows || []).map(r => ({ id: r.id, name: r.data && r.data.name, icon: r.data && r.data.icon, category: r.data && r.data.category, volumes: (r.data && Array.isArray(r.data.volumes)) ? r.data.volumes : [], color: r.data && r.data.color, size: r.data && r.data.size, imageSvg: r.data && r.data.image_svg, imageSvgDiagonal: r.data && r.data.image_svg_diagonal, primaryImage: r.data && r.data.primary_image }));
       // 저장된 프로젝트를 불러올 때 restoreParts가 즉시 PART_DEFS를 찾을 수 있도록, 화면에 아직 안 띄운 권까지 전부 미리 등록해 둔다.
       robotPartsCache.forEach(registerRobotPartDef);
       refreshRobotPalette();

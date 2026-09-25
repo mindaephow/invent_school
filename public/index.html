@@ -364,15 +364,17 @@
           <div><label>과목</label><select id="partSubject" required><option value="goldberg">골드버그</option><option value="robot">로봇</option><option value="aviation">항공</option></select></div>
           <div id="partCategoryWrap"><label>카테고리 (로봇만)</label><select id="partCategory"><option value="">(전체 공통)</option></select></div>
         </div>
-        <div id="partVolumeWrap"><label>권 (로봇만, 비우면 전체 공통)</label><input id="partVolume" type="number" min="1" step="1" autocomplete="off"></div>
+        <div id="partVolumeWrap">
+          <label>사용하는 권 (로봇만, 비우면 전체 공통)</label>
+          <p class="note" style="margin:2px 0 8px;">이 부품이 필요한 권과 그 권에서 필요한 수량을 추가하세요. 다음 권에도 같은 부품이 또 필요하면 새로 등록하지 말고 권을 하나 더 추가만 하면 돼요 — 아래에서 이름·이미지를 수정하면 모든 권에 한 번에 반영돼요.</p>
+          <div id="partVolumesList"></div>
+          <button type="button" class="ghost" id="partVolumeAddBtn">+ 권 추가</button>
+        </div>
         <div class="row2">
           <div><label>부품 이름</label><input id="partName" required autocomplete="off"></div>
           <div><label>아이콘 (이모지)</label><input id="partIcon" placeholder="예: 🤖" autocomplete="off"></div>
         </div>
-        <div class="row2">
-          <div><label>수량</label><input id="partQty" type="number" min="1" step="1" autocomplete="off"></div>
-          <div><label>색상</label><input id="partColor" placeholder="예: 레드" autocomplete="off"></div>
-        </div>
+        <div><label>색상</label><input id="partColor" placeholder="예: 레드" autocomplete="off"></div>
         <div><label>사이즈</label><input id="partSize" placeholder="예: 15cm, M3" autocomplete="off"></div>
         <div><label>이미지 — 위/정면 샷 (SVG 코드, 선택)</label><textarea id="partImageSvg" rows="3" placeholder="&lt;svg&gt;...&lt;/svg&gt; 코드를 붙여넣으면 목록에 썸네일로 보여요." autocomplete="off"></textarea></div>
         <div><label>이미지 — 대각선(입체) 샷 (SVG 코드, 선택)</label><textarea id="partImageSvgDiagonal" rows="3" placeholder="&lt;svg&gt;...&lt;/svg&gt; 코드를 붙여넣으면 위 이미지 옆에 나란히 보여요." autocomplete="off"></textarea></div>
@@ -1444,17 +1446,19 @@
     });
     return out;
   }
-  function partRowHtml(p){
-    const sub = [p.size, p.color, (p.qty != null ? p.qty + '개' : '')].filter(Boolean).join(' · ');
-    const editBtn = p._merged ? '' : `<button type="button" class="ghost" data-edit-part="${escapeHtml(p.id)}">수정</button>`;
-    const delBtn = p._merged ? '' : `<button type="button" class="ghost" data-delete-part="${escapeHtml(p.id)}">삭제</button>`;
+  // p는 항상 실제 부품(카탈로그 행) — 같은 부품이 여러 권에 걸쳐 쓰여도 행은 하나뿐이라 수정/삭제는
+  // 어느 권 목록에서 눌러도 같은 부품에 적용된다. displayQty는 그 권/누적 구간에서 필요한 수량만 표시용으로 바꿔치기.
+  function partRowHtml(p, displayQty){
+    const sub = [p.size, p.color, (displayQty != null ? displayQty + '개' : '')].filter(Boolean).join(' · ');
+    const editBtn = `<button type="button" class="ghost" data-edit-part="${escapeHtml(p.id)}">수정</button>`;
+    const delBtn = `<button type="button" class="ghost" data-delete-part="${escapeHtml(p.id)}">삭제</button>`;
     const primarySvg = p.primaryImage === 'diagonal' ? p.imageSvgDiagonal : p.imageSvg;
     const thumbSrc = uniquifySvgIds(primarySvg || p.imageSvg || p.imageSvgDiagonal, p.id);
     const thumb = thumbSrc ? `<button type="button" class="part-thumb" data-view-image="${escapeHtml(p.id)}">${thumbSrc}</button>` : '';
     return `<div class="design-row" style="align-items:center;"><div class="item-main"><div class="item-title">${escapeHtml(p.icon ? p.icon + ' ' : '')}${escapeHtml(p.name)}</div><div class="item-sub">${escapeHtml(sub)}</div></div><div style="display:flex; align-items:center; gap:8px; flex:none;">${thumb}${editBtn}${delBtn}</div></div>`;
   }
-  function partSectionHtml(title, items){
-    return `<details style="margin:10px 0;"><summary style="cursor:pointer; font-size:13px; font-weight:700; color:var(--ink-soft); padding:4px 0;">${escapeHtml(title)} <span style="font-weight:400;">(${items.length}개 종류)</span></summary>${items.map(partRowHtml).join('')}</details>`;
+  function partSectionHtml(title, rowsHtml){
+    return `<details style="margin:10px 0;"><summary style="cursor:pointer; font-size:13px; font-weight:700; color:var(--ink-soft); padding:4px 0;">${escapeHtml(title)} <span style="font-weight:400;">(${rowsHtml.length}개 종류)</span></summary>${rowsHtml.join('')}</details>`;
   }
   // 카테고리(예: 큐보) 단위로 묶고, 그 안에서 권별 섹션 + 맨 끝에 전체 권 합친 누적 섹션을 보여준다
   // (큐보 2권을 만들려면 1권 부품도 있어야 하는 것처럼, 뒤 권은 앞 권 부품 위에 쌓이는 구조라서)
@@ -1478,16 +1482,17 @@
   function renderGroupHtml(g){
     let html = '';
     const volumes = Array.from(g.byVolume.keys()).sort((a, b) => a - b);
-    if (g.noVolume.length) html += partSectionHtml(g.label + '-부품리스트', g.noVolume);
-    const merged = new Map();
+    if (g.noVolume.length) html += partSectionHtml(g.label + '-부품리스트', g.noVolume.map((p) => partRowHtml(p, null)));
+    const cumulative = new Map(); // partId -> { part, qty }
     volumes.forEach((v, i) => {
-      html += partSectionHtml(g.label + v + '권-부품리스트', g.byVolume.get(v));
-      g.byVolume.get(v).forEach((p) => {
-        const key = p.name + '|' + (p.color || '');
-        if (!merged.has(key)) merged.set(key, { ...p, qty: 0, _merged: true });
-        merged.get(key).qty += (p.qty || 0);
+      const atVolume = g.byVolume.get(v); // [{ part, qty }]
+      html += partSectionHtml(g.label + v + '권-부품리스트', atVolume.map((e) => partRowHtml(e.part, e.qty)));
+      atVolume.forEach((e) => {
+        const prev = cumulative.get(e.part.id);
+        if (!prev) cumulative.set(e.part.id, { part: e.part, qty: e.qty || 0 });
+        else prev.qty += (e.qty || 0);
       });
-      if (i > 0) html += partSectionHtml(`${g.label} 1~${v}권 누적`, Array.from(merged.values()));
+      if (i > 0) html += partSectionHtml(`${g.label} 1~${v}권 누적`, Array.from(cumulative.values()).map((c) => partRowHtml(c.part, c.qty)));
     });
     return html;
   }
@@ -1502,9 +1507,11 @@
       const catLabel = p.category ? categoryLabel(p.category) : (PART_SUBJECT_LABEL[p.subject] || p.subject);
       if (!byCategoryKey.has(catKey)) byCategoryKey.set(catKey, { label: catLabel, byVolume: new Map(), noVolume: [] });
       const g = byCategoryKey.get(catKey);
-      if (p.volume != null) {
-        if (!g.byVolume.has(p.volume)) g.byVolume.set(p.volume, []);
-        g.byVolume.get(p.volume).push(p);
+      if (Array.isArray(p.volumes) && p.volumes.length) {
+        p.volumes.forEach((entry) => {
+          if (!g.byVolume.has(entry.volume)) g.byVolume.set(entry.volume, []);
+          g.byVolume.get(entry.volume).push({ part: p, qty: entry.qty });
+        });
       } else {
         g.noVolume.push(p);
       }
@@ -1546,6 +1553,25 @@
   }
   document.getElementById('partSubject').addEventListener('change', syncPartCategoryVisibility);
 
+  // "이 부품이 필요한 권" 목록 — 권 번호 + 그 권에서 필요한 수량을 한 쌍씩 추가/삭제할 수 있게 한다.
+  // 다음 권에도 같은 부품이 필요하면 부품 전체를 새로 등록하는 대신 여기에 행 하나만 더 추가하면 된다.
+  function addPartVolumeRow(volume, qty){
+    const list = document.getElementById('partVolumesList');
+    const row = document.createElement('div');
+    row.className = 'volume-row';
+    row.style.cssText = 'display:flex; gap:8px; align-items:center; margin-bottom:6px;';
+    row.innerHTML = '<input type="number" min="1" step="1" class="vol-volume" placeholder="권" style="width:70px;" autocomplete="off"><input type="number" min="1" step="1" class="vol-qty" placeholder="수량(선택)" style="width:110px;" autocomplete="off"><button type="button" class="ghost vol-remove">삭제</button>';
+    if (volume != null) row.querySelector('.vol-volume').value = volume;
+    if (qty != null) row.querySelector('.vol-qty').value = qty;
+    row.querySelector('.vol-remove').addEventListener('click', () => row.remove());
+    list.appendChild(row);
+  }
+  document.getElementById('partVolumeAddBtn').addEventListener('click', () => addPartVolumeRow());
+  function collectPartVolumes(){
+    return Array.from(document.querySelectorAll('#partVolumesList .volume-row'))
+      .map((row) => ({ volume: row.querySelector('.vol-volume').value, qty: row.querySelector('.vol-qty').value }))
+      .filter((v) => v.volume !== '');
+  }
   document.getElementById('togglePartForm').addEventListener('click', () => {
     const f = document.getElementById('partForm');
     f.hidden = !f.hidden;
@@ -1555,6 +1581,7 @@
   function resetPartForm(){
     document.getElementById('partForm').reset();
     document.getElementById('partEditId').value = '';
+    document.getElementById('partVolumesList').innerHTML = '';
     document.getElementById('partSubmitBtn').textContent = '등록';
     document.getElementById('partCancelEdit').hidden = true;
   }
@@ -1567,7 +1594,7 @@
       const isRobot = subject === 'robot';
       const editId = document.getElementById('partEditId').value;
       const primaryImageInput = document.querySelector('input[name="partPrimaryImage"]:checked');
-      const payload = { name: document.getElementById('partName').value, icon: document.getElementById('partIcon').value, subject, category: isRobot ? document.getElementById('partCategory').value : '', volume: isRobot ? document.getElementById('partVolume').value : '', qty: document.getElementById('partQty').value, color: document.getElementById('partColor').value, size: document.getElementById('partSize').value, imageSvg: document.getElementById('partImageSvg').value, imageSvgDiagonal: document.getElementById('partImageSvgDiagonal').value, primaryImage: primaryImageInput ? primaryImageInput.value : 'front' };
+      const payload = { name: document.getElementById('partName').value, icon: document.getElementById('partIcon').value, subject, category: isRobot ? document.getElementById('partCategory').value : '', volumes: isRobot ? collectPartVolumes() : [], color: document.getElementById('partColor').value, size: document.getElementById('partSize').value, imageSvg: document.getElementById('partImageSvg').value, imageSvgDiagonal: document.getElementById('partImageSvgDiagonal').value, primaryImage: primaryImageInput ? primaryImageInput.value : 'front' };
       if (editId) { payload.action = 'update_part'; payload.partId = editId; } else { payload.action = 'add_part'; }
       await adminApi(payload);
       resetPartForm();
@@ -1606,10 +1633,10 @@
       document.getElementById('partSubject').value = p.subject || 'robot';
       syncPartCategoryVisibility();
       document.getElementById('partCategory').value = p.category || '';
-      document.getElementById('partVolume').value = p.volume ?? '';
+      document.getElementById('partVolumesList').innerHTML = '';
+      (p.volumes || []).forEach((v) => addPartVolumeRow(v.volume, v.qty));
       document.getElementById('partName').value = p.name || '';
       document.getElementById('partIcon').value = p.icon || '';
-      document.getElementById('partQty').value = p.qty ?? '';
       document.getElementById('partColor').value = p.color || '';
       document.getElementById('partSize').value = p.size || '';
       document.getElementById('partImageSvg').value = p.imageSvg || '';
