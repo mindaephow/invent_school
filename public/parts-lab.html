@@ -49,6 +49,7 @@ h4{margin:4px 0}
 .specBlock{background:#fff;border:1px solid #ddd;border-radius:8px;padding:10px 14px;margin-top:6px;max-width:640px;}
 .specBlock h5{margin:0 0 6px;font-size:13px;color:#555;}
 .specBlockHead{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.specMissingWarn{background:#fff3e0;border:1px solid #e0a83a;color:#8a5a00;font-size:11px;padding:6px 8px;border-radius:6px;margin:6px 0;}
 .specEditBtn{padding:4px 10px;border-radius:6px;border:1px solid #2b6be0;background:#fff;color:#2b6be0;cursor:pointer;font-size:11px;white-space:nowrap;}
 .specEditForm{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;}
 .specEditForm label{font-size:12px;color:#555;display:block;}
@@ -1420,7 +1421,12 @@ h4{margin:4px 0}
     // "사이즈 문자열"은 spec이 생기기 전에 쓰던 자유 텍스트라 구조화된 spec과 같은 무게로 보여주면 중복
     // 처럼 보임 — 항상 "참고"로만 붙인다(사용자 지시: "그럼 참고로 빼").
     if (p.size) rows.push(['참고(사이즈 문자열)', p.size]);
-    return '<div class="specBlock" data-part-id="' + esc(p.id) + '"><div class="specBlockHead"><h5>부품 스펙 전체</h5>' + editBtnHtml + '</div>' + shotThumbRowHtml(p) + '<table class="specTable">' +
+    // 행을 아예 빼버리면 "뭐가 없는지"조차 안 보임(사용자 지적: "어떤 정보가 없는지는 어떻게 알아???")
+    // — spec 자체가 없는 프레임에는 눈에 띄는 경고를 따로 붙인다.
+    const missingSpecWarning = (!isBracket && !(p.spec && p.spec.armLen1 != null))
+      ? '<div class="specMissingWarn">⚠️ 스펙 미저장 — 바운딩박스·두께·구멍 정보 없음. "스펙 수정"으로 채워주세요.</div>'
+      : '';
+    return '<div class="specBlock" data-part-id="' + esc(p.id) + '"><div class="specBlockHead"><h5>부품 스펙 전체</h5>' + editBtnHtml + '</div>' + missingSpecWarning + shotThumbRowHtml(p) + '<table class="specTable">' +
       rows.map(([k,v]) => '<tr><th>' + esc(k) + '</th><td>' + esc(String(v)) + '</td></tr>').join('') +
       '</table></div>';
   }
