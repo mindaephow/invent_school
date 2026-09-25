@@ -1448,14 +1448,17 @@
   }
   // p는 항상 실제 부품(카탈로그 행) — 같은 부품이 여러 권에 걸쳐 쓰여도 행은 하나뿐이라 수정/삭제는
   // 어느 권 목록에서 눌러도 같은 부품에 적용된다. displayQty는 그 권/누적 구간에서 필요한 수량만 표시용으로 바꿔치기.
-  function partRowHtml(p, displayQty){
+  // actionable=false는 "N~M권 누적" 섹션용 — 여러 권의 수량을 합친 요약일 뿐이라 여기서 수정/삭제/권
+  // 추가를 누르게 하면 혼란스럽다는 지적(사용자: "1권+2권에는 안나와야 하는거아니야?")에 따라 버튼을 뺀다.
+  function partRowHtml(p, displayQty, actionable){
+    if (actionable == null) actionable = true;
     const sub = [p.size, p.color, (displayQty != null ? displayQty + '개' : '')].filter(Boolean).join(' · ');
     // "수정"은 이름·이미지·색상 같은 부품 자체를 고치는 버튼, "+ 다른 권에 등록"은 그 부품을 그대로 두고
     // 권 하나만 더 배정하는 별개 동작 — 한 버튼에 두 역할을 같이 주면 헷갈린다는 지적(사용자: "수정버튼을
     // 그역할로 하면 엄청 헷갈려")에 따라 완전히 분리했다.
-    const addVolBtn = `<button type="button" class="ghost" data-add-volume="${escapeHtml(p.id)}">+ 다른 권에 등록</button>`;
-    const editBtn = `<button type="button" class="ghost" data-edit-part="${escapeHtml(p.id)}">수정</button>`;
-    const delBtn = `<button type="button" class="ghost" data-delete-part="${escapeHtml(p.id)}">삭제</button>`;
+    const addVolBtn = actionable ? `<button type="button" class="ghost" data-add-volume="${escapeHtml(p.id)}">+ 다른 권에 등록</button>` : '';
+    const editBtn = actionable ? `<button type="button" class="ghost" data-edit-part="${escapeHtml(p.id)}">수정</button>` : '';
+    const delBtn = actionable ? `<button type="button" class="ghost" data-delete-part="${escapeHtml(p.id)}">삭제</button>` : '';
     const primarySvg = p.primaryImage === 'diagonal' ? p.imageSvgDiagonal : p.imageSvg;
     const thumbSrc = uniquifySvgIds(primarySvg || p.imageSvg || p.imageSvgDiagonal, p.id);
     const thumb = thumbSrc ? `<button type="button" class="part-thumb" data-view-image="${escapeHtml(p.id)}">${thumbSrc}</button>` : '';
@@ -1508,7 +1511,7 @@
         if (!prev) cumulative.set(e.part.id, { part: e.part, qty: e.qty || 0 });
         else prev.qty += (e.qty || 0);
       });
-      if (i > 0) html += partSectionHtml(`${g.label} 1~${v}권 누적`, Array.from(cumulative.values()).map((c) => partRowHtml(c.part, c.qty)));
+      if (i > 0) html += partSectionHtml(`${g.label} 1~${v}권 누적`, Array.from(cumulative.values()).map((c) => partRowHtml(c.part, c.qty, false)));
     });
     return html;
   }
