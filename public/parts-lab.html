@@ -793,6 +793,12 @@ h4{margin:4px 0}
           snapshots,
         }, token);
         part.snapshots = snapshots;
+        // 저장 직후 화면에 떠 있는 부품스펙 썸네일 칸을 바로 갱신(사용자 지적: "저장이되었으면 썸네일
+        // 미리보기가 바로 불러와져야 하는거아니야?") — 같은 부품이 비교/수정 칸 양쪽에 동시에 떠 있을 수
+        // 있어서 data-part-id로 매칭되는 모든 칸을 갱신한다.
+        document.querySelectorAll('.shotThumbRow[data-part-id="' + part.id + '"]').forEach(row => {
+          row.outerHTML = shotThumbRowHtml(part);
+        });
         shotBtn.textContent = '✅ 저장됨';
         setTimeout(() => { shotBtn.textContent = prevText; }, 1500);
       } catch (e) {
@@ -1309,7 +1315,7 @@ h4{margin:4px 0}
   // 해당스샷이 있는지 없는지더 표시를 해줘 썸네일로, 썸네일 클릭하면 모달띄어서 확인할수 있게").
   function shotThumbRowHtml(p){
     const snaps = p.snapshots || {};
-    return '<div class="shotThumbRow">' + [['top','위'],['front','정면'],['back','뒷면']].map(([slot,label]) => {
+    return '<div class="shotThumbRow" data-part-id="' + esc(p.id) + '">' + [['top','위'],['front','정면'],['back','뒷면']].map(([slot,label]) => {
       const url = snaps[slot];
       if (url) {
         const shotLabel = (p.name || '부품') + ' (' + label + ')';
