@@ -1,6 +1,7 @@
 // 부품 수리실의 "도형 에디터" — 예전 자유낙서 스케치북 자리를 대신한다. 도형(박스/바퀴/톱니바퀴) 하나를
-// x/y/z(위치)·크기 숫자로 놓고 3D로 확인한 뒤, 고른 부품의 spec.shapes에 저장한다(브라켓이
-// armLen1/armLen2/armWidth 숫자만으로 항상 똑같이 재현되는 것과 같은 방식 — svg 없이 숫자만으로 모양이 재현됨).
+// 마우스로 직접 옮기거나 크기를 조절하고(THREE.TransformControls — OrbitControls와 같은 공식 three.js
+// 예제, 사용자 요청: "이동/크기 손잡이" 같은 팅커캐드식 조작), 숫자 입력으로도 정확히 맞춘 뒤, 고른 부품의
+// spec.shapes에 저장한다(svg 없이 숫자만으로 모양이 재현됨 — 브라켓의 armLen1/armLen2/armWidth와 같은 목적).
 //
 // parts-lab.html의 공용 헬퍼(baseScene 등)·adminApi는 window.__partsLab로 넘겨받는다(그 파일의 큰 IIFE 안에
 // 있어서 직접 접근 불가) — 코드가 길어져서 따로 분리한 파일이라 이렇게 최소한만 내보내 쓴다.
@@ -35,31 +36,15 @@ function buildShapeMesh(shape) {
   return new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: SHAPE_COLOR }));
 }
 
-function renderShapeScene(canvas, shape) {
-  const { baseScene, orthoCam, setupOrbit, addZoomButtons, addEdgeOutline } = window.__partsLab;
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
-  renderer.setSize(500, 500, false);
-  const scene = baseScene();
-  const camera = orthoCam(120);
-  camera.position.set(150, 150, 150);
-  camera.lookAt(shape.x, shape.y, shape.z);
-  const mesh = buildShapeMesh(shape);
-  mesh.position.set(shape.x, shape.y, shape.z);
-  if (mesh.isMesh) addEdgeOutline(mesh, SHAPE_COLOR);
-  else mesh.children.forEach((child) => addEdgeOutline(child, SHAPE_COLOR));
-  scene.add(mesh);
-  renderer.render(scene, camera);
-  const controls = setupOrbit(renderer, scene, camera, [shape.x, shape.y, shape.z]);
-  addZoomButtons(canvas, () => ({ camera, controls }));
-}
-
 function initBoxEditor() {
-  const { openPickerModal, adminApi, getAccessToken } = window.__partsLab;
+  const { baseScene, orthoCam, setupOrbit, addZoomButtons, addEdgeOutline, openPickerModal, adminApi, getAccessToken } = window.__partsLab;
   let targetPart = null;
+  // 지금 캔버스에 떠 있는 씬/카메라/조작 도구 — 숫자칸에서 "다시 그리기"를 누르거나 부품을 새로 고를 때마다
+  // 통째로 새로 만든다(브라켓/프레임 편집 패널과 같은 방식). 드래그로 옮기거나 크기를 바꾼 결과는
+  // transformControls의 objectChange 이벤트에서 바로 숫자칸에 반영한다.
+  let live = null;
 
-  function currentType() {
-    return document.getElementById('shapeType').value;
-  }
+  function currentType() { return document.getElementById('shapeType').value; }
   function syncFieldVisibility() {
     const type = currentType();
     document.getElementById('boxOnlyFields').hidden = type !== 'box';
@@ -87,26 +72,78 @@ function initBoxEditor() {
   }
   function fillShapeInputs(shape) {
     document.getElementById('shapeType').value = shape.type || 'box';
-    document.getElementById('boxX').value = shape.x;
-    document.getElementById('boxY').value = shape.y;
-    document.getElementById('boxZ').value = shape.z;
+    document.getElementById('boxX').value = round1(shape.x);
+    document.getElementById('boxY').value = round1(shape.y);
+    document.getElementById('boxZ').value = round1(shape.z);
     if ((shape.type || 'box') === 'box') {
-      document.getElementById('boxW').value = shape.w;
-      document.getElementById('boxH').value = shape.h;
-      document.getElementById('boxD').value = shape.d;
+      document.getElementById('boxW').value = round1(shape.w);
+      document.getElementById('boxH').value = round1(shape.h);
+      document.getElementById('boxD').value = round1(shape.d);
     } else {
-      document.getElementById('shapeRadius').value = shape.radius;
-      document.getElementById('shapeWidth').value = shape.width;
+      document.getElementById('shapeRadius').value = round1(shape.radius);
+      document.getElementById('shapeWidth').value = round1(shape.width);
       if (shape.type === 'gear') document.getElementById('shapeTeeth').value = shape.teeth;
     }
     syncFieldVisibility();
   }
-  // 이전 렌더러가 캔버스에 붙여둔 확대/축소 버튼 등 잔재를 지우려고, mutate하지 않고 캔버스 엘리먼트 자체를
-  // 새로 교체한다 — 부품 수리실의 브라켓/프레임 편집 패널(freshWrap)과 같은 방식.
+  function round1(n) { return Math.round(n * 10) / 10; }
+
+  // 드래그로 옮기거나("이동") 크기를 바꾼("크기") 결과를 숫자칸에 그대로 되읽어 온다. "크기" 모드는
+  // mesh.scale을 곱하는 방식이라, 매번 그 배율을 실제 w/h/d(또는 radius/width) 숫자에 구워넣고
+  // scale은 다시 1로 되돌린다 — 안 그러면 드래그를 여러 번 할수록 배율이 겹겹이 쌓여 숫자와 안 맞아진다.
+  function syncInputsFromLiveObject() {
+    if (!live) return;
+    const { target, shape } = live;
+    shape.x = target.position.x; shape.y = target.position.y; shape.z = target.position.z;
+    if (shape.type === 'box') {
+      shape.w = Math.max(1, shape.w * target.scale.x);
+      shape.h = Math.max(1, shape.h * target.scale.y);
+      shape.d = Math.max(1, shape.d * target.scale.z);
+    } else {
+      shape.radius = Math.max(1, shape.radius * ((target.scale.x + target.scale.z) / 2));
+      shape.width = Math.max(1, shape.width * target.scale.y);
+    }
+    target.scale.set(1, 1, 1);
+    fillShapeInputs(shape);
+  }
+
+  // 이전 렌더러/조작 도구가 캔버스에 붙여둔 확대/축소 버튼 등 잔재를 지우려고, mutate하지 않고 캔버스
+  // 엘리먼트 자체를 새로 교체한다 — 부품 수리실의 브라켓/프레임 편집 패널(freshWrap)과 같은 방식.
   function redraw() {
     const wrap = document.querySelector('#boxEditorPanel .imgWrap');
     wrap.innerHTML = '<canvas id="boxEditorCanvas" width="500" height="500"></canvas>';
-    renderShapeScene(document.getElementById('boxEditorCanvas'), readShapeInputs());
+    const canvas = document.getElementById('boxEditorCanvas');
+    const shape = readShapeInputs();
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
+    renderer.setSize(500, 500, false);
+    const scene = baseScene();
+    const camera = orthoCam(120);
+    camera.position.set(150, 150, 150);
+    camera.lookAt(shape.x, shape.y, shape.z);
+
+    const target = buildShapeMesh(shape);
+    target.position.set(shape.x, shape.y, shape.z);
+    if (target.isMesh) addEdgeOutline(target, SHAPE_COLOR);
+    else target.children.forEach((child) => addEdgeOutline(child, SHAPE_COLOR));
+    scene.add(target);
+
+    const controls = setupOrbit(renderer, scene, camera, [shape.x, shape.y, shape.z]);
+    addZoomButtons(canvas, () => ({ camera, controls }));
+
+    const transform = new THREE.TransformControls(camera, renderer.domElement);
+    transform.attach(target);
+    transform.setMode(document.querySelector('.tfModeBtn.on') && document.querySelector('.tfModeBtn.on').dataset.mode === 'scale' ? 'scale' : 'translate');
+    transform.addEventListener('dragging-changed', (e) => { controls.enabled = !e.value; });
+    transform.addEventListener('objectChange', syncInputsFromLiveObject);
+    scene.add(transform);
+
+    live = { target, shape, transform };
+  }
+
+  function setTransformMode(mode) {
+    document.querySelectorAll('.tfModeBtn').forEach((b) => b.classList.toggle('on', b.dataset.mode === mode));
+    if (live && live.transform) live.transform.setMode(mode);
   }
 
   function onBoxTargetPicked(p) {
@@ -120,6 +157,7 @@ function initBoxEditor() {
 
   document.getElementById('shapeType').addEventListener('change', () => { syncFieldVisibility(); redraw(); });
   document.getElementById('boxRedrawBtn').addEventListener('click', redraw);
+  document.querySelectorAll('.tfModeBtn').forEach((b) => b.addEventListener('click', () => setTransformMode(b.dataset.mode)));
   document.getElementById('boxTargetPickBtn').addEventListener('click', () => {
     openPickerModal('저장할 부품 고르기', onBoxTargetPicked);
   });
