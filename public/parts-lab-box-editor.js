@@ -17,8 +17,12 @@ import { FontLoader } from 'three/addons/loaders/FontLoader.js';
 import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 import { Evaluator, Brush, ADDITION, SUBTRACTION } from 'three-bvh-csg';
 
-const ADD_COLOR = 0x8fb2ff;
 const SUB_COLOR = 0xff8a8a;
+// 팅커캐드처럼 도형마다(팔레트 타일도, 캔버스에 놓인 도형도) 서로 다른 색을 준다 — 전부 한 가지 파란색
+// 하나로만 칠했더니 도형이 여러 개 겹치면 구분이 안 된다는 지적을 받고 추가함. "빼기(구멍)"로 지정된
+// 도형만은 의미 전달을 위해 계속 반투명 빨강(SUB_COLOR) 하나로 통일한다.
+const SHAPE_PALETTE = [0x5b8def, 0xff9f43, 0x51cf66, 0xa78bfa, 0x22b8cf, 0xff6fa5, 0xfcc419, 0x37b24d, 0x748ffc, 0xf783ac, 0x66d9e8, 0xffa94d, 0x845ef7, 0x20c997, 0xf06595];
+function colorForIndex(i) { return SHAPE_PALETTE[i % SHAPE_PALETTE.length]; }
 // "텍스트" 도형용 — 모듈이 로드되는 시점에 한 번만 받아온다(top-level await, 페이지 전체를 막지 않고
 // 이 모듈 하나만 폰트가 올 때까지 잠깐 기다림 — gate()가 window.initBoxEditor를 폴링해서 기다리는 것과 맞물림).
 // unpkg의 three npm 패키지엔 이제 examples/fonts가 안 들어있어서(0 files) three.js 깃허브 저장소를
@@ -170,7 +174,7 @@ function round1(n) { return Math.round(n * 10) / 10; }
 // 팔레트처럼(사용자가 실제 팅커캐드 스크린샷을 보여주며 "이모지 말고 이렇게" 지적).
 function renderPaletteThumbnails() {
   const size = 112;
-  SHAPE_TYPES.forEach((type) => {
+  SHAPE_TYPES.forEach((type, i) => {
     const canvas = document.createElement('canvas');
     canvas.width = size; canvas.height = size;
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
@@ -179,8 +183,9 @@ function renderPaletteThumbnails() {
     scene.add(new THREE.AmbientLight(0xffffff, 0.8));
     const dir = new THREE.DirectionalLight(0xffffff, 0.7); dir.position.set(2, 3, 2); scene.add(dir);
     const shape = defaultShapeOfType(type);
-    const mesh = new THREE.Mesh(buildShapeGeometry(shape), new THREE.MeshStandardMaterial({ color: ADD_COLOR }));
-    addEdgeOutline(mesh, ADD_COLOR);
+    const color = colorForIndex(i);
+    const mesh = new THREE.Mesh(buildShapeGeometry(shape), new THREE.MeshStandardMaterial({ color }));
+    addEdgeOutline(mesh, color);
     scene.add(mesh);
     const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 500);
     camera.position.set(45, 40, 45);
@@ -238,8 +243,8 @@ function initBoxEditor() {
     teardownLive();
     const canvas = freshCanvas();
     const { renderer, scene, camera, controls } = setupCommon(canvas);
-    const meshes = shapes.map((shape) => {
-      const color = shape.op === 'subtract' ? SUB_COLOR : ADD_COLOR;
+    const meshes = shapes.map((shape, i) => {
+      const color = shape.op === 'subtract' ? SUB_COLOR : colorForIndex(i);
       const mat = new THREE.MeshStandardMaterial({ color, transparent: shape.op === 'subtract', opacity: shape.op === 'subtract' ? 0.55 : 1 });
       const mesh = new THREE.Mesh(buildShapeGeometry(shape), mat);
       mesh.position.set(shape.x, shape.y, shape.z);
@@ -284,7 +289,7 @@ function initBoxEditor() {
       mesh.geometry = buildShapeGeometry(shape);
       mesh.children.forEach((c) => c.geometry && c.geometry.dispose());
       mesh.clear();
-      addEdgeOutline(mesh, shape.op === 'subtract' ? SUB_COLOR : ADD_COLOR);
+      addEdgeOutline(mesh, shape.op === 'subtract' ? SUB_COLOR : colorForIndex(selectedIndex));
     }
     renderShapeListUI();
     fillFieldsFromShape(shape);
@@ -306,8 +311,10 @@ function initBoxEditor() {
       result = evaluator.evaluate(result, b, shapes[i].op === 'subtract' ? SUBTRACTION : ADDITION);
       result.updateMatrixWorld();
     }
-    result.material = new THREE.MeshStandardMaterial({ color: ADD_COLOR });
-    addEdgeOutline(result, ADD_COLOR);
+    // 최종 결과는 여러 도형을 합친 하나의 완성품이라 베이스 도형의 색 하나로 통일해서 보여준다.
+    const finalColor = colorForIndex(0);
+    result.material = new THREE.MeshStandardMaterial({ color: finalColor });
+    addEdgeOutline(result, finalColor);
     scene.add(result);
     live = { renderer, scene, camera, controls, transform: null, meshes: [], rafId: 0 };
     renderer.render(scene, camera);
