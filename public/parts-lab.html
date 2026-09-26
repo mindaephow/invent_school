@@ -1304,9 +1304,9 @@ h4{margin:4px 0}
     // 등록된 svg의 실제 구멍 좌표(parseSvgMaskHoleCenters)를 그대로 써서 계산하므로 이름으로 추측하지 않는다.
     // 구멍마다 라벨을 다 박지 않고 표 좌표축처럼 위쪽엔 X번호(1,2,3...), 왼쪽엔 Z번호(1,2,3...)만 한 번씩 표시함.
     const holeCentersForAxes = showHoleLabels ? parseSvgMaskHoleCenters(svg) : [];
-    // 90도 프레임 전용 넘버링(사용자 확정 규칙): margin/피치로 나눈 칸이 아니라, 실제 구멍 수치(mm)를
-    // 그대로 모아 중복 제거·정렬한 뒤 순서대로 번호 1,2,3...을 매김 — 그리드 한 칸에 구멍 하나, 번호는 1부터.
-    // gridAxes(공용, floor(v/피치) 방식)는 1열브라켓 쪽에서 계속 쓰므로 여기서는 건드리지 않는다.
+    // 사용자 확정 규칙: margin/피치로 나눈 칸이 아니라, 실제 구멍 수치(mm)를 그대로 모아 중복 제거·정렬한
+    // 뒤 순서대로 번호 1,2,3...을 매김 — 그리드 한 칸에 구멍 하나, 번호는 1부터. 공용 gridAxes도 이제
+    // 같은 방식(gridCellIndex=gridRnd)이라 결과는 같지만, 여기선 직접 계산해서 중복 호출을 줄인다.
     const frameAxes = showHoleLabels
       ? {
           xs: [...new Set(holeCentersForAxes.map(h => gridRnd(h.x)))].sort((a,b) => a-b),
@@ -1403,31 +1403,21 @@ h4{margin:4px 0}
       new THREE.LineBasicMaterial({ color: darken(0xf2ead9,0.55) })
     ));
     partGroup.add(mesh);
-    // 숫자 입력칸(팔1/팔2)만으로는 실제 모델에서 어느 쪽이 팔1이고 어느 쪽이 팔2인지 알 수 없어서
-    // (사용자 지적: "팔1은 어디고 팔2는 어디야???") 각 팔 끝에 라벨을 직접 붙여서 눈으로 바로 구분되게 함.
-    const label1 = makeTextSprite('팔1', '#2b6be0');
-    label1.position.set(arm1 * 0.4, 14, armWidth/2);
-    partGroup.add(label1);
-    const label2 = makeTextSprite('팔2', '#c0392b');
-    label2.position.set(arm1 - armWidth/2, 14, arm2 * 0.6);
-    partGroup.add(label2);
     // 구멍: 여백5·피치10, 팔당 3개, 코너쪽(팔 끝에서 가장 가까운 첫 구멍)=블라인드, 앞면+뒷면 둘 다 있어야 함
     // (원본 발명학교-부품작업\_compare_all.html의 buildBracketScene과 비교해서 발견한 버그 수정:
     // 사용자 지적 "저기 그려진 구멍은 맞아???" — 높이는 armWidth/2가 아니라 항상 높이(10)의 절반인 고정값
     // 5여야 하고(원본 예시에서 armWidth가 우연히 5였을 뿐), 뒷면 구멍 세트가 통째로 빠져 있었음)
     const holeY = bracketThickness() / 2; // holeY는 항상 두께의 절반
-    // 구멍 번호(위 기준 위→아래=줄번호·왼→오=칸번호, 둘 다 숫자, 예: 2-1-A, 정면A·뒷면B)는 스펙 표에 항상 목록으로 나오고, "위" 샷에서는
-    // 구멍마다 라벨을 다 박지 않고(사용자 지시: "위에 1 2 3으로 적혀있고 왼쪽에 a b c만 적혀있으면 되") 표 좌표축처럼
-    // 위쪽엔 칸 번호(1,2,3...), 왼쪽엔 줄 문자(a,b,c...)만 한 번씩 표시함 — bracketHoleGeom이 makeHole과 같은
-    // 좌표를 쓰므로 눈에 보이는 구멍 위치와 축 위치가 항상 일치한다.
+    // 구멍 번호(위 기준 X·Z 둘 다 숫자, 예: 2-1-A, 정면A·뒷면B)는 스펙 표에 항상 목록으로 나오고, "위" 샷에서는
+    // 구멍마다 라벨을 다 박지 않고 표 좌표축처럼 위쪽엔 X번호(1,2,3...), 왼쪽엔 Z번호(1,2,3...)만 한 번씩
+    // 표시함 — bracketHoleGeom이 makeHole과 같은 좌표를 쓰므로 눈에 보이는 구멍 위치와 축 위치가 항상 일치한다.
     const holeGeoms = bracketHoleGeom(arm1, arm2, armWidth);
     holeGeoms.forEach((h) => makeHole(partGroup, h.x, holeY, h.z, h.rot, h.blind));
     if (showHoleLabels) {
       // bracketTopCamPos가 프레임의 위 카메라와 같은 축 방향(epsilon을 z에 둠)을 쓰므로 프레임과 완전히
-      // 같은 방식으로 계산: 숫자는 x(왼→오)를 따라 위쪽 가장자리에, 문자는 z(위→아래)를 따라 왼쪽 가장자리에.
-      // gridAxes가 이제 좌표를 10mm 칸 번호(gridCellIndex)로 묶어서 주므로, 라벨은 그 칸의 중앙
-      // (gridCellCenter = margin과 같은 5,15,25...)에 찍는다. z=0(팔1 반대쪽 면)은 z=5와 같은 칸이라
-      // 문자가 4개가 아니라 3개(a,b,c)만 나온다 — 0은 애초에 칸 중앙이 아니라서 나올 수 없다.
+      // 같은 방식으로 계산: X번호는 x(왼→오)를 따라 위쪽 가장자리에, Z번호는 z(위→아래)를 따라 왼쪽 가장자리에
+      // — 알파벳은 안 쓰고 X·Z 둘 다 숫자. gridAxes는 실제 구멍 수치를 그대로 모아 순서대로 번호를 매기므로
+      // (margin/피치로 나눈 칸이 아님) 서로 다른 두 구멍이 한 번호로 합쳐지지 않는다.
       const { xs, zs } = gridAxes(holeGeoms);
       const zAnchor = gridCellCenter(zs[0]);
       xs.forEach((cellIdx,i) => {
@@ -1437,7 +1427,7 @@ h4{margin:4px 0}
       });
       const xAnchor = gridCellCenter(xs[0]);
       zs.forEach((cellIdx,j) => {
-        const sprite = makeTextSprite(String.fromCharCode(97 + j), '#2b6be0', 2.4);
+        const sprite = makeTextSprite(String(j + 1), '#2b6be0', 2.4);
         sprite.position.set(xAnchor - 6, holeY + 5, gridCellCenter(cellIdx));
         scene.add(sprite);
       });
@@ -1733,14 +1723,13 @@ h4{margin:4px 0}
   // 호출(파일 앞쪽의 refFrameTop/refBracketTop 등)이 이 줄보다 앞에 있어서, const였다면 호출 시점에 아직
   // 초기화 전이라 "Cannot access before initialization" 에러가 났음 — function 선언은 완전히 끌어올려짐.
   function gridRnd(n){ return Math.round(n * 10) / 10; }
-  // 좌표를 그대로 값으로 비교하지 않고 10mm 그리드 칸 번호(floor(좌표/피치))로 묶는다. 1열브라켓처럼
-  // armWidth=margin인 경우, 팔1의 반대쪽 면 좌표(z=0)와 팔2의 첫 구멍 위치(z=5)는 서로 다른 구멍이지만
-  // 둘 다 같은 0~10mm 칸 안에 있다 — 팔1 전체가 물리적으로 한 줄(폭 5mm)일 뿐이라 애초에 두 줄로 나뉘면
-  // 안 되는데, 좌표값을 그대로 구분해서 세면 억지로 a(0)/b(5) 두 줄로 쪼개지고 뒤 칸들도 밀렸었다
-  // (사용자 지적: "왜 계속 a를 0이라고 하는거야" — 칸 중앙은 margin+i*pitch=5,15,25...뿐이라 0은 나오면 안 됨).
-  // 칸으로 묶으면 z=0,5가 같은 칸(0번, 중앙 5)으로 합쳐져서 문자가 4개(a~d)가 아니라 3개(a~c)만 나온다.
-  function gridCellIndex(v){ return Math.floor(v / bracketPitch()); }
-  function gridCellCenter(i){ return i * bracketPitch() + bracketPitch()/2; }
+  // 사용자 확정 규칙: 그리드 한 칸에 구멍 하나, 번호는 1부터. margin/피치로 나눈 칸(floor(좌표/피치))으로
+  // 묶으면 1열브라켓처럼 armWidth=margin(둘 다 5)인 경우 팔1의 반대쪽 면(z=0, arm1의 뒷면)과 팔2의 첫
+  // 구멍(z=5, arm2를 따라가는 완전히 다른 구멍)이 우연히 같은 0~10mm 칸에 들어가 번호 하나로 합쳐지는
+  // 문제가 있었다(서로 다른 구멍인데 칸 하나=구멍 하나 규칙이 깨짐). 그래서 칸으로 묶지 않고 실제 구멍
+  // 수치를 그대로 모아 중복만 제거하고 정렬해서 번호를 매긴다 — z=0과 z=5도 이제 서로 다른 번호로 나온다.
+  function gridCellIndex(v){ return gridRnd(v); }
+  function gridCellCenter(v){ return v; }
   function gridAxes(holes){
     return {
       xs: [...new Set(holes.map(h => gridCellIndex(h.x)))].sort((a,b) => a-b),
