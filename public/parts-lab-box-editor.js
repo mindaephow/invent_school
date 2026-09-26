@@ -295,8 +295,11 @@ function renderPaletteThumbnails() {
 function initBoxEditor() {
   const { openPickerModal, adminApi, getAccessToken } = window.__partsLab;
   let targetPart = null;
-  let shapes = [defaultShapeOfType('box')];
-  let selectedIndex = 0;
+  // 빈 캔버스로 시작한다 — 3D 디자인 도구는 원래 처음엔 아무것도 없는 게 정상이다(사용자 지적: "3d
+  // 디지인중에 처음부터 도형이 있는 경우가 어디있어?????"). 예전엔 기본 박스를 하나 깔아뒀는데, 그러면
+  // 그 박스를 지우려고 해도 "도형이 하나는 남아있어야" 막혀서 결국 못 지우는 게 이상하다는 지적도 같이 받음.
+  let shapes = [];
+  let selectedIndex = -1;
   let mode = 'edit'; // 'edit' | 'preview'
   // 지금 캔버스에 떠 있는 씬/렌더러/조작 도구 전체 — 모드를 바꾸거나 도형 목록이 바뀔 때마다 통째로 새로 만든다.
   let live = null;
@@ -358,7 +361,10 @@ function initBoxEditor() {
     startLoop(() => live);
   }
   function attachSelection() {
-    if (!live || !live.meshes.length) return;
+    if (!live || !live.meshes.length || selectedIndex < 0 || !live.meshes[selectedIndex]) {
+      if (live && live.transform) live.transform.detach();
+      return;
+    }
     const mesh = live.meshes[selectedIndex];
     live.transform.attach(mesh);
     live.transform.setMode(document.querySelector('.tfModeBtn.on').dataset.mode);
@@ -409,6 +415,14 @@ function initBoxEditor() {
     teardownLive();
     const canvas = freshCanvas();
     const { renderer, scene, camera, controls } = setupCommon(canvas);
+    if (!shapes.length) {
+      live = { renderer, scene, camera, controls, transform: null, meshes: [], rafId: 0 };
+      renderer.render(scene, camera);
+      startLoop(() => live);
+      document.getElementById('boxEditorMsg').textContent = '도형이 없어요 — 팔레트에서 추가해보세요.';
+      return;
+    }
+    document.getElementById('boxEditorMsg').textContent = '';
     const evaluator = new Evaluator();
     let result = new Brush(buildShapeGeometry(shapes[0]));
     result.position.set(shapes[0].x, shapes[0].y, shapes[0].z);
@@ -469,8 +483,8 @@ function initBoxEditor() {
   function syncFieldVisibility(type) {
     // .hidden 속성은 이 파일의 CSS 명시도 때문에 안 먹혀서 style.display를 직접 건드린다.
     const boxLike = BOX_LIKE.includes(type);
-    document.getElementById('boxOnlyFields').style.display = boxLike ? 'flex' : 'none';
-    document.getElementById('roundFields').style.display = boxLike ? 'none' : 'flex';
+    document.getElementById('boxOnlyFields').style.display = boxLike ? 'contents' : 'none';
+    document.getElementById('roundFields').style.display = boxLike ? 'none' : 'contents';
     document.getElementById('shapeWidthField').style.display = RADIUS_ONLY.includes(type) ? 'none' : 'flex';
     document.getElementById('shapeWidthLabel').textContent = WIDTH_FIELD_LABEL[type] || '두께(mm)';
     document.getElementById('shapeRadiusLabel').textContent = RADIUS_FIELD_LABEL[type] || '반지름(mm)';
@@ -479,7 +493,19 @@ function initBoxEditor() {
     document.getElementById('knexHolesField').style.display = type === 'knexConnector' ? 'flex' : 'none';
     document.getElementById('shapeOpField').style.display = selectedIndex === 0 ? 'none' : 'flex';
   }
+  // 캔버스가 비어있을 수도 있으니(사용자 지적: "3d 디지인중에 처음부터 도형이 있는 경우가 어디있어?????")
+  // 고른 도형이 없으면 숫자칸들을 다 숨기고 여기서 끝낸다 — shape가 undefined인 채로 아래로 내려가면
+  // shape.op 등에서 바로 에러난다.
   function fillFieldsFromShape(shape) {
+    const fieldsRow = document.querySelector('#boxEditorPanel .fieldsRow');
+    if (!shape) {
+      if (fieldsRow) fieldsRow.style.display = 'none';
+      document.getElementById('shapeOpField').style.display = 'none';
+      document.getElementById('boxRedrawBtn').disabled = true;
+      return;
+    }
+    if (fieldsRow) fieldsRow.style.display = 'flex';
+    document.getElementById('boxRedrawBtn').disabled = false;
     document.getElementById('shapeOp').value = shape.op;
     document.getElementById('boxX').value = round1(shape.x);
     document.getElementById('boxY').value = round1(shape.y);
@@ -501,6 +527,7 @@ function initBoxEditor() {
   // 회전축(x/y/z)을 고르면 그 축의 지금 각도를 15도 단위로 반올림해서 드롭다운에 보여준다 — 마우스로
   // 자유롭게 돌린 각도는 15도의 배수가 아닐 수 있으니, "실제 값을 그대로"가 아니라 "가장 가까운 15도"를 표시.
   function syncRotateAngleUI() {
+    if (!shapes[selectedIndex]) return;
     const axis = document.getElementById('rotateAxis').value;
     const rad = shapes[selectedIndex]['r' + axis] || 0;
     let deg = Math.round((rad * 180 / Math.PI) / 15) * 15;
@@ -538,14 +565,15 @@ function initBoxEditor() {
     document.getElementById('boxTargetLabel').textContent = '선택된 부품: ' + p.name;
     document.getElementById('boxSaveBtn').disabled = false;
     const saved = p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.length ? p.spec.shapes : null;
-    shapes = saved ? saved.map((s) => Object.assign({}, s)) : [defaultShapeOfType('box')];
-    selectedIndex = 0;
+    shapes = saved ? saved.map((s) => Object.assign({}, s)) : [];
+    selectedIndex = shapes.length ? 0 : -1;
     fillFieldsFromShape(shapes[0]);
     renderShapeListUI();
     setMode('edit');
   }
 
   document.getElementById('boxRedrawBtn').addEventListener('click', () => {
+    if (!shapes[selectedIndex]) return;
     shapes[selectedIndex] = readFieldsAsShape();
     renderShapeListUI();
     renderEditMode();
@@ -653,9 +681,9 @@ function initBoxEditor() {
     attachSelection();
   });
   document.getElementById('shapeDeleteBtn').addEventListener('click', () => {
-    if (shapes.length <= 1) { document.getElementById('boxEditorMsg').textContent = '도형이 하나는 남아있어야 해요.'; return; }
+    if (!shapes.length || selectedIndex < 0) return;
     shapes.splice(selectedIndex, 1);
-    selectedIndex = Math.max(0, selectedIndex - 1);
+    selectedIndex = shapes.length ? Math.max(0, selectedIndex - 1) : -1;
     fillFieldsFromShape(shapes[selectedIndex]);
     renderShapeListUI();
     renderEditMode();
@@ -663,7 +691,7 @@ function initBoxEditor() {
   document.querySelectorAll('.tfModeBtn').forEach((b) => b.addEventListener('click', () => {
     document.querySelectorAll('.tfModeBtn').forEach((x) => x.classList.toggle('on', x === b));
     if (live && live.transform) live.transform.setMode(b.dataset.mode);
-    document.getElementById('rotateAngleRow').hidden = b.dataset.mode !== 'rotate';
+    document.getElementById('rotateAngleRow').style.display = b.dataset.mode === 'rotate' ? 'flex' : 'none';
     if (b.dataset.mode === 'rotate') syncRotateAngleUI();
   }));
   // 회전축 고르기(x/y/z) — 그 축의 지금 각도를 드롭다운에 보여준다.
@@ -671,7 +699,7 @@ function initBoxEditor() {
   // 15도 단위 각도 드롭다운으로 정확한 각도를 바로 지정(사용자 지시: "x,y,z선택후 15도 단위로 회전 각도
   // 선택할수 있게 해줘") — 마우스 드래그와 별개로, 캔버스의 도형 회전값을 그 자리에서 바로 반영한다.
   document.getElementById('rotateAngle').addEventListener('change', () => {
-    if (!shapes.length) return;
+    if (!shapes[selectedIndex]) return;
     const axis = document.getElementById('rotateAxis').value;
     const deg = Number(document.getElementById('rotateAngle').value) || 0;
     const rad = deg * Math.PI / 180;

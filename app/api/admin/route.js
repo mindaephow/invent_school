@@ -127,7 +127,12 @@ function parseSpec(body) {
   const RADIUS_ONLY = ['sphere', 'icosahedron', 'dome']
   // op: 'add'(더하기)|'subtract'(빼기/뚫기) — 목록 순서대로 앞 결과에 CSG로 합치거나 깎아낸다. 첫 도형은
   // 기준(베이스)이라 op 의미가 없지만 필드는 그대로 두고 프론트에서 무시한다.
-  const shapes = Array.isArray(spec.shapes)
+  // shapes가 아예 안 왔는지(다른 화면에서 저장 — 건드리지 않음) vs 빈 배열로 왔는지(부품 수리실에서
+  // 도형을 전부 지우고 저장 — 실제로 비움)를 구분해야 한다. 길이만 보면 후자를 앞의 "아예 안 보냄"과
+  // 똑같이 취급해서 예전 도형이 안 지워지고 그대로 남는 문제가 있었다(사용자 지적: "3d 디지인중에 처음부터
+  // 도형이 있는 경우가 어디있어????? " — 빈 캔버스에서 시작해 도형을 0개까지 지울 수 있어야 함).
+  const shapesProvided = Array.isArray(spec.shapes)
+  const shapes = shapesProvided
     ? spec.shapes.map((s) => {
         if (!s || typeof s !== 'object' || !SHAPE_TYPES.includes(s.type)) return null
         const x = Number(s.x), y = Number(s.y), z = Number(s.z)
@@ -160,9 +165,9 @@ function parseSpec(body) {
         return out
       }).filter(Boolean)
     : []
-  if (!hasArmDims && !holeLabels && !shapes.length) return null
+  if (!hasArmDims && !holeLabels && !shapesProvided) return null
   const result = hasArmDims ? { armLen1, armLen2, armWidth } : {}
-  if (shapes.length) result.shapes = shapes
+  if (shapesProvided) result.shapes = shapes
   // 구멍 번호(위에서 본 모습 기준 왼→오=숫자·위→아래=소문자, 브라켓은 정면A/뒷면B도 붙음) — 부품 수리실에서
   // 계산해서 넘겨준 값을 그대로 저장. 브라켓이 아닌 부품(프레임 등)도 팔 치수 없이 이 값만 올 수 있음.
   if (holeLabels) result.holeLabels = holeLabels

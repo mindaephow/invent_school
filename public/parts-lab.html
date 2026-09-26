@@ -78,7 +78,8 @@ h4{margin:4px 0}
 #boxEditorPanel .btnRow{margin-top:6px; display:flex; gap:6px; flex-wrap:wrap; align-items:center;}
 #boxEditorPanel .btnRow button{padding:6px 10px; font-size:12px; border-radius:6px; border:1px solid #ccc; background:#fff; cursor:pointer;}
 #boxEditorPanel .btnRow button.on{background:#2b6be0;color:#fff;border-color:#2b6be0;}
-#boxEditorPanel .boxFields{display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;}
+#boxEditorPanel .fieldsRow{display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;}
+#boxEditorPanel .boxFields{display:contents;}
 #boxEditorPanel .boxFields label{font-size:11px; color:#666; display:flex; flex-direction:column; gap:2px;}
 #boxEditorPanel .boxFields input{width:64px; font-size:12px; padding:4px 6px; border:1px solid #ccc; border-radius:5px;}
 #boxEditorPanel .msg{margin-top:6px; font-size:12px;}
@@ -135,7 +136,7 @@ h4{margin:4px 0}
              절대좌표를 잡아서, 화면상 위치는 캔버스 왼쪽위 그대로 유지하면서 재렌더에도 안 사라지게 함
              (사용자 지적: "이게 스케치북 안이냐???" — 캔버스 바깥 버튼 줄이 아니라 캔버스 위에 겹쳐 보여야 함).
         -->
-        <div id="rotateAngleRow" hidden style="position:absolute; top:6px; left:6px; z-index:5; display:flex; gap:6px; background:rgba(255,255,255,0.9); border:1px solid #ddd; border-radius:6px; padding:5px 6px;">
+        <div id="rotateAngleRow" style="position:absolute; top:6px; left:6px; z-index:5; display:none; gap:6px; background:rgba(255,255,255,0.9); border:1px solid #ddd; border-radius:6px; padding:5px 6px;">
           <label style="font-size:11px;color:#666;display:flex;flex-direction:column;gap:2px;">회전축
             <select id="rotateAxis">
               <option value="x">X</option>
@@ -225,6 +226,7 @@ h4{margin:4px 0}
             </select>
           </label>
         </div>
+        <div class="fieldsRow">
         <div class="boxFields">
           <label>x(mm)<input type="number" id="boxX" value="0" step="1"></label>
           <label>y(mm)<input type="number" id="boxY" value="0" step="1"></label>
@@ -241,6 +243,7 @@ h4{margin:4px 0}
           <label id="shapeWidthField"><span id="shapeWidthLabel">두께(mm)</span><input type="number" id="shapeWidth" value="10" min="1" step="1"></label>
           <label id="teethField" hidden>톱니 수<input type="number" id="shapeTeeth" value="12" min="4" max="40" step="1"></label>
           <label id="knexHolesField" hidden>구멍 수<input type="number" id="knexHoles" value="6" min="3" max="8" step="1"></label>
+        </div>
         </div>
         <div class="btnRow"><button id="boxRedrawBtn" type="button" style="background:#fff;color:#2b6be0;">이 도형에 적용</button><button id="boxSaveBtn" type="button" disabled>저장</button></div>
         <div class="msg" id="boxEditorMsg"></div>
