@@ -68,6 +68,32 @@ function buildShapeGeometry(shape) {
 
 function round1(n) { return Math.round(n * 10) / 10; }
 
+// 팔레트 타일에 이모지 대신 그 도형의 실제 3D 미리보기를 한 번 그려서 이미지로 박아 넣는다 — 팅커캐드
+// 팔레트처럼(사용자가 실제 팅커캐드 스크린샷을 보여주며 "이모지 말고 이렇게" 지적).
+function renderPaletteThumbnails() {
+  const size = 112;
+  ['box', 'wheel', 'gear'].forEach((type) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = size; canvas.height = size;
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    renderer.setSize(size, size, false);
+    const scene = new THREE.Scene();
+    scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+    const dir = new THREE.DirectionalLight(0xffffff, 0.7); dir.position.set(2, 3, 2); scene.add(dir);
+    const shape = defaultShapeOfType(type);
+    const mesh = new THREE.Mesh(buildShapeGeometry(shape), new THREE.MeshStandardMaterial({ color: ADD_COLOR }));
+    addEdgeOutline(mesh, ADD_COLOR);
+    scene.add(mesh);
+    const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 500);
+    camera.position.set(45, 40, 45);
+    camera.lookAt(0, 0, 0);
+    renderer.render(scene, camera);
+    const btn = document.querySelector('.paletteBtn[data-type="' + type + '"]');
+    if (btn) btn.querySelector('.paletteThumb').src = canvas.toDataURL('image/png');
+    renderer.dispose();
+  });
+}
+
 function initBoxEditor() {
   const { openPickerModal, adminApi, getAccessToken } = window.__partsLab;
   let targetPart = null;
@@ -331,6 +357,7 @@ function initBoxEditor() {
     }
   });
 
+  renderPaletteThumbnails();
   fillFieldsFromShape(shapes[0]);
   renderShapeListUI();
   renderEditMode();
