@@ -258,7 +258,9 @@ h4{margin:4px 0}
   <div class="section-title">비교 대상 부품 (이해를 도울 부품)</div>
   <button id="compareRefPickBtn" type="button" class="pickBtn">🔍 부품 고르기</button>
 </div>
-<div class="section-note">확정된 스타일(구멍 모양·블라인드 홀·안쪽 코너선)의 기준입니다. 아래 "수정할 부품"을 이 모습과 비교하면서 고치세요. "🔍 부품 고르기"로 다른 등록 부품을 추가로 불러와 비교할 수도 있어요.<br>
+<div class="section-note">확정된 스타일(구멍 모양·블라인드 홀·안쪽 코너선)의 기준입니다. 아래 "수정할 부품"을 이 모습과 비교하면서 고치세요. "🔍 부품 고르기"로 다른 등록 부품을 추가로 불러와 비교할 수도 있어요.</div>
+<button id="ruleToggle" type="button" class="collapseToggle">▶ 기본 셋팅·넘버링 규칙 (펼치기)</button>
+<div id="rulePanel" class="section-note" hidden>
 <b>기본 셋팅(확정, 앞으로 항상 이대로):</b> 위/정면/뒷면 모두 화면에서 X축은 오른쪽 아래 방향, Z축은 왼쪽 아래 방향으로 기울어져 보입니다(90도 프레임 기준). 정면과 뒷면은 카메라 위치가 완전히 같고, 물체를 거울처럼 좌우로 뒤집었는지(정면) 안 뒤집었는지(뒷면)로만 구분합니다. 축 선이 물체 뒤로 가려지는 부분은 화면에 안 보이는 게 정상입니다.<br>
 <b>구멍 번호 매기는 법(확정):</b> 부품을 <u>위에서 내려다본 모습</u>을 기준으로, 구멍마다 X값과 Z값 두 개를 붙입니다. 알파벳은 전혀 쓰지 않고 둘 다 숫자만 씁니다. 값은 두 종류가 있습니다.<br>
 　1) <b>수치</b> = 실제 거리(mm). 부품의 모서리(코너)를 0mm로 잡고 잰 값이며, 이 그림이 화면 어디에 그려져 있는지와는 상관없습니다. 홀 사이 간격은 10mm이고, 모서리에서 첫 구멍까지도 5mm이므로 수치는 보통 5, 15, 25...로 나옵니다.<br>
@@ -2021,6 +2023,13 @@ h4{margin:4px 0}
     const open = panel.hidden;
     panel.hidden = !open;
     document.getElementById('sketchToggle').textContent = open ? '▼ 도형 에디터 (접기)' : '▶ 도형 에디터 (펼치기)';
+  });
+  // 기본 셋팅/넘버링 규칙 문구도 평소엔 접어두고 필요할 때만 펼침(사용자 지시: "따로 적혀서 평소 접어놔야해")
+  document.getElementById('ruleToggle').addEventListener('click', () => {
+    const panel = document.getElementById('rulePanel');
+    const open = panel.hidden;
+    panel.hidden = !open;
+    document.getElementById('ruleToggle').textContent = open ? '▼ 기본 셋팅·넘버링 규칙 (접기)' : '▶ 기본 셋팅·넘버링 규칙 (펼치기)';
   });
 
   // "비교 대상 부품"도 모달로 고른 부품 하나를 위/정면/뒷면 3컷으로 보여줌(기본은 90도프레임+1열브라켓 예시)
