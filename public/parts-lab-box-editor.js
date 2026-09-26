@@ -38,32 +38,50 @@ function baseScene() {
   return scene;
 }
 
+// 도형 종류 목록 — app/api/admin/route.js의 SHAPE_TYPES와 반드시 같이 맞춰야 한다.
+const SHAPE_TYPES = ['box', 'wheel', 'gear', 'sphere', 'cone', 'pyramid', 'torus', 'hexprism'];
+// 원형 계열 도형(바퀴/톱니바퀴/원뿔/각뿔/도넛/육각기둥)이 "두께" 칸을 어떤 뜻으로 쓰는지 — 팔레트에서
+// 고를 때 입력칸 라벨을 이 뜻에 맞게 바꿔준다.
+const WIDTH_FIELD_LABEL = { wheel: '두께(mm)', gear: '두께(mm)', cone: '높이(mm)', pyramid: '높이(mm)', torus: '튜브 두께(mm)', hexprism: '높이(mm)' };
+
 function defaultShapeOfType(type) {
   if (type === 'box') return { type: 'box', op: 'add', x: 0, y: 5, z: 0, w: 30, h: 10, d: 30 };
+  if (type === 'sphere') return { type: 'sphere', op: 'add', x: 0, y: 20, z: 0, radius: 20 };
+  if (type === 'torus') return { type: 'torus', op: 'add', x: 0, y: 6, z: 0, radius: 20, width: 6 };
   const base = { type, op: 'add', x: 0, y: 5, z: 0, radius: 20, width: 10 };
   if (type === 'gear') base.teeth = 12;
   return base;
 }
 
-// 도형 하나(박스/바퀴/톱니바퀴)의 실제 BufferGeometry를 만든다 — CSG는 도형당 지오메트리 하나만 다루므로,
-// 톱니바퀴는 원판+이빨을 하나로 합쳐(mergeGeometries) 통짜 입체로 만든다.
+// 도형 하나의 실제 BufferGeometry를 만든다 — CSG는 도형당 지오메트리 하나만 다루므로, 톱니바퀴는
+// 원판+이빨을 하나로 합쳐(mergeGeometries) 통짜 입체로 만든다.
 function buildShapeGeometry(shape) {
-  if (shape.type === 'box') return new THREE.BoxGeometry(shape.w, shape.h, shape.d);
-  const bodyGeo = new THREE.CylinderGeometry(shape.radius, shape.radius, shape.width, 32);
-  if (shape.type === 'wheel') return bodyGeo;
-  const teeth = Math.max(4, Math.round(shape.teeth) || 12);
-  const toothLen = Math.max(2, shape.radius * 0.18);
-  const toothWidth = Math.max(1.5, (2 * Math.PI * shape.radius) / teeth * 0.55);
-  const geos = [bodyGeo];
-  for (let i = 0; i < teeth; i++) {
-    const angle = (i / teeth) * Math.PI * 2;
-    const toothGeo = new THREE.BoxGeometry(toothWidth, shape.width, toothLen);
-    const r = shape.radius + toothLen / 2;
-    toothGeo.rotateY(-angle);
-    toothGeo.translate(Math.cos(angle) * r, 0, Math.sin(angle) * r);
-    geos.push(toothGeo);
+  switch (shape.type) {
+    case 'box': return new THREE.BoxGeometry(shape.w, shape.h, shape.d);
+    case 'sphere': return new THREE.SphereGeometry(shape.radius, 24, 16);
+    case 'cone': return new THREE.ConeGeometry(shape.radius, shape.width, 32);
+    case 'pyramid': return new THREE.ConeGeometry(shape.radius, shape.width, 4);
+    case 'hexprism': return new THREE.CylinderGeometry(shape.radius, shape.radius, shape.width, 6);
+    case 'torus': return new THREE.TorusGeometry(shape.radius, Math.min(shape.width, shape.radius * 0.9), 16, 32);
+    case 'wheel': return new THREE.CylinderGeometry(shape.radius, shape.radius, shape.width, 32);
+    case 'gear': {
+      const bodyGeo = new THREE.CylinderGeometry(shape.radius, shape.radius, shape.width, 32);
+      const teeth = Math.max(4, Math.round(shape.teeth) || 12);
+      const toothLen = Math.max(2, shape.radius * 0.18);
+      const toothWidth = Math.max(1.5, (2 * Math.PI * shape.radius) / teeth * 0.55);
+      const geos = [bodyGeo];
+      for (let i = 0; i < teeth; i++) {
+        const angle = (i / teeth) * Math.PI * 2;
+        const toothGeo = new THREE.BoxGeometry(toothWidth, shape.width, toothLen);
+        const r = shape.radius + toothLen / 2;
+        toothGeo.rotateY(-angle);
+        toothGeo.translate(Math.cos(angle) * r, 0, Math.sin(angle) * r);
+        geos.push(toothGeo);
+      }
+      return mergeGeometries(geos, false);
+    }
+    default: return new THREE.BoxGeometry(10, 10, 10);
   }
-  return mergeGeometries(geos, false);
 }
 
 function round1(n) { return Math.round(n * 10) / 10; }
@@ -72,7 +90,7 @@ function round1(n) { return Math.round(n * 10) / 10; }
 // 팔레트처럼(사용자가 실제 팅커캐드 스크린샷을 보여주며 "이모지 말고 이렇게" 지적).
 function renderPaletteThumbnails() {
   const size = 112;
-  ['box', 'wheel', 'gear'].forEach((type) => {
+  SHAPE_TYPES.forEach((type) => {
     const canvas = document.createElement('canvas');
     canvas.width = size; canvas.height = size;
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
@@ -175,6 +193,8 @@ function initBoxEditor() {
         shape.w = Math.max(1, shape.w * mesh.scale.x);
         shape.h = Math.max(1, shape.h * mesh.scale.y);
         shape.d = Math.max(1, shape.d * mesh.scale.z);
+      } else if (shape.type === 'sphere') {
+        shape.radius = Math.max(1, shape.radius * ((mesh.scale.x + mesh.scale.y + mesh.scale.z) / 3));
       } else {
         shape.radius = Math.max(1, shape.radius * ((mesh.scale.x + mesh.scale.z) / 2));
         shape.width = Math.max(1, shape.width * mesh.scale.y);
@@ -226,7 +246,7 @@ function initBoxEditor() {
 
   // ---------- 도형 목록 UI ----------
   function shapeLabel(shape, i) {
-    const typeLabel = { box: '박스', wheel: '바퀴', gear: '톱니바퀴' }[shape.type];
+    const typeLabel = { box: '박스', wheel: '바퀴', gear: '톱니바퀴', sphere: '구', cone: '원뿔', pyramid: '각뿔', torus: '도넛', hexprism: '육각기둥' }[shape.type];
     const opLabel = i === 0 ? '(베이스)' : (shape.op === 'subtract' ? '(➖ 빼기)' : '(➕ 더하기)');
     return (i + 1) + '. ' + typeLabel + ' ' + opLabel;
   }
@@ -252,6 +272,8 @@ function initBoxEditor() {
     // .hidden 속성은 이 파일의 CSS 명시도 때문에 안 먹혀서 style.display를 직접 건드린다.
     document.getElementById('boxOnlyFields').style.display = type === 'box' ? 'flex' : 'none';
     document.getElementById('roundFields').style.display = type === 'box' ? 'none' : 'flex';
+    document.getElementById('shapeWidthField').style.display = type === 'sphere' ? 'none' : 'flex';
+    document.getElementById('shapeWidthLabel').textContent = WIDTH_FIELD_LABEL[type] || '두께(mm)';
     document.getElementById('teethField').style.display = type === 'gear' ? 'flex' : 'none';
     document.getElementById('shapeOpField').style.display = selectedIndex === 0 ? 'none' : 'flex';
   }
@@ -266,7 +288,7 @@ function initBoxEditor() {
       document.getElementById('boxD').value = round1(shape.d);
     } else {
       document.getElementById('shapeRadius').value = round1(shape.radius);
-      document.getElementById('shapeWidth').value = round1(shape.width);
+      if (shape.type !== 'sphere') document.getElementById('shapeWidth').value = round1(shape.width);
       if (shape.type === 'gear') document.getElementById('shapeTeeth').value = shape.teeth;
     }
     syncFieldVisibility(shape.type);
@@ -285,7 +307,7 @@ function initBoxEditor() {
       shape.d = Math.max(1, Number(document.getElementById('boxD').value) || 1);
     } else {
       shape.radius = Math.max(1, Number(document.getElementById('shapeRadius').value) || 1);
-      shape.width = Math.max(1, Number(document.getElementById('shapeWidth').value) || 1);
+      if (type !== 'sphere') shape.width = Math.max(1, Number(document.getElementById('shapeWidth').value) || 1);
       if (type === 'gear') shape.teeth = Math.max(4, Number(document.getElementById('shapeTeeth').value) || 12);
     }
     return shape;

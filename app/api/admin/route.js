@@ -119,9 +119,10 @@ function parseSpec(body) {
   const armLen1 = Number(spec.armLen1), armLen2 = Number(spec.armLen2), armWidth = Number(spec.armWidth)
   const hasArmDims = [armLen1, armLen2, armWidth].every((n) => Number.isFinite(n) && n > 0)
   const holeLabels = Array.isArray(spec.holeLabels) && spec.holeLabels.every((s) => typeof s === 'string') ? spec.holeLabels : null
-  // 도형 에디터(부품 수리실 스케치북 자리) — 도형(박스/바퀴/톱니바퀴) 하나 이상의 위치·크기를 그대로 저장.
-  // svg 없이도 이 숫자만으로 모양이 재현됨(브라켓의 armLen1/armLen2/armWidth와 같은 목적).
-  const SHAPE_TYPES = ['box', 'wheel', 'gear']
+  // 도형 에디터(부품 수리실 스케치북 자리) — 도형(박스/바퀴/톱니바퀴/구/원뿔/각뿔/도넛/육각기둥) 하나 이상의
+  // 위치·크기를 그대로 저장. svg 없이도 이 숫자만으로 모양이 재현됨(브라켓의 armLen1/armLen2/armWidth와
+  // 같은 목적). parts-lab-box-editor.js의 SHAPE_TYPES와 반드시 같이 맞춰야 한다.
+  const SHAPE_TYPES = ['box', 'wheel', 'gear', 'sphere', 'cone', 'pyramid', 'torus', 'hexprism']
   // op: 'add'(더하기)|'subtract'(빼기/뚫기) — 목록 순서대로 앞 결과에 CSG로 합치거나 깎아낸다. 첫 도형은
   // 기준(베이스)이라 op 의미가 없지만 필드는 그대로 두고 프론트에서 무시한다.
   const shapes = Array.isArray(spec.shapes)
@@ -135,8 +136,11 @@ function parseSpec(body) {
           if (![w, h, d].every((n) => Number.isFinite(n) && n > 0)) return null
           return { type: 'box', op, x, y, z, w, h, d }
         }
-        const radius = Number(s.radius), width = Number(s.width)
-        if (!Number.isFinite(radius) || radius <= 0 || !Number.isFinite(width) || width <= 0) return null
+        const radius = Number(s.radius)
+        if (!Number.isFinite(radius) || radius <= 0) return null
+        if (s.type === 'sphere') return { type: 'sphere', op, x, y, z, radius }
+        const width = Number(s.width)
+        if (!Number.isFinite(width) || width <= 0) return null
         const out = { type: s.type, op, x, y, z, radius, width }
         if (s.type === 'gear') {
           const teeth = Number(s.teeth)

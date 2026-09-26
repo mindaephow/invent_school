@@ -138,6 +138,11 @@ h4{margin:4px 0}
           <button type="button" class="paletteBtn" data-type="box" style="width:84px; height:84px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; border:1px solid #ddd; border-radius:8px; background:#f4f4f4; cursor:pointer; font-size:11px; padding:0;"><img class="paletteThumb" alt="" style="width:56px; height:56px;">박스</button>
           <button type="button" class="paletteBtn" data-type="wheel" style="width:84px; height:84px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; border:1px solid #ddd; border-radius:8px; background:#f4f4f4; cursor:pointer; font-size:11px; padding:0;"><img class="paletteThumb" alt="" style="width:56px; height:56px;">바퀴</button>
           <button type="button" class="paletteBtn" data-type="gear" style="width:84px; height:84px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; border:1px solid #ddd; border-radius:8px; background:#f4f4f4; cursor:pointer; font-size:11px; padding:0;"><img class="paletteThumb" alt="" style="width:56px; height:56px;">톱니바퀴</button>
+          <button type="button" class="paletteBtn" data-type="sphere" style="width:84px; height:84px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; border:1px solid #ddd; border-radius:8px; background:#f4f4f4; cursor:pointer; font-size:11px; padding:0;"><img class="paletteThumb" alt="" style="width:56px; height:56px;">구</button>
+          <button type="button" class="paletteBtn" data-type="cone" style="width:84px; height:84px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; border:1px solid #ddd; border-radius:8px; background:#f4f4f4; cursor:pointer; font-size:11px; padding:0;"><img class="paletteThumb" alt="" style="width:56px; height:56px;">원뿔</button>
+          <button type="button" class="paletteBtn" data-type="pyramid" style="width:84px; height:84px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; border:1px solid #ddd; border-radius:8px; background:#f4f4f4; cursor:pointer; font-size:11px; padding:0;"><img class="paletteThumb" alt="" style="width:56px; height:56px;">각뿔</button>
+          <button type="button" class="paletteBtn" data-type="torus" style="width:84px; height:84px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; border:1px solid #ddd; border-radius:8px; background:#f4f4f4; cursor:pointer; font-size:11px; padding:0;"><img class="paletteThumb" alt="" style="width:56px; height:56px;">도넛</button>
+          <button type="button" class="paletteBtn" data-type="hexprism" style="width:84px; height:84px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; border:1px solid #ddd; border-radius:8px; background:#f4f4f4; cursor:pointer; font-size:11px; padding:0;"><img class="paletteThumb" alt="" style="width:56px; height:56px;">육각기둥</button>
         </div>
         <div class="section-note" style="margin:0 0 6px;">도형 목록 — 맨 위가 기준(베이스), 그 아래는 순서대로 더하거나 뺍니다.</div>
         <div id="shapeList" style="display:flex; flex-direction:column; gap:4px; margin-bottom:8px;"></div>
@@ -164,7 +169,7 @@ h4{margin:4px 0}
         </div>
         <div class="boxFields" id="roundFields" hidden>
           <label>반지름(mm)<input type="number" id="shapeRadius" value="20" min="1" step="1"></label>
-          <label>두께(mm)<input type="number" id="shapeWidth" value="10" min="1" step="1"></label>
+          <label id="shapeWidthField"><span id="shapeWidthLabel">두께(mm)</span><input type="number" id="shapeWidth" value="10" min="1" step="1"></label>
           <label id="teethField" hidden>톱니 수<input type="number" id="shapeTeeth" value="12" min="4" max="40" step="1"></label>
         </div>
         <div class="btnRow"><button id="boxRedrawBtn" type="button" style="background:#fff;color:#2b6be0;">이 도형에 적용</button><button id="boxSaveBtn" type="button" disabled>저장</button></div>
