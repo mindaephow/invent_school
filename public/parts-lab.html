@@ -1228,18 +1228,18 @@ h4{margin:4px 0}
       }
       scene.add(mesh);
       if (frameAxes.xs.length || frameAxes.zs.length) {
-        // 사용자 지적: "가로,세로 넘버링은 한칸에 하나임" — 실제 mm 좌표가 아니라 칸 번호를 균등한 간격
-        // (피치)으로 배치해서 표처럼 보이게 함(브라켓의 축 라벨과 같은 방식).
-        const minX = Math.min(...frameAxes.xs), minZ = Math.min(...frameAxes.zs);
-        const cell = bracketPitch();
-        frameAxes.xs.forEach((x,i) => {
+        // 사용자 지적: "가로,세로 넘버링은 한칸에 하나임" — gridAxes가 좌표를 10mm 칸 번호로 묶어주므로
+        // 라벨은 그 칸의 중앙(gridCellCenter)에 찍는다(브라켓의 축 라벨과 같은 방식).
+        const zAnchor = gridCellCenter(frameAxes.zs[0]);
+        const xAnchor = gridCellCenter(frameAxes.xs[0]);
+        frameAxes.xs.forEach((cellIdx,i) => {
           const sprite = makeTextSprite(String(i+1), '#2b6be0', 2.4);
-          sprite.position.set((minX + i * cell) - cxR, 6, (minZ - 6) - cyR);
+          sprite.position.set(gridCellCenter(cellIdx) - cxR, 6, (zAnchor - 6) - cyR);
           scene.add(sprite);
         });
-        frameAxes.zs.forEach((z,j) => {
+        frameAxes.zs.forEach((cellIdx,j) => {
           const sprite = makeTextSprite(String.fromCharCode(97 + j), '#2b6be0', 2.4);
-          sprite.position.set((minX - 6) - cxR, 6, (minZ + j * cell) - cyR);
+          sprite.position.set((xAnchor - 6) - cxR, 6, gridCellCenter(cellIdx) - cyR);
           scene.add(sprite);
         });
       }
@@ -1305,24 +1305,20 @@ h4{margin:4px 0}
     if (showHoleLabels) {
       // bracketTopCamPos가 프레임의 위 카메라와 같은 축 방향(epsilon을 z에 둠)을 쓰므로 프레임과 완전히
       // 같은 방식으로 계산: 숫자는 x(왼→오)를 따라 위쪽 가장자리에, 문자는 z(위→아래)를 따라 왼쪽 가장자리에.
-      // 라벨은 "10mm 그리드 칸 균등 배치"가 아니라 각 구멍의 실제 좌표에 그대로 찍는다. 균등 배치를
-      // 시도해봤지만(칸 경계선에 반올림하거나, floor(좌표/10)로 같은 칸끼리 묶어보거나) 1열브라켓처럼
-      // armWidth=margin인 경우엔 팔1의 반대쪽 면 좌표(z=0)와 팔2의 첫 번째 진짜 구멍 위치(z=5)가 5mm밖에
-      // 안 떨어져 있어서, 균등 그리드로 억지로 맞추면 이 서로 다른 두 자리가 한 칸에 뭉개지거나 뒤쪽
-      // 칸들이 통째로 밀리거나 둘 중 하나만 됨 — 어느 쪽으로도 깔끔한 그리드가 안 나온다(90도 프레임은
-      // 모든 구멍이 정확히 10mm 간격이라 이 문제가 안 보였을 뿐). 그래서 실제 좌표값을 그대로 쓰는 게
-      // 유일하게 항상 정확한 방법이다. xs/zs가 중복 없는 정렬된 좌표 목록이라 한 칸에 숫자/문자 하나씩만
-      // 나오는 건 그대로 유지된다.
+      // gridAxes가 이제 좌표를 10mm 칸 번호(gridCellIndex)로 묶어서 주므로, 라벨은 그 칸의 중앙
+      // (gridCellCenter = margin과 같은 5,15,25...)에 찍는다. z=0(팔1 반대쪽 면)은 z=5와 같은 칸이라
+      // 문자가 4개가 아니라 3개(a,b,c)만 나온다 — 0은 애초에 칸 중앙이 아니라서 나올 수 없다.
       const { xs, zs } = gridAxes(holeGeoms);
-      const minX = Math.min(...xs), minZ = Math.min(...zs);
-      xs.forEach((x,i) => {
+      const zAnchor = gridCellCenter(zs[0]);
+      xs.forEach((cellIdx,i) => {
         const sprite = makeTextSprite(String(i+1), '#2b6be0', 2.4);
-        sprite.position.set(x, holeY + 5, minZ - 6);
+        sprite.position.set(gridCellCenter(cellIdx), holeY + 5, zAnchor - 6);
         scene.add(sprite);
       });
-      zs.forEach((z,j) => {
+      const xAnchor = gridCellCenter(xs[0]);
+      zs.forEach((cellIdx,j) => {
         const sprite = makeTextSprite(String.fromCharCode(97 + j), '#2b6be0', 2.4);
-        sprite.position.set(minX - 6, holeY + 5, z);
+        sprite.position.set(xAnchor - 6, holeY + 5, gridCellCenter(cellIdx));
         scene.add(sprite);
       });
     }
@@ -1602,10 +1598,18 @@ h4{margin:4px 0}
   // 호출(파일 앞쪽의 refFrameTop/refBracketTop 등)이 이 줄보다 앞에 있어서, const였다면 호출 시점에 아직
   // 초기화 전이라 "Cannot access before initialization" 에러가 났음 — function 선언은 완전히 끌어올려짐.
   function gridRnd(n){ return Math.round(n * 10) / 10; }
+  // 좌표를 그대로 값으로 비교하지 않고 10mm 그리드 칸 번호(floor(좌표/피치))로 묶는다. 1열브라켓처럼
+  // armWidth=margin인 경우, 팔1의 반대쪽 면 좌표(z=0)와 팔2의 첫 구멍 위치(z=5)는 서로 다른 구멍이지만
+  // 둘 다 같은 0~10mm 칸 안에 있다 — 팔1 전체가 물리적으로 한 줄(폭 5mm)일 뿐이라 애초에 두 줄로 나뉘면
+  // 안 되는데, 좌표값을 그대로 구분해서 세면 억지로 a(0)/b(5) 두 줄로 쪼개지고 뒤 칸들도 밀렸었다
+  // (사용자 지적: "왜 계속 a를 0이라고 하는거야" — 칸 중앙은 margin+i*pitch=5,15,25...뿐이라 0은 나오면 안 됨).
+  // 칸으로 묶으면 z=0,5가 같은 칸(0번, 중앙 5)으로 합쳐져서 문자가 4개(a~d)가 아니라 3개(a~c)만 나온다.
+  function gridCellIndex(v){ return Math.floor(v / bracketPitch()); }
+  function gridCellCenter(i){ return i * bracketPitch() + bracketPitch()/2; }
   function gridAxes(holes){
     return {
-      xs: [...new Set(holes.map(h => gridRnd(h.x)))].sort((a,b) => a-b),
-      zs: [...new Set(holes.map(h => gridRnd(h.z)))].sort((a,b) => a-b)
+      xs: [...new Set(holes.map(h => gridCellIndex(h.x)))].sort((a,b) => a-b),
+      zs: [...new Set(holes.map(h => gridCellIndex(h.z)))].sort((a,b) => a-b)
     };
   }
   // 사용자 지적: "왜 소문자 부분이 엉망으로 들어가있어?" — makeHole 호출 순서 그대로 나열해서 같은 줄(row)인
@@ -1614,8 +1618,8 @@ h4{margin:4px 0}
   // 만들지 않고, 그 라벨이 어느 실제 좌표(x,z)·면(face)에서 나왔는지도 같이 꺼낼 수 있게 pairs로 뽑아둔다.
   function gridHoleLabelPairs(holes){
     const { xs, zs } = gridAxes(holes);
-    const rowOf = (h) => zs.indexOf(gridRnd(h.z));
-    const colOf = (h) => xs.indexOf(gridRnd(h.x));
+    const rowOf = (h) => zs.indexOf(gridCellIndex(h.z));
+    const colOf = (h) => xs.indexOf(gridCellIndex(h.x));
     return holes
       .slice()
       .sort((a, b) => rowOf(a) - rowOf(b) || colOf(a) - colOf(b) || (a.face || '').localeCompare(b.face || ''))
