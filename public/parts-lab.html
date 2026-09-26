@@ -1388,11 +1388,13 @@ h4{margin:4px 0}
     camera.lookAt(ctr[0],ctr[1],ctr[2]);
     // 사용자 지시: "1열 브라켓도 우선 ㄱ자 모양으로 돌려놔줘" — 원래는 꺾이는 지점이 왼쪽 위(Γ 모양)였던 걸
     // x만 좌우로 뒤집어서(x'=arm1-x) 90도 프레임 예시와 똑같이 진짜 ㄱ자(꺾이는 지점이 오른쪽 위)로 맞춤.
-    // 그냥 좌표만 바꾸면 테두리가 뒤집히면서 안팎이 뒤집히므로(면의 앞뒤가 바뀜), 점 순서도 거꾸로 돌아서
-    // 원래와 같은 방향(winding)을 유지해야 조명·면이 정상적으로 나온다.
+    // x 반사는 그 자체로 이미 winding을 한 번 뒤집으므로, 점 순서는 원본(_compare_all.html의
+    // buildBracketMesh) 그대로 두고 각 점의 x만 바꿔야 정확히 한 번만 뒤집힌다 — 예전엔 점 순서까지
+    // 거꾸로 나열해서 winding이 원래대로 두 번 뒤집혀 있었고, 그 때문에 오목한 코너에서 삼각분할이
+    // 꼬여 조명 아래 색이 깨져 보였다(사용자 지적: "색상이 얼룩이네").
     const shape = new THREE.Shape();
-    shape.moveTo(arm1,0); shape.lineTo(arm1,-arm2); shape.lineTo(arm1-armWidth,-arm2);
-    shape.lineTo(arm1-armWidth,-armWidth); shape.lineTo(0,-armWidth); shape.lineTo(0,0);
+    shape.moveTo(arm1,0); shape.lineTo(0,0); shape.lineTo(0,-armWidth);
+    shape.lineTo(arm1-armWidth,-armWidth); shape.lineTo(arm1-armWidth,-arm2); shape.lineTo(arm1,-arm2);
     shape.closePath();
     const geo = new THREE.ExtrudeGeometry(shape, { depth:bracketThickness(), bevelEnabled:false });
     geo.rotateX(-Math.PI/2);
