@@ -1799,6 +1799,10 @@ h4{margin:4px 0}
       ['구멍 피치(간격)', bracketPitch() + 'mm'],
       ['구멍 반지름', bracketBoreRadius() + 'mm'],
       ['팔당 최대 구멍 수', bracketMaxHoles() + '개(모서리쪽 1개=블라인드 홀, 관통 안 됨)'],
+      // 블라인드 홀은 실제로 뚫리지 않은 자리라 "구멍 수"에 관통 구멍과 섞어서 세면 이상해짐
+      // (사용자 지적: "블라인드 홀도 구멍이야?? 그럼 벽도 구멍이겠다") — 둘을 나눠서 표시한다.
+      ['관통 구멍 수', bracketHoleGeom(arm1, arm2, armWidth).filter(h => !h.blind).length + '개'],
+      ['블라인드 홀 수', bracketHoleGeom(arm1, arm2, armWidth).filter(h => h.blind).length + '개'],
       ['구멍 번호', bracketHoleLabels(arm1, arm2, armWidth).join(', ')],
       ['비고', '위 기준 위→아래=줄번호·왼→오=칸번호(둘 다 숫자), 예: 2-1-A, 정면A·뒷면B'],
     ];
