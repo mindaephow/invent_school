@@ -172,13 +172,21 @@ function round1(n) { return Math.round(n * 10) / 10; }
 
 // 팔레트 타일에 이모지 대신 그 도형의 실제 3D 미리보기를 한 번 그려서 이미지로 박아 넣는다 — 팅커캐드
 // 팔레트처럼(사용자가 실제 팅커캐드 스크린샷을 보여주며 "이모지 말고 이렇게" 지적).
+// 도형마다 WebGLRenderer(=WebGL 컨텍스트)를 새로 만들었더니, dispose()를 불러도 브라우저가 그 컨텍스트
+// 슬롯을 바로 회수해주지 않아서(GC가 나중에 돌 때까지 살아있음) 한 번에 15개를 연달아 만드는 동안 페이지
+// 전체의 WebGL 컨텍스트 개수 한도(브라우저마다 보통 16개 안팎)를 넘겨버렸다 — 그 결과 이 페이지에서 먼저
+// 떠 있던 "비교 대상 부품"(90도 프레임 위/정면) 같은 오래된 컨텍스트가 브라우저에 의해 강제로 잘려서
+// 빈 화면(깨진 아이콘)으로 보이는 사고가 실제로 났다. 그래서 렌더러 하나를 15번 재사용한다.
 function renderPaletteThumbnails() {
   const size = 112;
+  const canvas = document.createElement('canvas');
+  canvas.width = size; canvas.height = size;
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setSize(size, size, false);
+  const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 500);
+  camera.position.set(45, 40, 45);
+  camera.lookAt(0, 0, 0);
   SHAPE_TYPES.forEach((type, i) => {
-    const canvas = document.createElement('canvas');
-    canvas.width = size; canvas.height = size;
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-    renderer.setSize(size, size, false);
     const scene = new THREE.Scene();
     scene.add(new THREE.AmbientLight(0xffffff, 0.8));
     const dir = new THREE.DirectionalLight(0xffffff, 0.7); dir.position.set(2, 3, 2); scene.add(dir);
@@ -187,14 +195,14 @@ function renderPaletteThumbnails() {
     const mesh = new THREE.Mesh(buildShapeGeometry(shape), new THREE.MeshStandardMaterial({ color }));
     addEdgeOutline(mesh, color);
     scene.add(mesh);
-    const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 500);
-    camera.position.set(45, 40, 45);
-    camera.lookAt(0, 0, 0);
     renderer.render(scene, camera);
     const btn = document.querySelector('.paletteBtn[data-type="' + type + '"]');
     if (btn) btn.querySelector('.paletteThumb').src = canvas.toDataURL('image/png');
-    renderer.dispose();
+    mesh.geometry.dispose();
+    mesh.material.dispose();
+    mesh.children.forEach((c) => { c.geometry && c.geometry.dispose(); c.material && c.material.dispose(); });
   });
+  renderer.dispose();
 }
 
 function initBoxEditor() {
