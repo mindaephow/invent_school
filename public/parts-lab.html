@@ -133,20 +133,18 @@ h4{margin:4px 0}
         </div>
       </div>
       <div style="flex:1; min-width:220px;">
+        <div class="section-note" style="margin:0 0 6px;">도형 팔레트 — 눌러서 캔버스에 바로 추가</div>
+        <div id="shapePalette" style="display:flex; gap:8px; margin-bottom:14px;">
+          <button type="button" class="paletteBtn" data-type="box" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; padding:10px 4px; border:1px solid #ccc; border-radius:8px; background:#fff; cursor:pointer; font-size:12px;"><span style="font-size:22px;">📦</span>박스</button>
+          <button type="button" class="paletteBtn" data-type="wheel" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; padding:10px 4px; border:1px solid #ccc; border-radius:8px; background:#fff; cursor:pointer; font-size:12px;"><span style="font-size:22px;">🛞</span>바퀴</button>
+          <button type="button" class="paletteBtn" data-type="gear" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; padding:10px 4px; border:1px solid #ccc; border-radius:8px; background:#fff; cursor:pointer; font-size:12px;"><span style="font-size:22px;">⚙️</span>톱니바퀴</button>
+        </div>
         <div class="section-note" style="margin:0 0 6px;">도형 목록 — 맨 위가 기준(베이스), 그 아래는 순서대로 더하거나 뺍니다.</div>
         <div id="shapeList" style="display:flex; flex-direction:column; gap:4px; margin-bottom:8px;"></div>
         <div class="btnRow" style="margin-top:0;">
-          <button id="shapeAddBtn" type="button">+ 도형 추가</button>
           <button id="shapeDeleteBtn" type="button" style="background:#fff;color:#c0392b;">선택 도형 삭제</button>
         </div>
         <div class="btnRow">
-          <label style="font-size:11px;color:#666;display:flex;flex-direction:column;gap:2px;">도형 종류
-            <select id="shapeType">
-              <option value="box">박스</option>
-              <option value="wheel">바퀴</option>
-              <option value="gear">톱니바퀴</option>
-            </select>
-          </label>
           <label id="shapeOpField" style="font-size:11px;color:#666;display:flex;flex-direction:column;gap:2px;">연산
             <select id="shapeOp">
               <option value="add">➕ 더하기</option>

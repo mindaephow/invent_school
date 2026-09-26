@@ -192,7 +192,7 @@ function initBoxEditor() {
     mode = next;
     document.getElementById('boxPreviewBtn').hidden = mode === 'preview';
     document.getElementById('boxBackToEditBtn').hidden = mode === 'edit';
-    document.getElementById('shapeAddBtn').disabled = mode === 'preview';
+    document.querySelectorAll('.paletteBtn').forEach((b) => { b.disabled = mode === 'preview'; });
     document.getElementById('shapeDeleteBtn').disabled = mode === 'preview';
     document.getElementById('boxRedrawBtn').disabled = mode === 'preview';
     if (mode === 'edit') renderEditMode(); else renderPreviewMode();
@@ -220,9 +220,9 @@ function initBoxEditor() {
   }
 
   // ---------- 입력칸 <-> 선택된 도형 ----------
-  function currentType() { return document.getElementById('shapeType').value; }
-  function syncFieldVisibility() {
-    const type = currentType();
+  // 도형 종류는 팔레트에서 고른 순간 정해지고 바뀌지 않는다(팅커캐드처럼 — 종류를 바꾸려면 지우고 팔레트에서
+  // 다시 추가) — 그래서 드롭다운 없이 선택된 도형 자체의 type을 그대로 쓴다.
+  function syncFieldVisibility(type) {
     // .hidden 속성은 이 파일의 CSS 명시도 때문에 안 먹혀서 style.display를 직접 건드린다.
     document.getElementById('boxOnlyFields').style.display = type === 'box' ? 'flex' : 'none';
     document.getElementById('roundFields').style.display = type === 'box' ? 'none' : 'flex';
@@ -230,7 +230,6 @@ function initBoxEditor() {
     document.getElementById('shapeOpField').style.display = selectedIndex === 0 ? 'none' : 'flex';
   }
   function fillFieldsFromShape(shape) {
-    document.getElementById('shapeType').value = shape.type;
     document.getElementById('shapeOp').value = shape.op;
     document.getElementById('boxX').value = round1(shape.x);
     document.getElementById('boxY').value = round1(shape.y);
@@ -244,10 +243,10 @@ function initBoxEditor() {
       document.getElementById('shapeWidth').value = round1(shape.width);
       if (shape.type === 'gear') document.getElementById('shapeTeeth').value = shape.teeth;
     }
-    syncFieldVisibility();
+    syncFieldVisibility(shape.type);
   }
   function readFieldsAsShape() {
-    const type = currentType();
+    const type = shapes[selectedIndex].type;
     const shape = {
       type, op: selectedIndex === 0 ? 'add' : document.getElementById('shapeOp').value,
       x: Number(document.getElementById('boxX').value) || 0,
@@ -278,19 +277,20 @@ function initBoxEditor() {
     setMode('edit');
   }
 
-  document.getElementById('shapeType').addEventListener('change', syncFieldVisibility);
   document.getElementById('boxRedrawBtn').addEventListener('click', () => {
     shapes[selectedIndex] = readFieldsAsShape();
     renderShapeListUI();
     renderEditMode();
   });
-  document.getElementById('shapeAddBtn').addEventListener('click', () => {
-    shapes.push(defaultShapeOfType(currentType()));
+  // 팅커캐드처럼 팔레트의 도형을 누르면 그 종류가 바로 캔버스에 추가된다(사용자 지시: "도형이 오른쪽에
+  // 쭉 나열되어 있어야지") — 드롭다운으로 종류를 고르고 따로 추가 버튼을 누르는 방식이 아니다.
+  document.querySelectorAll('.paletteBtn').forEach((btn) => btn.addEventListener('click', () => {
+    shapes.push(defaultShapeOfType(btn.dataset.type));
     selectedIndex = shapes.length - 1;
     fillFieldsFromShape(shapes[selectedIndex]);
     renderShapeListUI();
     renderEditMode();
-  });
+  }));
   document.getElementById('shapeDeleteBtn').addEventListener('click', () => {
     if (shapes.length <= 1) { document.getElementById('boxEditorMsg').textContent = '도형이 하나는 남아있어야 해요.'; return; }
     shapes.splice(selectedIndex, 1);
