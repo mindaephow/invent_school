@@ -256,6 +256,7 @@ function initBoxEditor() {
       const mat = new THREE.MeshStandardMaterial({ color, transparent: shape.op === 'subtract', opacity: shape.op === 'subtract' ? 0.55 : 1 });
       const mesh = new THREE.Mesh(buildShapeGeometry(shape), mat);
       mesh.position.set(shape.x, shape.y, shape.z);
+      mesh.rotation.set(shape.rx || 0, shape.ry || 0, shape.rz || 0);
       addEdgeOutline(mesh, color);
       scene.add(mesh);
       return mesh;
@@ -281,6 +282,7 @@ function initBoxEditor() {
   function syncSelectedShapeFromMesh(meshes) {
     const mesh = meshes[selectedIndex], shape = shapes[selectedIndex];
     shape.x = mesh.position.x; shape.y = mesh.position.y; shape.z = mesh.position.z;
+    shape.rx = mesh.rotation.x; shape.ry = mesh.rotation.y; shape.rz = mesh.rotation.z;
     if (mesh.scale.x !== 1 || mesh.scale.y !== 1 || mesh.scale.z !== 1) {
       if (BOX_LIKE.includes(shape.type)) {
         shape.w = Math.max(1, shape.w * mesh.scale.x);
@@ -311,10 +313,12 @@ function initBoxEditor() {
     const evaluator = new Evaluator();
     let result = new Brush(buildShapeGeometry(shapes[0]));
     result.position.set(shapes[0].x, shapes[0].y, shapes[0].z);
+    result.rotation.set(shapes[0].rx || 0, shapes[0].ry || 0, shapes[0].rz || 0);
     result.updateMatrixWorld();
     for (let i = 1; i < shapes.length; i++) {
       const b = new Brush(buildShapeGeometry(shapes[i]));
       b.position.set(shapes[i].x, shapes[i].y, shapes[i].z);
+      b.rotation.set(shapes[i].rx || 0, shapes[i].ry || 0, shapes[i].rz || 0);
       b.updateMatrixWorld();
       result = evaluator.evaluate(result, b, shapes[i].op === 'subtract' ? SUBTRACTION : ADDITION);
       result.updateMatrixWorld();
@@ -392,12 +396,15 @@ function initBoxEditor() {
     syncFieldVisibility(shape.type);
   }
   function readFieldsAsShape() {
-    const type = shapes[selectedIndex].type;
+    const prev = shapes[selectedIndex];
+    const type = prev.type;
     const shape = {
       type, op: selectedIndex === 0 ? 'add' : document.getElementById('shapeOp').value,
       x: Number(document.getElementById('boxX').value) || 0,
       y: Number(document.getElementById('boxY').value) || 0,
       z: Number(document.getElementById('boxZ').value) || 0,
+      // 회전은 숫자칸이 없고 마우스(↻ 회전)로만 조절하므로, 숫자칸으로 다시 그릴 때 기존 회전값을 그대로 지킨다.
+      rx: prev.rx || 0, ry: prev.ry || 0, rz: prev.rz || 0,
     };
     if (BOX_LIKE.includes(type)) {
       shape.w = Math.max(1, Number(document.getElementById('boxW').value) || 1);
@@ -429,20 +436,64 @@ function initBoxEditor() {
     renderShapeListUI();
     renderEditMode();
   });
-  // 팅커캐드처럼 팔레트의 도형을 누르면 그 종류가 바로 캔버스에 추가된다(사용자 지시: "도형이 오른쪽에
-  // 쭉 나열되어 있어야지") — 드롭다운으로 종류를 고르고 따로 추가 버튼을 누르는 방식이 아니다.
-  document.querySelectorAll('.paletteBtn').forEach((btn) => btn.addEventListener('click', () => {
-    const shape = defaultShapeOfType(btn.dataset.type);
-    // 새 도형마다 x를 조금씩 띄워서 등록 — 전부 원점에 완전히 겹쳐 놓이면(특히 도형이 여러 개 쌓일수록)
-    // "결과 미리보기"의 CSG 계산이 급격히 느려지는 걸 실제로 확인했다(하트까지 5개 겹쳤을 때 체감 멈춤
-    // 수준). 겹치지 않게 놓고 필요하면 드래그로 다시 겹치면 된다.
-    shape.x += shapes.length * 25;
+  function addShape(shape) {
     shapes.push(shape);
     selectedIndex = shapes.length - 1;
     fillFieldsFromShape(shapes[selectedIndex]);
     renderShapeListUI();
     renderEditMode();
-  }));
+  }
+  // 캔버스 위 마우스 위치를 바닥(y=0) 평면과의 교점으로 바꿔서 그 자리에 도형을 놓는다 — 팔레트에서
+  // 드래그해서 캔버스에 놓을 때, 놓은 그 지점에 도형이 나오게 하기 위함(사용자 지시: "도형잡고
+  // 스케치북으로 이동하면 해당도형을 옮겨주면되").
+  function dropPointOnGround(clientX, clientY) {
+    if (!live) return null;
+    const canvas = document.getElementById('boxEditorCanvas');
+    const rect = canvas.getBoundingClientRect();
+    const ndc = new THREE.Vector2(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1
+    );
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(ndc, live.camera);
+    const point = new THREE.Vector3();
+    return raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), point) ? point : null;
+  }
+  // 팅커캐드처럼 팔레트의 도형을 누르면 그 종류가 바로 캔버스에 추가된다(사용자 지시: "도형이 오른쪽에
+  // 쭉 나열되어 있어야지") — 드롭다운으로 종류를 고르고 따로 추가 버튼을 누르는 방식이 아니다. 클릭은
+  // 기존대로 두고, 팔레트에서 캔버스로 직접 드래그해서 놓은 자리에 그대로 놓는 방식도 같이 지원한다.
+  document.querySelectorAll('.paletteBtn').forEach((btn) => {
+    btn.draggable = true;
+    btn.addEventListener('dragstart', (e) => {
+      if (btn.disabled) { e.preventDefault(); return; }
+      e.dataTransfer.setData('text/plain', btn.dataset.type);
+      e.dataTransfer.effectAllowed = 'copy';
+    });
+    btn.addEventListener('click', () => {
+      const shape = defaultShapeOfType(btn.dataset.type);
+      // 새 도형마다 x를 조금씩 띄워서 등록 — 전부 원점에 완전히 겹쳐 놓이면(특히 도형이 여러 개 쌓일수록)
+      // "결과 미리보기"의 CSG 계산이 급격히 느려지는 걸 실제로 확인했다(하트까지 5개 겹쳤을 때 체감 멈춤
+      // 수준). 겹치지 않게 놓고 필요하면 드래그로 다시 겹치면 된다.
+      shape.x += shapes.length * 25;
+      addShape(shape);
+    });
+  });
+  const canvasWrap = document.querySelector('#boxEditorPanel .imgWrap');
+  canvasWrap.addEventListener('dragover', (e) => {
+    if (mode !== 'edit' || !live) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  });
+  canvasWrap.addEventListener('drop', (e) => {
+    e.preventDefault();
+    if (mode !== 'edit' || !live) return;
+    const type = e.dataTransfer.getData('text/plain');
+    if (!SHAPE_TYPES.includes(type)) return;
+    const shape = defaultShapeOfType(type);
+    const point = dropPointOnGround(e.clientX, e.clientY);
+    if (point) { shape.x = round1(point.x); shape.z = round1(point.z); }
+    addShape(shape);
+  });
   document.getElementById('shapeDeleteBtn').addEventListener('click', () => {
     if (shapes.length <= 1) { document.getElementById('boxEditorMsg').textContent = '도형이 하나는 남아있어야 해요.'; return; }
     shapes.splice(selectedIndex, 1);

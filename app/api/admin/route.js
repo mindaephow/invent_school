@@ -133,17 +133,21 @@ function parseSpec(body) {
         const x = Number(s.x), y = Number(s.y), z = Number(s.z)
         if (![x, y, z].every(Number.isFinite)) return null
         const op = s.op === 'subtract' ? 'subtract' : 'add'
+        // rx/ry/rz(라디안) — 마우스로 돌린 회전값. 없던 부품(예전에 저장된 도형)은 0으로 취급.
+        const rx = Number.isFinite(Number(s.rx)) ? Number(s.rx) : 0
+        const ry = Number.isFinite(Number(s.ry)) ? Number(s.ry) : 0
+        const rz = Number.isFinite(Number(s.rz)) ? Number(s.rz) : 0
         if (BOX_LIKE.includes(s.type)) {
           const w = Number(s.w), h = Number(s.h), d = Number(s.d)
           if (![w, h, d].every((n) => Number.isFinite(n) && n > 0)) return null
-          return { type: s.type, op, x, y, z, w, h, d }
+          return { type: s.type, op, x, y, z, rx, ry, rz, w, h, d }
         }
         const radius = Number(s.radius)
         if (!Number.isFinite(radius) || radius <= 0) return null
-        if (RADIUS_ONLY.includes(s.type)) return { type: s.type, op, x, y, z, radius }
+        if (RADIUS_ONLY.includes(s.type)) return { type: s.type, op, x, y, z, rx, ry, rz, radius }
         const width = Number(s.width)
         if (!Number.isFinite(width) || width <= 0) return null
-        const out = { type: s.type, op, x, y, z, radius, width }
+        const out = { type: s.type, op, x, y, z, rx, ry, rz, radius, width }
         if (s.type === 'gear') {
           const teeth = Number(s.teeth)
           out.teeth = Number.isFinite(teeth) && teeth >= 4 ? Math.round(teeth) : 12
