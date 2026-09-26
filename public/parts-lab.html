@@ -254,11 +254,6 @@ h4{margin:4px 0}
   </div>
 </div>
 
-<div class="section-title-row">
-  <div class="section-title">비교 대상 부품 (이해를 도울 부품)</div>
-  <button id="compareRefPickBtn" type="button" class="pickBtn">🔍 부품 고르기</button>
-</div>
-<div class="section-note">확정된 스타일(구멍 모양·블라인드 홀·안쪽 코너선)의 기준입니다. 아래 "수정할 부품"을 이 모습과 비교하면서 고치세요. "🔍 부품 고르기"로 다른 등록 부품을 추가로 불러와 비교할 수도 있어요.</div>
 <button id="ruleToggle" type="button" class="collapseToggle">▶ 기본 셋팅·넘버링 규칙 (펼치기)</button>
 <div id="rulePanel" class="section-note" hidden>
 <b>기본 셋팅(확정, 앞으로 항상 이대로):</b> 위/정면/뒷면 모두 화면에서 X축은 오른쪽 아래 방향, Z축은 왼쪽 아래 방향으로 기울어져 보입니다(90도 프레임 기준). 정면과 뒷면은 카메라 위치가 완전히 같고, 물체를 거울처럼 좌우로 뒤집었는지(정면) 안 뒤집었는지(뒷면)로만 구분합니다. 축 선이 물체 뒤로 가려지는 부분은 화면에 안 보이는 게 정상입니다.<br>
@@ -267,6 +262,11 @@ h4{margin:4px 0}
 　2) <b>번호</b> = 수치를 작은 값부터 순서대로 센 순번(1, 2, 3...). 즉 수치 5mm는 1번, 15mm는 2번, 25mm는 3번입니다.<br>
 　예시(90도 프레임의 첫 번째 구멍): 수치로는 X 5mm·Z 5mm, 번호로는 X 1번·Z 1번입니다.<br>
 　구멍이 여러 개일 땐 같은 줄(Z가 같은 값)에서 왼쪽에서 오른쪽으로(X 작은 값부터) 먼저 나열하고, 그 다음 줄(Z가 큰 값)로 넘어갑니다.</div>
+<div class="section-title-row">
+  <div class="section-title">비교 대상 부품 (이해를 도울 부품)</div>
+  <button id="compareRefPickBtn" type="button" class="pickBtn">🔍 부품 고르기</button>
+</div>
+<div class="section-note">확정된 스타일(구멍 모양·블라인드 홀·안쪽 코너선)의 기준입니다. 아래 "수정할 부품"을 이 모습과 비교하면서 고치세요. "🔍 부품 고르기"로 다른 등록 부품을 추가로 불러와 비교할 수도 있어요.</div>
 <div class="row" id="compareArea"></div>
 <div id="compareSpec"></div>
 <div class="row">
