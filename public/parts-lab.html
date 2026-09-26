@@ -1696,8 +1696,11 @@ h4{margin:4px 0}
     const missingSpecWarning = (!isBracket && !(p.spec && p.spec.armLen1 != null))
       ? '<div class="specMissingWarn">⚠️ 스펙 미저장 — 바운딩박스·두께·구멍 정보 없음. "스펙 수정"으로 채워주세요.</div>'
       : '';
+    // 구멍 번호처럼 항목이 여러 개인 값은 하나의 콤마 문자열로 뭉치면 구멍끼리 경계가 안 보여서
+    // (사용자 지적: "장난치냐?" — 라벨 안에 콤마가 있는데 구멍 사이 구분도 콤마라 뒤섞여 보였음)
+    // 배열로 넘어온 값은 항목마다 줄을 나눠서(<br>) 보여준다. 각 항목은 그대로 escape해서 안전하게 넣음.
     return '<div class="specBlock" data-part-id="' + esc(p.id) + '"><div class="specBlockHead"><h5>부품 스펙 전체</h5>' + editBtnHtml + '</div>' + missingSpecWarning + shotThumbRowHtml(p) + '<table class="specTable">' +
-      rows.map(([k,v]) => '<tr><th>' + esc(k) + '</th><td>' + esc(String(v)) + '</td></tr>').join('') +
+      rows.map(([k,v]) => '<tr><th>' + esc(k) + '</th><td>' + (Array.isArray(v) ? v.map(item => esc(String(item))).join('<br>') : esc(String(v))) + '</td></tr>').join('') +
       '</table></div>';
   }
   // 부품스펙 오른쪽 "스펙 수정" 버튼 저장 후, 그 부품이 떠 있는 모든 .specBlock을 다시 그림(같은 부품이
@@ -1812,10 +1815,25 @@ h4{margin:4px 0}
     const rows = [];
     if (s && s.armLen1 != null && s.armLen2 != null) rows.push(['바운딩박스', 'X ' + s.armLen1 + 'mm, Z ' + s.armLen2 + 'mm']);
     if (s && s.thickness != null) rows.push(['높이(Y)', s.thickness + 'mm']);
-    if (s && Array.isArray(s.holeLabels) && s.holeLabels.length) {
+    // 사용자 확정 규칙: 번호형(순번)과 수치형(실제 mm)은 서로 다른 것이므로 한 줄에 섞지 않고 행을 따로 둔다.
+    // 라벨 문자열(holeLabels)을 믿지 않고 holeCoords의 실제 x,z 수치에서 매번 다시 계산해서, 저장 시점의
+    // 포맷이 뭐였든 항상 최신 규칙(그리드 한 칸에 구멍 하나, 번호 1부터, 가로 먼저 세로 나중)으로 보여준다.
+    if (s && Array.isArray(s.holeCoords) && s.holeCoords.length) {
+      const coords = s.holeCoords;
+      const xs = [...new Set(coords.map(h => gridRnd(h.x)))].sort((a,b) => a-b);
+      const zs = [...new Set(coords.map(h => gridRnd(h.z)))].sort((a,b) => a-b);
+      const withNums = coords.map(h => ({
+        x: h.x, z: h.z,
+        xNum: xs.indexOf(gridRnd(h.x)) + 1,
+        zNum: zs.indexOf(gridRnd(h.z)) + 1,
+      })).sort((a,b) => a.zNum - b.zNum || a.xNum - b.xNum);
+      rows.push(['구멍 수', coords.length + '개']);
+      rows.push(['구멍 번호', withNums.map(h => 'X' + h.xNum + ' Z' + h.zNum)]);
+      rows.push(['구멍 수치', withNums.map(h => 'X' + h.x + 'mm Z' + h.z + 'mm')]);
+      rows.push(['비고', '위 기준 X·Z 둘 다 숫자, 가로(X) 먼저·세로(Z) 나중 순서']);
+    } else if (s && Array.isArray(s.holeLabels) && s.holeLabels.length) {
       rows.push(['구멍 수', s.holeLabels.length + '개']);
-      rows.push(['구멍 번호', s.holeLabels.join(', ')]);
-      rows.push(['비고', '위 기준 위→아래=줄번호·왼→오=칸번호(둘 다 숫자), 예: 2-1']);
+      rows.push(['구멍 번호', s.holeLabels]);
     }
     return rows;
   }
