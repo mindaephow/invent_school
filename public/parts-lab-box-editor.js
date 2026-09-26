@@ -56,19 +56,28 @@ function baseScene() {
 }
 
 // 도형 종류 목록 — app/api/admin/route.js의 SHAPE_TYPES와 반드시 같이 맞춰야 한다.
-const SHAPE_TYPES = ['box', 'wheel', 'gear', 'sphere', 'cone', 'pyramid', 'torus', 'hexprism', 'icosahedron', 'dome', 'wedge', 'ring', 'star', 'heart', 'text'];
+const SHAPE_TYPES = ['box', 'wheel', 'gear', 'sphere', 'cone', 'pyramid', 'torus', 'hexprism', 'icosahedron', 'dome', 'wedge', 'ring', 'star', 'heart', 'text', 'duplo', 'knexRod', 'knexConnector'];
+// 팔레트 탭 — 어떤 도형이 어느 탭(기본/듀프로형/케이넥스형)에 속하는지. 팔레트 UI에서만 쓰고 저장 스펙과는 무관.
+const SHAPE_CATEGORY = { duplo: 'duplo', knexRod: 'knex', knexConnector: 'knex' };
+function categoryOf(type) { return SHAPE_CATEGORY[type] || 'basic'; }
 // 반지름만 쓰는 도형(두께 칸 없음), w/h/d를 쓰는 박스류 도형 — 이 둘에 안 속하면 반지름+두께 조합을 쓴다.
+// 듀프로형 블록은 스터드가 위에 붙는다는 점만 다르고 몸통 자체는 박스라서 w/h/d를 그대로 재사용한다.
 const RADIUS_ONLY = ['sphere', 'icosahedron', 'dome'];
-const BOX_LIKE = ['box', 'wedge'];
+const BOX_LIKE = ['box', 'wedge', 'duplo'];
 // 반지름+두께를 쓰는 도형들이 "두께" 칸을 각자 다른 뜻으로 쓰므로 — 팔레트에서 고를 때 입력칸 라벨을 그 뜻에 맞게 바꿔준다.
-const WIDTH_FIELD_LABEL = { wheel: '두께(mm)', gear: '두께(mm)', cone: '높이(mm)', pyramid: '높이(mm)', torus: '튜브 두께(mm)', hexprism: '높이(mm)', ring: '두께(mm)', star: '두께(mm)', heart: '두께(mm)', text: '두께(mm)' };
+const WIDTH_FIELD_LABEL = { wheel: '두께(mm)', gear: '두께(mm)', cone: '높이(mm)', pyramid: '높이(mm)', torus: '튜브 두께(mm)', hexprism: '높이(mm)', ring: '두께(mm)', star: '두께(mm)', heart: '두께(mm)', text: '두께(mm)', knexRod: '길이(mm)', knexConnector: '두께(mm)' };
+const RADIUS_FIELD_LABEL = { knexRod: '굵기(mm)' };
 
 function defaultShapeOfType(type) {
   if (type === 'box') return { type: 'box', op: 'add', x: 0, y: 5, z: 0, w: 30, h: 10, d: 30 };
   if (type === 'wedge') return { type: 'wedge', op: 'add', x: 0, y: 0, z: 0, w: 30, h: 20, d: 20 };
+  // 듀프로는 기본 블록보다 훨씬 큼직하게(2×2 스터드 자리) — 실제 듀프로가 레고보다 스터드가 2배 큰 것과 같은 느낌.
+  if (type === 'duplo') return { type: 'duplo', op: 'add', x: 0, y: 10, z: 0, w: 32, h: 20, d: 32 };
   if (RADIUS_ONLY.includes(type)) return { type, op: 'add', x: 0, y: 20, z: 0, radius: 20 };
   if (type === 'torus') return { type: 'torus', op: 'add', x: 0, y: 6, z: 0, radius: 20, width: 6 };
   if (type === 'text') return { type: 'text', op: 'add', x: 0, y: 5, z: 0, text: 'A', radius: 20, width: 5 };
+  if (type === 'knexRod') return { type: 'knexRod', op: 'add', x: 0, y: 3, z: 0, radius: 3, width: 60 };
+  if (type === 'knexConnector') return { type: 'knexConnector', op: 'add', x: 0, y: 4, z: 0, radius: 16, width: 8, holes: 6 };
   const base = { type, op: 'add', x: 0, y: 5, z: 0, radius: 20, width: 10 };
   if (type === 'gear') base.teeth = 12;
   return base;
@@ -120,11 +129,64 @@ function heartGeometry(scale, thickness) {
   return geo;
 }
 
+// 옥스포드/레고식 스터드보다 큰 듀프로식 스터드 — 몸통(w×h×d 박스) 위에 원기둥 돌기를 격자로 붙인다.
+function duploGeometry(w, h, d) {
+  const pitch = 16; // 스터드 하나가 차지하는 칸 크기(듀프로는 레고/옥스포드보다 이 칸이 큼)
+  const studsX = Math.max(1, Math.round(w / pitch));
+  const studsZ = Math.max(1, Math.round(d / pitch));
+  const studR = pitch * 0.34, studH = pitch * 0.4;
+  const geos = [new THREE.BoxGeometry(w, h, d)];
+  for (let ix = 0; ix < studsX; ix++) {
+    for (let iz = 0; iz < studsZ; iz++) {
+      const stud = new THREE.CylinderGeometry(studR, studR, studH, 20);
+      const px = (ix - (studsX - 1) / 2) * pitch, pz = (iz - (studsZ - 1) / 2) * pitch;
+      stud.translate(px, h / 2 + studH / 2, pz);
+      geos.push(stud);
+    }
+  }
+  return mergeGeometries(geos, false);
+}
+// 케이넥스 막대 — 원기둥 몸통 + 양 끝에 둥근 캡(실제 케이넥스 막대의 둥근 끝 느낌).
+function knexRodGeometry(r, len) {
+  const bodyLen = Math.max(1, len - r * 2);
+  const geos = [new THREE.CylinderGeometry(r, r, bodyLen, 12)];
+  const capTop = new THREE.SphereGeometry(r, 12, 8);
+  capTop.translate(0, bodyLen / 2, 0);
+  const capBottom = new THREE.SphereGeometry(r, 12, 8);
+  capBottom.translate(0, -bodyLen / 2, 0);
+  geos.push(capTop, capBottom);
+  return mergeGeometries(geos, false);
+}
+// 케이넥스 커넥터 — 원판 허브에 막대를 꽂을 수 있는 구멍을 여러 각도(holeCount개, 방사형)로 실제로 뚫는다
+// (이 도형 하나 안에서만 쓰는 CSG라서, 바깥의 더하기/빼기 목록과는 무관하게 여기서 바로 뺀다).
+function knexConnectorGeometry(r, thick, holeCount) {
+  const n = Math.max(3, Math.min(8, Math.round(holeCount) || 6));
+  const holeR = Math.max(1.2, r * 0.14);
+  const ringR = r * 0.62;
+  const evaluator = new Evaluator();
+  let result = new Brush(new THREE.CylinderGeometry(r, r, thick, 24));
+  result.updateMatrixWorld();
+  for (let i = 0; i < n; i++) {
+    const angle = (i / n) * Math.PI * 2;
+    const hole = new Brush(new THREE.CylinderGeometry(holeR, holeR, thick * 2.2, 10));
+    hole.position.set(Math.cos(angle) * ringR, 0, Math.sin(angle) * ringR);
+    hole.updateMatrixWorld();
+    result = evaluator.evaluate(result, hole, SUBTRACTION);
+  }
+  const centerHole = new Brush(new THREE.CylinderGeometry(holeR, holeR, thick * 2.2, 10));
+  centerHole.updateMatrixWorld();
+  result = evaluator.evaluate(result, centerHole, SUBTRACTION);
+  return result.geometry;
+}
+
 // 도형 하나의 실제 BufferGeometry를 만든다 — CSG는 도형당 지오메트리 하나만 다루므로, 톱니바퀴는
 // 원판+이빨을 하나로 합쳐(mergeGeometries) 통짜 입체로 만든다.
 function buildShapeGeometry(shape) {
   switch (shape.type) {
     case 'box': return new THREE.BoxGeometry(shape.w, shape.h, shape.d);
+    case 'duplo': return duploGeometry(shape.w, shape.h, shape.d);
+    case 'knexRod': return knexRodGeometry(shape.radius, shape.width);
+    case 'knexConnector': return knexConnectorGeometry(shape.radius, shape.width, shape.holes);
     case 'wedge': return wedgeGeometry(shape.w, shape.h, shape.d);
     case 'sphere': return new THREE.SphereGeometry(shape.radius, 24, 16);
     case 'icosahedron': return new THREE.IcosahedronGeometry(shape.radius, 0);
@@ -345,7 +407,7 @@ function initBoxEditor() {
 
   // ---------- 도형 목록 UI ----------
   function shapeLabel(shape, i) {
-    const typeLabel = { box: '박스', wheel: '바퀴', gear: '톱니바퀴', sphere: '구', cone: '원뿔', pyramid: '각뿔', torus: '도넛', hexprism: '육각기둥', icosahedron: '다면체', dome: '반구', wedge: '지붕', ring: '고리', star: '별', heart: '하트', text: '텍스트' }[shape.type];
+    const typeLabel = { box: '박스', wheel: '바퀴', gear: '톱니바퀴', sphere: '구', cone: '원뿔', pyramid: '각뿔', torus: '도넛', hexprism: '육각기둥', icosahedron: '다면체', dome: '반구', wedge: '지붕', ring: '고리', star: '별', heart: '하트', text: '텍스트', duplo: '듀프로 블록', knexRod: '케이넥스 막대', knexConnector: '케이넥스 커넥터' }[shape.type];
     const opLabel = i === 0 ? '(베이스)' : (shape.op === 'subtract' ? '(➖ 빼기)' : '(➕ 더하기)');
     return (i + 1) + '. ' + typeLabel + ' ' + opLabel;
   }
@@ -374,8 +436,10 @@ function initBoxEditor() {
     document.getElementById('roundFields').style.display = boxLike ? 'none' : 'flex';
     document.getElementById('shapeWidthField').style.display = RADIUS_ONLY.includes(type) ? 'none' : 'flex';
     document.getElementById('shapeWidthLabel').textContent = WIDTH_FIELD_LABEL[type] || '두께(mm)';
+    document.getElementById('shapeRadiusLabel').textContent = RADIUS_FIELD_LABEL[type] || '반지름(mm)';
     document.getElementById('teethField').style.display = type === 'gear' ? 'flex' : 'none';
     document.getElementById('textField').style.display = type === 'text' ? 'flex' : 'none';
+    document.getElementById('knexHolesField').style.display = type === 'knexConnector' ? 'flex' : 'none';
     document.getElementById('shapeOpField').style.display = selectedIndex === 0 ? 'none' : 'flex';
   }
   function fillFieldsFromShape(shape) {
@@ -392,6 +456,7 @@ function initBoxEditor() {
       if (!RADIUS_ONLY.includes(shape.type)) document.getElementById('shapeWidth').value = round1(shape.width);
       if (shape.type === 'gear') document.getElementById('shapeTeeth').value = shape.teeth;
       if (shape.type === 'text') document.getElementById('shapeText').value = shape.text;
+      if (shape.type === 'knexConnector') document.getElementById('knexHoles').value = shape.holes;
     }
     syncFieldVisibility(shape.type);
   }
@@ -415,6 +480,7 @@ function initBoxEditor() {
       if (!RADIUS_ONLY.includes(type)) shape.width = Math.max(1, Number(document.getElementById('shapeWidth').value) || 1);
       if (type === 'gear') shape.teeth = Math.max(4, Number(document.getElementById('shapeTeeth').value) || 12);
       if (type === 'text') shape.text = (document.getElementById('shapeText').value || 'A').slice(0, 10);
+      if (type === 'knexConnector') shape.holes = Math.max(3, Math.min(8, Number(document.getElementById('knexHoles').value) || 6));
     }
     return shape;
   }
@@ -478,6 +544,22 @@ function initBoxEditor() {
       addShape(shape);
     });
   });
+  // 도형 팔레트 접기/펼치기(사용자 지시: "도형 팔레트 접었다 폈다 할수있게").
+  document.getElementById('paletteToggle').addEventListener('click', () => {
+    const wrap = document.getElementById('shapePaletteWrap');
+    const nowHidden = wrap.style.display !== 'none';
+    wrap.style.display = nowHidden ? 'none' : '';
+    document.getElementById('paletteToggle').textContent = nowHidden ? '▶ 펼치기' : '▼ 접기';
+  });
+  // 팔레트 탭(기본 도형/듀프로형/케이넥스형) — 탭에 안 맞는 도형 버튼은 숨긴다.
+  document.querySelectorAll('.paletteTabBtn').forEach((tabBtn) => {
+    tabBtn.addEventListener('click', () => {
+      document.querySelectorAll('.paletteTabBtn').forEach((b) => b.classList.toggle('on', b === tabBtn));
+      document.querySelectorAll('.paletteBtn').forEach((b) => {
+        b.style.display = categoryOf(b.dataset.type) === tabBtn.dataset.category ? '' : 'none';
+      });
+    });
+  });
   const canvasWrap = document.querySelector('#boxEditorPanel .imgWrap');
   canvasWrap.addEventListener('dragover', (e) => {
     if (mode !== 'edit' || !live) return;
@@ -534,6 +616,13 @@ function initBoxEditor() {
     }
   });
 
+  // 처음엔 "기본 도형" 탭만 보이게 — 듀프로형/케이넥스형 버튼은 그 탭을 눌러야 나온다.
+  const initialTab = document.querySelector('.paletteTabBtn.on') || document.querySelector('.paletteTabBtn');
+  if (initialTab) {
+    document.querySelectorAll('.paletteBtn').forEach((b) => {
+      b.style.display = categoryOf(b.dataset.type) === initialTab.dataset.category ? '' : 'none';
+    });
+  }
   renderPaletteThumbnails();
   fillFieldsFromShape(shapes[0]);
   renderShapeListUI();

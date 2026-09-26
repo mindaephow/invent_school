@@ -134,7 +134,16 @@ h4{margin:4px 0}
         </div>
       </div>
       <div style="flex:1; min-width:220px;">
-        <div class="section-note" style="margin:0 0 6px;">도형 팔레트 — 눌러서 캔버스에 바로 추가</div>
+        <div class="section-note" style="margin:0 0 6px; display:flex; align-items:center; justify-content:space-between; gap:8px;">
+          <span>도형 팔레트 — 눌러서 캔버스에 바로 추가, 또는 캔버스로 드래그</span>
+          <button id="paletteToggle" type="button" style="font-size:11px; padding:3px 8px; border-radius:6px; border:1px solid #ccc; background:#fff; cursor:pointer; flex:none;">▼ 접기</button>
+        </div>
+        <div id="shapePaletteWrap">
+        <div class="btnRow" style="margin-top:0; margin-bottom:8px;">
+          <button type="button" class="paletteTabBtn on" data-category="basic">기본 도형</button>
+          <button type="button" class="paletteTabBtn" data-category="duplo">듀프로형</button>
+          <button type="button" class="paletteTabBtn" data-category="knex">케이넥스형</button>
+        </div>
         <div id="shapePalette" style="display:grid; grid-template-columns:repeat(3, 84px); gap:8px; margin-bottom:14px;">
           <button type="button" class="paletteBtn" data-type="box" style="width:84px; height:84px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; border:1px solid #ddd; border-radius:8px; background:#f4f4f4; cursor:pointer; font-size:11px; padding:0;"><img class="paletteThumb" alt="" style="width:56px; height:56px;">박스</button>
           <button type="button" class="paletteBtn" data-type="wheel" style="width:84px; height:84px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; border:1px solid #ddd; border-radius:8px; background:#f4f4f4; cursor:pointer; font-size:11px; padding:0;"><img class="paletteThumb" alt="" style="width:56px; height:56px;">바퀴</button>
@@ -151,6 +160,10 @@ h4{margin:4px 0}
           <button type="button" class="paletteBtn" data-type="star" style="width:84px; height:84px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; border:1px solid #ddd; border-radius:8px; background:#f4f4f4; cursor:pointer; font-size:11px; padding:0;"><img class="paletteThumb" alt="" style="width:56px; height:56px;">별</button>
           <button type="button" class="paletteBtn" data-type="heart" style="width:84px; height:84px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; border:1px solid #ddd; border-radius:8px; background:#f4f4f4; cursor:pointer; font-size:11px; padding:0;"><img class="paletteThumb" alt="" style="width:56px; height:56px;">하트</button>
           <button type="button" class="paletteBtn" data-type="text" style="width:84px; height:84px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; border:1px solid #ddd; border-radius:8px; background:#f4f4f4; cursor:pointer; font-size:11px; padding:0;"><img class="paletteThumb" alt="" style="width:56px; height:56px;">텍스트</button>
+          <button type="button" class="paletteBtn" data-type="duplo" style="width:84px; height:84px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; border:1px solid #ddd; border-radius:8px; background:#f4f4f4; cursor:pointer; font-size:11px; padding:0;"><img class="paletteThumb" alt="" style="width:56px; height:56px;">듀프로 블록</button>
+          <button type="button" class="paletteBtn" data-type="knexRod" style="width:84px; height:84px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; border:1px solid #ddd; border-radius:8px; background:#f4f4f4; cursor:pointer; font-size:11px; padding:0;"><img class="paletteThumb" alt="" style="width:56px; height:56px;">케이넥스 막대</button>
+          <button type="button" class="paletteBtn" data-type="knexConnector" style="width:84px; height:84px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; border:1px solid #ddd; border-radius:8px; background:#f4f4f4; cursor:pointer; font-size:11px; padding:0;"><img class="paletteThumb" alt="" style="width:56px; height:56px;">케이넥스 커넥터</button>
+        </div>
         </div>
         <div class="section-note" style="margin:0 0 6px;">도형 목록 — 맨 위가 기준(베이스), 그 아래는 순서대로 더하거나 뺍니다.</div>
         <div id="shapeList" style="display:flex; flex-direction:column; gap:4px; margin-bottom:8px;"></div>
@@ -177,9 +190,10 @@ h4{margin:4px 0}
         </div>
         <div class="boxFields" id="roundFields" hidden>
           <label id="textField" hidden>텍스트 내용<input type="text" id="shapeText" value="A" maxlength="10"></label>
-          <label>반지름(mm)<input type="number" id="shapeRadius" value="20" min="1" step="1"></label>
+          <label><span id="shapeRadiusLabel">반지름(mm)</span><input type="number" id="shapeRadius" value="20" min="1" step="1"></label>
           <label id="shapeWidthField"><span id="shapeWidthLabel">두께(mm)</span><input type="number" id="shapeWidth" value="10" min="1" step="1"></label>
           <label id="teethField" hidden>톱니 수<input type="number" id="shapeTeeth" value="12" min="4" max="40" step="1"></label>
+          <label id="knexHolesField" hidden>구멍 수<input type="number" id="knexHoles" value="6" min="3" max="8" step="1"></label>
         </div>
         <div class="btnRow"><button id="boxRedrawBtn" type="button" style="background:#fff;color:#2b6be0;">이 도형에 적용</button><button id="boxSaveBtn" type="button" disabled>저장</button></div>
         <div class="msg" id="boxEditorMsg"></div>
