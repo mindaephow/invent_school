@@ -453,6 +453,8 @@ function initBoxEditor() {
     document.querySelectorAll('.paletteBtn').forEach((b) => { b.disabled = mode === 'preview'; });
     document.getElementById('shapeDeleteBtn').disabled = mode === 'preview';
     document.getElementById('boxRedrawBtn').disabled = mode === 'preview';
+    document.getElementById('boxFlipBtn').disabled = mode === 'preview';
+    document.getElementById('boxFlipYBtn').disabled = mode === 'preview';
     if (mode === 'edit') renderEditMode(); else renderPreviewMode();
   }
 
@@ -694,22 +696,22 @@ function initBoxEditor() {
     document.getElementById('rotateAngleRow').style.display = b.dataset.mode === 'rotate' ? 'flex' : 'none';
     if (b.dataset.mode === 'rotate') syncRotateAngleUI();
   }));
-  // 사용자 지시: "중심으로 반대로 뒤집는 버튼, 위아래로 뒤집는 버튼 추가해줘" — 도형을 옮기는 게 아니라
-  // 카메라를 controls.target(캔버스 중심, 항상 0,0,0) 기준으로 반사시켜서 반대편/아래쪽에서 보게 한다.
-  document.getElementById('boxFlipBtn').addEventListener('click', () => {
-    if (!live) return;
-    const t = live.controls.target, p = live.camera.position;
-    live.camera.position.set(2 * t.x - p.x, p.y, 2 * t.z - p.z);
-    live.camera.lookAt(t);
-    live.controls.update();
-  });
-  document.getElementById('boxFlipYBtn').addEventListener('click', () => {
-    if (!live) return;
-    const t = live.controls.target, p = live.camera.position;
-    live.camera.position.set(p.x, 2 * t.y - p.y, p.z);
-    live.camera.lookAt(t);
-    live.controls.update();
-  });
+  // 사용자 지시: "중심으로 반대로 뒤집는 버튼, 위아래로 뒤집는 버튼 추가해줘" / "3D 관련 프로그램에서
+  // 누가 시각을 뒤집니?" — 카메라가 아니라 선택된 도형 자체를 180도 돌린다(회전값이 shape에 저장되므로
+  // 저장 버튼으로 그대로 남는다). "반대로"는 Y축(세로) 180도, "위아래로"는 X축(가로) 180도.
+  function flipSelectedShape(axis){
+    const shape = shapes[selectedIndex];
+    if (!shape) return;
+    shape['r' + axis] = (shape['r' + axis] || 0) + Math.PI;
+    if (live && live.meshes[selectedIndex]) {
+      const mesh = live.meshes[selectedIndex];
+      mesh.rotation[axis] = shape['r' + axis];
+      applyFloorClamp(mesh, shape);
+    }
+    fillFieldsFromShape(shape);
+  }
+  document.getElementById('boxFlipBtn').addEventListener('click', () => flipSelectedShape('y'));
+  document.getElementById('boxFlipYBtn').addEventListener('click', () => flipSelectedShape('x'));
   // 회전축 고르기(x/y/z) — 그 축의 지금 각도를 드롭다운에 보여준다.
   document.getElementById('rotateAxis').addEventListener('change', syncRotateAngleUI);
   // 15도 단위 각도 드롭다운으로 정확한 각도를 바로 지정(사용자 지시: "x,y,z선택후 15도 단위로 회전 각도

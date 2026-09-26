@@ -469,6 +469,42 @@ h4{margin:4px 0}
     canvas.addEventListener('pointerup', stop);
     canvas.addEventListener('pointerleave', stop);
   }
+  // "📦 물체 이동" — attachGroundPan과 같은 화면 기준 x,z 계산이지만, 카메라 대신 물체(mesh) 위치를 옮긴다
+  // (사용자 지적: "이동도 물체이동과 카메라가 움직이는 이동 두개로 분류해서 만들어줘" — 기존 "이동" 버튼은
+  // 사실 카메라+시점을 옮기는 것뿐이라 물체는 그대로였음).
+  function attachObjectPan(canvas, camera, mesh, isActive){
+    let dragging = false, lastX = 0, lastY = 0, pid = null;
+    function worldPerPixel(){ return (camera.right - camera.left) / camera.zoom / canvas.clientWidth; }
+    function flatAxis(localAxis, fallback){
+      const v = localAxis.clone().applyQuaternion(camera.quaternion);
+      v.y = 0;
+      return v.lengthSq() > 1e-6 ? v.normalize() : fallback;
+    }
+    function pan(dxPx, dyPx){
+      if (!mesh) return;
+      const scale = worldPerPixel();
+      const right = flatAxis(new THREE.Vector3(1,0,0), new THREE.Vector3(1,0,0));
+      const fwd = flatAxis(new THREE.Vector3(0,0,-1), new THREE.Vector3(0,0,-1));
+      const delta = new THREE.Vector3()
+        .addScaledVector(right, -dxPx * scale)
+        .addScaledVector(fwd, dyPx * scale);
+      mesh.position.add(delta);
+    }
+    canvas.addEventListener('pointerdown', (e) => {
+      if (!isActive()) return;
+      dragging = true; lastX = e.clientX; lastY = e.clientY; pid = e.pointerId;
+      canvas.setPointerCapture(pid);
+      canvas.style.cursor = 'grabbing';
+    });
+    canvas.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      pan(e.clientX - lastX, e.clientY - lastY);
+      lastX = e.clientX; lastY = e.clientY;
+    });
+    function stop(){ if (!dragging) return; dragging = false; if (isActive()) canvas.style.cursor = 'grab'; }
+    canvas.addEventListener('pointerup', stop);
+    canvas.addEventListener('pointerleave', stop);
+  }
   function baseScene(){
     const scene = new THREE.Scene();
     scene.add(new THREE.AmbientLight(0xffffff,1));
@@ -871,7 +907,7 @@ h4{margin:4px 0}
 
     const toolbar = document.createElement('div');
     toolbar.className = 'btnRow';
-    toolbar.innerHTML = '<button type="button" class="clearBtn">지우기</button><button type="button" class="modeBtn">🔄 돌리기</button><button type="button" class="panBtn">✋ 이동</button>' +
+    toolbar.innerHTML = '<button type="button" class="clearBtn">지우기</button><button type="button" class="modeBtn">🔄 돌리기</button><button type="button" class="panBtn">✋ 카메라 이동</button><button type="button" class="objPanBtn">📦 물체 이동</button>' +
       '<button type="button" class="flipBtn">↔️ 반대로</button><button type="button" class="flipYBtn">↕️ 위아래로</button>' +
       (vertexPoints ? '<button type="button" class="vertexBtn">🔗 꼭지점</button><button type="button" class="guideBtn">📏 가이드</button>' : '') +
       '<button type="button" class="shotBtn">📸 스샷</button>';
@@ -906,49 +942,52 @@ h4{margin:4px 0}
     }
 
     attachScribble(overlay, toolbar);
-    const stateFlags = { rotate:false, pan:false, vertex:false, guide:false };
-    function syncOverlay(){ overlay.style.pointerEvents = (stateFlags.rotate || stateFlags.pan || stateFlags.vertex || stateFlags.guide) ? 'none' : 'auto'; }
+    const stateFlags = { rotate:false, pan:false, objpan:false, vertex:false, guide:false };
+    function syncOverlay(){ overlay.style.pointerEvents = (stateFlags.rotate || stateFlags.pan || stateFlags.objpan || stateFlags.vertex || stateFlags.guide) ? 'none' : 'auto'; }
     syncOverlay();
 
     // 사용자 지시: "돌리기 오른쪽에 이동버튼 추가 => 모든곳에" / "x,z만 움직이면 됨(바닥 아래로는 못 내려가게)"
     // — OrbitControls 기본 PAN은 카메라 화면 기준 좌우/상하로 움직여서 각도에 따라 Y(높이)까지 바뀔 수 있음.
     // 대신 카메라의 오른쪽·정면 방향을 바닥(XZ평면)에 투영해서 y는 절대 안 바뀌게 직접 계산하고, 매번 바닥
-    // (y=0) 아래로는 못 내려가게 고정한다. 그리기·돌리기·이동은 한 번에 하나만 켜지게(서로 배타적) 함.
+    // (y=0) 아래로는 못 내려가게 고정한다. 그리기·돌리기·카메라이동·물체이동은 한 번에 하나만 켜지게(서로 배타적) 함.
+    // 사용자 지적: "이동도 물체이동과 카메라가 움직이는 이동 두개로 분류해서 만들어줘" — 기존 "이동"은
+    // 카메라(+시점)만 옮기고 물체는 그대로였어서, 물체 자체를 옮기는 버튼을 따로 추가함.
     const modeBtn = toolbar.querySelector('.modeBtn');
     const panBtn = toolbar.querySelector('.panBtn');
-    function setOrbitMode(mode){ // 'rotate' | 'pan' | 'off'
+    const objPanBtn = toolbar.querySelector('.objPanBtn');
+    function setOrbitMode(mode){ // 'rotate' | 'pan' | 'objpan' | 'off'
       controls.enabled = mode === 'rotate';
       stateFlags.rotate = mode === 'rotate';
       stateFlags.pan = mode === 'pan';
+      stateFlags.objpan = mode === 'objpan';
       syncOverlay();
       modeBtn.classList.toggle('on', stateFlags.rotate);
       modeBtn.textContent = stateFlags.rotate ? '✏️ 그리기로' : '🔄 돌리기';
       panBtn.classList.toggle('on', stateFlags.pan);
-      panBtn.textContent = stateFlags.pan ? '✏️ 그리기로' : '✋ 이동';
-      canvas.style.cursor = stateFlags.pan ? 'grab' : '';
+      panBtn.textContent = stateFlags.pan ? '✏️ 그리기로' : '✋ 카메라 이동';
+      objPanBtn.classList.toggle('on', stateFlags.objpan);
+      objPanBtn.textContent = stateFlags.objpan ? '✏️ 그리기로' : '📦 물체 이동';
+      canvas.style.cursor = (stateFlags.pan || stateFlags.objpan) ? 'grab' : '';
     }
     modeBtn.addEventListener('click', () => setOrbitMode(stateFlags.rotate ? 'off' : 'rotate'));
     panBtn.addEventListener('click', () => setOrbitMode(stateFlags.pan ? 'off' : 'pan'));
+    objPanBtn.addEventListener('click', () => setOrbitMode(stateFlags.objpan ? 'off' : 'objpan'));
     attachGroundPan(canvas, camera, controls, () => stateFlags.pan);
+    attachObjectPan(canvas, camera, mesh, () => stateFlags.objpan);
 
-    // 사용자 지시: "반대로 뒤집는 버튼, 위아래로 뒤집는 버튼 모든곳에 다 추가해줘" — 카메라를 바라보는
-    // 중심점(controls.target) 기준으로 반사시켜서, 어느 각도로 시작했든 눌러서 반대쪽/위아래를 바로 볼 수
-    // 있게 함. "반대로"는 x,z(수평)를 중심점 기준으로 뒤집고(진짜 반대편에서 보기), "위아래로"는 y(높이)를
-    // 중심점 기준으로 뒤집는다(밑에서 올려다보기). controls.update()가 다음 프레임에 현재 camera.position을
-    // 기준으로 스페리컬을 다시 계산하므로 이렇게 직접 옮겨도 그대로 반영된다.
+    // 사용자 지시: "반대로 뒤집는 버튼, 위아래로 뒤집는 버튼 모든곳에 다 추가해줘" / "3D 관련 프로그램에서
+    // 누가 시각을 뒤집니?" — 카메라(보는 시점)가 아니라 물체 자체를 180도 돌린다. "반대로"는 세로축(Y) 기준
+    // 180도 돌려서 반대쪽 면이 보이게 하고, "위아래로"는 가로축(X) 기준 180도 돌려서 위/아래가 뒤집히게 함.
+    // 물체가 없는 빈 칸(mesh=null)에서는 버튼을 눌러도 아무 일도 안 하게 막는다.
     const flipBtn = toolbar.querySelector('.flipBtn');
     const flipYBtn = toolbar.querySelector('.flipYBtn');
     flipBtn.addEventListener('click', () => {
-      const t = controls.target, p = camera.position;
-      camera.position.set(2 * t.x - p.x, p.y, 2 * t.z - p.z);
-      camera.lookAt(t);
-      controls.update();
+      if (!mesh) return;
+      mesh.rotation.y += Math.PI;
     });
     flipYBtn.addEventListener('click', () => {
-      const t = controls.target, p = camera.position;
-      camera.position.set(p.x, 2 * t.y - p.y, p.z);
-      camera.lookAt(t);
-      controls.update();
+      if (!mesh) return;
+      mesh.rotation.x += Math.PI;
     });
 
     // 스샷 버튼 — 사용자 지시: "스샷버튼을 누르면 다운로드되고 db에 저장이 되게". 이름표는 이 칸의 .col > h4
