@@ -260,7 +260,7 @@ h4{margin:4px 0}
 </div>
 <div class="section-note">확정된 스타일(구멍 모양·블라인드 홀·안쪽 코너선)의 기준입니다. 아래 "수정할 부품"을 이 모습과 비교하면서 고치세요. "🔍 부품 고르기"로 다른 등록 부품을 추가로 불러와 비교할 수도 있어요.<br>
 <b>기본 셋팅(확정, 앞으로 항상 이대로):</b> 위/정면/뒷면 모두 X축=화면 오른쪽·아래로 기움, Z축=화면 왼쪽·아래로 기움(90도 프레임 기준). 정면·뒷면은 카메라가 완전히 같고, 물체를 거울반사(정면) 했는지 안 했는지로만 구분함. 축 선은 물체에 가려질 땐 정상적으로 안 보여야 함(depthTest 켜짐).<br>
-<b>넘버링 규칙(확정):</b> 위 모습 기준 X·Z 둘 다 숫자(1,2,3...)만 쓰고 알파벳은 안 씀. margin·피치 계산 없이, 실제 첫 번째 구멍 좌표를 그대로 1로 놓고 다음 구멍부터 순서대로 2,3...으로 매김.</div>
+<b>넘버링 규칙(확정):</b> 위 모습 기준 X·Z 둘 다 숫자(1,2,3...)만 쓰고 알파벳은 안 씀. 좌표는 두 종류 — <b>수치좌표</b>(실제 mm 값, 첫 구멍 수치는 5, 그리드/피치 10mm)와 <b>번호좌표</b>(수치를 오름차순 정렬해서 1부터 매긴 순번, 그리드 한 칸에 구멍 하나). margin·피치로 나눈 칸이 아니라 실제 구멍 수치를 그대로 모아 번호를 매김. 여러 구멍을 나열할 땐 같은 Z(줄)에서 X(가로) 오름차순으로 먼저 쓰고, 그 다음 Z(세로)로 이동(가로 먼저, 세로 나중).</div>
 <div class="row" id="compareArea"></div>
 <div id="compareSpec"></div>
 <div class="row">
@@ -1294,12 +1294,19 @@ h4{margin:4px 0}
     // 대신 가장 가까운 10mm 배수로 반올림해서 맞춰야 부품 모서리가 격자선 위에 정확히 놓임
     // (사용자 지적: "베이스 스케치북 이 한칸에 10MM 인거지? 그럼 라인을 맞춰서 배치를 해야 할꼬 아니야").
     const cxR = Math.round(cx/10)*10, cyR = Math.round(cy/10)*10;
-    // 구멍 번호(위 기준 위→아래=줄번호·왼→오=칸번호, 둘 다 숫자, 예: 2-1) — 앞뒤가 대칭인 얇은 판이라 정면A/뒷면B 구분 없이 한 번만 매김.
+    // 구멍 번호(위 기준 X·Z 둘 다 숫자, 예: 2-1) — 앞뒤가 대칭인 얇은 판이라 정면A/뒷면B 구분 없이 한 번만 매김.
     // 등록된 svg의 실제 구멍 좌표(parseSvgMaskHoleCenters)를 그대로 써서 계산하므로 이름으로 추측하지 않는다.
-    // 구멍마다 라벨을 다 박지 않고(사용자 지시: "위에 1 2 3으로 적혀있고 왼쪽에 a b c만 적혀있으면 되") 표 좌표축처럼
-    // 위쪽엔 칸 번호(1,2,3...), 왼쪽엔 줄 문자(a,b,c...)만 한 번씩 표시함.
+    // 구멍마다 라벨을 다 박지 않고 표 좌표축처럼 위쪽엔 X번호(1,2,3...), 왼쪽엔 Z번호(1,2,3...)만 한 번씩 표시함.
     const holeCentersForAxes = showHoleLabels ? parseSvgMaskHoleCenters(svg) : [];
-    const frameAxes = showHoleLabels ? gridAxes(holeCentersForAxes.map(h => ({ x:h.x, z:h.y }))) : { xs:[], zs:[] };
+    // 90도 프레임 전용 넘버링(사용자 확정 규칙): margin/피치로 나눈 칸이 아니라, 실제 구멍 수치(mm)를
+    // 그대로 모아 중복 제거·정렬한 뒤 순서대로 번호 1,2,3...을 매김 — 그리드 한 칸에 구멍 하나, 번호는 1부터.
+    // gridAxes(공용, floor(v/피치) 방식)는 1열브라켓 쪽에서 계속 쓰므로 여기서는 건드리지 않는다.
+    const frameAxes = showHoleLabels
+      ? {
+          xs: [...new Set(holeCentersForAxes.map(h => gridRnd(h.x)))].sort((a,b) => a-b),
+          zs: [...new Set(holeCentersForAxes.map(h => gridRnd(h.y)))].sort((a,b) => a-b)
+        }
+      : { xs:[], zs:[] };
     const dataUri = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
     const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true, preserveDrawingBuffer:true });
     renderer.setSize(300,300,false);
@@ -1331,19 +1338,17 @@ h4{margin:4px 0}
       }
       scene.add(mesh);
       if (frameAxes.xs.length || frameAxes.zs.length) {
-        // 사용자 지적: "가로,세로 넘버링은 한칸에 하나임" — gridAxes가 좌표를 10mm 칸 번호로 묶어주므로
-        // 라벨은 그 칸의 중앙(gridCellCenter)에 찍는다(브라켓의 축 라벨과 같은 방식).
-        const zAnchor = gridCellCenter(frameAxes.zs[0]);
-        const xAnchor = gridCellCenter(frameAxes.xs[0]);
-        frameAxes.xs.forEach((cellIdx,i) => {
+        // 사용자 확정 규칙: 라벨은 (margin/피치로 계산한 칸 중앙이 아니라) 실제 구멍 수치(mm) 자리에 그대로 찍는다.
+        const zAnchor = frameAxes.zs[0];
+        const xAnchor = frameAxes.xs[0];
+        frameAxes.xs.forEach((v,i) => {
           const sprite = makeTextSprite(String(i+1), '#2b6be0', 2.4);
-          sprite.position.set(gridCellCenter(cellIdx) - cxR, 6, (zAnchor - 6) - cyR);
+          sprite.position.set(v - cxR, 6, (zAnchor - 6) - cyR);
           scene.add(sprite);
         });
-        frameAxes.zs.forEach((cellIdx,j) => {
-          // 사용자 지시: "이제 영어 없다는 말 못들었나?" — Z축도 알파벳(a,b,c)이 아니라 숫자(1,2,3)로.
+        frameAxes.zs.forEach((v,j) => {
           const sprite = makeTextSprite(String(j + 1), '#2b6be0', 2.4);
-          sprite.position.set((xAnchor - 6) - cxR, 6, gridCellCenter(cellIdx) - cyR);
+          sprite.position.set((xAnchor - 6) - cxR, 6, v - cyR);
           scene.add(sprite);
         });
       }
@@ -1805,8 +1810,8 @@ h4{margin:4px 0}
   function frameSpecRows(svg, outline, spec){
     const s = spec || null;
     const rows = [];
-    if (s && s.armLen1 != null && s.armLen2 != null) rows.push(['바운딩박스', s.armLen1 + '×' + s.armLen2 + 'mm']);
-    if (s && s.thickness != null) rows.push(['두께', s.thickness + 'mm']);
+    if (s && s.armLen1 != null && s.armLen2 != null) rows.push(['바운딩박스', 'X ' + s.armLen1 + 'mm, Z ' + s.armLen2 + 'mm']);
+    if (s && s.thickness != null) rows.push(['높이(Y)', s.thickness + 'mm']);
     if (s && Array.isArray(s.holeLabels) && s.holeLabels.length) {
       rows.push(['구멍 수', s.holeLabels.length + '개']);
       rows.push(['구멍 번호', s.holeLabels.join(', ')]);
