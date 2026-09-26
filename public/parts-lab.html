@@ -1394,10 +1394,7 @@ h4{margin:4px 0}
     shape.moveTo(arm1,0); shape.lineTo(arm1,-arm2); shape.lineTo(arm1-armWidth,-arm2);
     shape.lineTo(arm1-armWidth,-armWidth); shape.lineTo(0,-armWidth); shape.lineTo(0,0);
     shape.closePath();
-    // 오목한(안쪽으로 꺾인) 코너가 있는 도형이라 베벨 없이 압출하면 그 코너 삼각분할이 지저분해져서
-    // 조명 아래 얼룩(색이 깨져 보임)이 생김 — 아주 작은 베벨을 줘서 그 모서리 삼각분할을 정리한다
-    // (사용자 지적: "색상이 얼룩이네", 코너 부분에만 국한된 현상이라 베벨로 해결 시도).
-    const geo = new THREE.ExtrudeGeometry(shape, { depth:bracketThickness(), bevelEnabled:true, bevelThickness:0.05, bevelSize:0.05, bevelSegments:1 });
+    const geo = new THREE.ExtrudeGeometry(shape, { depth:bracketThickness(), bevelEnabled:false });
     geo.rotateX(-Math.PI/2);
     const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color:0xf2ead9 }));
     addEdgeOutline(mesh, 0xf2ead9);
