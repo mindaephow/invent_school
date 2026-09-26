@@ -1427,11 +1427,14 @@ h4{margin:4px 0}
         scene.add(sprite);
       });
     }
-    // 사용자 지시: "뒷면은 이렇게가 맞는거야~ 앞면은 이것의 반대로 물체가 뒤집어져 있어야 하는거야" — 뒷면
-    // 카메라(bracketBackCamPos)는 그대로 두고, 정면 호출에서만 mirror=true를 넘겨서 물체(몸체+구멍+라벨)를
-    // 진짜 거울 반사(음수 스케일, 회전이 아님 — "너 반대로 모르니?? 데칼코마니???")로 뒤집는다. 그룹 원점(0)
-    // 기준으로만 스케일을 뒤집으면 카메라가 보고 있는 자리(ctr)에서 물체가 옆으로 밀려나 버리므로(사용자
-    // 스샷: 팔2가 화면 밖으로 잘려 보임), ctr.x 기준으로 반사되도록 position.x를 2*ctr.x로 같이 옮긴다.
+    // 사용자 지시: "뒷면은 이렇게가 맞는거야~ 앞면은 이것의 반대로 물체가 뒤집어져 있어야 하는거야" — 정면은
+    // 90도 프레임과 똑같은 카메라([70,90,110], eye.x가 중심보다 큰 쪽)를 그대로 쓰고, mirror=true일 때만
+    // 물체(몸체+구멍+라벨)를 진짜 거울 반사(음수 스케일, 회전이 아님 — "너 반대로 모르니?? 데칼코마니???")로
+    // 뒤집는다. 한때 정면도 뒷면(bracketBackCamPos, eye.x가 중심보다 작은 쪽)과 같은 카메라를 쓰게 했더니
+    // X축이 프레임과 반대로(위쪽 기울어짐) 나와서 되돌림(사용자 지적: "90도 브라켓과 방향이 같아?").
+    // 그룹 원점(0) 기준으로만 스케일을 뒤집으면 카메라가 보고 있는 자리(ctr)에서 물체가 옆으로 밀려나
+    // 버리므로(사용자 스샷: 팔2가 화면 밖으로 잘려 보임), ctr.x 기준으로 반사되도록 position.x를 2*ctr.x로
+    // 같이 옮긴다.
     if (mirror) { partGroup.position.x = 2 * ctr[0]; partGroup.scale.x = -1; setDoubleSided(partGroup); }
     renderer.render(scene, camera);
     const controls = setupOrbit(renderer, scene, camera, ctr);
@@ -1506,7 +1509,7 @@ h4{margin:4px 0}
   function drawRefBracket(){
     const { refArmLen1:a1, refArmLen2:a2, refArmWidth:aw } = bracketStandards;
     renderBracketPanel(document.getElementById('refBracketTop'), a1, a2, aw, bracketTopCamPos(a1), true);
-    renderBracketPanel(document.getElementById('refBracketFront'), a1, a2, aw, bracketBackCamPos(a1), false, true);
+    renderBracketPanel(document.getElementById('refBracketFront'), a1, a2, aw, [70,90,110], false, true);
     renderBracketPanel(document.getElementById('refBracketBack'), a1, a2, aw, bracketBackCamPos(a1,a2));
     renderRefSpecCols();
   }
@@ -2002,7 +2005,7 @@ h4{margin:4px 0}
       const m = String(p.size||'').match(/(\d+(?:\.\d+)?)\s*[×xX]\s*(\d+(?:\.\d+)?)\s*[×xX]\s*(\d+(?:\.\d+)?)/);
       const arm1 = spec.armLen1 || (m ? Number(m[1]) : 30), arm2 = spec.armLen2 || (m ? Number(m[2]) : 30), armWidth = spec.armWidth || (m ? Number(m[3]) : 10);
       renderBracketPanel(shot1.canvas, arm1, arm2, armWidth, bracketTopCamPos(arm1), true);
-      renderBracketPanel(shot2.canvas, arm1, arm2, armWidth, bracketBackCamPos(arm1), false, true);
+      renderBracketPanel(shot2.canvas, arm1, arm2, armWidth, [70,90,110], false, true);
       renderBracketPanel(shot3.canvas, arm1, arm2, armWidth, bracketBackCamPos(arm1, arm2));
       specEl.innerHTML = buildSpecHtml(p, bracketSpecRows(arm1, arm2, armWidth));
     } else {
@@ -2089,7 +2092,7 @@ h4{margin:4px 0}
         const arm2 = Number(document.getElementById('editArm2').value) || 30;
         const armWidth = Number(document.getElementById('editArmWidth').value) || 10;
         renderBracketPanel(canvas1, arm1, arm2, armWidth, bracketTopCamPos(arm1), true); // 위
-        renderBracketPanel(canvas2, arm1, arm2, armWidth, bracketBackCamPos(arm1), false, true); // 정면(뒷면과 같은 카메라, 물체만 거울반사)
+        renderBracketPanel(canvas2, arm1, arm2, armWidth, [70,90,110], false, true); // 정면(90도 프레임과 같은 카메라, 물체만 거울반사)
         if (canvas3) renderBracketPanel(canvas3, arm1, arm2, armWidth, bracketBackCamPos(arm1, arm2)); // 뒷면
         specEl.innerHTML = buildSpecHtml(p, bracketSpecRows(arm1, arm2, armWidth));
       } else {
