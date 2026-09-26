@@ -259,7 +259,8 @@ h4{margin:4px 0}
   <button id="compareRefPickBtn" type="button" class="pickBtn">🔍 부품 고르기</button>
 </div>
 <div class="section-note">확정된 스타일(구멍 모양·블라인드 홀·안쪽 코너선)의 기준입니다. 아래 "수정할 부품"을 이 모습과 비교하면서 고치세요. "🔍 부품 고르기"로 다른 등록 부품을 추가로 불러와 비교할 수도 있어요.<br>
-<b>기본 셋팅(확정, 앞으로 항상 이대로):</b> 위/정면/뒷면 모두 X축=화면 오른쪽·아래로 기움, Z축=화면 왼쪽·아래로 기움(90도 프레임 기준). 정면·뒷면은 카메라가 완전히 같고, 물체를 거울반사(정면) 했는지 안 했는지로만 구분함. 축 선은 물체에 가려질 땐 정상적으로 안 보여야 함(depthTest 켜짐).</div>
+<b>기본 셋팅(확정, 앞으로 항상 이대로):</b> 위/정면/뒷면 모두 X축=화면 오른쪽·아래로 기움, Z축=화면 왼쪽·아래로 기움(90도 프레임 기준). 정면·뒷면은 카메라가 완전히 같고, 물체를 거울반사(정면) 했는지 안 했는지로만 구분함. 축 선은 물체에 가려질 땐 정상적으로 안 보여야 함(depthTest 켜짐).<br>
+<b>넘버링 규칙(확정):</b> 위 모습 기준 X·Z 둘 다 숫자(1,2,3...)만 쓰고 알파벳은 안 씀. margin·피치 계산 없이, 실제 첫 번째 구멍 좌표를 그대로 1로 놓고 다음 구멍부터 순서대로 2,3...으로 매김.</div>
 <div class="row" id="compareArea"></div>
 <div id="compareSpec"></div>
 <div class="row">
@@ -1340,7 +1341,8 @@ h4{margin:4px 0}
           scene.add(sprite);
         });
         frameAxes.zs.forEach((cellIdx,j) => {
-          const sprite = makeTextSprite(String.fromCharCode(97 + j), '#2b6be0', 2.4);
+          // 사용자 지시: "이제 영어 없다는 말 못들었나?" — Z축도 알파벳(a,b,c)이 아니라 숫자(1,2,3)로.
+          const sprite = makeTextSprite(String(j + 1), '#2b6be0', 2.4);
           sprite.position.set((xAnchor - 6) - cxR, 6, gridCellCenter(cellIdx) - cyR);
           scene.add(sprite);
         });
