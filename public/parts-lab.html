@@ -1305,20 +1305,23 @@ h4{margin:4px 0}
     if (showHoleLabels) {
       // bracketTopCamPos가 프레임의 위 카메라와 같은 축 방향(epsilon을 z에 둠)을 쓰므로 프레임과 완전히
       // 같은 방식으로 계산: 숫자는 x(왼→오)를 따라 위쪽 가장자리에, 문자는 z(위→아래)를 따라 왼쪽 가장자리에.
-      // 칸 간격을 무조건 피치(10mm) 균등으로 찍었더니, 코너 쪽(팔 두께=여백 5mm인 경우) 실제 구멍 간격이
-      // 5mm뿐인데도 10mm로 찍혀서 마지막 숫자/문자가 실제 위치보다 밀려 보였음(사용자 지적: "넘버링이
-      // 잘못됐다"). 실제 좌표(x,z) 값을 그대로 써도 한 칸에 숫자/문자 하나씩만 나오는 건 똑같이 보장되므로
-      // (xs/zs가 중복 없는 정렬된 좌표 목록), 균등 간격 대신 실제 좌표에 맞춰 찍는다.
+      // 사용자 지적: "베이스 스케치북이 한칸에 10MM인거지? 그럼 라인을 맞춰서 배치해야지" — 라벨은 실제 mm
+      // 좌표가 아니라 항상 10mm 스케치북 그리드 칸 번호(균등 간격)에 맞춰 찍는다. armWidth=margin인 1열브라켓처럼
+      // 구멍 하나가 칸 중앙이 아니라 칸 경계선에 걸치는 경우엔 그 칸의 정중앙(예: 4번 칸=30~40mm의 중앙 35)에
+      // 라벨이 찍히므로 실제 구멍 mm값(30)과는 5mm 차이가 나는데, 이건 버그가 아니라 "라벨은 그리드 칸을
+      // 가리킨다"는 규칙대로 동작하는 것 — 90도 프레임은 모든 구멍이 정확히 칸 중앙(15,25,35)이라 이 차이가
+      // 안 보였을 뿐이다.
       const { xs, zs } = gridAxes(holeGeoms);
       const minX = Math.min(...xs), minZ = Math.min(...zs);
+      const cell = bracketPitch();
       xs.forEach((x,i) => {
         const sprite = makeTextSprite(String(i+1), '#2b6be0', 2.4);
-        sprite.position.set(x, holeY + 5, minZ - 6);
+        sprite.position.set(minX + i * cell, holeY + 5, minZ - 6);
         scene.add(sprite);
       });
       zs.forEach((z,j) => {
         const sprite = makeTextSprite(String.fromCharCode(97 + j), '#2b6be0', 2.4);
-        sprite.position.set(minX - 6, holeY + 5, z);
+        sprite.position.set(minX - 6, holeY + 5, minZ + j * cell);
         scene.add(sprite);
       });
     }
