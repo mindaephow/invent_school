@@ -503,7 +503,9 @@ function initBoxEditor() {
   function syncRotateAngleUI() {
     const axis = document.getElementById('rotateAxis').value;
     const rad = shapes[selectedIndex]['r' + axis] || 0;
-    const deg = ((Math.round((rad * 180 / Math.PI) / 15) * 15) % 360 + 360) % 360;
+    let deg = Math.round((rad * 180 / Math.PI) / 15) * 15;
+    deg = ((deg % 360) + 360) % 360; // 0~359로
+    if (deg > 180) deg -= 360; // -180~180로(사용자 지시: "각도를 +180까지 -180꺼지 해야지")
     document.getElementById('rotateAngle').value = String(deg);
   }
   function readFieldsAsShape() {
