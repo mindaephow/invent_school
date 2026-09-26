@@ -989,10 +989,15 @@ h4{margin:4px 0}
     // 뒤집는다. 음수 스케일이면 삼각형이 뒤집혀서 뒷면이 컬링되어 안 보이므로 재질을 양면(DoubleSide)으로
     // 바꿔줘야 한다. "위아래로"는 실제로 손으로 들어서 뒤집는 것(회전)이라 그대로 회전을 쓴다. 물체가 없는
     // 빈 칸(mesh=null)에서는 버튼을 눌러도 아무 일도 안 하게 막는다.
+    // scale.x만 뒤집으면 물체 그룹의 원점(0) 기준으로 반사돼서, 카메라가 보고 있는 자리(controls.target)에서
+    // 물체가 옆으로 밀려나 화면 밖으로 잘려 보인다(실제로 이 사고가 났음). controls.target.x 기준으로
+    // 반사되도록 position.x도 같이 옮긴다 — 두 번 누르면 원래대로 돌아오는 토글 공식(2c-현재값).
     const flipBtn = toolbar.querySelector('.flipBtn');
     const flipYBtn = toolbar.querySelector('.flipYBtn');
     flipBtn.addEventListener('click', () => {
       if (!mesh) return;
+      const c = controls.target.x;
+      mesh.position.x = 2 * c - mesh.position.x;
       mesh.scale.x *= -1;
       setDoubleSided(mesh);
     });
@@ -1402,8 +1407,10 @@ h4{margin:4px 0}
     }
     // 사용자 지시: "뒷면은 이렇게가 맞는거야~ 앞면은 이것의 반대로 물체가 뒤집어져 있어야 하는거야" — 뒷면
     // 카메라(bracketBackCamPos)는 그대로 두고, 정면 호출에서만 mirror=true를 넘겨서 물체(몸체+구멍+라벨)를
-    // 진짜 거울 반사(음수 스케일, 회전이 아님 — "너 반대로 모르니?? 데칼코마니???")로 뒤집는다.
-    if (mirror) { partGroup.scale.x = -1; setDoubleSided(partGroup); }
+    // 진짜 거울 반사(음수 스케일, 회전이 아님 — "너 반대로 모르니?? 데칼코마니???")로 뒤집는다. 그룹 원점(0)
+    // 기준으로만 스케일을 뒤집으면 카메라가 보고 있는 자리(ctr)에서 물체가 옆으로 밀려나 버리므로(사용자
+    // 스샷: 팔2가 화면 밖으로 잘려 보임), ctr.x 기준으로 반사되도록 position.x를 2*ctr.x로 같이 옮긴다.
+    if (mirror) { partGroup.position.x = 2 * ctr[0]; partGroup.scale.x = -1; setDoubleSided(partGroup); }
     renderer.render(scene, camera);
     const controls = setupOrbit(renderer, scene, camera, ctr);
     const zoomBox = addZoomButtons(canvas, () => ({ camera, controls }));
