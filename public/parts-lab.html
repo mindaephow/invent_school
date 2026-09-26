@@ -359,6 +359,14 @@ h4{margin:4px 0}
     const edgesMat = new THREE.LineBasicMaterial({ color: darken(baseColorHex, factor || 0.55) });
     mesh.add(new THREE.LineSegments(edgesGeo, edgesMat));
   }
+  // "반대로" 버튼이 축 하나를 음수로 스케일해서 진짜 거울 반사를 만드는데, 그러면 삼각형 감김 방향이
+  // 뒤집혀서 기본(FrontSide) 재질로는 컬링되어 안 보인다 — 양면(DoubleSide)으로 바꿔서 항상 보이게 함.
+  function setDoubleSided(root){
+    root.traverse((obj) => {
+      if (!obj.isMesh || !obj.material) return;
+      (Array.isArray(obj.material) ? obj.material : [obj.material]).forEach((m) => { m.side = THREE.DoubleSide; });
+    });
+  }
   function makeBossTexture(light, mid, dark, ringColor){
     const size = 128;
     const canvas = document.createElement('canvas');
@@ -976,14 +984,17 @@ h4{margin:4px 0}
     attachObjectPan(canvas, camera, mesh, () => stateFlags.objpan);
 
     // 사용자 지시: "반대로 뒤집는 버튼, 위아래로 뒤집는 버튼 모든곳에 다 추가해줘" / "3D 관련 프로그램에서
-    // 누가 시각을 뒤집니?" — 카메라(보는 시점)가 아니라 물체 자체를 180도 돌린다. "반대로"는 세로축(Y) 기준
-    // 180도 돌려서 반대쪽 면이 보이게 하고, "위아래로"는 가로축(X) 기준 180도 돌려서 위/아래가 뒤집히게 함.
-    // 물체가 없는 빈 칸(mesh=null)에서는 버튼을 눌러도 아무 일도 안 하게 막는다.
+    // 누가 시각을 뒤집니?" / "너 반대로 모르니?? 데칼코마니???" — "반대로"는 회전이 아니라 진짜 거울
+    // 반사(데칼코마니, 좌우 손이 바뀌는 것처럼 회전으로는 절대 못 만드는 모양)라서 축 하나를 음수 스케일로
+    // 뒤집는다. 음수 스케일이면 삼각형이 뒤집혀서 뒷면이 컬링되어 안 보이므로 재질을 양면(DoubleSide)으로
+    // 바꿔줘야 한다. "위아래로"는 실제로 손으로 들어서 뒤집는 것(회전)이라 그대로 회전을 쓴다. 물체가 없는
+    // 빈 칸(mesh=null)에서는 버튼을 눌러도 아무 일도 안 하게 막는다.
     const flipBtn = toolbar.querySelector('.flipBtn');
     const flipYBtn = toolbar.querySelector('.flipYBtn');
     flipBtn.addEventListener('click', () => {
       if (!mesh) return;
-      mesh.rotation.y += Math.PI;
+      mesh.scale.x *= -1;
+      setDoubleSided(mesh);
     });
     flipYBtn.addEventListener('click', () => {
       if (!mesh) return;
@@ -1315,7 +1326,7 @@ h4{margin:4px 0}
       });
     });
   }
-  function renderBracketPanel(canvas, arm1, arm2, armWidth, camPos, showHoleLabels){
+  function renderBracketPanel(canvas, arm1, arm2, armWidth, camPos, showHoleLabels, mirror){
     camPos = camPos || [70,90,110];
     // preserveDrawingBuffer: 저장할 때 이 캔버스를 실제 이미지로 캡처(toDataURL)해서 같이 저장하기 위함
     // (사용자 지시: "설계도 보면 모든사람들이 다 알지?? 그렇게 저장을 하라고" — 숫자만이 아니라 확정된 실제
@@ -1323,6 +1334,11 @@ h4{margin:4px 0}
     const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true, preserveDrawingBuffer:true });
     renderer.setSize(300,300,false);
     const scene = baseScene();
+    // 물체(몸체)+구멍+라벨+꼭지점/가이드를 전부 이 그룹 하나에 넣어서, "반대로"/"위아래로"/"물체 이동"
+    // 버튼이 몸체 mesh 하나만 옮기고 구멍은 원래 자리에 남는 일이 없게 함(사용자 지적: "반대를 하면 똑같이
+    // 반대로 가야지 구멍은 남아있으면 어떻게 하니").
+    const partGroup = new THREE.Group();
+    scene.add(partGroup);
     const camera = orthoCam(40);
     camera.position.set(camPos[0],camPos[1],camPos[2]);
     const ctr = [arm1/2, armWidth/2, arm1/2];
@@ -1344,15 +1360,15 @@ h4{margin:4px 0}
       new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(arm1-armWidth-bNudge,0,armWidth+bNudge), new THREE.Vector3(arm1-armWidth-bNudge,10,armWidth+bNudge)]),
       new THREE.LineBasicMaterial({ color: darken(0xf2ead9,0.55) })
     ));
-    scene.add(mesh);
+    partGroup.add(mesh);
     // 숫자 입력칸(팔1/팔2)만으로는 실제 모델에서 어느 쪽이 팔1이고 어느 쪽이 팔2인지 알 수 없어서
     // (사용자 지적: "팔1은 어디고 팔2는 어디야???") 각 팔 끝에 라벨을 직접 붙여서 눈으로 바로 구분되게 함.
     const label1 = makeTextSprite('팔1', '#2b6be0');
     label1.position.set(arm1 * 0.4, 14, armWidth/2);
-    scene.add(label1);
+    partGroup.add(label1);
     const label2 = makeTextSprite('팔2', '#c0392b');
     label2.position.set(arm1 - armWidth/2, 14, arm2 * 0.6);
-    scene.add(label2);
+    partGroup.add(label2);
     // 구멍: 여백5·피치10, 팔당 3개, 코너쪽(팔 끝에서 가장 가까운 첫 구멍)=블라인드, 앞면+뒷면 둘 다 있어야 함
     // (원본 발명학교-부품작업\_compare_all.html의 buildBracketScene과 비교해서 발견한 버그 수정:
     // 사용자 지적 "저기 그려진 구멍은 맞아???" — 높이는 armWidth/2가 아니라 항상 높이(10)의 절반인 고정값
@@ -1363,7 +1379,7 @@ h4{margin:4px 0}
     // 위쪽엔 칸 번호(1,2,3...), 왼쪽엔 줄 문자(a,b,c...)만 한 번씩 표시함 — bracketHoleGeom이 makeHole과 같은
     // 좌표를 쓰므로 눈에 보이는 구멍 위치와 축 위치가 항상 일치한다.
     const holeGeoms = bracketHoleGeom(arm1, arm2, armWidth);
-    holeGeoms.forEach((h) => makeHole(scene, h.x, holeY, h.z, h.rot, h.blind));
+    holeGeoms.forEach((h) => makeHole(partGroup, h.x, holeY, h.z, h.rot, h.blind));
     if (showHoleLabels) {
       // bracketTopCamPos가 프레임의 위 카메라와 같은 축 방향(epsilon을 z에 둠)을 쓰므로 프레임과 완전히
       // 같은 방식으로 계산: 숫자는 x(왼→오)를 따라 위쪽 가장자리에, 문자는 z(위→아래)를 따라 왼쪽 가장자리에.
@@ -1384,11 +1400,17 @@ h4{margin:4px 0}
         scene.add(sprite);
       });
     }
+    // 사용자 지시: "뒷면은 이렇게가 맞는거야~ 앞면은 이것의 반대로 물체가 뒤집어져 있어야 하는거야" — 뒷면
+    // 카메라(bracketBackCamPos)는 그대로 두고, 정면 호출에서만 mirror=true를 넘겨서 물체(몸체+구멍+라벨)를
+    // 진짜 거울 반사(음수 스케일, 회전이 아님 — "너 반대로 모르니?? 데칼코마니???")로 뒤집는다.
+    if (mirror) { partGroup.scale.x = -1; setDoubleSided(partGroup); }
     renderer.render(scene, camera);
     const controls = setupOrbit(renderer, scene, camera, ctr);
     const zoomBox = addZoomButtons(canvas, () => ({ camera, controls }));
+    // mesh 대신 partGroup을 넘겨서 "반대로"/"위아래로"/"물체 이동"이 몸체+구멍+팔1·팔2 라벨을 통째로
+    // 같이 옮기게 함(target도 partGroup으로 줘서 꼭지점/가이드도 같이 따라감).
     attachFullToolkit(canvas, {
-      scene, camera, controls, mesh, target: scene, zoomBox,
+      scene, camera, controls, mesh: partGroup, target: partGroup, zoomBox,
       vertexPoints: bracketVertices(arm1, arm2, armWidth),
       edgeDefs: bracketEdgeDefs(arm1, arm2, armWidth)
     });
@@ -1455,7 +1477,7 @@ h4{margin:4px 0}
   function drawRefBracket(){
     const { refArmLen1:a1, refArmLen2:a2, refArmWidth:aw } = bracketStandards;
     renderBracketPanel(document.getElementById('refBracketTop'), a1, a2, aw, bracketTopCamPos(a1), true);
-    renderBracketPanel(document.getElementById('refBracketFront'), a1, a2, aw, [70,90,110]);
+    renderBracketPanel(document.getElementById('refBracketFront'), a1, a2, aw, [70,90,110], false, true);
     renderBracketPanel(document.getElementById('refBracketBack'), a1, a2, aw, bracketBackCamPos(a1,a2));
     renderRefSpecCols();
   }
@@ -1951,7 +1973,7 @@ h4{margin:4px 0}
       const m = String(p.size||'').match(/(\d+(?:\.\d+)?)\s*[×xX]\s*(\d+(?:\.\d+)?)\s*[×xX]\s*(\d+(?:\.\d+)?)/);
       const arm1 = spec.armLen1 || (m ? Number(m[1]) : 30), arm2 = spec.armLen2 || (m ? Number(m[2]) : 30), armWidth = spec.armWidth || (m ? Number(m[3]) : 10);
       renderBracketPanel(shot1.canvas, arm1, arm2, armWidth, bracketTopCamPos(arm1), true);
-      renderBracketPanel(shot2.canvas, arm1, arm2, armWidth, [70,90,110]);
+      renderBracketPanel(shot2.canvas, arm1, arm2, armWidth, [70,90,110], false, true);
       renderBracketPanel(shot3.canvas, arm1, arm2, armWidth, bracketBackCamPos(arm1, arm2));
       specEl.innerHTML = buildSpecHtml(p, bracketSpecRows(arm1, arm2, armWidth));
     } else {
@@ -2038,7 +2060,7 @@ h4{margin:4px 0}
         const arm2 = Number(document.getElementById('editArm2').value) || 30;
         const armWidth = Number(document.getElementById('editArmWidth').value) || 10;
         renderBracketPanel(canvas1, arm1, arm2, armWidth, bracketTopCamPos(arm1), true); // 위
-        renderBracketPanel(canvas2, arm1, arm2, armWidth, [70,90,110]); // 정면
+        renderBracketPanel(canvas2, arm1, arm2, armWidth, [70,90,110], false, true); // 정면(뒷면과 반대로 거울반사)
         if (canvas3) renderBracketPanel(canvas3, arm1, arm2, armWidth, bracketBackCamPos(arm1, arm2)); // 뒷면
         specEl.innerHTML = buildSpecHtml(p, bracketSpecRows(arm1, arm2, armWidth));
       } else {
