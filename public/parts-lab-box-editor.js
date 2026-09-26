@@ -45,21 +45,30 @@ function addEdgeOutline(mesh, colorHex) {
   const edges = new THREE.EdgesGeometry(mesh.geometry, 1);
   mesh.add(new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: darken(colorHex, 0.55) })));
 }
+// 부품수리실(parts-lab.html)의 makeAxesRods와 동일 — 얇은 GL 선은 배경(밝은 모눈종이 vs 어두운 도형)에
+// 따라 같은 색이 두 톤으로 보이는 안티에일리어싱 문제가 있어서(사용자 지적: "빨간색이 왜 두 가지 색으로
+// 보여?"), 조명 영향 없는 단색 막대(박스)로 대체한다.
+function makeAxesRods(size) {
+  const group = new THREE.Group();
+  const t = 0.6;
+  const specs = [[0xff0000, [size / 2, 0, 0], [size, t, t]], [0x00ff00, [0, size / 2, 0], [t, size, t]], [0x0000ff, [0, 0, size / 2], [t, t, size]]];
+  specs.forEach(([color, pos, dim]) => {
+    const rod = new THREE.Mesh(new THREE.BoxGeometry(dim[0], dim[1], dim[2]), new THREE.MeshBasicMaterial({ color, depthTest: false }));
+    rod.position.set(pos[0], pos[1], pos[2]);
+    rod.renderOrder = 999;
+    group.add(rod);
+  });
+  return group;
+}
 function baseScene() {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xf3f5f8);
   scene.add(new THREE.AmbientLight(0xffffff, 0.7));
   const dir = new THREE.DirectionalLight(0xffffff, 0.6); dir.position.set(100, 200, 100); scene.add(dir);
   scene.add(new THREE.GridHelper(200, 20, 0xcccccc, 0xe5e5e5));
-  // 부품수리실과 동일하게 depthTest를 꺼서 축 선이 도형에 가려 안 보이는 일이 없게 함(사용자 지적:
-  // "z선(파란색) 보이냐???").
-  const axes = new THREE.AxesHelper(50);
-  axes.material.depthTest = false;
-  axes.renderOrder = 999;
-  scene.add(axes);
+  scene.add(makeAxesRods(50));
   return scene;
 }
-
 // 도형 종류 목록 — app/api/admin/route.js의 SHAPE_TYPES와 반드시 같이 맞춰야 한다.
 const SHAPE_TYPES = ['box', 'wheel', 'gear', 'sphere', 'cone', 'pyramid', 'torus', 'hexprism', 'icosahedron', 'dome', 'wedge', 'ring', 'star', 'heart', 'text', 'duplo', 'knexRod', 'knexConnector', 'technicBeam'];
 // 팔레트 탭 — 어떤 도형이 어느 탭(기본/휴벨리노형/케이넥스형/테크닉형)에 속하는지. 팔레트 UI에서만 쓰고 저장 스펙과는 무관.
