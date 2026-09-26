@@ -51,7 +51,12 @@ function baseScene() {
   scene.add(new THREE.AmbientLight(0xffffff, 0.7));
   const dir = new THREE.DirectionalLight(0xffffff, 0.6); dir.position.set(100, 200, 100); scene.add(dir);
   scene.add(new THREE.GridHelper(200, 20, 0xcccccc, 0xe5e5e5));
-  scene.add(new THREE.AxesHelper(50));
+  // 부품수리실과 동일하게 depthTest를 꺼서 축 선이 도형에 가려 안 보이는 일이 없게 함(사용자 지적:
+  // "z선(파란색) 보이냐???").
+  const axes = new THREE.AxesHelper(50);
+  axes.material.depthTest = false;
+  axes.renderOrder = 999;
+  scene.add(axes);
   return scene;
 }
 

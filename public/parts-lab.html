@@ -520,7 +520,13 @@ h4{margin:4px 0}
     // 모든 3D 패널이 스케치북과 같은 모습(모눈종이 배경 + X/Y/Z축)을 갖도록 여기서 공통으로 추가
     // (사용자 지시: "사각형 하나하나가 스케치북의 모습을 하고 있어야해").
     scene.add(new THREE.GridHelper(200, 20, 0xc7cbd1, 0xe6e8eb));
-    scene.add(new THREE.AxesHelper(50));
+    // 사용자 지적: "z선(파란색) 보이냐???" — 기본 depthTest로는 Z축 선이 물체(mesh) 뒤로 가려져서 화면에
+    // 하나도 안 보이는 각도가 있었음. 텍스트 라벨 스프라이트와 같은 방식(depthTest 끄고 renderOrder를 높임)으로
+    // 항상 물체 위에 그려지게 해서 X/Y/Z 세 축이 항상 다 보이게 함.
+    const axes = new THREE.AxesHelper(50);
+    axes.material.depthTest = false;
+    axes.renderOrder = 999;
+    scene.add(axes);
     return scene;
   }
   function orthoCam(d){ return new THREE.OrthographicCamera(-d, d, d, -d, 0.1, 6000); }
