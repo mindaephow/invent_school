@@ -47,15 +47,15 @@ function addEdgeOutline(mesh, colorHex) {
 }
 // 부품수리실(parts-lab.html)의 makeAxesRods와 동일 — 얇은 GL 선은 배경(밝은 모눈종이 vs 어두운 도형)에
 // 따라 같은 색이 두 톤으로 보이는 안티에일리어싱 문제가 있어서(사용자 지적: "빨간색이 왜 두 가지 색으로
-// 보여?"), 조명 영향 없는 단색 막대(박스)로 대체한다.
+// 보여?"), 조명 영향 없는 단색 막대(박스)로 대체한다. depthTest는 켜둔다 — 사용자 지적: "물체 뒷편에 있는
+// 선은 물리적으로 안 보여야 하는데 보이고 있어".
 function makeAxesRods(size) {
   const group = new THREE.Group();
   const t = 0.6;
   const specs = [[0xff0000, [size / 2, 0, 0], [size, t, t]], [0x00ff00, [0, size / 2, 0], [t, size, t]], [0x0000ff, [0, 0, size / 2], [t, t, size]]];
   specs.forEach(([color, pos, dim]) => {
-    const rod = new THREE.Mesh(new THREE.BoxGeometry(dim[0], dim[1], dim[2]), new THREE.MeshBasicMaterial({ color, depthTest: false }));
+    const rod = new THREE.Mesh(new THREE.BoxGeometry(dim[0], dim[1], dim[2]), new THREE.MeshBasicMaterial({ color }));
     rod.position.set(pos[0], pos[1], pos[2]);
-    rod.renderOrder = 999;
     group.add(rod);
   });
   return group;
