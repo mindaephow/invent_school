@@ -122,8 +122,8 @@ function parseSpec(body) {
   // 도형 에디터(부품 수리실 스케치북 자리) — 도형 하나 이상의 위치·크기를 그대로 저장. svg 없이도 이
   // 숫자만으로 모양이 재현됨(브라켓의 armLen1/armLen2/armWidth와 같은 목적).
   // parts-lab-box-editor.js의 SHAPE_TYPES/BOX_LIKE/RADIUS_ONLY와 반드시 같이 맞춰야 한다.
-  const SHAPE_TYPES = ['box', 'wheel', 'gear', 'sphere', 'cone', 'pyramid', 'torus', 'hexprism', 'icosahedron', 'dome', 'wedge', 'ring', 'star', 'heart', 'text', 'duplo', 'knexRod', 'knexConnector']
-  const BOX_LIKE = ['box', 'wedge', 'duplo']
+  const SHAPE_TYPES = ['box', 'wheel', 'gear', 'sphere', 'cone', 'pyramid', 'torus', 'hexprism', 'icosahedron', 'dome', 'wedge', 'ring', 'star', 'heart', 'text', 'duplo', 'knexRod', 'knexConnector', 'technicBeam']
+  const BOX_LIKE = ['box', 'wedge', 'duplo', 'technicBeam']
   const RADIUS_ONLY = ['sphere', 'icosahedron', 'dome']
   // op: 'add'(더하기)|'subtract'(빼기/뚫기) — 목록 순서대로 앞 결과에 CSG로 합치거나 깎아낸다. 첫 도형은
   // 기준(베이스)이라 op 의미가 없지만 필드는 그대로 두고 프론트에서 무시한다.

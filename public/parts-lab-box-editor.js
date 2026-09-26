@@ -56,14 +56,16 @@ function baseScene() {
 }
 
 // 도형 종류 목록 — app/api/admin/route.js의 SHAPE_TYPES와 반드시 같이 맞춰야 한다.
-const SHAPE_TYPES = ['box', 'wheel', 'gear', 'sphere', 'cone', 'pyramid', 'torus', 'hexprism', 'icosahedron', 'dome', 'wedge', 'ring', 'star', 'heart', 'text', 'duplo', 'knexRod', 'knexConnector'];
-// 팔레트 탭 — 어떤 도형이 어느 탭(기본/듀프로형/케이넥스형)에 속하는지. 팔레트 UI에서만 쓰고 저장 스펙과는 무관.
-const SHAPE_CATEGORY = { duplo: 'duplo', knexRod: 'knex', knexConnector: 'knex' };
+const SHAPE_TYPES = ['box', 'wheel', 'gear', 'sphere', 'cone', 'pyramid', 'torus', 'hexprism', 'icosahedron', 'dome', 'wedge', 'ring', 'star', 'heart', 'text', 'duplo', 'knexRod', 'knexConnector', 'technicBeam'];
+// 팔레트 탭 — 어떤 도형이 어느 탭(기본/휴벨리노형/케이넥스형/테크닉형)에 속하는지. 팔레트 UI에서만 쓰고 저장 스펙과는 무관.
+// (내부 type 이름은 'duplo'로 그대로 두되, 사용자가 부르는 이름인 "휴벨리노형"은 화면 라벨(HTML)에서만 씀 —
+// 사용자 지적: "난 휴벨리노형이라고 했는데 왜 듀블로형이래?")
+const SHAPE_CATEGORY = { duplo: 'duplo', knexRod: 'knex', knexConnector: 'knex', technicBeam: 'technic' };
 function categoryOf(type) { return SHAPE_CATEGORY[type] || 'basic'; }
 // 반지름만 쓰는 도형(두께 칸 없음), w/h/d를 쓰는 박스류 도형 — 이 둘에 안 속하면 반지름+두께 조합을 쓴다.
-// 듀프로형 블록은 스터드가 위에 붙는다는 점만 다르고 몸통 자체는 박스라서 w/h/d를 그대로 재사용한다.
+// 휴벨리노형/테크닉형 도형은 스터드나 구멍이 몸통에 붙는다는 점만 다르고 몸통 자체는 박스라서 w/h/d를 그대로 재사용한다.
 const RADIUS_ONLY = ['sphere', 'icosahedron', 'dome'];
-const BOX_LIKE = ['box', 'wedge', 'duplo'];
+const BOX_LIKE = ['box', 'wedge', 'duplo', 'technicBeam'];
 // 반지름+두께를 쓰는 도형들이 "두께" 칸을 각자 다른 뜻으로 쓰므로 — 팔레트에서 고를 때 입력칸 라벨을 그 뜻에 맞게 바꿔준다.
 const WIDTH_FIELD_LABEL = { wheel: '두께(mm)', gear: '두께(mm)', cone: '높이(mm)', pyramid: '높이(mm)', torus: '튜브 두께(mm)', hexprism: '높이(mm)', ring: '두께(mm)', star: '두께(mm)', heart: '두께(mm)', text: '두께(mm)', knexRod: '길이(mm)', knexConnector: '두께(mm)' };
 const RADIUS_FIELD_LABEL = { knexRod: '굵기(mm)' };
@@ -78,6 +80,8 @@ function defaultShapeOfType(type) {
   if (type === 'text') return { type: 'text', op: 'add', x: 0, y: 5, z: 0, text: 'A', radius: 20, width: 5 };
   if (type === 'knexRod') return { type: 'knexRod', op: 'add', x: 0, y: 3, z: 0, radius: 3, width: 60 };
   if (type === 'knexConnector') return { type: 'knexConnector', op: 'add', x: 0, y: 4, z: 0, radius: 16, width: 8, holes: 6 };
+  // 테크닉형 빔 — 레고 테크닉 표준 간격(듀프로/휴벨리노 간격의 절반)으로 둥근 구멍이 줄줄이 뚫려있음.
+  if (type === 'technicBeam') return { type: 'technicBeam', op: 'add', x: 0, y: 4, z: 0, w: 64, h: 8, d: 8 };
   const base = { type, op: 'add', x: 0, y: 5, z: 0, radius: 20, width: 10 };
   if (type === 'gear') base.teeth = 12;
   return base;
@@ -178,6 +182,26 @@ function knexConnectorGeometry(r, thick, holeCount) {
   result = evaluator.evaluate(result, centerHole, SUBTRACTION);
   return result.geometry;
 }
+// 테크닉형 빔 — 박스 몸통에 길이(w) 방향으로 일정 간격(pitch)마다 둥근 구멍을 실제로 뚫는다. 레고 테크닉
+// 빔처럼 구멍이 옆에서 훤히 뚫려 보이도록, 구멍 축을 두께(d) 방향으로 눕혀서(rotateX) 배치한다.
+function technicBeamGeometry(w, h, d) {
+  const pitch = 8; // 휴벨리노 스터드 간격(16)의 절반 — 실제 레고가 듀프로의 절반 크기인 것과 같은 비율
+  const holeCount = Math.max(1, Math.floor(w / pitch));
+  const holeR = Math.min(h, d) * 0.32;
+  const evaluator = new Evaluator();
+  let result = new Brush(new THREE.BoxGeometry(w, h, d));
+  result.updateMatrixWorld();
+  for (let i = 0; i < holeCount; i++) {
+    const px = (i - (holeCount - 1) / 2) * pitch;
+    const holeGeo = new THREE.CylinderGeometry(holeR, holeR, d * 2.2, 16);
+    holeGeo.rotateX(Math.PI / 2);
+    const hole = new Brush(holeGeo);
+    hole.position.set(px, 0, 0);
+    hole.updateMatrixWorld();
+    result = evaluator.evaluate(result, hole, SUBTRACTION);
+  }
+  return result.geometry;
+}
 
 // 도형 하나의 실제 BufferGeometry를 만든다 — CSG는 도형당 지오메트리 하나만 다루므로, 톱니바퀴는
 // 원판+이빨을 하나로 합쳐(mergeGeometries) 통짜 입체로 만든다.
@@ -185,6 +209,7 @@ function buildShapeGeometry(shape) {
   switch (shape.type) {
     case 'box': return new THREE.BoxGeometry(shape.w, shape.h, shape.d);
     case 'duplo': return duploGeometry(shape.w, shape.h, shape.d);
+    case 'technicBeam': return technicBeamGeometry(shape.w, shape.h, shape.d);
     case 'knexRod': return knexRodGeometry(shape.radius, shape.width);
     case 'knexConnector': return knexConnectorGeometry(shape.radius, shape.width, shape.holes);
     case 'wedge': return wedgeGeometry(shape.w, shape.h, shape.d);
@@ -407,7 +432,7 @@ function initBoxEditor() {
 
   // ---------- 도형 목록 UI ----------
   function shapeLabel(shape, i) {
-    const typeLabel = { box: '박스', wheel: '바퀴', gear: '톱니바퀴', sphere: '구', cone: '원뿔', pyramid: '각뿔', torus: '도넛', hexprism: '육각기둥', icosahedron: '다면체', dome: '반구', wedge: '지붕', ring: '고리', star: '별', heart: '하트', text: '텍스트', duplo: '듀프로 블록', knexRod: '케이넥스 막대', knexConnector: '케이넥스 커넥터' }[shape.type];
+    const typeLabel = { box: '박스', wheel: '바퀴', gear: '톱니바퀴', sphere: '구', cone: '원뿔', pyramid: '각뿔', torus: '도넛', hexprism: '육각기둥', icosahedron: '다면체', dome: '반구', wedge: '지붕', ring: '고리', star: '별', heart: '하트', text: '텍스트', duplo: '휴벨리노 블록', knexRod: '케이넥스 막대', knexConnector: '케이넥스 커넥터', technicBeam: '테크닉 빔' }[shape.type];
     const opLabel = i === 0 ? '(베이스)' : (shape.op === 'subtract' ? '(➖ 빼기)' : '(➕ 더하기)');
     return (i + 1) + '. ' + typeLabel + ' ' + opLabel;
   }
