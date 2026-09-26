@@ -13,10 +13,23 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 import { Evaluator, Brush, ADDITION, SUBTRACTION } from 'three-bvh-csg';
 
 const ADD_COLOR = 0x8fb2ff;
 const SUB_COLOR = 0xff8a8a;
+// "텍스트" 도형용 — 모듈이 로드되는 시점에 한 번만 받아온다(top-level await, 페이지 전체를 막지 않고
+// 이 모듈 하나만 폰트가 올 때까지 잠깐 기다림 — gate()가 window.initBoxEditor를 폴링해서 기다리는 것과 맞물림).
+// unpkg의 three npm 패키지엔 이제 examples/fonts가 안 들어있어서(0 files) three.js 깃허브 저장소를
+// jsDelivr로 직접 받는다. 이거 하나가 실패해도 에디터 전체가 죽지 않도록 try/catch로 감싼다 — 실패하면
+// textFont가 null로 남고, 텍스트 도형만 못 쓰고 나머지(박스/바퀴 등)는 그대로 동작한다.
+let textFont = null;
+try {
+  textFont = await new FontLoader().loadAsync('https://cdn.jsdelivr.net/gh/mrdoob/three.js@r186/examples/fonts/helvetiker_regular.typeface.json');
+} catch (e) {
+  console.error('텍스트 도형용 폰트를 못 불러왔어요 — 텍스트 도형은 빈 박스로 대체됩니다.', e);
+}
 
 function darken(hex, factor) {
   const r = Math.floor(((hex >> 16) & 255) * factor);
@@ -39,18 +52,68 @@ function baseScene() {
 }
 
 // 도형 종류 목록 — app/api/admin/route.js의 SHAPE_TYPES와 반드시 같이 맞춰야 한다.
-const SHAPE_TYPES = ['box', 'wheel', 'gear', 'sphere', 'cone', 'pyramid', 'torus', 'hexprism'];
-// 원형 계열 도형(바퀴/톱니바퀴/원뿔/각뿔/도넛/육각기둥)이 "두께" 칸을 어떤 뜻으로 쓰는지 — 팔레트에서
-// 고를 때 입력칸 라벨을 이 뜻에 맞게 바꿔준다.
-const WIDTH_FIELD_LABEL = { wheel: '두께(mm)', gear: '두께(mm)', cone: '높이(mm)', pyramid: '높이(mm)', torus: '튜브 두께(mm)', hexprism: '높이(mm)' };
+const SHAPE_TYPES = ['box', 'wheel', 'gear', 'sphere', 'cone', 'pyramid', 'torus', 'hexprism', 'icosahedron', 'dome', 'wedge', 'ring', 'star', 'heart', 'text'];
+// 반지름만 쓰는 도형(두께 칸 없음), w/h/d를 쓰는 박스류 도형 — 이 둘에 안 속하면 반지름+두께 조합을 쓴다.
+const RADIUS_ONLY = ['sphere', 'icosahedron', 'dome'];
+const BOX_LIKE = ['box', 'wedge'];
+// 반지름+두께를 쓰는 도형들이 "두께" 칸을 각자 다른 뜻으로 쓰므로 — 팔레트에서 고를 때 입력칸 라벨을 그 뜻에 맞게 바꿔준다.
+const WIDTH_FIELD_LABEL = { wheel: '두께(mm)', gear: '두께(mm)', cone: '높이(mm)', pyramid: '높이(mm)', torus: '튜브 두께(mm)', hexprism: '높이(mm)', ring: '두께(mm)', star: '두께(mm)', heart: '두께(mm)', text: '두께(mm)' };
 
 function defaultShapeOfType(type) {
   if (type === 'box') return { type: 'box', op: 'add', x: 0, y: 5, z: 0, w: 30, h: 10, d: 30 };
-  if (type === 'sphere') return { type: 'sphere', op: 'add', x: 0, y: 20, z: 0, radius: 20 };
+  if (type === 'wedge') return { type: 'wedge', op: 'add', x: 0, y: 0, z: 0, w: 30, h: 20, d: 20 };
+  if (RADIUS_ONLY.includes(type)) return { type, op: 'add', x: 0, y: 20, z: 0, radius: 20 };
   if (type === 'torus') return { type: 'torus', op: 'add', x: 0, y: 6, z: 0, radius: 20, width: 6 };
+  if (type === 'text') return { type: 'text', op: 'add', x: 0, y: 5, z: 0, text: 'A', radius: 20, width: 5 };
   const base = { type, op: 'add', x: 0, y: 5, z: 0, radius: 20, width: 10 };
   if (type === 'gear') base.teeth = 12;
   return base;
+}
+
+function wedgeGeometry(w, h, d) {
+  const s = new THREE.Shape();
+  s.moveTo(-w / 2, 0); s.lineTo(w / 2, 0); s.lineTo(0, h); s.closePath();
+  const geo = new THREE.ExtrudeGeometry(s, { depth: d, bevelEnabled: false });
+  geo.translate(0, 0, -d / 2);
+  return geo;
+}
+function ringGeometry(outerR, thickness) {
+  const s = new THREE.Shape();
+  s.absarc(0, 0, outerR, 0, Math.PI * 2, false);
+  const hole = new THREE.Path();
+  hole.absarc(0, 0, outerR * 0.5, 0, Math.PI * 2, true);
+  s.holes.push(hole);
+  const geo = new THREE.ExtrudeGeometry(s, { depth: thickness, bevelEnabled: false, curveSegments: 32 });
+  geo.rotateX(-Math.PI / 2);
+  geo.translate(0, -thickness / 2, 0);
+  return geo;
+}
+function starGeometry(outerR, thickness, points) {
+  const innerR = outerR * 0.45;
+  const s = new THREE.Shape();
+  for (let i = 0; i < points * 2; i++) {
+    const r = i % 2 === 0 ? outerR : innerR;
+    const a = (i / (points * 2)) * Math.PI * 2 - Math.PI / 2;
+    const x = Math.cos(a) * r, y = Math.sin(a) * r;
+    if (i === 0) s.moveTo(x, y); else s.lineTo(x, y);
+  }
+  s.closePath();
+  const geo = new THREE.ExtrudeGeometry(s, { depth: thickness, bevelEnabled: false });
+  geo.rotateX(-Math.PI / 2);
+  geo.translate(0, -thickness / 2, 0);
+  return geo;
+}
+function heartGeometry(scale, thickness) {
+  const s = new THREE.Shape();
+  s.moveTo(0, scale * 0.35);
+  s.bezierCurveTo(0, scale * 0.7, -scale * 0.6, scale * 1.1, -scale, scale * 0.55);
+  s.bezierCurveTo(-scale * 1.5, -scale * 0.05, -scale * 0.5, -scale * 0.7, 0, -scale);
+  s.bezierCurveTo(scale * 0.5, -scale * 0.7, scale * 1.5, -scale * 0.05, scale, scale * 0.55);
+  s.bezierCurveTo(scale * 0.6, scale * 1.1, 0, scale * 0.7, 0, scale * 0.35);
+  const geo = new THREE.ExtrudeGeometry(s, { depth: thickness, bevelEnabled: false, curveSegments: 16 });
+  geo.rotateX(-Math.PI / 2);
+  geo.translate(0, -thickness / 2, 0);
+  return geo;
 }
 
 // 도형 하나의 실제 BufferGeometry를 만든다 — CSG는 도형당 지오메트리 하나만 다루므로, 톱니바퀴는
@@ -58,11 +121,28 @@ function defaultShapeOfType(type) {
 function buildShapeGeometry(shape) {
   switch (shape.type) {
     case 'box': return new THREE.BoxGeometry(shape.w, shape.h, shape.d);
+    case 'wedge': return wedgeGeometry(shape.w, shape.h, shape.d);
     case 'sphere': return new THREE.SphereGeometry(shape.radius, 24, 16);
+    case 'icosahedron': return new THREE.IcosahedronGeometry(shape.radius, 0);
+    case 'dome': {
+      const dome = new THREE.SphereGeometry(shape.radius, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2);
+      const cap = new THREE.CircleGeometry(shape.radius, 24);
+      cap.rotateX(Math.PI / 2);
+      return mergeGeometries([dome, cap], false);
+    }
     case 'cone': return new THREE.ConeGeometry(shape.radius, shape.width, 32);
     case 'pyramid': return new THREE.ConeGeometry(shape.radius, shape.width, 4);
     case 'hexprism': return new THREE.CylinderGeometry(shape.radius, shape.radius, shape.width, 6);
     case 'torus': return new THREE.TorusGeometry(shape.radius, Math.min(shape.width, shape.radius * 0.9), 16, 32);
+    case 'ring': return ringGeometry(shape.radius, shape.width);
+    case 'star': return starGeometry(shape.radius, shape.width, 5);
+    case 'heart': return heartGeometry(shape.radius, shape.width);
+    case 'text': {
+      if (!textFont) return new THREE.BoxGeometry(shape.radius, shape.width, shape.radius * 0.3);
+      const geo = new TextGeometry(shape.text || 'A', { font: textFont, size: shape.radius, depth: shape.width, curveSegments: 6 });
+      geo.center();
+      return geo;
+    }
     case 'wheel': return new THREE.CylinderGeometry(shape.radius, shape.radius, shape.width, 32);
     case 'gear': {
       const bodyGeo = new THREE.CylinderGeometry(shape.radius, shape.radius, shape.width, 32);
@@ -189,11 +269,11 @@ function initBoxEditor() {
     const mesh = meshes[selectedIndex], shape = shapes[selectedIndex];
     shape.x = mesh.position.x; shape.y = mesh.position.y; shape.z = mesh.position.z;
     if (mesh.scale.x !== 1 || mesh.scale.y !== 1 || mesh.scale.z !== 1) {
-      if (shape.type === 'box') {
+      if (BOX_LIKE.includes(shape.type)) {
         shape.w = Math.max(1, shape.w * mesh.scale.x);
         shape.h = Math.max(1, shape.h * mesh.scale.y);
         shape.d = Math.max(1, shape.d * mesh.scale.z);
-      } else if (shape.type === 'sphere') {
+      } else if (RADIUS_ONLY.includes(shape.type)) {
         shape.radius = Math.max(1, shape.radius * ((mesh.scale.x + mesh.scale.y + mesh.scale.z) / 3));
       } else {
         shape.radius = Math.max(1, shape.radius * ((mesh.scale.x + mesh.scale.z) / 2));
@@ -246,7 +326,7 @@ function initBoxEditor() {
 
   // ---------- 도형 목록 UI ----------
   function shapeLabel(shape, i) {
-    const typeLabel = { box: '박스', wheel: '바퀴', gear: '톱니바퀴', sphere: '구', cone: '원뿔', pyramid: '각뿔', torus: '도넛', hexprism: '육각기둥' }[shape.type];
+    const typeLabel = { box: '박스', wheel: '바퀴', gear: '톱니바퀴', sphere: '구', cone: '원뿔', pyramid: '각뿔', torus: '도넛', hexprism: '육각기둥', icosahedron: '다면체', dome: '반구', wedge: '지붕', ring: '고리', star: '별', heart: '하트', text: '텍스트' }[shape.type];
     const opLabel = i === 0 ? '(베이스)' : (shape.op === 'subtract' ? '(➖ 빼기)' : '(➕ 더하기)');
     return (i + 1) + '. ' + typeLabel + ' ' + opLabel;
   }
@@ -270,11 +350,13 @@ function initBoxEditor() {
   // 다시 추가) — 그래서 드롭다운 없이 선택된 도형 자체의 type을 그대로 쓴다.
   function syncFieldVisibility(type) {
     // .hidden 속성은 이 파일의 CSS 명시도 때문에 안 먹혀서 style.display를 직접 건드린다.
-    document.getElementById('boxOnlyFields').style.display = type === 'box' ? 'flex' : 'none';
-    document.getElementById('roundFields').style.display = type === 'box' ? 'none' : 'flex';
-    document.getElementById('shapeWidthField').style.display = type === 'sphere' ? 'none' : 'flex';
+    const boxLike = BOX_LIKE.includes(type);
+    document.getElementById('boxOnlyFields').style.display = boxLike ? 'flex' : 'none';
+    document.getElementById('roundFields').style.display = boxLike ? 'none' : 'flex';
+    document.getElementById('shapeWidthField').style.display = RADIUS_ONLY.includes(type) ? 'none' : 'flex';
     document.getElementById('shapeWidthLabel').textContent = WIDTH_FIELD_LABEL[type] || '두께(mm)';
     document.getElementById('teethField').style.display = type === 'gear' ? 'flex' : 'none';
+    document.getElementById('textField').style.display = type === 'text' ? 'flex' : 'none';
     document.getElementById('shapeOpField').style.display = selectedIndex === 0 ? 'none' : 'flex';
   }
   function fillFieldsFromShape(shape) {
@@ -282,14 +364,15 @@ function initBoxEditor() {
     document.getElementById('boxX').value = round1(shape.x);
     document.getElementById('boxY').value = round1(shape.y);
     document.getElementById('boxZ').value = round1(shape.z);
-    if (shape.type === 'box') {
+    if (BOX_LIKE.includes(shape.type)) {
       document.getElementById('boxW').value = round1(shape.w);
       document.getElementById('boxH').value = round1(shape.h);
       document.getElementById('boxD').value = round1(shape.d);
     } else {
       document.getElementById('shapeRadius').value = round1(shape.radius);
-      if (shape.type !== 'sphere') document.getElementById('shapeWidth').value = round1(shape.width);
+      if (!RADIUS_ONLY.includes(shape.type)) document.getElementById('shapeWidth').value = round1(shape.width);
       if (shape.type === 'gear') document.getElementById('shapeTeeth').value = shape.teeth;
+      if (shape.type === 'text') document.getElementById('shapeText').value = shape.text;
     }
     syncFieldVisibility(shape.type);
   }
@@ -301,14 +384,15 @@ function initBoxEditor() {
       y: Number(document.getElementById('boxY').value) || 0,
       z: Number(document.getElementById('boxZ').value) || 0,
     };
-    if (type === 'box') {
+    if (BOX_LIKE.includes(type)) {
       shape.w = Math.max(1, Number(document.getElementById('boxW').value) || 1);
       shape.h = Math.max(1, Number(document.getElementById('boxH').value) || 1);
       shape.d = Math.max(1, Number(document.getElementById('boxD').value) || 1);
     } else {
       shape.radius = Math.max(1, Number(document.getElementById('shapeRadius').value) || 1);
-      if (type !== 'sphere') shape.width = Math.max(1, Number(document.getElementById('shapeWidth').value) || 1);
+      if (!RADIUS_ONLY.includes(type)) shape.width = Math.max(1, Number(document.getElementById('shapeWidth').value) || 1);
       if (type === 'gear') shape.teeth = Math.max(4, Number(document.getElementById('shapeTeeth').value) || 12);
+      if (type === 'text') shape.text = (document.getElementById('shapeText').value || 'A').slice(0, 10);
     }
     return shape;
   }
@@ -333,7 +417,12 @@ function initBoxEditor() {
   // 팅커캐드처럼 팔레트의 도형을 누르면 그 종류가 바로 캔버스에 추가된다(사용자 지시: "도형이 오른쪽에
   // 쭉 나열되어 있어야지") — 드롭다운으로 종류를 고르고 따로 추가 버튼을 누르는 방식이 아니다.
   document.querySelectorAll('.paletteBtn').forEach((btn) => btn.addEventListener('click', () => {
-    shapes.push(defaultShapeOfType(btn.dataset.type));
+    const shape = defaultShapeOfType(btn.dataset.type);
+    // 새 도형마다 x를 조금씩 띄워서 등록 — 전부 원점에 완전히 겹쳐 놓이면(특히 도형이 여러 개 쌓일수록)
+    // "결과 미리보기"의 CSG 계산이 급격히 느려지는 걸 실제로 확인했다(하트까지 5개 겹쳤을 때 체감 멈춤
+    // 수준). 겹치지 않게 놓고 필요하면 드래그로 다시 겹치면 된다.
+    shape.x += shapes.length * 25;
+    shapes.push(shape);
     selectedIndex = shapes.length - 1;
     fillFieldsFromShape(shapes[selectedIndex]);
     renderShapeListUI();
