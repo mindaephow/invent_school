@@ -388,6 +388,15 @@ function initBoxEditor() {
       mesh.clear();
       addEdgeOutline(mesh, shape.op === 'subtract' ? SUB_COLOR : colorForIndex(selectedIndex));
     }
+    // "바닥 위에 붙이기" — 이동/크기 조절로 도형이 바닥(y=0) 아래로 파고들면 다시 바닥 위로 밀어올린다.
+    // 회전된 상태에서도 정확히 맞도록, 로컬 지오메트리 치수가 아니라 실제 월드 좌표 바운딩박스(회전·크기 반영)로 계산한다.
+    if (document.getElementById('floorClampChk').checked) {
+      const worldBox = new THREE.Box3().setFromObject(mesh);
+      if (worldBox.min.y < -0.001) {
+        mesh.position.y -= worldBox.min.y;
+        shape.y = round1(mesh.position.y);
+      }
+    }
     renderShapeListUI();
     fillFieldsFromShape(shape);
   }
