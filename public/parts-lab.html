@@ -122,6 +122,8 @@ h4{margin:4px 0}
       <button type="button" class="tfModeBtn on" data-mode="translate">✋ 이동</button>
       <button type="button" class="tfModeBtn" data-mode="rotate">↻ 회전</button>
       <button type="button" class="tfModeBtn" data-mode="scale">↔ 크기</button>
+      <button type="button" id="boxFlipBtn">↔️ 반대로</button>
+      <button type="button" id="boxFlipYBtn">↕️ 위아래로</button>
       <label style="font-size:12px; display:flex; align-items:center; gap:4px; cursor:pointer;"><input type="checkbox" id="floorClampChk" checked> 바닥 위에 붙이기</label>
       <span class="section-note" style="margin:0;">캔버스 안 도형의 화살표/손잡이를 드래그해보세요.</span>
     </div>
@@ -870,6 +872,7 @@ h4{margin:4px 0}
     const toolbar = document.createElement('div');
     toolbar.className = 'btnRow';
     toolbar.innerHTML = '<button type="button" class="clearBtn">지우기</button><button type="button" class="modeBtn">🔄 돌리기</button><button type="button" class="panBtn">✋ 이동</button>' +
+      '<button type="button" class="flipBtn">↔️ 반대로</button><button type="button" class="flipYBtn">↕️ 위아래로</button>' +
       (vertexPoints ? '<button type="button" class="vertexBtn">🔗 꼭지점</button><button type="button" class="guideBtn">📏 가이드</button>' : '') +
       '<button type="button" class="shotBtn">📸 스샷</button>';
     wrap.insertAdjacentElement('afterend', toolbar);
@@ -927,6 +930,26 @@ h4{margin:4px 0}
     modeBtn.addEventListener('click', () => setOrbitMode(stateFlags.rotate ? 'off' : 'rotate'));
     panBtn.addEventListener('click', () => setOrbitMode(stateFlags.pan ? 'off' : 'pan'));
     attachGroundPan(canvas, camera, controls, () => stateFlags.pan);
+
+    // 사용자 지시: "반대로 뒤집는 버튼, 위아래로 뒤집는 버튼 모든곳에 다 추가해줘" — 카메라를 바라보는
+    // 중심점(controls.target) 기준으로 반사시켜서, 어느 각도로 시작했든 눌러서 반대쪽/위아래를 바로 볼 수
+    // 있게 함. "반대로"는 x,z(수평)를 중심점 기준으로 뒤집고(진짜 반대편에서 보기), "위아래로"는 y(높이)를
+    // 중심점 기준으로 뒤집는다(밑에서 올려다보기). controls.update()가 다음 프레임에 현재 camera.position을
+    // 기준으로 스페리컬을 다시 계산하므로 이렇게 직접 옮겨도 그대로 반영된다.
+    const flipBtn = toolbar.querySelector('.flipBtn');
+    const flipYBtn = toolbar.querySelector('.flipYBtn');
+    flipBtn.addEventListener('click', () => {
+      const t = controls.target, p = camera.position;
+      camera.position.set(2 * t.x - p.x, p.y, 2 * t.z - p.z);
+      camera.lookAt(t);
+      controls.update();
+    });
+    flipYBtn.addEventListener('click', () => {
+      const t = controls.target, p = camera.position;
+      camera.position.set(p.x, 2 * t.y - p.y, p.z);
+      camera.lookAt(t);
+      controls.update();
+    });
 
     // 스샷 버튼 — 사용자 지시: "스샷버튼을 누르면 다운로드되고 db에 저장이 되게". 이름표는 이 칸의 .col > h4
     // 텍스트를 그대로 씀(예: "90도 프레임 (위)") — 위/정면/뒷면 세 칸이 전부 이 패턴이라 어디서나 통함.

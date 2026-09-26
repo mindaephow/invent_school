@@ -694,6 +694,22 @@ function initBoxEditor() {
     document.getElementById('rotateAngleRow').style.display = b.dataset.mode === 'rotate' ? 'flex' : 'none';
     if (b.dataset.mode === 'rotate') syncRotateAngleUI();
   }));
+  // 사용자 지시: "중심으로 반대로 뒤집는 버튼, 위아래로 뒤집는 버튼 추가해줘" — 도형을 옮기는 게 아니라
+  // 카메라를 controls.target(캔버스 중심, 항상 0,0,0) 기준으로 반사시켜서 반대편/아래쪽에서 보게 한다.
+  document.getElementById('boxFlipBtn').addEventListener('click', () => {
+    if (!live) return;
+    const t = live.controls.target, p = live.camera.position;
+    live.camera.position.set(2 * t.x - p.x, p.y, 2 * t.z - p.z);
+    live.camera.lookAt(t);
+    live.controls.update();
+  });
+  document.getElementById('boxFlipYBtn').addEventListener('click', () => {
+    if (!live) return;
+    const t = live.controls.target, p = live.camera.position;
+    live.camera.position.set(p.x, 2 * t.y - p.y, p.z);
+    live.camera.lookAt(t);
+    live.controls.update();
+  });
   // 회전축 고르기(x/y/z) — 그 축의 지금 각도를 드롭다운에 보여준다.
   document.getElementById('rotateAxis').addEventListener('change', syncRotateAngleUI);
   // 15도 단위 각도 드롭다운으로 정확한 각도를 바로 지정(사용자 지시: "x,y,z선택후 15도 단위로 회전 각도
