@@ -185,7 +185,7 @@ function knexConnectorGeometry(r, thick, holeCount) {
 // 테크닉형 빔 — 박스 몸통에 길이(w) 방향으로 일정 간격(pitch)마다 둥근 구멍을 실제로 뚫는다. 레고 테크닉
 // 빔처럼 구멍이 옆에서 훤히 뚫려 보이도록, 구멍 축을 두께(d) 방향으로 눕혀서(rotateX) 배치한다.
 function technicBeamGeometry(w, h, d) {
-  const pitch = 8; // 휴벨리노 스터드 간격(16)의 절반 — 실제 레고가 듀프로의 절반 크기인 것과 같은 비율
+  const pitch = 8; // 휴벨리노 스터드 간격(16)의 절반 — 실제 레고 테크닉이 듀프로의 절반 크기인 것과 같은 비율
   const holeCount = Math.max(1, Math.floor(w / pitch));
   const holeR = Math.min(h, d) * 0.32;
   const evaluator = new Evaluator();
