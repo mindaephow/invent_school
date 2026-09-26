@@ -1417,8 +1417,7 @@ h4{margin:4px 0}
     if (showHoleLabels) {
       // bracketTopCamPos가 프레임의 위 카메라와 같은 축 방향(epsilon을 z에 둠)을 쓰므로 프레임과 완전히
       // 같은 방식으로 계산: X번호는 x(왼→오)를 따라 위쪽 가장자리에, Z번호는 z(위→아래)를 따라 왼쪽 가장자리에
-      // — 알파벳은 안 쓰고 X·Z 둘 다 숫자. gridAxes는 실제 구멍 수치를 그대로 모아 순서대로 번호를 매기므로
-      // (margin/피치로 나눈 칸이 아님) 서로 다른 두 구멍이 한 번호로 합쳐지지 않는다.
+      // — 알파벳은 안 쓰고 X·Z 둘 다 숫자.
       const { xs, zs } = gridAxes(holeGeoms);
       // 사용자 지시: X번호=빨강(X축과 같은 색), Z번호=파랑(Z축과 같은 색) — 숫자 색만 봐도 어느 축인지 알 수 있게.
       const zAnchor = gridCellCenter(zs[0]);
@@ -1725,13 +1724,8 @@ h4{margin:4px 0}
   // 호출(파일 앞쪽의 refFrameTop/refBracketTop 등)이 이 줄보다 앞에 있어서, const였다면 호출 시점에 아직
   // 초기화 전이라 "Cannot access before initialization" 에러가 났음 — function 선언은 완전히 끌어올려짐.
   function gridRnd(n){ return Math.round(n * 10) / 10; }
-  // 사용자 확정 규칙: 그리드 한 칸에 구멍 하나, 번호는 1부터. margin/피치로 나눈 칸(floor(좌표/피치))으로
-  // 묶으면 1열브라켓처럼 armWidth=margin(둘 다 5)인 경우 팔1의 반대쪽 면(z=0, arm1의 뒷면)과 팔2의 첫
-  // 구멍(z=5, arm2를 따라가는 완전히 다른 구멍)이 우연히 같은 0~10mm 칸에 들어가 번호 하나로 합쳐지는
-  // 문제가 있었다(서로 다른 구멍인데 칸 하나=구멍 하나 규칙이 깨짐). 그래서 칸으로 묶지 않고 실제 구멍
-  // 수치를 그대로 모아 중복만 제거하고 정렬해서 번호를 매긴다 — z=0과 z=5도 이제 서로 다른 번호로 나온다.
-  function gridCellIndex(v){ return gridRnd(v); }
-  function gridCellCenter(v){ return v; }
+  function gridCellIndex(v){ return Math.floor(v / bracketPitch()); }
+  function gridCellCenter(i){ return i * bracketPitch() + bracketPitch()/2; }
   function gridAxes(holes){
     return {
       xs: [...new Set(holes.map(h => gridCellIndex(h.x)))].sort((a,b) => a-b),
