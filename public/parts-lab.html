@@ -1477,7 +1477,7 @@ h4{margin:4px 0}
   function drawRefBracket(){
     const { refArmLen1:a1, refArmLen2:a2, refArmWidth:aw } = bracketStandards;
     renderBracketPanel(document.getElementById('refBracketTop'), a1, a2, aw, bracketTopCamPos(a1), true);
-    renderBracketPanel(document.getElementById('refBracketFront'), a1, a2, aw, [70,90,110], false, true);
+    renderBracketPanel(document.getElementById('refBracketFront'), a1, a2, aw, bracketBackCamPos(a1), false, true);
     renderBracketPanel(document.getElementById('refBracketBack'), a1, a2, aw, bracketBackCamPos(a1,a2));
     renderRefSpecCols();
   }
@@ -1973,7 +1973,7 @@ h4{margin:4px 0}
       const m = String(p.size||'').match(/(\d+(?:\.\d+)?)\s*[×xX]\s*(\d+(?:\.\d+)?)\s*[×xX]\s*(\d+(?:\.\d+)?)/);
       const arm1 = spec.armLen1 || (m ? Number(m[1]) : 30), arm2 = spec.armLen2 || (m ? Number(m[2]) : 30), armWidth = spec.armWidth || (m ? Number(m[3]) : 10);
       renderBracketPanel(shot1.canvas, arm1, arm2, armWidth, bracketTopCamPos(arm1), true);
-      renderBracketPanel(shot2.canvas, arm1, arm2, armWidth, [70,90,110], false, true);
+      renderBracketPanel(shot2.canvas, arm1, arm2, armWidth, bracketBackCamPos(arm1), false, true);
       renderBracketPanel(shot3.canvas, arm1, arm2, armWidth, bracketBackCamPos(arm1, arm2));
       specEl.innerHTML = buildSpecHtml(p, bracketSpecRows(arm1, arm2, armWidth));
     } else {
@@ -2060,7 +2060,7 @@ h4{margin:4px 0}
         const arm2 = Number(document.getElementById('editArm2').value) || 30;
         const armWidth = Number(document.getElementById('editArmWidth').value) || 10;
         renderBracketPanel(canvas1, arm1, arm2, armWidth, bracketTopCamPos(arm1), true); // 위
-        renderBracketPanel(canvas2, arm1, arm2, armWidth, [70,90,110], false, true); // 정면(뒷면과 반대로 거울반사)
+        renderBracketPanel(canvas2, arm1, arm2, armWidth, bracketBackCamPos(arm1), false, true); // 정면(뒷면과 같은 카메라, 물체만 거울반사)
         if (canvas3) renderBracketPanel(canvas3, arm1, arm2, armWidth, bracketBackCamPos(arm1, arm2)); // 뒷면
         specEl.innerHTML = buildSpecHtml(p, bracketSpecRows(arm1, arm2, armWidth));
       } else {
