@@ -601,6 +601,34 @@ function initBoxEditor() {
     if (point) { shape.x = round1(point.x); shape.z = round1(point.z); }
     addShape(shape);
   });
+  // 캔버스 안 도형을 직접 클릭해서 선택 — 지금까진 오른쪽 "도형 목록"에서만 고를 수 있었다(사용자 지적:
+  // "도형선택이 왜 안바뀌어???" — 캔버스에서 도형을 눌러도 아무 반응이 없었음). 회전(오빗)이나 기즈모를
+  // 드래그하는 동작과 구분하기 위해, 누른 지점과 뗀 지점이 거의 같을 때(실제 "클릭")만 선택을 바꾼다 —
+  // 안 그러면 화면을 돌리려고 드래그만 해도 마우스를 뗀 자리 아래 도형으로 선택이 계속 튀게 된다.
+  let pointerDownAt = null;
+  canvasWrap.addEventListener('pointerdown', (e) => { pointerDownAt = { x: e.clientX, y: e.clientY }; });
+  canvasWrap.addEventListener('pointerup', (e) => {
+    const start = pointerDownAt;
+    pointerDownAt = null;
+    if (!start || mode !== 'edit' || !live || !live.meshes.length) return;
+    if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > 4) return;
+    const canvas = document.getElementById('boxEditorCanvas');
+    const rect = canvas.getBoundingClientRect();
+    const ndc = new THREE.Vector2(
+      ((e.clientX - rect.left) / rect.width) * 2 - 1,
+      -((e.clientY - rect.top) / rect.height) * 2 + 1
+    );
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(ndc, live.camera);
+    const hit = raycaster.intersectObjects(live.meshes, false)[0];
+    if (!hit) return;
+    const idx = live.meshes.indexOf(hit.object);
+    if (idx < 0 || idx === selectedIndex) return;
+    selectedIndex = idx;
+    fillFieldsFromShape(shapes[idx]);
+    renderShapeListUI();
+    attachSelection();
+  });
   document.getElementById('shapeDeleteBtn').addEventListener('click', () => {
     if (shapes.length <= 1) { document.getElementById('boxEditorMsg').textContent = '도형이 하나는 남아있어야 해요.'; return; }
     shapes.splice(selectedIndex, 1);
