@@ -366,6 +366,17 @@ function initBoxEditor() {
   // 드래그(이동/크기)한 결과를 그 도형의 숫자로 되읽어 온다. "크기" 모드는 mesh.scale을 곱하는 방식이라,
   // 매번 실제 치수(w/h/d 또는 radius/width) 숫자에 구워넣고 scale은 1로 되돌린 뒤 지오메트리를 다시 만든다 —
   // 안 그러면 드래그를 여러 번 할수록 배율이 겹겹이 쌓여 숫자와 안 맞아진다.
+  // "바닥 위에 붙이기" — 이동/크기/회전으로 도형이 바닥(y=0) 아래로 파고들면 다시 바닥 위로 밀어올린다.
+  // 회전된 상태에서도 정확히 맞도록, 로컬 지오메트리 치수가 아니라 실제 월드 좌표 바운딩박스(회전·크기
+  // 반영)로 계산한다. 드래그(syncSelectedShapeFromMesh)와 15도 단위 각도 드롭다운 둘 다 이걸 같이 쓴다.
+  function applyFloorClamp(mesh, shape) {
+    if (!document.getElementById('floorClampChk').checked) return;
+    const worldBox = new THREE.Box3().setFromObject(mesh);
+    if (worldBox.min.y < -0.001) {
+      mesh.position.y -= worldBox.min.y;
+      shape.y = round1(mesh.position.y);
+    }
+  }
   function syncSelectedShapeFromMesh(meshes) {
     const mesh = meshes[selectedIndex], shape = shapes[selectedIndex];
     shape.x = mesh.position.x; shape.y = mesh.position.y; shape.z = mesh.position.z;
@@ -388,15 +399,7 @@ function initBoxEditor() {
       mesh.clear();
       addEdgeOutline(mesh, shape.op === 'subtract' ? SUB_COLOR : colorForIndex(selectedIndex));
     }
-    // "바닥 위에 붙이기" — 이동/크기 조절로 도형이 바닥(y=0) 아래로 파고들면 다시 바닥 위로 밀어올린다.
-    // 회전된 상태에서도 정확히 맞도록, 로컬 지오메트리 치수가 아니라 실제 월드 좌표 바운딩박스(회전·크기 반영)로 계산한다.
-    if (document.getElementById('floorClampChk').checked) {
-      const worldBox = new THREE.Box3().setFromObject(mesh);
-      if (worldBox.min.y < -0.001) {
-        mesh.position.y -= worldBox.min.y;
-        shape.y = round1(mesh.position.y);
-      }
-    }
+    applyFloorClamp(mesh, shape);
     renderShapeListUI();
     fillFieldsFromShape(shape);
   }
@@ -493,6 +496,15 @@ function initBoxEditor() {
       if (shape.type === 'knexConnector') document.getElementById('knexHoles').value = shape.holes;
     }
     syncFieldVisibility(shape.type);
+    syncRotateAngleUI();
+  }
+  // 회전축(x/y/z)을 고르면 그 축의 지금 각도를 15도 단위로 반올림해서 드롭다운에 보여준다 — 마우스로
+  // 자유롭게 돌린 각도는 15도의 배수가 아닐 수 있으니, "실제 값을 그대로"가 아니라 "가장 가까운 15도"를 표시.
+  function syncRotateAngleUI() {
+    const axis = document.getElementById('rotateAxis').value;
+    const rad = shapes[selectedIndex]['r' + axis] || 0;
+    const deg = ((Math.round((rad * 180 / Math.PI) / 15) * 15) % 360 + 360) % 360;
+    document.getElementById('rotateAngle').value = String(deg);
   }
   function readFieldsAsShape() {
     const prev = shapes[selectedIndex];
@@ -649,7 +661,26 @@ function initBoxEditor() {
   document.querySelectorAll('.tfModeBtn').forEach((b) => b.addEventListener('click', () => {
     document.querySelectorAll('.tfModeBtn').forEach((x) => x.classList.toggle('on', x === b));
     if (live && live.transform) live.transform.setMode(b.dataset.mode);
+    document.getElementById('rotateAngleRow').hidden = b.dataset.mode !== 'rotate';
+    if (b.dataset.mode === 'rotate') syncRotateAngleUI();
   }));
+  // 회전축 고르기(x/y/z) — 그 축의 지금 각도를 드롭다운에 보여준다.
+  document.getElementById('rotateAxis').addEventListener('change', syncRotateAngleUI);
+  // 15도 단위 각도 드롭다운으로 정확한 각도를 바로 지정(사용자 지시: "x,y,z선택후 15도 단위로 회전 각도
+  // 선택할수 있게 해줘") — 마우스 드래그와 별개로, 캔버스의 도형 회전값을 그 자리에서 바로 반영한다.
+  document.getElementById('rotateAngle').addEventListener('change', () => {
+    if (!shapes.length) return;
+    const axis = document.getElementById('rotateAxis').value;
+    const deg = Number(document.getElementById('rotateAngle').value) || 0;
+    const rad = deg * Math.PI / 180;
+    shapes[selectedIndex]['r' + axis] = rad;
+    if (mode === 'edit' && live && live.meshes[selectedIndex]) {
+      const mesh = live.meshes[selectedIndex];
+      mesh.rotation[axis] = rad;
+      applyFloorClamp(mesh, shapes[selectedIndex]);
+      fillFieldsFromShape(shapes[selectedIndex]);
+    }
+  });
   document.getElementById('boxPreviewBtn').addEventListener('click', () => setMode('preview'));
   document.getElementById('boxBackToEditBtn').addEventListener('click', () => setMode('edit'));
   document.getElementById('boxTargetPickBtn').addEventListener('click', () => {
