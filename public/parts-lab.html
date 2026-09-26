@@ -1413,7 +1413,7 @@ h4{margin:4px 0}
     // 구멍마다 라벨을 다 박지 않고 표 좌표축처럼 위쪽엔 X번호(1,2,3...), 왼쪽엔 Z번호(1,2,3...)만 한 번씩
     // 표시함 — bracketHoleGeom이 makeHole과 같은 좌표를 쓰므로 눈에 보이는 구멍 위치와 축 위치가 항상 일치한다.
     const holeGeoms = bracketHoleGeom(arm1, arm2, armWidth);
-    holeGeoms.forEach((h) => makeHole(partGroup, h.x, holeY, h.z, h.rot, h.blind));
+    holeGeoms.forEach((h) => makeHole(partGroup, h.renderX, holeY, h.renderZ, h.rot, h.blind));
     if (showHoleLabels) {
       // bracketTopCamPos가 프레임의 위 카메라와 같은 축 방향(epsilon을 z에 둠)을 쓰므로 프레임과 완전히
       // 같은 방식으로 계산: X번호는 x(왼→오)를 따라 위쪽 가장자리에, Z번호는 z(위→아래)를 따라 왼쪽 가장자리에
@@ -1759,13 +1759,17 @@ h4{margin:4px 0}
     // ㄱ자로 뒤집은 위치(x'=arm1-x)에 맞춰 구멍 좌표도 같이 뒤집음 — 코너쪽(블라인드 홀)이 여전히
     // 코너에 붙어 있어야 하므로 팔1은 x만 뒤집고, 팔2는 안쪽/바깥쪽 면 위치가 서로 자리를 바꾸므로
     // face A·B의 x좌표와 그 회전(원래 서로 마주보던 방향이 뒤집혔으므로 부호도 반대)을 같이 바꿈.
+    // x,z는 번호/스펙 저장에 쓰는 진짜 좌표(그대로 유지). renderX,renderZ만 원본(_compare_all.html의
+    // makeWindow 호출: armA 정면 Z=armWidth+0.05·뒷면 Z=-0.05, armB 정면 X=armWidth+0.05·뒷면 X=-0.05)과
+    // 똑같이 표면에서 0.05mm 띄운 값 — 표면과 구멍이 같은 깊이에서 겹쳐(z-fighting) 안 보이던 문제를 고침
+    // (사용자 지시: "같은 html인데 그대로 코드를 복사해서 수정하라 해도 아직도 안하잖아").
     positions1.forEach((p,i) => {
-      holes.push({ x:arm1-p, z:armWidth, face:'A', rot:0, blind:i===0 });
-      holes.push({ x:arm1-p, z:0, face:'B', rot:Math.PI, blind:i===0 });
+      holes.push({ x:arm1-p, z:armWidth, renderZ:armWidth+0.05, face:'A', rot:0, blind:i===0 });
+      holes.push({ x:arm1-p, z:0, renderZ:-0.05, face:'B', rot:Math.PI, blind:i===0 });
     });
     positions2.forEach((p,i) => {
-      holes.push({ x:arm1-armWidth, z:p, face:'A', rot:-Math.PI/2, blind:i===0 });
-      holes.push({ x:arm1, z:p, face:'B', rot:Math.PI/2, blind:i===0 });
+      holes.push({ x:arm1-armWidth, renderX:arm1-armWidth-0.05, z:p, face:'A', rot:-Math.PI/2, blind:i===0 });
+      holes.push({ x:arm1, renderX:arm1+0.05, z:p, face:'B', rot:Math.PI/2, blind:i===0 });
     });
     // 여백(margin)과 두께(armWidth)가 같은 값이면(예: 둘 다 5mm) 팔1·팔2의 "코너에서 가장 가까운 구멍"이
     // 완전히 같은 자리에 겹침 — 실제로 구멍이 2개가 아니라 1개이므로 좌표+면이 같은 건 하나만 남김
@@ -1776,7 +1780,7 @@ h4{margin:4px 0}
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
-    });
+    }).map(h => ({ ...h, renderX: h.renderX ?? h.x, renderZ: h.renderZ ?? h.z }));
   }
   function bracketHoleLabels(arm1, arm2, armWidth){
     return gridHoleLabels(bracketHoleGeom(arm1, arm2, armWidth));
