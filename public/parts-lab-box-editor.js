@@ -28,7 +28,12 @@ const SHAPE_PALETTE = [0x5b8def, 0xff9f43, 0x51cf66, 0xa78bfa, 0x22b8cf, 0xff6fa
 function colorForIndex(i) { return SHAPE_PALETTE[i % SHAPE_PALETTE.length]; }
 // 불러온 3D 파일은 팔레트 색 대신 아이보리색으로(사용자 지시: "아이보리색으로") — 1열브라켓과 같은 톤(0xf2ead9).
 const IMPORT_COLOR = 0xf2ead9;
-function colorForShape(shape, i) { return shape.type === 'import' ? IMPORT_COLOR : colorForIndex(i); }
+// 물체를 고른 뒤 색상 팔레트(HTML <input type="color">)로 직접 정할 수 있게 함(사용자 지시: "물체 선택후
+// 색상팔레트 선택할수 있게 해줘") — shape.color(문자열 "#rrggbb")가 있으면 그걸 최우선으로 쓴다.
+function colorForShape(shape, i) {
+  if (shape.color) return Number('0x' + shape.color.slice(1));
+  return shape.type === 'import' ? IMPORT_COLOR : colorForIndex(i);
+}
 // "텍스트" 도형용 — 모듈이 로드되는 시점에 한 번만 받아온다(top-level await, 페이지 전체를 막지 않고
 // 이 모듈 하나만 폰트가 올 때까지 잠깐 기다림 — gate()가 window.initBoxEditor를 폴링해서 기다리는 것과 맞물림).
 // unpkg의 three npm 패키지엔 이제 examples/fonts가 안 들어있어서(0 files) three.js 깃허브 저장소를
@@ -607,6 +612,7 @@ function initBoxEditor() {
     document.getElementById('boxX').value = round1(shape.x);
     document.getElementById('boxY').value = round1(shape.y);
     document.getElementById('boxZ').value = round1(shape.z);
+    document.getElementById('shapeColor').value = '#' + colorForShape(shape, selectedIndex).toString(16).padStart(6, '0');
     if (BOX_LIKE.includes(shape.type)) {
       document.getElementById('boxW').value = round1(shape.w);
       document.getElementById('boxH').value = round1(shape.h);
@@ -643,6 +649,8 @@ function initBoxEditor() {
       z: Number(document.getElementById('boxZ').value) || 0,
       // 회전은 숫자칸이 없고 마우스(↻ 회전)로만 조절하므로, 숫자칸으로 다시 그릴 때 기존 회전값을 그대로 지킨다.
       rx: prev.rx || 0, ry: prev.ry || 0, rz: prev.rz || 0,
+      // 색상 팔레트로 고른 색도(있으면) 그대로 이어받는다 — 위치만 바꾸려고 "적용"을 눌러도 색이 안 없어지게.
+      color: document.getElementById('shapeColor').value,
     };
     if (type === 'import') {
       // 불러온 파일 자체(지오메트리·원본 파일)는 숫자칸으로 다시 만드는 게 아니라 그대로 이어받는다 —
@@ -686,6 +694,17 @@ function initBoxEditor() {
     shapes[selectedIndex] = readFieldsAsShape();
     renderShapeListUI();
     renderEditMode();
+  });
+  // 물체 선택 후 색상 팔레트로 바로 색을 바꿀 수 있게(사용자 지시: "물체 선택후 색상팔레트 선택할수
+  // 있게 해줘") — 다른 숫자칸과 달리 "이 도형에 적용" 버튼 없이 고르는 즉시 반영한다.
+  document.getElementById('shapeColor').addEventListener('input', (e) => {
+    if (!shapes[selectedIndex]) return;
+    shapes[selectedIndex].color = e.target.value;
+    if (mode === 'edit' && live && live.meshes[selectedIndex]) {
+      live.meshes[selectedIndex].material.color.set(e.target.value);
+    } else if (mode === 'preview') {
+      renderPreviewMode();
+    }
   });
   function addShape(shape) {
     shapes.push(shape);
