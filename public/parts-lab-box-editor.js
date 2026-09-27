@@ -74,8 +74,11 @@ function makeAxesRods(size) {
 function baseScene() {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xf3f5f8);
-  scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-  const dir = new THREE.DirectionalLight(0xffffff, 0.6); dir.position.set(100, 200, 100); scene.add(dir);
+  // 조명이 어두워서 순수한 색(예: 빨강 #e03b2b)을 골라도 검은색을 섞은 것처럼 어둡게 나오던 문제
+  // (사용자 지적: "지금 나오는 색깔은 모든색상에 검은색을 부어놓은거 같아") — 세기를 올려서 실제 고른
+  // 색에 더 가깝게 보이도록 함. 같은 파일의 다른 3D 화면(브라켓/프레임, AmbientLight 세기 1)과 맞춤.
+  scene.add(new THREE.AmbientLight(0xffffff, 1.2));
+  const dir = new THREE.DirectionalLight(0xffffff, 0.8); dir.position.set(100, 200, 100); scene.add(dir);
   scene.add(new THREE.GridHelper(200, 20, 0xcccccc, 0xe5e5e5));
   scene.add(makeAxesRods(50));
   return scene;
