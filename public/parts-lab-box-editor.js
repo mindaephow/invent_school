@@ -26,6 +26,9 @@ const SUB_COLOR = 0xff8a8a;
 // 도형만은 의미 전달을 위해 계속 반투명 빨강(SUB_COLOR) 하나로 통일한다.
 const SHAPE_PALETTE = [0x5b8def, 0xff9f43, 0x51cf66, 0xa78bfa, 0x22b8cf, 0xff6fa5, 0xfcc419, 0x37b24d, 0x748ffc, 0xf783ac, 0x66d9e8, 0xffa94d, 0x845ef7, 0x20c997, 0xf06595];
 function colorForIndex(i) { return SHAPE_PALETTE[i % SHAPE_PALETTE.length]; }
+// 불러온 3D 파일은 팔레트 색 대신 밝은 색으로(사용자 지시: "불러 올때 색상을 밝은 색상으로 불러와줘").
+const IMPORT_COLOR = 0xe9edf5;
+function colorForShape(shape, i) { return shape.type === 'import' ? IMPORT_COLOR : colorForIndex(i); }
 // "텍스트" 도형용 — 모듈이 로드되는 시점에 한 번만 받아온다(top-level await, 페이지 전체를 막지 않고
 // 이 모듈 하나만 폰트가 올 때까지 잠깐 기다림 — gate()가 window.initBoxEditor를 폴링해서 기다리는 것과 맞물림).
 // unpkg의 three npm 패키지엔 이제 examples/fonts가 안 들어있어서(0 files) three.js 깃허브 저장소를
@@ -433,7 +436,7 @@ function initBoxEditor() {
     const canvas = freshCanvas();
     const { renderer, scene, camera, controls } = setupCommon(canvas);
     const meshes = shapes.map((shape, i) => {
-      const color = shape.op === 'subtract' ? SUB_COLOR : colorForIndex(i);
+      const color = shape.op === 'subtract' ? SUB_COLOR : colorForShape(shape, i);
       const mat = new THREE.MeshStandardMaterial({ color, transparent: shape.op === 'subtract', opacity: shape.op === 'subtract' ? 0.55 : 1 });
       const mesh = new THREE.Mesh(buildShapeGeometry(shape), mat);
       mesh.position.set(shape.x, shape.y, shape.z);
@@ -494,7 +497,7 @@ function initBoxEditor() {
       mesh.geometry = buildShapeGeometry(shape);
       mesh.children.forEach((c) => c.geometry && c.geometry.dispose());
       mesh.clear();
-      addEdgeOutline(mesh, shape.op === 'subtract' ? SUB_COLOR : colorForIndex(selectedIndex));
+      addEdgeOutline(mesh, shape.op === 'subtract' ? SUB_COLOR : colorForShape(shape, selectedIndex));
     }
     applyFloorClamp(mesh, shape);
     renderShapeListUI();
@@ -528,7 +531,7 @@ function initBoxEditor() {
       result.updateMatrixWorld();
     }
     // 최종 결과는 여러 도형을 합친 하나의 완성품이라 베이스 도형의 색 하나로 통일해서 보여준다.
-    const finalColor = colorForIndex(0);
+    const finalColor = colorForShape(shapes[0], 0);
     result.material = new THREE.MeshStandardMaterial({ color: finalColor });
     addEdgeOutline(result, finalColor);
     scene.add(result);
