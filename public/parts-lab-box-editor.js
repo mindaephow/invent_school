@@ -300,6 +300,11 @@ async function loadImportedGeometry(file) {
       geometry = geos.length === 1 ? geos[0] : mergeGeometries(geos, false);
     } else if (ext === 'stl') {
       geometry = await new STLLoader().loadAsync(url);
+      // STL은 "위" 축을 정해둔 규격이 없는데, CAD·3D프린팅 쪽에서 만든 파일은 거의 항상 Z축을 위로 두고
+      // 만든다(사용자 파일도 Z가 두께(5mm)였음). three.js는 Y축이 위라서, 그대로 불러오면 눕혀서 만든
+      // 판이 세워진 것처럼 보인다(사용자 지적: "눕혀있는 파일인데 왜 서있는걸로 불러와???") — Z축을
+      // Y축 자리로 돌려서 맞춘다.
+      geometry.rotateX(-Math.PI / 2);
     } else if (ext === 'obj') {
       const obj = await new OBJLoader().loadAsync(url);
       const geos = [];
