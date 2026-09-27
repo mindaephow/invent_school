@@ -730,19 +730,25 @@ function initBoxEditor() {
     targetPart = p;
     document.getElementById('boxTargetLabel').textContent = '선택된 부품: ' + p.name;
     document.getElementById('boxSaveBtn').disabled = false;
-    const saved = p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.length ? p.spec.shapes : null;
-    shapes = saved ? saved.map((s) => Object.assign({}, s)) : [];
-    // 저장된 도형 중 "3D 파일 불러오기"로 만든 게 있으면(type:'import'), 그때 저장해둔 원본 파일
-    // (fileDataUrl)을 다시 읽어서 지오메트리를 새로 만들어야 화면에 그릴 수 있다 — 숫자만으로는
-    // 못 그리는 도형이라(사용자 지시: "그 숫자로 매번 다시그린다는게 뭐야???" 질문에 답한 그 이유).
-    await Promise.all(shapes.filter((s) => s.type === 'import' && s.fileDataUrl && !s._geometry).map(async (s) => {
-      try { s._geometry = await loadImportedGeometry(dataUrlToFile(s.fileDataUrl, s.fileName || 'model')); }
-      catch (e) { console.error('불러온 3D 파일을 다시 못 읽었어요.', e); }
-    }));
-    selectedIndex = shapes.length ? 0 : -1;
-    fillFieldsFromShape(shapes[0]);
-    renderShapeListUI();
-    setMode('edit');
+    // 캔버스에 이미 도형이 있으면(한창 만들다가 "이제 이 부품에 저장할래" 하는 경우) 그 작업을 지우지
+    // 않는다 — 예전엔 무조건 덮어써서, STL 불러와 만들어둔 걸 대상 고르자마자 날려버렸다(사용자 지적:
+    // "이거하려고 다 수정한건데???"). 캔버스가 비어있을 때만(처음 시작할 때) 그 부품에 저장돼 있던
+    // 도형을 불러와서 이어서 편집할 수 있게 한다.
+    if (!shapes.length) {
+      const saved = p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.length ? p.spec.shapes : null;
+      shapes = saved ? saved.map((s) => Object.assign({}, s)) : [];
+      // 저장된 도형 중 "3D 파일 불러오기"로 만든 게 있으면(type:'import'), 그때 저장해둔 원본 파일
+      // (fileDataUrl)을 다시 읽어서 지오메트리를 새로 만들어야 화면에 그릴 수 있다 — 숫자만으로는
+      // 못 그리는 도형이라(사용자 지시: "그 숫자로 매번 다시그린다는게 뭐야???" 질문에 답한 그 이유).
+      await Promise.all(shapes.filter((s) => s.type === 'import' && s.fileDataUrl && !s._geometry).map(async (s) => {
+        try { s._geometry = await loadImportedGeometry(dataUrlToFile(s.fileDataUrl, s.fileName || 'model')); }
+        catch (e) { console.error('불러온 3D 파일을 다시 못 읽었어요.', e); }
+      }));
+      selectedIndex = shapes.length ? 0 : -1;
+      fillFieldsFromShape(shapes[0]);
+      renderShapeListUI();
+      setMode('edit');
+    }
   }
 
   document.getElementById('boxRedrawBtn').addEventListener('click', () => {
