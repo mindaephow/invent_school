@@ -57,9 +57,12 @@ async function requireTeacher(sb, request) {
   const { data, error } = await sb.auth.getUser(token)
   if (error || !data?.user) return { error: json({ error: '로그인이 만료되었습니다. 다시 로그인해주세요.' }, 401) }
   if (data.user.app_metadata?.role === 'admin') return { userId: data.user.id }
-  const { data: teacher, error: tErr } = await sb.from('ivs_teachers').select('id').eq('id', data.user.id).maybeSingle()
+  const { data: teacher, error: tErr } = await sb.from('ivs_teachers').select('id, approved').eq('id', data.user.id).maybeSingle()
   if (tErr) return { error: json({ error: tErr.message }, 500) }
   if (!teacher) return { error: json({ error: '선생님 계정이 아닙니다.' }, 403) }
+  // 사용자 지시: "부품 저장을 승인받은 선생님도 할수있게 해줘" — 본사 승인(ivs_teachers.approved)을
+  // 받은 선생님만 부품 카탈로그를 쓸 수 있게 함(승인 대기 중인 계정은 여전히 막힘).
+  if (!teacher.approved) return { error: json({ error: '승인 대기 중인 선생님 계정입니다. 본사 승인 후 이용해주세요.' }, 403) }
   return { userId: data.user.id }
 }
 
