@@ -18,6 +18,7 @@ import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+import { STLExporter } from 'three/addons/exporters/STLExporter.js';
 import { Evaluator, Brush, ADDITION, SUBTRACTION } from 'three-bvh-csg';
 
 const SUB_COLOR = 0xff8a8a;
@@ -410,7 +411,7 @@ function renderPaletteThumbnails() {
 }
 
 function initBoxEditor() {
-  const { openPickerModal, adminApi, getAccessToken } = window.__partsLab;
+  const { openPickerModal, adminApi, getAccessToken, getSubject } = window.__partsLab;
   let targetPart = null;
   // 빈 캔버스로 시작한다 — 3D 디자인 도구는 원래 처음엔 아무것도 없는 게 정상이다(사용자 지적: "3d
   // 디지인중에 처음부터 도형이 있는 경우가 어디있어?????"). 예전엔 기본 박스를 하나 깔아뒀는데, 그러면
@@ -527,19 +528,9 @@ function initBoxEditor() {
     fillFieldsFromShape(shape);
   }
 
-  // ---------- 미리보기 모드: 실제 CSG로 더하고 뺀 최종 결과 하나만 보여줌(읽기 전용) ----------
-  function renderPreviewMode() {
-    teardownLive();
-    const canvas = freshCanvas();
-    const { renderer, scene, camera, controls } = setupCommon(canvas);
-    if (!shapes.length) {
-      live = { renderer, scene, camera, controls, transform: null, meshes: [], rafId: 0 };
-      renderer.render(scene, camera);
-      startLoop(() => live);
-      document.getElementById('boxEditorMsg').textContent = '도형이 없어요 — 팔레트에서 추가해보세요.';
-      return;
-    }
-    document.getElementById('boxEditorMsg').textContent = '';
+  // 여러 도형을 순서대로 더하기/빼기(CSG)한 최종 결과 하나를 계산 — 미리보기 렌더와 STL 내보내기가 같이 쓴다.
+  function computeMergedBrush() {
+    if (!shapes.length) return null;
     const evaluator = new Evaluator();
     let result = new Brush(buildShapeGeometry(shapes[0]));
     result.position.set(shapes[0].x, shapes[0].y, shapes[0].z);
@@ -553,6 +544,23 @@ function initBoxEditor() {
       result = evaluator.evaluate(result, b, shapes[i].op === 'subtract' ? SUBTRACTION : ADDITION);
       result.updateMatrixWorld();
     }
+    return result;
+  }
+
+  // ---------- 미리보기 모드: 실제 CSG로 더하고 뺀 최종 결과 하나만 보여줌(읽기 전용) ----------
+  function renderPreviewMode() {
+    teardownLive();
+    const canvas = freshCanvas();
+    const { renderer, scene, camera, controls } = setupCommon(canvas);
+    if (!shapes.length) {
+      live = { renderer, scene, camera, controls, transform: null, meshes: [], rafId: 0 };
+      renderer.render(scene, camera);
+      startLoop(() => live);
+      document.getElementById('boxEditorMsg').textContent = '도형이 없어요 — 팔레트에서 추가해보세요.';
+      return;
+    }
+    document.getElementById('boxEditorMsg').textContent = '';
+    const result = computeMergedBrush();
     // 최종 결과는 여러 도형을 합친 하나의 완성품이라 베이스 도형의 색 하나로 통일해서 보여준다.
     const finalColor = materialColorForShape(shapes[0], 0);
     result.material = new THREE.MeshBasicMaterial({ color: finalColor });
@@ -561,6 +569,28 @@ function initBoxEditor() {
     live = { renderer, scene, camera, controls, transform: null, meshes: [], rafId: 0 };
     renderer.render(scene, camera);
     startLoop(() => live);
+  }
+
+  // 지금 만든 도형(들)을 하나의 STL 파일로 내보낸다(사용자 지시: "에디터에 있는것을 stl로 저장해서
+  // 내보내기 하는 기능"). 화면에 보여주는 것과 같은 computeMergedBrush() 결과를 그대로 내보내서,
+  // 미리보기에서 본 모양과 실제 파일이 항상 같게 한다.
+  function exportSTL() {
+    const msg = document.getElementById('boxEditorMsg');
+    if (!shapes.length) { msg.className = 'msg err'; msg.textContent = '내보낼 도형이 없어요.'; return; }
+    const result = computeMergedBrush();
+    const exporter = new STLExporter();
+    const stlText = exporter.parse(result, { binary: false });
+    const blob = new Blob([stlText], { type: 'model/stl' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = (targetPart ? targetPart.name : '부품') + '.stl';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    msg.className = 'msg ok';
+    msg.textContent = 'STL 파일로 내보냈어요.';
   }
 
   function setMode(next) {
@@ -924,9 +954,46 @@ function initBoxEditor() {
   });
   document.getElementById('boxPreviewBtn').addEventListener('click', () => setMode('preview'));
   document.getElementById('boxBackToEditBtn').addEventListener('click', () => setMode('edit'));
+  // showAll=true — 프레임/브라켓뿐 아니라 등록된 부품 전체를 보여줘서, 어떤 부품이든 열어서 지금 만든
+  // 도형(들)로 교체 저장할 수 있게 함(사용자 지시: "기존의 등록된 부품을 수정으로 열어서 교체하는 기능").
   document.getElementById('boxTargetPickBtn').addEventListener('click', () => {
-    openPickerModal('저장할 부품 고르기', onBoxTargetPicked);
+    openPickerModal('기존 부품 열어서 교체', onBoxTargetPicked, true);
   });
+  // 지금 만든 도형(들)을 완전히 새 부품으로 등록(사용자 지시: "부품등록쪽으로 저장하는기능") — 이름만
+  // 입력받고, 나머지(아이콘·과목 등)는 기본값으로 채운 뒤 "스펙 수정" 등 기존 화면에서 더 정리할 수 있다.
+  document.getElementById('boxNewPartBtn').addEventListener('click', async () => {
+    const msg = document.getElementById('boxEditorMsg');
+    const nameInput = document.getElementById('boxNewPartName');
+    const name = nameInput.value.trim();
+    if (!name) { msg.className = 'msg err'; msg.textContent = '새 부품 이름을 입력해주세요.'; return; }
+    if (!shapes.length) { msg.className = 'msg err'; msg.textContent = '등록할 도형이 없어요.'; return; }
+    const btn = document.getElementById('boxNewPartBtn');
+    btn.disabled = true; msg.textContent = '';
+    try {
+      const shapesToSave = shapes.map((s) => { const { _geometry, ...rest } = s; return rest; });
+      const res = await adminApi({
+        action: 'add_part', name, icon: '📦', subject: getSubject(), category: '',
+        volumes: [], color: null, size: null,
+        imageSvg: '', imageSvgDiagonal: '', primaryImage: 'front',
+        spec: { shapes: shapesToSave },
+      }, getAccessToken());
+      const created = (res.parts || []).slice().reverse().find((p) => p.name === name);
+      if (created) {
+        targetPart = created;
+        document.getElementById('boxTargetLabel').textContent = '선택된 부품: ' + created.name;
+        document.getElementById('boxSaveBtn').disabled = false;
+      }
+      msg.className = 'msg ok';
+      msg.textContent = '"' + name + '" 새 부품으로 등록했어요.';
+      nameInput.value = '';
+    } catch (err) {
+      msg.className = 'msg err';
+      msg.textContent = '등록 실패: ' + err.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+  document.getElementById('boxExportStlBtn').addEventListener('click', exportSTL);
   // 팅커캐드처럼 GLB/GLTF·STL·OBJ 파일을 불러와서 다른 도형들과 똑같이 더하기/빼기 목록에 추가한다
   // (사용자 지시: "저장할 부품고르기 3D파일 불러올수있게 해줘" → "3가지 모두 불러올수 있게 해줘").
   document.getElementById('boxImportBtn').addEventListener('click', () => {

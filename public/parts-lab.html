@@ -117,7 +117,8 @@ h4{margin:4px 0}
   <button id="sketchToggle" type="button" class="collapseToggle">▶ 도형 에디터 (펼치기)</button>
   <div id="boxEditorPanel" hidden>
     <div class="section-note">도형 하나를 마우스로 직접 옮기거나 크기를 조절하고, 숫자로도 정확히 맞춰서 모양을 만들어요. 새 부품을 구상하거나, 설명하거나, 기존 부품에 저장해둘 수 있어요.</div>
-    <div class="btnRow"><button id="boxTargetPickBtn" type="button">🔍 저장할 부품 고르기</button><span id="boxTargetLabel" class="section-note" style="margin:0;">선택 안 됨 — 저장 없이 그냥 볼 수도 있어요.</span></div>
+    <div class="btnRow"><button id="boxTargetPickBtn" type="button">🔍 기존 부품 열어서 교체</button><span id="boxTargetLabel" class="section-note" style="margin:0;">선택 안 됨 — 저장 없이 그냥 볼 수도 있어요.</span></div>
+    <div class="btnRow"><input type="text" id="boxNewPartName" placeholder="새 부품 이름" style="flex:1; min-width:120px; padding:5px 8px; border:1px solid #ccc; border-radius:6px;"><button id="boxNewPartBtn" type="button">🆕 새 부품으로 등록</button></div>
     <div class="btnRow"><button id="boxImportBtn" type="button">📁 3D 파일 불러오기(GLB/GLTF·STL·OBJ)</button><input type="file" id="boxImportInput" accept=".glb,.gltf,.stl,.obj" hidden><span id="boxImportMsg" class="section-note" style="margin:0;"></span></div>
     <div class="btnRow">
       <button type="button" class="tfModeBtn on" data-mode="translate">✋ 이동</button>
@@ -259,7 +260,7 @@ h4{margin:4px 0}
           <label id="knexHolesField" hidden>구멍 수<input type="number" id="knexHoles" value="6" min="3" max="8" step="1"></label>
         </div>
         </div>
-        <div class="btnRow"><button id="boxRedrawBtn" type="button" style="background:#fff;color:#2b6be0;">이 도형에 적용</button><button id="boxSaveBtn" type="button" disabled>저장</button></div>
+        <div class="btnRow"><button id="boxRedrawBtn" type="button" style="background:#fff;color:#2b6be0;">이 도형에 적용</button><button id="boxSaveBtn" type="button" disabled>저장</button><button id="boxExportStlBtn" type="button" style="background:#fff;color:#2b6be0;">⬇️ STL로 내보내기</button></div>
         <div class="msg" id="boxEditorMsg"></div>
       </div>
     </div>
@@ -1572,6 +1573,7 @@ h4{margin:4px 0}
     baseScene, orthoCam, setupOrbit, addZoomButtons, addEdgeOutline,
     openPickerModal, adminApi,
     getAccessToken: () => window.__accessToken,
+    getSubject: () => curSubject,
   };
 
   // parts-lab-box-editor.js는 </body> 바로 앞에서 일반 <script src>로 실려온다 — 문서 순서상 이 메인
@@ -1660,8 +1662,11 @@ h4{margin:4px 0}
   }
   function renderModalPartList(){
     const el = document.getElementById('modalPartList');
-    const items = allParts.filter(p => p.subject === curSubject && /프레임|브라켓/.test(p.name||''));
-    if (!items.length) { el.innerHTML = '<span style="color:#888;font-size:12px;">이 갈래엔 프레임/브라켓 부품이 없어요.</span>'; return; }
+    // 도형 에디터의 "저장할 부품 고르기"는 프레임/브라켓이 아닌 부품(기어·바퀴 등)에도 shapes를 저장할 수
+    // 있어야 해서 modalShowAll이면 필터 없이 전체를 보여준다(사용자 지시: "기존의 등록된 부품을 수정으로
+    // 열어서 교체하는 기능을 추가해줘"). 비교/스펙수정 쪽은 여전히 프레임/브라켓만 보여준다(기존 동작 유지).
+    const items = allParts.filter(p => p.subject === curSubject && (modalShowAll || /프레임|브라켓/.test(p.name||'')));
+    if (!items.length) { el.innerHTML = '<span style="color:#888;font-size:12px;">이 갈래엔 ' + (modalShowAll ? '' : '프레임/브라켓 ') + '부품이 없어요.</span>'; return; }
     el.innerHTML = '';
     items.forEach(p => {
       const btn = document.createElement('button');
@@ -1836,12 +1841,19 @@ h4{margin:4px 0}
     const rows = [];
     // 1열브라켓 스펙과 형식을 맞춤(사용자 지적: "1열브라켓엔 팔 방향, 내측길이, 외측길이... 다 들어가있는데
     // 왜 90도 프레임에는 없어??") — armWidth가 팔 폭이므로 내측 길이는 armLen-armWidth로 똑같이 계산.
+    // "팔"은 90도/135도 프레임처럼 꺾인(오목 꼭짓점이 있는) 모양에만 있는 개념(사용자 지적: "27프레임 이런곳에
+    // 팔이 어디있어? 그냥 직사각형인데?" / "팔이있는건 90도 프레임,135도 프레임 이런것만 팔이 있지") —
+    // armWidth가 null이면(deriveFrameArmDims가 꺾이지 않은 곧은 판이라 판단한 경우) 꺾이지 않은 직사각형이므로
+    // "팔" 대신 그냥 가로/세로로 표기하고, 의미 없는 내측 팔 길이(0mm) 행은 만들지 않는다.
     if (s && s.armLen1 != null && s.armLen2 != null) {
-      rows.push(['외측 X팔 길이', s.armLen1 + 'mm']);
-      rows.push(['외측 Z팔 길이', s.armLen2 + 'mm']);
       if (s.armWidth != null) {
+        rows.push(['외측 X팔 길이', s.armLen1 + 'mm']);
+        rows.push(['외측 Z팔 길이', s.armLen2 + 'mm']);
         rows.push(['내측 X팔 길이', Math.max(s.armLen1 - s.armWidth, 0) + 'mm']);
         rows.push(['내측 Z팔 길이', Math.max(s.armLen2 - s.armWidth, 0) + 'mm']);
+      } else {
+        rows.push(['가로(X)', s.armLen1 + 'mm']);
+        rows.push(['세로(Z)', s.armLen2 + 'mm']);
       }
     }
     if (s && s.armWidth != null) rows.push(['두께/폭', s.armWidth + 'mm']);
@@ -1880,9 +1892,11 @@ h4{margin:4px 0}
   // ===== 부품 고르기 모달 — "비교 대상 부품"과 "수정할 부품" 양쪽에서 같은 모달을 재사용
   // (사용자 지시: "비교부품대상 오른쪽에 [부품고르기] 버튼... 수정할부품 오른쪽에 [부품고르기]버튼") =====
   let pickerModalCallback = null;
-  function openPickerModal(title, onPick){
+  let modalShowAll = false;
+  function openPickerModal(title, onPick, showAll){
     document.getElementById('pickerModalTitle').textContent = title;
     pickerModalCallback = onPick;
+    modalShowAll = !!showAll;
     document.getElementById('pickerModal').hidden = false;
     renderModalPartList();
   }
