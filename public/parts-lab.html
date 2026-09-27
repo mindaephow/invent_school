@@ -1822,7 +1822,17 @@ h4{margin:4px 0}
   function frameSpecRows(svg, outline, spec){
     const s = spec || null;
     const rows = [];
-    if (s && s.armLen1 != null && s.armLen2 != null) rows.push(['바운딩박스', 'X ' + s.armLen1 + 'mm, Z ' + s.armLen2 + 'mm']);
+    // 1열브라켓 스펙과 형식을 맞춤(사용자 지적: "1열브라켓엔 팔 방향, 내측길이, 외측길이... 다 들어가있는데
+    // 왜 90도 프레임에는 없어??") — armWidth가 팔 폭이므로 내측 길이는 armLen-armWidth로 똑같이 계산.
+    if (s && s.armLen1 != null && s.armLen2 != null) {
+      rows.push(['외측 X팔 길이', s.armLen1 + 'mm']);
+      rows.push(['외측 Z팔 길이', s.armLen2 + 'mm']);
+      if (s.armWidth != null) {
+        rows.push(['내측 X팔 길이', Math.max(s.armLen1 - s.armWidth, 0) + 'mm']);
+        rows.push(['내측 Z팔 길이', Math.max(s.armLen2 - s.armWidth, 0) + 'mm']);
+      }
+    }
+    if (s && s.armWidth != null) rows.push(['두께/폭', s.armWidth + 'mm']);
     if (s && s.thickness != null) rows.push(['높이(Y)', s.thickness + 'mm']);
     // 1열브라켓 스펙엔 있는데 여기엔 빠져 있던 항목(사용자 지적: "90도 프레임 스펙에는 빠진게 많은거 같은데")
     if (s && s.pitch != null) rows.push(['구멍 피치(간격)', s.pitch + 'mm']);
