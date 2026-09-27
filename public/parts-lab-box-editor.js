@@ -34,6 +34,17 @@ function colorForShape(shape, i) {
   if (shape.color) return Number('0x' + shape.color.slice(1));
   return shape.type === 'import' ? IMPORT_COLOR : colorForIndex(i);
 }
+// 사용자 지시: "명암을 더 밝게 해야할꺼 같아~ 안되면 명암조절 기능을 넣던가~~" — 조명 문제를 더 파고드는
+// 대신, 화면에 실제로 그리는 색에 밝기(%)를 곱해서 사용자가 직접 밝게 조절할 수 있게 한다(100=원래 색,
+// 200=두 배 밝게, 채널별로 255를 넘지 않게 자름). shape.brightness가 없으면(기본 100%) 원래 색 그대로.
+function materialColorForShape(shape, i) {
+  const base = colorForShape(shape, i);
+  const pct = shape.brightness || 100;
+  if (pct === 100) return base;
+  const scale = (c) => Math.min(255, Math.round(c * pct / 100));
+  const r = scale((base >> 16) & 255), g = scale((base >> 8) & 255), b = scale(base & 255);
+  return (r << 16) | (g << 8) | b;
+}
 // "텍스트" 도형용 — 모듈이 로드되는 시점에 한 번만 받아온다(top-level await, 페이지 전체를 막지 않고
 // 이 모듈 하나만 폰트가 올 때까지 잠깐 기다림 — gate()가 window.initBoxEditor를 폴링해서 기다리는 것과 맞물림).
 // unpkg의 three npm 패키지엔 이제 examples/fonts가 안 들어있어서(0 files) three.js 깃허브 저장소를
@@ -448,7 +459,7 @@ function initBoxEditor() {
     const canvas = freshCanvas();
     const { renderer, scene, camera, controls } = setupCommon(canvas);
     const meshes = shapes.map((shape, i) => {
-      const color = shape.op === 'subtract' ? SUB_COLOR : colorForShape(shape, i);
+      const color = shape.op === 'subtract' ? SUB_COLOR : materialColorForShape(shape, i);
       const mat = new THREE.MeshBasicMaterial({ color, transparent: shape.op === 'subtract', opacity: shape.op === 'subtract' ? 0.55 : 1 });
       const mesh = new THREE.Mesh(buildShapeGeometry(shape), mat);
       mesh.position.set(shape.x, shape.y, shape.z);
@@ -509,7 +520,7 @@ function initBoxEditor() {
       mesh.geometry = buildShapeGeometry(shape);
       mesh.children.forEach((c) => c.geometry && c.geometry.dispose());
       mesh.clear();
-      addEdgeOutline(mesh, shape.op === 'subtract' ? SUB_COLOR : colorForShape(shape, selectedIndex));
+      addEdgeOutline(mesh, shape.op === 'subtract' ? SUB_COLOR : materialColorForShape(shape, selectedIndex));
     }
     applyFloorClamp(mesh, shape);
     renderShapeListUI();
@@ -543,7 +554,7 @@ function initBoxEditor() {
       result.updateMatrixWorld();
     }
     // 최종 결과는 여러 도형을 합친 하나의 완성품이라 베이스 도형의 색 하나로 통일해서 보여준다.
-    const finalColor = colorForShape(shapes[0], 0);
+    const finalColor = materialColorForShape(shapes[0], 0);
     result.material = new THREE.MeshBasicMaterial({ color: finalColor });
     addEdgeOutline(result, finalColor);
     scene.add(result);
@@ -625,6 +636,7 @@ function initBoxEditor() {
       document.getElementById('shapeColorR').value = parseInt(hex.slice(1, 3), 16);
       document.getElementById('shapeColorG').value = parseInt(hex.slice(3, 5), 16);
       document.getElementById('shapeColorB').value = parseInt(hex.slice(5, 7), 16);
+      document.getElementById('shapeBrightness').value = shape.brightness || 100;
     }
     if (BOX_LIKE.includes(shape.type)) {
       document.getElementById('boxW').value = round1(shape.w);
@@ -664,6 +676,7 @@ function initBoxEditor() {
       rx: prev.rx || 0, ry: prev.ry || 0, rz: prev.rz || 0,
       // 색상 팔레트로 고른 색도(있으면) 그대로 이어받는다 — 위치만 바꾸려고 "적용"을 눌러도 색이 안 없어지게.
       color: document.getElementById('shapeColor').value,
+      brightness: Number(document.getElementById('shapeBrightness').value) || 100,
     };
     if (type === 'import') {
       // 불러온 파일 자체(지오메트리·원본 파일)는 숫자칸으로 다시 만드는 게 아니라 그대로 이어받는다 —
@@ -711,6 +724,17 @@ function initBoxEditor() {
   // 물체 선택 후 색상 팔레트로 바로 색을 바꿀 수 있게(사용자 지시: "물체 선택후 색상팔레트 선택할수
   // 있게 해줘") — 다른 숫자칸과 달리 "이 도형에 적용" 버튼 없이 고르는 즉시 반영한다. 색을 바꾸는 경로가
   // 셋(색상칸 직접, 자주쓰는색 클릭, R/G/B 숫자칸)이라 실제 반영은 이 함수 하나로 모은다.
+  // 밝기까지 반영한 실제 재질 색을 라이브 메쉬/미리보기에 반영 — 색상칸/RGB/밝기 슬라이더 어느 쪽을
+  // 바꾸든 이 함수 하나로 모아서 처리한다.
+  function refreshLiveShapeColor() {
+    if (!shapes[selectedIndex]) return;
+    const hex = '#' + materialColorForShape(shapes[selectedIndex], selectedIndex).toString(16).padStart(6, '0');
+    if (mode === 'edit' && live && live.meshes[selectedIndex]) {
+      live.meshes[selectedIndex].material.color.set(hex);
+    } else if (mode === 'preview') {
+      renderPreviewMode();
+    }
+  }
   function applyShapeColor(hex) {
     if (!shapes[selectedIndex]) return;
     shapes[selectedIndex].color = hex;
@@ -719,13 +743,16 @@ function initBoxEditor() {
     document.getElementById('shapeColorR').value = rgb[0];
     document.getElementById('shapeColorG').value = rgb[1];
     document.getElementById('shapeColorB').value = rgb[2];
-    if (mode === 'edit' && live && live.meshes[selectedIndex]) {
-      live.meshes[selectedIndex].material.color.set(hex);
-    } else if (mode === 'preview') {
-      renderPreviewMode();
-    }
+    refreshLiveShapeColor();
   }
   document.getElementById('shapeColor').addEventListener('input', (e) => applyShapeColor(e.target.value));
+  // 밝기 슬라이더(사용자 지시: "명암을 더 밝게 해야할꺼 같아~ 안되면 명암조절 기능을 넣던가~~") — 100%가
+  // 원래 색, 최대 200%까지 밝게. 색상 자체(shape.color)는 그대로 두고 렌더링에만 곱해서 적용.
+  document.getElementById('shapeBrightness').addEventListener('input', (e) => {
+    if (!shapes[selectedIndex]) return;
+    shapes[selectedIndex].brightness = Number(e.target.value) || 100;
+    refreshLiveShapeColor();
+  });
   function rgbToHex(r, g, b) {
     return '#' + [r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(v) || 0)).toString(16).padStart(2, '0')).join('');
   }
