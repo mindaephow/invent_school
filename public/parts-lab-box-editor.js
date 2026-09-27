@@ -74,9 +74,13 @@ function makeAxesRods(size) {
 function baseScene() {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xf3f5f8);
-  // 조명이 어두워서 순수한 색(예: 빨강 #e03b2b)을 골라도 검은색을 섞은 것처럼 어둡게 나오던 문제
-  // (사용자 지적: "지금 나오는 색깔은 모든색상에 검은색을 부어놓은거 같아") — 세기를 올려서 실제 고른
-  // 색에 더 가깝게 보이도록 함. 같은 파일의 다른 3D 화면(브라켓/프레임, AmbientLight 세기 1)과 맞춤.
+  // 진짜 원인: 이 파일만 최신 three.js(r186, 모듈)를 쓰는데, 최신 버전은 조명 세기의 단위 자체가
+  // 예전(브라켓/프레임이 쓰는 r0.128) 방식과 달라서, 같은 숫자(0.6~1.2)를 넣어도 훨씬 어둡게 나온다
+  // (사용자 지적: "니가 기본도형에 그린 도형들 색상도 모두 그래" / "도형 에디터만 그런 현상이 있어" /
+  // "무슨 필터같은게 있는거 아닐까?" — 정확히 짚으심, 두 three.js 버전의 조명 처리 차이였음). 조명 세기를
+  // 더 올리는 방법도 있지만, 근본적으로 도형 색은 "고른 색 그대로" 보여주는 게 목적이라 조명에 아예 영향
+  // 안 받는 재질(MeshBasicMaterial)로 바꿔서 해결함 — 이 조명은 그리드/축 막대 등에는 영향 없음(그것들도
+  // MeshBasicMaterial이라 원래도 조명 영향 안 받았음).
   scene.add(new THREE.AmbientLight(0xffffff, 1.2));
   const dir = new THREE.DirectionalLight(0xffffff, 0.8); dir.position.set(100, 200, 100); scene.add(dir);
   scene.add(new THREE.GridHelper(200, 20, 0xcccccc, 0xe5e5e5));
@@ -381,7 +385,7 @@ function renderPaletteThumbnails() {
     const dir = new THREE.DirectionalLight(0xffffff, 0.7); dir.position.set(2, 3, 2); scene.add(dir);
     const shape = defaultShapeOfType(type);
     const color = colorForIndex(i);
-    const mesh = new THREE.Mesh(buildShapeGeometry(shape), new THREE.MeshStandardMaterial({ color }));
+    const mesh = new THREE.Mesh(buildShapeGeometry(shape), new THREE.MeshBasicMaterial({ color }));
     addEdgeOutline(mesh, color);
     scene.add(mesh);
     renderer.render(scene, camera);
@@ -445,7 +449,7 @@ function initBoxEditor() {
     const { renderer, scene, camera, controls } = setupCommon(canvas);
     const meshes = shapes.map((shape, i) => {
       const color = shape.op === 'subtract' ? SUB_COLOR : colorForShape(shape, i);
-      const mat = new THREE.MeshStandardMaterial({ color, transparent: shape.op === 'subtract', opacity: shape.op === 'subtract' ? 0.55 : 1 });
+      const mat = new THREE.MeshBasicMaterial({ color, transparent: shape.op === 'subtract', opacity: shape.op === 'subtract' ? 0.55 : 1 });
       const mesh = new THREE.Mesh(buildShapeGeometry(shape), mat);
       mesh.position.set(shape.x, shape.y, shape.z);
       mesh.rotation.set(shape.rx || 0, shape.ry || 0, shape.rz || 0);
@@ -540,7 +544,7 @@ function initBoxEditor() {
     }
     // 최종 결과는 여러 도형을 합친 하나의 완성품이라 베이스 도형의 색 하나로 통일해서 보여준다.
     const finalColor = colorForShape(shapes[0], 0);
-    result.material = new THREE.MeshStandardMaterial({ color: finalColor });
+    result.material = new THREE.MeshBasicMaterial({ color: finalColor });
     addEdgeOutline(result, finalColor);
     scene.add(result);
     live = { renderer, scene, camera, controls, transform: null, meshes: [], rafId: 0 };
