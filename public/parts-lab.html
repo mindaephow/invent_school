@@ -236,6 +236,15 @@ h4{margin:4px 0}
           <label>z(mm)<input type="number" id="boxZ" value="0" step="1"></label>
           <label>색상<input type="color" id="shapeColor" value="#5b8def" style="height:32px;padding:2px;"></label>
         </div>
+        <div class="boxFields" id="colorExtraFields" style="align-items:flex-end;">
+          <div style="display:flex; flex-direction:column; gap:2px;">
+            <span style="font-size:11px; color:#666;">자주 쓰는 색</span>
+            <div id="colorPresets" style="display:flex; gap:4px;"></div>
+          </div>
+          <label style="width:44px;">R<input type="number" id="shapeColorR" min="0" max="255" step="1"></label>
+          <label style="width:44px;">G<input type="number" id="shapeColorG" min="0" max="255" step="1"></label>
+          <label style="width:44px;">B<input type="number" id="shapeColorB" min="0" max="255" step="1"></label>
+        </div>
         <div class="boxFields" id="boxOnlyFields">
           <label>가로 w(mm)<input type="number" id="boxW" value="30" min="1" step="1"></label>
           <label>높이 h(mm)<input type="number" id="boxH" value="10" min="1" step="1"></label>

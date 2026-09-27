@@ -612,7 +612,13 @@ function initBoxEditor() {
     document.getElementById('boxX').value = round1(shape.x);
     document.getElementById('boxY').value = round1(shape.y);
     document.getElementById('boxZ').value = round1(shape.z);
-    document.getElementById('shapeColor').value = '#' + colorForShape(shape, selectedIndex).toString(16).padStart(6, '0');
+    {
+      const hex = '#' + colorForShape(shape, selectedIndex).toString(16).padStart(6, '0');
+      document.getElementById('shapeColor').value = hex;
+      document.getElementById('shapeColorR').value = parseInt(hex.slice(1, 3), 16);
+      document.getElementById('shapeColorG').value = parseInt(hex.slice(3, 5), 16);
+      document.getElementById('shapeColorB').value = parseInt(hex.slice(5, 7), 16);
+    }
     if (BOX_LIKE.includes(shape.type)) {
       document.getElementById('boxW').value = round1(shape.w);
       document.getElementById('boxH').value = round1(shape.h);
@@ -696,15 +702,42 @@ function initBoxEditor() {
     renderEditMode();
   });
   // 물체 선택 후 색상 팔레트로 바로 색을 바꿀 수 있게(사용자 지시: "물체 선택후 색상팔레트 선택할수
-  // 있게 해줘") — 다른 숫자칸과 달리 "이 도형에 적용" 버튼 없이 고르는 즉시 반영한다.
-  document.getElementById('shapeColor').addEventListener('input', (e) => {
+  // 있게 해줘") — 다른 숫자칸과 달리 "이 도형에 적용" 버튼 없이 고르는 즉시 반영한다. 색을 바꾸는 경로가
+  // 셋(색상칸 직접, 자주쓰는색 클릭, R/G/B 숫자칸)이라 실제 반영은 이 함수 하나로 모은다.
+  function applyShapeColor(hex) {
     if (!shapes[selectedIndex]) return;
-    shapes[selectedIndex].color = e.target.value;
+    shapes[selectedIndex].color = hex;
+    document.getElementById('shapeColor').value = hex;
+    const rgb = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+    document.getElementById('shapeColorR').value = rgb[0];
+    document.getElementById('shapeColorG').value = rgb[1];
+    document.getElementById('shapeColorB').value = rgb[2];
     if (mode === 'edit' && live && live.meshes[selectedIndex]) {
-      live.meshes[selectedIndex].material.color.set(e.target.value);
+      live.meshes[selectedIndex].material.color.set(hex);
     } else if (mode === 'preview') {
       renderPreviewMode();
     }
+  }
+  document.getElementById('shapeColor').addEventListener('input', (e) => applyShapeColor(e.target.value));
+  function rgbToHex(r, g, b) {
+    return '#' + [r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(v) || 0)).toString(16).padStart(2, '0')).join('');
+  }
+  ['shapeColorR', 'shapeColorG', 'shapeColorB'].forEach((id) => {
+    document.getElementById(id).addEventListener('input', () => {
+      const r = Number(document.getElementById('shapeColorR').value) || 0;
+      const g = Number(document.getElementById('shapeColorG').value) || 0;
+      const b = Number(document.getElementById('shapeColorB').value) || 0;
+      applyShapeColor(rgbToHex(r, g, b));
+    });
+  });
+  // 자주 쓰는 색 10개 — 이 부품 체계에서 실제로 쓰는 아이보리(1열브라켓)·회색(90도 프레임)에, 팔레트
+  // 기본색 몇 가지와 무채색(흰/검)을 더함.
+  const COLOR_PRESETS = ['#f2ead9', '#c7cbd1', '#ffffff', '#555555', '#222222', '#5b8def', '#ff9f43', '#51cf66', '#e03b2b', '#fcc419'];
+  document.getElementById('colorPresets').innerHTML = COLOR_PRESETS.map((hex) =>
+    '<button type="button" data-hex="' + hex + '" title="' + hex + '" style="width:22px;height:22px;padding:0;border-radius:5px;border:1px solid #ccc;background:' + hex + ';cursor:pointer;"></button>'
+  ).join('');
+  document.getElementById('colorPresets').querySelectorAll('button').forEach((btn) => {
+    btn.addEventListener('click', () => applyShapeColor(btn.dataset.hex));
   });
   function addShape(shape) {
     shapes.push(shape);
