@@ -964,9 +964,14 @@ function initBoxEditor() {
   document.getElementById('boxNewPartBtn').addEventListener('click', async () => {
     const msg = document.getElementById('boxEditorMsg');
     const nameInput = document.getElementById('boxNewPartName');
-    const name = nameInput.value.trim();
-    if (!name) { msg.className = 'msg err'; msg.textContent = '새 부품 이름을 입력해주세요.'; return; }
     if (!shapes.length) { msg.className = 'msg err'; msg.textContent = '등록할 도형이 없어요.'; return; }
+    // 이름을 미리 안 써놨어도 버튼부터 누르고 그때 물어볼 수 있게 함(사용자 지적: "왜 미리 적어야 하게
+    // 만들었냐" — 입력칸이 비어있으면 눌렀을 때 바로 물어본다).
+    let name = nameInput.value.trim();
+    if (!name) {
+      name = (window.prompt('새 부품 이름을 입력해주세요:') || '').trim();
+      if (!name) return;
+    }
     const btn = document.getElementById('boxNewPartBtn');
     btn.disabled = true; msg.textContent = '';
     try {
