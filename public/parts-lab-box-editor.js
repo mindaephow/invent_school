@@ -15,6 +15,9 @@ import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { FontLoader } from 'three/addons/loaders/FontLoader.js';
 import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { Evaluator, Brush, ADDITION, SUBTRACTION } from 'three-bvh-csg';
 
 const SUB_COLOR = 0xff8a8a;
@@ -265,8 +268,77 @@ function buildShapeGeometry(shape) {
       }
       return mergeGeometries(geos, false);
     }
+    // GLB/GLTF·STL·OBJ로 불러온 도형 — 숫자(가로/세로/높이 등)로 계산해서 그리는 다른 도형과 달리, 파일
+    // 안의 삼각형 좌표를 통째로 쓴다. 그래서 shape._geometry(불러올 때 미리 만들어 캐시해둔 지오메트리)를
+    // 그대로 돌려준다 — 다른 도형처럼 매번 새로 계산하지 않음(사용자 지시: "팅커캐드처럼 3D 파일도
+    // 불러올 수 있게 해줘").
+    case 'import': return shape._geometry || new THREE.BoxGeometry(10, 10, 10);
     default: return new THREE.BoxGeometry(10, 10, 10);
   }
+}
+
+// GLB/GLTF·STL·OBJ 파일을 읽어서 하나의 BufferGeometry로 합쳐 돌려준다. 원점 중심으로 맞추고, 바닥(y=0)
+// 위에 놓이도록 y를 올려서 다른 도형들과 똑같이 다룰 수 있게 한다. glTF는 보통 미터 단위로 만들어져서
+// 이 도구(mm 단위)보다 1000배 작게 들어오는 경우가 많아 — 크기가 아주 작으면(5mm 미만) 1000배 키운다.
+async function loadImportedGeometry(file) {
+  const ext = (file.name.split('.').pop() || '').toLowerCase();
+  const url = URL.createObjectURL(file);
+  try {
+    let geometry;
+    if (ext === 'glb' || ext === 'gltf') {
+      const gltf = await new GLTFLoader().loadAsync(url);
+      const geos = [];
+      gltf.scene.traverse((obj) => {
+        if (obj.isMesh && obj.geometry) {
+          const g = obj.geometry.clone();
+          obj.updateWorldMatrix(true, false);
+          g.applyMatrix4(obj.matrixWorld);
+          geos.push(g);
+        }
+      });
+      if (!geos.length) throw new Error('이 파일 안에 메쉬(모양)가 없습니다.');
+      geometry = geos.length === 1 ? geos[0] : mergeGeometries(geos, false);
+    } else if (ext === 'stl') {
+      geometry = await new STLLoader().loadAsync(url);
+    } else if (ext === 'obj') {
+      const obj = await new OBJLoader().loadAsync(url);
+      const geos = [];
+      obj.traverse((o) => { if (o.isMesh && o.geometry) geos.push(o.geometry); });
+      if (!geos.length) throw new Error('이 파일 안에 메쉬(모양)가 없습니다.');
+      geometry = geos.length === 1 ? geos[0] : mergeGeometries(geos, false);
+    } else {
+      throw new Error('지원하는 형식이 아닙니다(GLB/GLTF, STL, OBJ만 가능).');
+    }
+    geometry.computeBoundingBox();
+    const size = new THREE.Vector3();
+    geometry.boundingBox.getSize(size);
+    if (Math.max(size.x, size.y, size.z) < 5) geometry.scale(1000, 1000, 1000);
+    geometry.computeBoundingBox();
+    const center = new THREE.Vector3();
+    geometry.boundingBox.getCenter(center);
+    geometry.translate(-center.x, -geometry.boundingBox.min.y, -center.z);
+    return geometry;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+// 저장(spec.shapes)에는 원본 파일을 base64로 같이 넣어둔다 — 그래야 다른 컴퓨터에서 그 부품을 다시 열었을
+// 때도 같은 모양을 다시 만들 수 있다(지오메트리 자체는 숫자 몇 개로 표현이 안 돼서 저장 못 함).
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+function dataUrlToFile(dataUrl, fileName) {
+  const [header, b64] = dataUrl.split(',');
+  const mime = (header.match(/data:(.*?);base64/) || [])[1] || 'application/octet-stream';
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new File([bytes], fileName, { type: mime });
 }
 
 function round1(n) { return Math.round(n * 10) / 10; }
@@ -474,7 +546,7 @@ function initBoxEditor() {
 
   // ---------- 도형 목록 UI ----------
   function shapeLabel(shape, i) {
-    const typeLabel = { box: '박스', wheel: '바퀴', gear: '톱니바퀴', sphere: '구', cone: '원뿔', pyramid: '각뿔', torus: '도넛', hexprism: '육각기둥', icosahedron: '다면체', dome: '반구', wedge: '지붕', ring: '고리', star: '별', heart: '하트', text: '텍스트', duplo: '휴벨리노 블록', knexRod: '케이넥스 막대', knexConnector: '케이넥스 커넥터', technicBeam: '테크닉 빔' }[shape.type];
+    const typeLabel = { box: '박스', wheel: '바퀴', gear: '톱니바퀴', sphere: '구', cone: '원뿔', pyramid: '각뿔', torus: '도넛', hexprism: '육각기둥', icosahedron: '다면체', dome: '반구', wedge: '지붕', ring: '고리', star: '별', heart: '하트', text: '텍스트', duplo: '휴벨리노 블록', knexRod: '케이넥스 막대', knexConnector: '케이넥스 커넥터', technicBeam: '테크닉 빔', import: '불러온 파일(' + (shape.fileName || '') + ')' }[shape.type];
     const opLabel = i === 0 ? '(베이스)' : (shape.op === 'subtract' ? '(➖ 빼기)' : '(➕ 더하기)');
     return (i + 1) + '. ' + typeLabel + ' ' + opLabel;
   }
@@ -501,7 +573,8 @@ function initBoxEditor() {
     const boxLike = BOX_LIKE.includes(type);
     document.getElementById('boxOnlyFields').style.display = boxLike ? 'contents' : 'none';
     document.getElementById('roundFields').style.display = boxLike ? 'none' : 'contents';
-    document.getElementById('shapeWidthField').style.display = RADIUS_ONLY.includes(type) ? 'none' : 'flex';
+    document.getElementById('shapeWidthField').style.display = (RADIUS_ONLY.includes(type) || type === 'import') ? 'none' : 'flex';
+    document.getElementById('shapeRadiusLabel').closest('label').style.display = type === 'import' ? 'none' : '';
     document.getElementById('shapeWidthLabel').textContent = WIDTH_FIELD_LABEL[type] || '두께(mm)';
     document.getElementById('shapeRadiusLabel').textContent = RADIUS_FIELD_LABEL[type] || '반지름(mm)';
     document.getElementById('teethField').style.display = type === 'gear' ? 'flex' : 'none';
@@ -530,7 +603,8 @@ function initBoxEditor() {
       document.getElementById('boxW').value = round1(shape.w);
       document.getElementById('boxH').value = round1(shape.h);
       document.getElementById('boxD').value = round1(shape.d);
-    } else {
+    } else if (shape.type !== 'import') {
+      // 불러온 3D 파일은 크기가 파일 안 좌표로 정해져서(숫자로 계산하는 도형이 아님) 반지름/두께 칸이 없다.
       document.getElementById('shapeRadius').value = round1(shape.radius);
       if (!RADIUS_ONLY.includes(shape.type)) document.getElementById('shapeWidth').value = round1(shape.width);
       if (shape.type === 'gear') document.getElementById('shapeTeeth').value = shape.teeth;
@@ -562,7 +636,11 @@ function initBoxEditor() {
       // 회전은 숫자칸이 없고 마우스(↻ 회전)로만 조절하므로, 숫자칸으로 다시 그릴 때 기존 회전값을 그대로 지킨다.
       rx: prev.rx || 0, ry: prev.ry || 0, rz: prev.rz || 0,
     };
-    if (BOX_LIKE.includes(type)) {
+    if (type === 'import') {
+      // 불러온 파일 자체(지오메트리·원본 파일)는 숫자칸으로 다시 만드는 게 아니라 그대로 이어받는다 —
+      // 안 그러면 위치만 바꾸려고 "이 도형에 적용"을 눌러도 불러온 모양이 사라져버린다.
+      shape._geometry = prev._geometry; shape.fileName = prev.fileName; shape.fileDataUrl = prev.fileDataUrl;
+    } else if (BOX_LIKE.includes(type)) {
       shape.w = Math.max(1, Number(document.getElementById('boxW').value) || 1);
       shape.h = Math.max(1, Number(document.getElementById('boxH').value) || 1);
       shape.d = Math.max(1, Number(document.getElementById('boxD').value) || 1);
@@ -576,12 +654,19 @@ function initBoxEditor() {
     return shape;
   }
 
-  function onBoxTargetPicked(p) {
+  async function onBoxTargetPicked(p) {
     targetPart = p;
     document.getElementById('boxTargetLabel').textContent = '선택된 부품: ' + p.name;
     document.getElementById('boxSaveBtn').disabled = false;
     const saved = p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.length ? p.spec.shapes : null;
     shapes = saved ? saved.map((s) => Object.assign({}, s)) : [];
+    // 저장된 도형 중 "3D 파일 불러오기"로 만든 게 있으면(type:'import'), 그때 저장해둔 원본 파일
+    // (fileDataUrl)을 다시 읽어서 지오메트리를 새로 만들어야 화면에 그릴 수 있다 — 숫자만으로는
+    // 못 그리는 도형이라(사용자 지시: "그 숫자로 매번 다시그린다는게 뭐야???" 질문에 답한 그 이유).
+    await Promise.all(shapes.filter((s) => s.type === 'import' && s.fileDataUrl && !s._geometry).map(async (s) => {
+      try { s._geometry = await loadImportedGeometry(dataUrlToFile(s.fileDataUrl, s.fileName || 'model')); }
+      catch (e) { console.error('불러온 3D 파일을 다시 못 읽었어요.', e); }
+    }));
     selectedIndex = shapes.length ? 0 : -1;
     fillFieldsFromShape(shapes[0]);
     renderShapeListUI();
@@ -748,11 +833,36 @@ function initBoxEditor() {
   document.getElementById('boxTargetPickBtn').addEventListener('click', () => {
     openPickerModal('저장할 부품 고르기', onBoxTargetPicked);
   });
+  // 팅커캐드처럼 GLB/GLTF·STL·OBJ 파일을 불러와서 다른 도형들과 똑같이 더하기/빼기 목록에 추가한다
+  // (사용자 지시: "저장할 부품고르기 3D파일 불러올수있게 해줘" → "3가지 모두 불러올수 있게 해줘").
+  document.getElementById('boxImportBtn').addEventListener('click', () => {
+    document.getElementById('boxImportInput').click();
+  });
+  document.getElementById('boxImportInput').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    const msg = document.getElementById('boxImportMsg');
+    msg.textContent = '불러오는 중...';
+    try {
+      const geometry = await loadImportedGeometry(file);
+      const fileDataUrl = await fileToDataUrl(file);
+      const shape = { type: 'import', op: 'add', x: shapes.length * 25, y: 0, z: 0, rx: 0, ry: 0, rz: 0, fileName: file.name, fileDataUrl, _geometry: geometry };
+      addShape(shape);
+      msg.textContent = '"' + file.name + '" 불러왔어요.';
+    } catch (err) {
+      msg.textContent = '불러오기 실패: ' + err.message;
+    }
+  });
   document.getElementById('boxSaveBtn').addEventListener('click', async () => {
     const msg = document.getElementById('boxEditorMsg'), btn = document.getElementById('boxSaveBtn');
     if (!targetPart) { msg.className = 'msg err'; msg.textContent = '먼저 저장할 부품을 골라주세요.'; return; }
     // 이 부품에 이미 있던 다른 spec 필드(holeLabels 등)를 지우지 않도록 합쳐서 보낸다.
-    const spec = Object.assign({}, targetPart.spec || {}, { shapes: shapes.map((s) => Object.assign({}, s)) });
+    // _geometry(불러온 3D 파일을 메모리에 캐시해둔 것)는 숫자·문자열이 아니라 저장(JSON)이 안 되므로 뺀다
+    // — 대신 fileDataUrl(원본 파일 자체)이 저장되어 있어서, 다시 열 때 그걸로 지오메트리를 새로 만든다.
+    const spec = Object.assign({}, targetPart.spec || {}, {
+      shapes: shapes.map((s) => { const { _geometry, ...rest } = s; return rest; })
+    });
     btn.disabled = true; msg.textContent = '';
     try {
       await adminApi({
