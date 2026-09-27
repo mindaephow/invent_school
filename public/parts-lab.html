@@ -1824,6 +1824,9 @@ h4{margin:4px 0}
     const rows = [];
     if (s && s.armLen1 != null && s.armLen2 != null) rows.push(['바운딩박스', 'X ' + s.armLen1 + 'mm, Z ' + s.armLen2 + 'mm']);
     if (s && s.thickness != null) rows.push(['높이(Y)', s.thickness + 'mm']);
+    // 1열브라켓 스펙엔 있는데 여기엔 빠져 있던 항목(사용자 지적: "90도 프레임 스펙에는 빠진게 많은거 같은데")
+    if (s && s.pitch != null) rows.push(['구멍 피치(간격)', s.pitch + 'mm']);
+    if (s && s.boreRadius != null) rows.push(['구멍 반지름', s.boreRadius + 'mm']);
     // 사용자 확정 규칙: 번호형(순번)과 수치형(실제 mm)은 서로 다른 것이므로 한 줄에 섞지 않고 행을 따로 둔다.
     // 라벨 문자열(holeLabels)을 믿지 않고 holeCoords의 실제 x,z 수치에서 매번 다시 계산해서, 저장 시점의
     // 포맷이 뭐였든 항상 최신 규칙(그리드 한 칸에 구멍 하나, 번호 1부터, 가로 먼저 세로 나중)으로 보여준다.
