@@ -485,9 +485,20 @@ function initPartMaker() {
 
   // ---------- 편집 모드: 도형을 하나하나 그대로(합치지 않고) 보여주고, 고른 도형만 드래그로 옮기거나 크기 조절 ----------
   function renderEditMode() {
+    // "이 도형에 적용"처럼 값 하나만 바꿔도 씬을 통째로 다시 만들기 때문에, 그 전의 줌·시점을 기억해뒀다가
+    // 새 카메라에 그대로 옮겨준다 — 안 그러면 매번 기본 줌으로 화면이 리셋됨(사용자 지적: "위치만
+    // 이동하면 되는데 왜 화면이 줄어들어??").
+    const prevCam = live ? { position: live.camera.position.clone(), zoom: live.camera.zoom, target: live.controls.target.clone() } : null;
     teardownLive();
     const canvas = freshCanvas();
     const { renderer, scene, camera, controls } = setupCommon(canvas);
+    if (prevCam) {
+      camera.position.copy(prevCam.position);
+      camera.zoom = prevCam.zoom;
+      camera.updateProjectionMatrix();
+      controls.target.copy(prevCam.target);
+      controls.update();
+    }
     const meshes = shapes.map((shape, i) => {
       const color = shape.op === 'subtract' ? SUB_COLOR : materialColorForShape(shape, i);
       const mat = new THREE.MeshBasicMaterial({ color, transparent: shape.op === 'subtract', opacity: shape.op === 'subtract' ? 0.55 : 1 });
@@ -1095,10 +1106,12 @@ function initPartMaker() {
       return '<button type="button" class="shapeListRow" data-i="' + i + '"' + on + ' style="text-align:left; padding:6px 10px; border-radius:6px; border:1px solid #ccc; background:#fff; cursor:pointer;' + (i === selectedIndex ? 'background:#2b6be0;color:#fff;border-color:#2b6be0;' : '') + '">' + shapeLabel(shape, i) + '</button>';
     }).join('');
     el.querySelectorAll('.shapeListRow').forEach((btn) => btn.addEventListener('click', () => selectShape(Number(btn.dataset.i))));
-    // "선택 도형 삭제" 버튼은 고른 도형이 있을 때만 보이게(사용자 지시: "도형을 선택했을때만 표시해줘") —
+    // "선택 도형 삭제"·"이 도형에 적용" 버튼은 고른 도형이 있을 때만 보이게(사용자 지시: "도형을
+    // 선택했을때만 표시해줘" / "이도형에 적용버튼이 도형을 선택 안해도 항상 보여서 난 뭔가 했어") —
     // selectedIndex는 항상 이 함수 호출 직전에 바뀌므로, 여기 한 군데서만 처리해도 모든 경로(목록 클릭,
     // 캔버스 클릭, 도형 추가/삭제, 카탈로그 불러오기)에서 자동으로 맞게 갱신된다.
     document.getElementById('partMakerShapeDeleteBtn').style.display = selectedIndex >= 0 ? '' : 'none';
+    document.getElementById('partMakerRedrawBtn').style.display = selectedIndex >= 0 ? '' : 'none';
   }
   function selectShape(i) {
     selectedIndex = i;
@@ -1280,6 +1293,25 @@ function initPartMaker() {
       const b = Number(document.getElementById('partMakerShapeColorB').value) || 0;
       applyShapeColor(rgbToHex(r, g, b));
     });
+  });
+  // x/y/z 위치 칸도 색상과 같은 방식으로 즉시 반영(사용자 지적: "드래그로만 가는거야???" — 숫자를
+  // 바꿔도 "이 도형에 적용" 버튼을 눌러야만 움직여서, 드래그와 달리 실시간으로 안 보였음). 종류·크기·
+  // 회전은 다시 그려야 하는 값이라 여전히 "이 도형에 적용" 버튼이 필요하지만, 위치는 mesh.position만
+  // 바꾸면 되므로 다시 그릴 필요 없이 바로 옮길 수 있다.
+  function applyLivePosition() {
+    if (!shapes[selectedIndex]) return;
+    const shape = shapes[selectedIndex];
+    shape.x = Number(document.getElementById('partMakerX').value) || 0;
+    shape.y = Number(document.getElementById('partMakerY').value) || 0;
+    shape.z = Number(document.getElementById('partMakerZ').value) || 0;
+    if (mode === 'edit' && live && live.meshes[selectedIndex]) {
+      live.meshes[selectedIndex].position.set(shape.x, shape.y, shape.z);
+    } else if (mode === 'preview') {
+      renderPreviewMode();
+    }
+  }
+  ['partMakerX', 'partMakerY', 'partMakerZ'].forEach((id) => {
+    document.getElementById(id).addEventListener('input', applyLivePosition);
   });
   // 자주 쓰는 색 10개 — 이 부품 체계에서 실제로 쓰는 아이보리(1열브라켓)·회색(90도 프레임)에, 팔레트
   // 기본색 몇 가지와 무채색(흰/검)을 더함.
