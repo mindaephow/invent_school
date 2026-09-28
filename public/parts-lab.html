@@ -1,13 +1,5 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>부품 수리실</title>
-<!-- 도형 에디터(parts-lab-box-editor.js)가 쓰는 최신 three.js·CSG 모듈들을 미리 받아두기 시작함(사용자
-     지적: "스크립트 로딩 시간 초과가 자꾸 뜨는데 최적화가 안된거 아니야?") — 이 모듈 스크립트는 원래
-     </body> 바로 앞, 오래된 three@0.128 등 다른 <script> 태그들이 다 실행된 뒤에야 요청이 시작돼서
-     느렸다. modulepreload로 브라우저 파싱 시작 시점부터 병렬로 미리 받아두면 실제 대기 시간이 줄어든다. -->
-<link rel="modulepreload" href="https://unpkg.com/three@0.186.1/build/three.module.js">
-<link rel="modulepreload" href="https://unpkg.com/three-mesh-bvh@0.9.15/src/index.js">
-<link rel="modulepreload" href="https://unpkg.com/three-bvh-csg@0.0.18/src/index.js">
-<link rel="modulepreload" href="parts-lab-box-editor.js">
 <style>
 body{background:#eef1f4;font-family:sans-serif;padding:10px;margin:0}
 .topbar{background:#fff;border-bottom:1px solid #ddd;padding:10px 14px;display:flex;align-items:center;gap:10px;}
@@ -378,6 +370,15 @@ h4{margin:4px 0}
   }
 }
 </script>
+<!-- 도형 에디터가 쓰는 모듈들을 여기서부터 미리 받기 시작함(모듈 스크립트 자체는 </body> 바로 앞이라
+     늦게 시작됨) — 반드시 위 import map 뒤에 둘 것. import map보다 먼저 두면(사용자 지적: "스크립트
+     로딩 시간 초과"가 왜 계속 뜨는지 조사하다 발견) 브라우저가 그 뒤의 import map을 무시해버려서
+     "three"라는 이름을 못 찾는 에러로 도형 에디터 전체가 초기화 실패한다(2026-09-28, 한 번 이렇게
+     만들었다가 바로 발견해 되돌림 — 다시 겪지 말 것). -->
+<link rel="modulepreload" href="https://unpkg.com/three@0.186.1/build/three.module.js">
+<link rel="modulepreload" href="https://unpkg.com/three-mesh-bvh@0.9.15/src/index.js">
+<link rel="modulepreload" href="https://unpkg.com/three-bvh-csg@0.0.18/src/index.js">
+<link rel="modulepreload" href="parts-lab-box-editor.js">
 <script>
 (function(){
   const SUPABASE_URL = 'https://brfeszcyjsaprbakqsjl.supabase.co';
