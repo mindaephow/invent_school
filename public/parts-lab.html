@@ -2368,25 +2368,35 @@ h4{margin:4px 0}
     document.getElementById('ruleToggle').textContent = open ? '▼ 기본 셋팅·넘버링 규칙 (접기)' : '▶ 기본 셋팅·넘버링 규칙 (펼치기)';
   });
 
-  // 나누기/붙이기도 평소엔 접어두고, 버튼을 눌러야 축/개수 등 조작 컨트롤이 나타나게 함
-  // (사용자 지적: 부품/STL을 불러오지도 않았는데 몇 등분·몇 개로 할지 컨트롤이 기본으로 보이고 있었음)
-  document.getElementById('partMakerCutToggle').addEventListener('click', () => {
-    const panel = document.getElementById('partMakerCutPanel');
-    const open = panel.hidden;
-    panel.hidden = !open;
-    document.getElementById('partMakerCutToggle').textContent = open ? '▼ ✂️ 나누기 (접기)' : '▶ ✂️ 나누기 (펼치기)';
-  });
-  document.getElementById('partMakerJoinToggle').addEventListener('click', () => {
-    const panel = document.getElementById('partMakerJoinPanel');
-    const open = panel.hidden;
-    panel.hidden = !open;
-    document.getElementById('partMakerJoinToggle').textContent = open ? '▼ 🔗 붙이기 (접기)' : '▶ 🔗 붙이기 (펼치기)';
-  });
-  document.getElementById('partMakerBorderToggle').addEventListener('click', () => {
-    const panel = document.getElementById('partMakerBorderPanel');
-    const open = panel.hidden;
-    panel.hidden = !open;
-    document.getElementById('partMakerBorderToggle').textContent = open ? '▼ 🖼️ 테두리 만들기 (접기)' : '▶ 🖼️ 테두리 만들기 (펼치기)';
+  // 나누기/붙이기/테두리 만들기는 탭 방식으로 하나만 활성화(사용자 지시: "탭방식으로 한번선택할때 한
+  // 기능만 활성화를 시켜") — 하나를 열면 나머지 둘은 자동으로 닫힌다. 이미 열려있는 걸 다시 누르면
+  // 전부 닫힌 상태로 돌아간다(부품/STL을 불러오지도 않았는데 컨트롤이 기본으로 펼쳐져 있던 문제를
+  // 처음 고칠 때부터의 원칙 유지 — 평소엔 접혀 있어야 함).
+  const partMakerSubTools = [
+    { toggle: 'partMakerCutToggle', panel: 'partMakerCutPanel', label: '✂️ 나누기' },
+    { toggle: 'partMakerJoinToggle', panel: 'partMakerJoinPanel', label: '🔗 붙이기' },
+    { toggle: 'partMakerBorderToggle', panel: 'partMakerBorderPanel', label: '🖼️ 테두리 만들기' },
+  ];
+  partMakerSubTools.forEach((t) => {
+    document.getElementById(t.toggle).addEventListener('click', () => {
+      const wasOpen = !document.getElementById(t.panel).hidden;
+      partMakerSubTools.forEach((o) => {
+        document.getElementById(o.panel).hidden = true;
+        const btn = document.getElementById(o.toggle);
+        btn.textContent = '▶ ' + o.label + ' (펼치기)';
+        btn.style.background = '#fff';
+        btn.style.color = '';
+        btn.style.borderColor = '#ccc';
+      });
+      if (!wasOpen) {
+        document.getElementById(t.panel).hidden = false;
+        const btn = document.getElementById(t.toggle);
+        btn.textContent = '▼ ' + t.label + ' (접기)';
+        btn.style.background = '#2b6be0';
+        btn.style.color = '#fff';
+        btn.style.borderColor = '#2b6be0';
+      }
+    });
   });
   // 나누기/붙이기/테두리 만들기의 축 선택 드롭다운 — 3D 화면의 축 색(X=빨강/Z=파랑, makeAxesRods)과
   // 맞춰서 닫혀있을 때도 어느 축인지 색으로 바로 보이게 한다(<option style>은 펼친 목록에만 먹고 닫힌
