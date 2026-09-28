@@ -67,7 +67,9 @@ function darken(hex, factor) {
 // 선택된 도형은 테두리를 눈에 띄는 노란색으로 강조한다(사용자 지시: "부품을 클릭하면 부품이
 // 선택되었다는 표시가 되었으면 좋겠어 — 테두리만 하이라이트 된다던가"). 이동/회전/크기 버튼을 꺼도(토글
 // 오프) 기즈모 없이 어떤 도형이 선택돼 있는지 알 수 있어야 하므로, 기즈모와는 별개로 항상 표시한다.
-const SELECTED_OUTLINE_COLOR = 0xffd60a;
+// 사용자 지적(2번째): "하이라이트가 너무 밝아, 선택됐다는 표시만 되면 돼" — 처음엔 눈에 확 띄는 노란색
+// (0xffd60a)이었는데, 이 앱 다른 곳(도형 목록·탭)에서 이미 "선택됨"을 나타내는 파란색과 맞춰서 차분하게.
+const SELECTED_OUTLINE_COLOR = 0x2b6be0;
 function addEdgeOutline(mesh, colorHex, selected) {
   const edges = new THREE.EdgesGeometry(mesh.geometry, 1);
   const lineColor = selected ? SELECTED_OUTLINE_COLOR : darken(colorHex, 0.55);
