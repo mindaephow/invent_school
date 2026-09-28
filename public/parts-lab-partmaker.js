@@ -64,9 +64,14 @@ function darken(hex, factor) {
   const b = Math.floor((hex & 255) * factor);
   return (r << 16) | (g << 8) | b;
 }
-function addEdgeOutline(mesh, colorHex) {
+// 선택된 도형은 테두리를 눈에 띄는 노란색으로 강조한다(사용자 지시: "부품을 클릭하면 부품이
+// 선택되었다는 표시가 되었으면 좋겠어 — 테두리만 하이라이트 된다던가"). 이동/회전/크기 버튼을 꺼도(토글
+// 오프) 기즈모 없이 어떤 도형이 선택돼 있는지 알 수 있어야 하므로, 기즈모와는 별개로 항상 표시한다.
+const SELECTED_OUTLINE_COLOR = 0xffd60a;
+function addEdgeOutline(mesh, colorHex, selected) {
   const edges = new THREE.EdgesGeometry(mesh.geometry, 1);
-  mesh.add(new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: darken(colorHex, 0.55) })));
+  const lineColor = selected ? SELECTED_OUTLINE_COLOR : darken(colorHex, 0.55);
+  mesh.add(new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: lineColor })));
 }
 // 부품수리실(parts-lab.html)의 makeAxesRods와 동일 — 얇은 GL 선은 배경(밝은 모눈종이 vs 어두운 도형)에
 // 따라 같은 색이 두 톤으로 보이는 안티에일리어싱 문제가 있어서(사용자 지적: "빨간색이 왜 두 가지 색으로
@@ -487,7 +492,7 @@ function initPartMaker() {
       const mesh = new THREE.Mesh(buildShapeGeometry(shape), mat);
       mesh.position.set(shape.x, shape.y, shape.z);
       mesh.rotation.set(shape.rx || 0, shape.ry || 0, shape.rz || 0);
-      addEdgeOutline(mesh, color);
+      addEdgeOutline(mesh, color, i === selectedIndex);
       scene.add(mesh);
       return mesh;
     });
@@ -514,6 +519,23 @@ function initPartMaker() {
     const mesh = live.meshes[selectedIndex];
     live.transform.attach(mesh);
     live.transform.setMode(activeBtn.dataset.mode);
+  }
+  // 도형을 고르면(목록 클릭·캔버스 클릭) 기즈모(attachSelection)와 별개로 테두리 색도 갱신한다 — 이동/
+  // 회전/크기를 꺼둔 상태(기즈모 없음)에서도 어떤 도형이 선택돼 있는지 알 수 있어야 하기 때문(사용자 지시:
+  // "부품을 클릭하면 부품이 선택되었다는 표시가 되었으면 좋겠어 — 테두리만 하이라이트 된다던가"). 도형이
+  // 추가/삭제되어 전체를 다시 그리는 경우(addShape/delete/renderEditMode)는 이미 selectedIndex를 반영해
+  // 새로 만들어지므로 여기서 다시 부를 필요 없다 — 이건 "같은 도형들, 선택만 바뀜"일 때만 쓴다.
+  function updateSelectionHighlight() {
+    if (!live) return;
+    live.meshes.forEach((mesh, i) => {
+      const shape = shapes[i];
+      if (!shape) return;
+      const color = shape.op === 'subtract' ? SUB_COLOR : materialColorForShape(shape, i);
+      mesh.children.forEach((c) => c.geometry && c.geometry.dispose());
+      mesh.clear();
+      addEdgeOutline(mesh, color, i === selectedIndex);
+    });
+    live.dirty = true;
   }
   // 드래그(이동/크기)한 결과를 그 도형의 숫자로 되읽어 온다. "크기" 모드는 mesh.scale을 곱하는 방식이라,
   // 매번 실제 치수(w/h/d 또는 radius/width) 숫자에 구워넣고 scale은 1로 되돌린 뒤 지오메트리를 다시 만든다 —
@@ -549,7 +571,7 @@ function initPartMaker() {
       mesh.geometry = buildShapeGeometry(shape);
       mesh.children.forEach((c) => c.geometry && c.geometry.dispose());
       mesh.clear();
-      addEdgeOutline(mesh, shape.op === 'subtract' ? SUB_COLOR : materialColorForShape(shape, selectedIndex));
+      addEdgeOutline(mesh, shape.op === 'subtract' ? SUB_COLOR : materialColorForShape(shape, selectedIndex), true);
     }
     applyFloorClamp(mesh, shape);
     renderShapeListUI();
@@ -1071,12 +1093,16 @@ function initPartMaker() {
       return '<button type="button" class="shapeListRow" data-i="' + i + '"' + on + ' style="text-align:left; padding:6px 10px; border-radius:6px; border:1px solid #ccc; background:#fff; cursor:pointer;' + (i === selectedIndex ? 'background:#2b6be0;color:#fff;border-color:#2b6be0;' : '') + '">' + shapeLabel(shape, i) + '</button>';
     }).join('');
     el.querySelectorAll('.shapeListRow').forEach((btn) => btn.addEventListener('click', () => selectShape(Number(btn.dataset.i))));
+    // "선택 도형 삭제" 버튼은 고른 도형이 있을 때만 보이게(사용자 지시: "도형을 선택했을때만 표시해줘") —
+    // selectedIndex는 항상 이 함수 호출 직전에 바뀌므로, 여기 한 군데서만 처리해도 모든 경로(목록 클릭,
+    // 캔버스 클릭, 도형 추가/삭제, 카탈로그 불러오기)에서 자동으로 맞게 갱신된다.
+    document.getElementById('partMakerShapeDeleteBtn').style.display = selectedIndex >= 0 ? '' : 'none';
   }
   function selectShape(i) {
     selectedIndex = i;
     fillFieldsFromShape(shapes[i]);
     renderShapeListUI();
-    if (mode === 'edit') attachSelection();
+    if (mode === 'edit') { attachSelection(); updateSelectionHighlight(); }
   }
 
   // ---------- 입력칸 <-> 선택된 도형 ----------
@@ -1363,6 +1389,7 @@ function initPartMaker() {
     fillFieldsFromShape(shapes[idx]);
     renderShapeListUI();
     attachSelection();
+    updateSelectionHighlight();
   });
   document.getElementById('partMakerShapeDeleteBtn').addEventListener('click', () => {
     if (!shapes.length || selectedIndex < 0) return;
