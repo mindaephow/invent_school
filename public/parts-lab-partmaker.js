@@ -19,7 +19,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { STLExporter } from 'three/addons/exporters/STLExporter.js';
-import { Evaluator, Brush, ADDITION, SUBTRACTION } from 'three-bvh-csg';
+import { Evaluator, Brush, ADDITION, SUBTRACTION, INTERSECTION } from 'three-bvh-csg';
 
 const SUB_COLOR = 0xff8a8a;
 // 팅커캐드처럼 도형마다(팔레트 타일도, 캔버스에 놓인 도형도) 서로 다른 색을 준다 — 전부 한 가지 파란색
@@ -349,6 +349,16 @@ async function loadImportedGeometry(file) {
     const center = new THREE.Vector3();
     geometry.boundingBox.getCenter(center);
     geometry.translate(-center.x, -geometry.boundingBox.min.y, -center.z);
+    // three-bvh-csg(CSG 연산)는 geometry에 normal·uv 속성이 꼭 있어야 하는데, STL 파일은 uv가 아예 없다
+    // (실제로 겪은 에러: "나누기"에서 evaluator.evaluate()가 GeometryBuilder.initFromGeometry 안에서
+    // "Cannot read properties of undefined (reading 'array')"로 죽음 — uv 속성이 없어서였다). 이 도형
+    // 하나만 쓸 땐(더하기/빼기 없이) evaluate()를 안 타서 안 드러나다가, 다른 도형과 합치거나 나누기를
+    // 하는 순간 터진다 — 값은 안 쓰이니 0으로 채운 uv를 만들어서 미리 막아둔다.
+    if (!geometry.attributes.normal) geometry.computeVertexNormals();
+    if (!geometry.attributes.uv) {
+      const count = geometry.attributes.position.count;
+      geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(count * 2), 2));
+    }
     return geometry;
   } finally {
     URL.revokeObjectURL(url);
@@ -654,6 +664,116 @@ function initPartMaker() {
     URL.revokeObjectURL(url);
     msg.className = 'msg ok';
     msg.textContent = 'STL 파일로 내보냈어요.';
+  }
+
+  // ---------- 나누기: 바닥에 붙인 뒤 고른 축 방향으로 N등분해서 조각마다 미리보고 STL로 저장 ----------
+  // 315프레임(3×15)처럼 이미 실측 정확한 큰 부품 하나를 등분으로 잘라서, 작은 부품들을 매번 다시 실측하지
+  // 않고 기하학적으로 정확하게 뽑아내려는 용도(사용자 설명: "315stl파일을 불러와서 가로를 15등분을 하면
+  // 31프레임이 되는거고 세로로 3등분을 하면 115프레임이 3개 나오게 되는거고"). 자르는 도구는 큰 박스
+  // Brush를 구간마다 만들어 INTERSECTION(교집합)하는 방식 — 잘린 단면이 저절로 막힌 입체로 나와서 단면을
+  // 손으로 채우는 로직이 따로 필요 없다.
+  let cutPieces = []; // [{ geometry, size:{x,y,z} }]
+  function sliceMergedIntoPieces(axis, count) {
+    const merged = computeMergedBrush();
+    if (!merged) return [];
+    // "바닥에 딱 붙인다음 나누기"(사용자 지시) — 자르기 전에 전체를 바닥(y=0) 위로 맞춘다.
+    merged.geometry.computeBoundingBox();
+    const floorShift = -merged.geometry.boundingBox.min.y;
+    if (Math.abs(floorShift) > 1e-6) merged.geometry.translate(0, floorShift, 0);
+    merged.geometry.computeBoundingBox();
+    const box = merged.geometry.boundingBox;
+    const min = box.min, max = box.max;
+    const total = max[axis] - min[axis];
+    const step = total / count;
+    const PAD = 1000; // 자르는 축이 아닌 나머지 두 축은 충분히 크게 잡아서 확실히 다 덮는다
+    const evaluator = new Evaluator();
+    const pieces = [];
+    for (let i = 0; i < count; i++) {
+      const lo = min[axis] + i * step;
+      const hi = i === count - 1 ? max[axis] : min[axis] + (i + 1) * step; // 끝조각은 오차 없이 딱 끝까지
+      const size = { x: (max.x - min.x) + PAD * 2, y: (max.y - min.y) + PAD * 2, z: (max.z - min.z) + PAD * 2 };
+      const center = { x: (min.x + max.x) / 2, y: (min.y + max.y) / 2, z: (min.z + max.z) / 2 };
+      size[axis] = hi - lo;
+      center[axis] = (lo + hi) / 2;
+      const cutBox = new Brush(new THREE.BoxGeometry(size.x, size.y, size.z));
+      cutBox.position.set(center.x, center.y, center.z);
+      cutBox.updateMatrixWorld();
+      const piece = evaluator.evaluate(merged, cutBox, INTERSECTION);
+      piece.geometry.computeBoundingBox();
+      // 다른 부품들(불러온 3D 파일)과 같은 관례로 조각마다 원점 중심/바닥 정렬 — 각 조각이 독립된 부품처럼
+      // 깔끔한 자기 좌표를 갖는다.
+      const c = new THREE.Vector3();
+      piece.geometry.boundingBox.getCenter(c);
+      piece.geometry.translate(-c.x, -piece.geometry.boundingBox.min.y, -c.z);
+      piece.geometry.computeBoundingBox();
+      const sz = new THREE.Vector3();
+      piece.geometry.boundingBox.getSize(sz);
+      pieces.push({ geometry: piece.geometry, size: { x: round1(sz.x), y: round1(sz.y), z: round1(sz.z) } });
+    }
+    return pieces;
+  }
+
+  // 조각 하나를 STL로 내보낸다 — exportSTL()과 같은 방식(같은 결과를 보고 같은 파일이 나오게).
+  function exportPieceSTL(piece, index) {
+    const mesh = new THREE.Mesh(piece.geometry);
+    const exporter = new STLExporter();
+    const stlText = exporter.parse(mesh, { binary: false });
+    const blob = new Blob([stlText], { type: 'model/stl' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = (targetPart ? targetPart.name : '부품') + '_조각' + (index + 1) + '.stl';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  // 조각들의 작은 3D 미리보기를 그린다 — renderPaletteThumbnails와 같은 이유로(WebGL 컨텍스트 개수 제한)
+  // 렌더러 하나를 재사용해서 <img>에 스냅샷을 박아 넣는다.
+  function renderCutThumbnails() {
+    const wrap = document.getElementById('partMakerCutResults');
+    wrap.innerHTML = cutPieces.map((p, i) =>
+      '<div class="cutPieceCard" data-i="' + i + '" style="width:130px; border:1px solid #ddd; border-radius:8px; padding:6px; text-align:center; background:#fff;">' +
+      '<img class="cutThumb" width="110" height="110" style="width:110px;height:110px;border-radius:4px;background:#f3f5f8;">' +
+      '<div style="font-size:11px; color:#666; margin:4px 0;">' + (i + 1) + '. ' + p.size.x + ' × ' + p.size.y + ' × ' + p.size.z + 'mm</div>' +
+      '<div style="display:flex; gap:4px; justify-content:center;">' +
+      '<button type="button" class="cutSaveBtn" data-i="' + i + '" style="font-size:11px; padding:3px 6px; border-radius:5px; border:1px solid #2b6be0; background:#fff; color:#2b6be0; cursor:pointer;">⬇️ STL</button>' +
+      '<button type="button" class="cutDeleteBtn" data-i="' + i + '" style="font-size:11px; padding:3px 6px; border-radius:5px; border:1px solid #c0392b; background:#fff; color:#c0392b; cursor:pointer;">삭제</button>' +
+      '</div></div>'
+    ).join('') || '<span class="section-note">잘린 조각이 없어요.</span>';
+    if (!cutPieces.length) return;
+    const size = 110;
+    const canvas0 = document.createElement('canvas');
+    const renderer = new THREE.WebGLRenderer({ canvas: canvas0, antialias: true, alpha: true });
+    renderer.setSize(size, size, false);
+    const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 5000);
+    wrap.querySelectorAll('.cutPieceCard').forEach((card, i) => {
+      const piece = cutPieces[i];
+      const s = Math.max(piece.size.x, piece.size.y, piece.size.z, 1);
+      camera.position.set(s, s * 0.9, s);
+      camera.lookAt(0, s * 0.15, 0);
+      const scene = new THREE.Scene();
+      scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+      const dir = new THREE.DirectionalLight(0xffffff, 0.7); dir.position.set(2, 3, 2); scene.add(dir);
+      const mesh = new THREE.Mesh(piece.geometry, new THREE.MeshBasicMaterial({ color: IMPORT_COLOR }));
+      addEdgeOutline(mesh, IMPORT_COLOR);
+      scene.add(mesh);
+      renderer.render(scene, camera);
+      card.querySelector('.cutThumb').src = canvas0.toDataURL('image/png');
+      mesh.material.dispose();
+      mesh.children.forEach((c) => { c.material && c.material.dispose(); });
+    });
+    renderer.dispose();
+    wrap.querySelectorAll('.cutSaveBtn').forEach((btn) => {
+      btn.addEventListener('click', () => exportPieceSTL(cutPieces[Number(btn.dataset.i)], Number(btn.dataset.i)));
+    });
+    wrap.querySelectorAll('.cutDeleteBtn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        cutPieces.splice(Number(btn.dataset.i), 1);
+        renderCutThumbnails();
+      });
+    });
   }
 
   function setMode(next) {
@@ -1122,6 +1242,26 @@ function initPartMaker() {
       return;
     }
     await saveToTargetPart();
+  });
+
+  // "나누기" — 자르기 미리보기 버튼(사용자 지시: "바닥에 딱 붙인다음 원하는 축으로 나누면 될듯~~ 그중
+  // 삭제하고 싶은거 삭제하고 저장하고 싶은거 저장하면 되고~~ 그걸 stl파일로 저장하게끔 우선 구현해줘").
+  document.getElementById('partMakerCutPreviewBtn').addEventListener('click', () => {
+    const msg = document.getElementById('partMakerCutMsg');
+    if (!shapes.length) { msg.className = 'msg err'; msg.textContent = '자를 도형이 없어요.'; return; }
+    const axis = document.getElementById('partMakerCutAxis').value;
+    const count = Math.max(2, Math.round(Number(document.getElementById('partMakerCutCount').value) || 2));
+    document.getElementById('partMakerCutCount').value = count;
+    msg.textContent = '자르는 중...';
+    try {
+      cutPieces = sliceMergedIntoPieces(axis, count);
+      renderCutThumbnails();
+      msg.className = 'msg ok';
+      msg.textContent = count + '조각으로 잘랐어요 — 마음에 드는 조각만 STL로 저장하세요.';
+    } catch (e) {
+      msg.className = 'msg err';
+      msg.textContent = '자르기 실패: ' + e.message;
+    }
   });
 
   // 색상칸·밝기 슬라이더·뒤집기 버튼·회전 각도 드롭다운·바닥붙이기 체크박스처럼 캔버스 바깥에서 라이브
