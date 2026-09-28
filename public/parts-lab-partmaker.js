@@ -767,6 +767,8 @@ function initPartMaker() {
       '<div style="font-size:11px; color:#666; margin:4px 0;">' + (i + 1) + '. ' + p.size.x + ' × ' + p.size.y + ' × ' + p.size.z + 'mm</div>' +
       '<div style="display:flex; gap:4px; justify-content:center; flex-wrap:wrap;">' +
       '<button type="button" class="cutEditBtn" data-i="' + i + '" style="font-size:11px; padding:3px 6px; border-radius:5px; border:1px solid #2b6be0; background:#fff; color:#2b6be0; cursor:pointer;">✏️ 에디터</button>' +
+      '<button type="button" class="cutNewPartBtn" data-i="' + i + '" style="font-size:11px; padding:3px 6px; border-radius:5px; border:1px solid #2b6be0; background:#2b6be0; color:#fff; cursor:pointer;">🆕 새 부품</button>' +
+      '<button type="button" class="cutSaveExistingBtn" data-i="' + i + '" style="font-size:11px; padding:3px 6px; border-radius:5px; border:1px solid #2b6be0; background:#fff; color:#2b6be0; cursor:pointer;">💾 기존 부품</button>' +
       '<button type="button" class="cutSaveBtn" data-i="' + i + '" style="font-size:11px; padding:3px 6px; border-radius:5px; border:1px solid #2b6be0; background:#fff; color:#2b6be0; cursor:pointer;">⬇️ STL</button>' +
       '<button type="button" class="cutDeleteBtn" data-i="' + i + '" style="font-size:11px; padding:3px 6px; border-radius:5px; border:1px solid #c0392b; background:#fff; color:#c0392b; cursor:pointer;">삭제</button>' +
       '</div></div>'
@@ -810,6 +812,18 @@ function initPartMaker() {
     });
     wrap.querySelectorAll('.cutSaveBtn').forEach((btn) => {
       btn.addEventListener('click', () => exportPieceSTL(cutPieces[Number(btn.dataset.i)], Number(btn.dataset.i)));
+    });
+    wrap.querySelectorAll('.cutNewPartBtn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const i = Number(btn.dataset.i);
+        registerResultAsNewPart(cutPieces[i].geometry, document.getElementById('partMakerCutMsg'), btn);
+      });
+    });
+    wrap.querySelectorAll('.cutSaveExistingBtn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const i = Number(btn.dataset.i);
+        saveResultToExistingPart(cutPieces[i].geometry, '조각' + (i + 1), document.getElementById('partMakerCutMsg'));
+      });
     });
     wrap.querySelectorAll('.cutDeleteBtn').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -1058,6 +1072,64 @@ function initPartMaker() {
     setMode('edit');
   }
 
+  // 나누기/붙이기/테두리 결과 카드 공용 — "새 부품으로 등록"/"기존 부품에 저장" 두 버튼을 어느 결과에나
+  // 똑같이 붙일 수 있게 한다(사용자 지시: "모든결과물 (나누기,붙이기,테두리) 모두 새부품이나 기존 부품으로
+  // 등록이 가능해야해"). STL로 내보내 fileDataUrl까지 만든 뒤 import 도형 하나로 감싸고, 새 부품은
+  // add_part로, 기존 부품 저장은 그 부품의 기존 spec은 유지한 채 shapes만 이 결과 하나로 교체해
+  // update_part로 보낸다(에디터 화면의 "새 부품으로 등록"/"저장"과 같은 동작).
+  async function buildResultShape(geometry, fileName) {
+    const exporter = new STLExporter();
+    const mesh = new THREE.Mesh(geometry);
+    const stlText = exporter.parse(mesh, { binary: false });
+    const blob = new Blob([stlText], { type: 'model/stl' });
+    const fileDataUrl = await fileToDataUrl(blob);
+    return { type: 'import', op: 'add', x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0, fileName, fileDataUrl };
+  }
+
+  async function registerResultAsNewPart(geometry, msgEl, btn) {
+    const name = (await openNamePromptModal() || '').trim();
+    if (!name) return;
+    btn.disabled = true; msgEl.textContent = '';
+    try {
+      const shape = await buildResultShape(geometry, name + '.stl');
+      await adminApi({
+        action: 'add_part', name, icon: '📦', subject: getSubject(), category: '',
+        volumes: [], color: null, size: null,
+        imageSvg: '', imageSvgDiagonal: '', primaryImage: 'front',
+        spec: { shapes: [shape] },
+      }, getAccessToken());
+      msgEl.className = 'msg ok';
+      msgEl.textContent = '"' + name + '" 새 부품으로 등록했어요.';
+    } catch (err) {
+      msgEl.className = 'msg err';
+      msgEl.textContent = '등록 실패: ' + err.message;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function saveResultToExistingPart(geometry, fileNamePrefix, msgEl) {
+    openPickerModal('저장할 부품 고르기', async (p) => {
+      msgEl.textContent = '';
+      try {
+        const shape = await buildResultShape(geometry, fileNamePrefix + '.stl');
+        const spec = Object.assign({}, p.spec || {}, { shapes: [shape] });
+        await adminApi({
+          action: 'update_part', partId: p.id,
+          name: p.name, icon: p.icon, subject: p.subject, category: p.category || '',
+          volumes: p.volumes || [], color: p.color, size: p.size,
+          imageSvg: p.imageSvg, imageSvgDiagonal: p.imageSvgDiagonal, primaryImage: p.primaryImage || 'front',
+          spec, snapshot: p.snapshot || null, snapshots: p.snapshots || null,
+        }, getAccessToken());
+        msgEl.className = 'msg ok';
+        msgEl.textContent = '"' + p.name + '"에 저장했어요.';
+      } catch (err) {
+        msgEl.className = 'msg err';
+        msgEl.textContent = '저장 실패: ' + err.message;
+      }
+    }, true);
+  }
+
   function renderJoinResult() {
     const wrap = document.getElementById('partMakerJoinResult');
     if (!joinResult) { wrap.innerHTML = ''; return; }
@@ -1069,6 +1141,7 @@ function initPartMaker() {
       '<div style="display:flex; gap:4px; justify-content:center; flex-wrap:wrap;">' +
       '<button type="button" id="partMakerJoinEditBtn" style="font-size:11px; padding:4px 8px; border-radius:5px; border:1px solid #2b6be0; background:#fff; color:#2b6be0; cursor:pointer;">✏️ 에디터에서 보기</button>' +
       '<button type="button" id="partMakerJoinNewPartBtn" style="font-size:11px; padding:4px 8px; border-radius:5px; border:1px solid #2b6be0; background:#2b6be0; color:#fff; cursor:pointer;">🆕 새 부품으로 등록</button>' +
+      '<button type="button" id="partMakerJoinSaveExistingBtn" style="font-size:11px; padding:4px 8px; border-radius:5px; border:1px solid #2b6be0; background:#fff; color:#2b6be0; cursor:pointer;">💾 기존 부품에 저장</button>' +
       '<button type="button" id="partMakerJoinExportBtn" style="font-size:11px; padding:4px 8px; border-radius:5px; border:1px solid #2b6be0; background:#fff; color:#2b6be0; cursor:pointer;">⬇️ STL</button>' +
       '</div></div>';
     document.getElementById('partMakerJoinEditBtn').addEventListener('click', async () => {
@@ -1124,6 +1197,9 @@ function initPartMaker() {
         btn.disabled = false;
       }
     });
+    document.getElementById('partMakerJoinSaveExistingBtn').addEventListener('click', () => {
+      saveResultToExistingPart(joinResult.geometry, '붙이기결과', document.getElementById('partMakerJoinMsg'));
+    });
   }
 
   function renderBorderResult() {
@@ -1137,6 +1213,7 @@ function initPartMaker() {
       '<div style="display:flex; gap:4px; justify-content:center; flex-wrap:wrap;">' +
       '<button type="button" id="partMakerBorderEditBtn" style="font-size:11px; padding:4px 8px; border-radius:5px; border:1px solid #2b6be0; background:#fff; color:#2b6be0; cursor:pointer;">✏️ 에디터에서 보기</button>' +
       '<button type="button" id="partMakerBorderNewPartBtn" style="font-size:11px; padding:4px 8px; border-radius:5px; border:1px solid #2b6be0; background:#2b6be0; color:#fff; cursor:pointer;">🆕 새 부품으로 등록</button>' +
+      '<button type="button" id="partMakerBorderSaveExistingBtn" style="font-size:11px; padding:4px 8px; border-radius:5px; border:1px solid #2b6be0; background:#fff; color:#2b6be0; cursor:pointer;">💾 기존 부품에 저장</button>' +
       '<button type="button" id="partMakerBorderExportBtn" style="font-size:11px; padding:4px 8px; border-radius:5px; border:1px solid #2b6be0; background:#fff; color:#2b6be0; cursor:pointer;">⬇️ STL</button>' +
       '</div></div>';
     // "에디터에서 보기" — 결과를 캔버스로 가져와서 회전·확대해서 눈으로 확인하고, 기존 "저장(불러온
@@ -1208,6 +1285,9 @@ function initPartMaker() {
       } finally {
         btn.disabled = false;
       }
+    });
+    document.getElementById('partMakerBorderSaveExistingBtn').addEventListener('click', () => {
+      saveResultToExistingPart(borderResult.geometry, '테두리결과', document.getElementById('partMakerBorderMsg'));
     });
   }
 
