@@ -35,8 +35,9 @@ h4{margin:4px 0}
 .zoomCtrl button{width:22px;height:22px;padding:0;font-size:13px;line-height:1;border-radius:4px;cursor:pointer;}
 #app{display:none;}
 #app.shown{display:block;}
-#sketchSection{margin-bottom:18px;}
+#editorTabsSection{margin-bottom:18px;}
 .collapseToggle{padding:7px 14px;border-radius:6px;border:1px solid #ccc;background:#fff;cursor:pointer;font-size:13px;}
+.editorTabBtn.on{background:#2b6be0;color:#fff;border-color:#2b6be0;}
 .section-title-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:22px 0 0;}
 .section-title-row .section-title{margin:0;}
 .pickBtn{padding:6px 12px;border-radius:999px;border:1px solid #2b6be0;background:#fff;color:#2b6be0;cursor:pointer;font-size:12px;white-space:nowrap;}
@@ -51,6 +52,8 @@ h4{margin:4px 0}
 .specBlockHead{display:flex;align-items:center;justify-content:space-between;gap:8px;}
 .specMissingWarn{background:#fff3e0;border:1px solid #e0a83a;color:#8a5a00;font-size:11px;padding:6px 8px;border-radius:6px;margin:6px 0;}
 .specEditBtn{padding:4px 10px;border-radius:6px;border:1px solid #2b6be0;background:#fff;color:#2b6be0;cursor:pointer;font-size:11px;white-space:nowrap;}
+.specToggleBtn{padding:4px 10px;border-radius:6px;border:1px solid #ccc;background:#fff;color:#555;cursor:pointer;font-size:11px;white-space:nowrap;}
+.specBlockHead .btnGroup{display:flex;gap:8px;align-items:center;}
 .specEditForm{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;}
 .specEditForm label{font-size:12px;color:#555;display:block;}
 .specEditForm input{width:100%;box-sizing:border-box;padding:6px;font-size:13px;margin-top:2px;}
@@ -73,18 +76,18 @@ h4{margin:4px 0}
 .specTable{border-collapse:collapse;font-size:12px;width:100%;table-layout:fixed;}
 .specTable th{text-align:left;color:#888;font-weight:600;padding:3px 10px 3px 0;white-space:normal;word-break:keep-all;vertical-align:top;width:38%;}
 .specTable td{padding:3px 0;color:#222;word-break:break-all;}
-#boxEditorPanel{width:940px; max-width:100%; flex:none; margin-top:10px;}
-#boxEditorPanel .imgWrap{width:500px; height:500px;}
-#boxEditorPanel .btnRow{margin-top:6px; display:flex; gap:6px; flex-wrap:wrap; align-items:center;}
-#boxEditorPanel .btnRow button{padding:6px 10px; font-size:12px; border-radius:6px; border:1px solid #ccc; background:#fff; cursor:pointer;}
-#boxEditorPanel .btnRow button.on{background:#2b6be0;color:#fff;border-color:#2b6be0;}
-#boxEditorPanel .fieldsRow{display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;}
-#boxEditorPanel .boxFields{display:contents;}
-#boxEditorPanel .boxFields label{font-size:11px; color:#666; display:flex; flex-direction:column; gap:2px;}
-#boxEditorPanel .boxFields input{width:64px; font-size:12px; padding:4px 6px; border:1px solid #ccc; border-radius:5px;}
-#boxEditorPanel .msg{margin-top:6px; font-size:12px;}
-#boxEditorPanel .msg.ok{color:#1d7a3c;}
-#boxEditorPanel .msg.err{color:#c0392b;}
+#boxEditorPanel, #partMakerEditorPanel{width:940px; max-width:100%; flex:none; margin-top:10px;}
+#boxEditorPanel .imgWrap, #partMakerEditorPanel .imgWrap{width:500px; height:500px;}
+#boxEditorPanel .btnRow, #partMakerEditorPanel .btnRow{margin-top:6px; display:flex; gap:6px; flex-wrap:wrap; align-items:center;}
+#boxEditorPanel .btnRow button, #partMakerEditorPanel .btnRow button{padding:6px 10px; font-size:12px; border-radius:6px; border:1px solid #ccc; background:#fff; cursor:pointer;}
+#boxEditorPanel .btnRow button.on, #partMakerEditorPanel .btnRow button.on{background:#2b6be0;color:#fff;border-color:#2b6be0;}
+#boxEditorPanel .fieldsRow, #partMakerEditorPanel .fieldsRow{display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;}
+#boxEditorPanel .boxFields, #partMakerEditorPanel .boxFields{display:contents;}
+#boxEditorPanel .boxFields label, #partMakerEditorPanel .boxFields label{font-size:11px; color:#666; display:flex; flex-direction:column; gap:2px;}
+#boxEditorPanel .boxFields input, #partMakerEditorPanel .boxFields input{width:64px; font-size:12px; padding:4px 6px; border:1px solid #ccc; border-radius:5px;}
+#boxEditorPanel .msg, #partMakerEditorPanel .msg{margin-top:6px; font-size:12px;}
+#boxEditorPanel .msg.ok, #partMakerEditorPanel .msg.ok{color:#1d7a3c;}
+#boxEditorPanel .msg.err, #partMakerEditorPanel .msg.err{color:#c0392b;}
 .overlay{position:absolute;top:0;left:0;background:transparent;cursor:crosshair;}
 .btnRow{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;}
 .btnRow button{padding:5px 9px;font-size:11px;border-radius:6px;border:1px solid #ccc;background:#fff;cursor:pointer;}
@@ -113,8 +116,11 @@ h4{margin:4px 0}
 <div id="app">
 <div id="mainCol">
 
-<div id="sketchSection">
-  <button id="sketchToggle" type="button" class="collapseToggle">▶ 도형 에디터 (펼치기)</button>
+<div id="editorTabsSection">
+  <div class="btnRow" style="margin-top:0;">
+    <button id="sketchToggle" type="button" class="collapseToggle editorTabBtn">도형 에디터</button>
+    <button id="partMakerToggle" type="button" class="collapseToggle editorTabBtn">부품 만들기</button>
+  </div>
   <div id="boxEditorPanel" hidden>
     <div class="section-note">도형 하나를 마우스로 직접 옮기거나 크기를 조절하고, 숫자로도 정확히 맞춰서 모양을 만들어요. 새 부품을 구상하거나, 설명하거나, 기존 부품에 저장해둘 수 있어요.</div>
     <div class="btnRow"><button id="boxTargetPickBtn" type="button">🔍 기존 부품 불러오기</button><span id="boxTargetLabel" class="section-note" style="margin:0;">선택 안 됨 — 저장 없이 그냥 볼 수도 있어요.</span></div>
@@ -181,7 +187,7 @@ h4{margin:4px 0}
           <button id="boxPreviewBtn" type="button" style="background:#fff;color:#2b6be0;">🧮 결과 미리보기(더하기·빼기 계산)</button>
           <button id="boxBackToEditBtn" type="button" hidden>✏️ 편집으로 돌아가기</button>
         </div>
-        <div class="btnRow"><input type="text" id="boxNewPartName" placeholder="새 부품 이름" style="flex:1; min-width:120px; padding:5px 8px; border:1px solid #ccc; border-radius:6px;"><button id="boxNewPartBtn" type="button">🆕 새 부품으로 등록</button><button id="boxExportStlBtn" type="button" style="background:#fff;color:#2b6be0;">⬇️ STL로 내보내기</button><button id="boxSaveBtn" type="button">저장(부품 골라서 덮어쓰기)</button></div>
+        <div class="btnRow"><button id="boxNewPartBtn" type="button">🆕 새 부품으로 등록</button><button id="boxExportStlBtn" type="button" style="background:#fff;color:#2b6be0;">⬇️ STL로 내보내기</button><button id="boxSaveBtn" type="button">저장(부품 골라서 덮어쓰기)</button></div>
       </div>
       <div style="flex:1; min-width:220px;">
         <div class="section-note" style="margin:0 0 6px; display:flex; align-items:center; justify-content:space-between; gap:8px;">
@@ -265,6 +271,133 @@ h4{margin:4px 0}
       </div>
     </div>
   </div>
+
+  <div id="partMakerEditorPanel" hidden>
+    <div class="section-note">도형 하나를 마우스로 직접 옮기거나 크기를 조절하고, 숫자로도 정확히 맞춰서 모양을 만들어요. 새 부품을 구상하거나, 설명하거나, 기존 부품에 저장해둘 수 있어요.</div>
+    <div class="btnRow"><button id="partMakerTargetPickBtn" type="button">🔍 기존 부품 불러오기</button><span id="partMakerTargetLabel" class="section-note" style="margin:0;">선택 안 됨 — 저장 없이 그냥 볼 수도 있어요.</span></div>
+    <div class="btnRow"><button id="partMakerImportBtn" type="button">📁 3D 파일 불러오기(GLB/GLTF·STL·OBJ)</button><input type="file" id="partMakerImportInput" accept=".glb,.gltf,.stl,.obj" hidden><span id="partMakerImportMsg" class="section-note" style="margin:0;"></span></div>
+    <div class="btnRow">
+      <button type="button" class="tfModeBtn on" data-mode="translate">✋ 이동</button>
+      <button type="button" class="tfModeBtn" data-mode="rotate">↻ 회전</button>
+      <button type="button" class="tfModeBtn" data-mode="scale">↔ 크기</button>
+      <button type="button" id="partMakerFlipBtn">↔️ 반대로</button>
+      <button type="button" id="partMakerFlipYBtn">↕️ 위아래로</button>
+      <label style="font-size:12px; display:flex; align-items:center; gap:4px; cursor:pointer;"><input type="checkbox" id="partMakerFloorClampChk" checked> 바닥 위에 붙이기</label>
+      <span class="section-note" style="margin:0;">캔버스 안 도형의 화살표/손잡이를 드래그해보세요.</span>
+    </div>
+    <div style="display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap;">
+      <div style="position:relative;">
+        <div class="imgWrap">
+          <canvas id="partMakerEditorCanvas" width="500" height="500"></canvas>
+        </div>
+        <div id="partMakerRotateAngleRow" style="position:absolute; top:6px; left:6px; z-index:5; display:none; gap:6px; background:rgba(255,255,255,0.9); border:1px solid #ddd; border-radius:6px; padding:5px 6px;">
+          <label style="font-size:11px;color:#666;display:flex;flex-direction:column;gap:2px;">회전축
+            <select id="partMakerRotateAxis">
+              <option value="x">X</option>
+              <option value="y">Y</option>
+              <option value="z">Z</option>
+            </select>
+          </label>
+          <label style="font-size:11px;color:#666;display:flex;flex-direction:column;gap:2px;">각도(15도 단위)
+            <select id="partMakerRotateAngle">
+              <option value="-180">-180°</option>
+              <option value="-165">-165°</option>
+              <option value="-150">-150°</option>
+              <option value="-135">-135°</option>
+              <option value="-120">-120°</option>
+              <option value="-105">-105°</option>
+              <option value="-90">-90°</option>
+              <option value="-75">-75°</option>
+              <option value="-60">-60°</option>
+              <option value="-45">-45°</option>
+              <option value="-30">-30°</option>
+              <option value="-15">-15°</option>
+              <option value="0">0°</option>
+              <option value="15">15°</option>
+              <option value="30">30°</option>
+              <option value="45">45°</option>
+              <option value="60">60°</option>
+              <option value="75">75°</option>
+              <option value="90">90°</option>
+              <option value="105">105°</option>
+              <option value="120">120°</option>
+              <option value="135">135°</option>
+              <option value="150">150°</option>
+              <option value="165">165°</option>
+              <option value="180">180°</option>
+            </select>
+          </label>
+        </div>
+        <div class="btnRow">
+          <button id="partMakerPreviewBtn" type="button" style="background:#fff;color:#2b6be0;">🧮 결과 미리보기(더하기·빼기 계산)</button>
+          <button id="partMakerBackToEditBtn" type="button" hidden>✏️ 편집으로 돌아가기</button>
+        </div>
+        <div class="btnRow"><button id="partMakerNewPartBtn" type="button">🆕 새 부품으로 등록</button><button id="partMakerExportStlBtn" type="button" style="background:#fff;color:#2b6be0;">⬇️ STL로 내보내기</button><button id="partMakerSaveBtn" type="button">저장(부품 골라서 덮어쓰기)</button></div>
+      </div>
+      <div style="flex:1; min-width:220px;">
+        <div class="section-note" style="margin:0 0 6px; display:flex; align-items:center; justify-content:space-between; gap:8px;">
+          <span>도형 팔레트 — 눌러서 캔버스에 바로 추가, 또는 캔버스로 드래그</span>
+          <button id="partMakerPaletteToggle" type="button" style="font-size:11px; padding:3px 8px; border-radius:6px; border:1px solid #ccc; background:#fff; cursor:pointer; flex:none;">▼ 접기</button>
+        </div>
+        <div id="partMakerShapePaletteWrap">
+        <div class="btnRow" style="margin-top:0; margin-bottom:8px;">
+          <button type="button" class="paletteTabBtn on" data-category="cubo">큐보</button>
+          <button type="button" class="paletteTabBtn" data-category="meta-provo">메타,프로보</button>
+          <button type="button" class="paletteTabBtn" data-category="technic">테크닉</button>
+          <button type="button" class="paletteTabBtn" data-category="hubelino">휴벨리노</button>
+          <button type="button" class="paletteTabBtn" data-category="ecological">콜로지칼</button>
+        </div>
+        <div id="partMakerShapePalette" style="display:grid; grid-template-columns:repeat(3, 84px); gap:8px; margin-bottom:14px;">
+        </div>
+        </div>
+        <div class="section-note" style="margin:0 0 6px;">도형 목록 — 맨 위가 기준(베이스), 그 아래는 순서대로 더하거나 뺍니다.</div>
+        <div id="partMakerShapeList" style="display:flex; flex-direction:column; gap:4px; margin-bottom:8px;"></div>
+        <div class="btnRow" style="margin-top:0;">
+          <button id="partMakerShapeDeleteBtn" type="button" style="background:#fff;color:#c0392b;">선택 도형 삭제</button>
+        </div>
+        <div class="btnRow">
+          <label id="partMakerShapeOpField" style="font-size:11px;color:#666;display:flex;flex-direction:column;gap:2px;">연산
+            <select id="partMakerShapeOp">
+              <option value="add">➕ 더하기</option>
+              <option value="subtract">➖ 빼기(뚫기)</option>
+            </select>
+          </label>
+        </div>
+        <div class="fieldsRow">
+        <div class="boxFields">
+          <label>x(mm)<input type="number" id="partMakerX" value="0" step="1"></label>
+          <label>y(mm)<input type="number" id="partMakerY" value="0" step="1"></label>
+          <label>z(mm)<input type="number" id="partMakerZ" value="0" step="1"></label>
+          <label>색상<input type="color" id="partMakerShapeColor" value="#5b8def" style="height:32px;padding:2px;"></label>
+        </div>
+        <div class="boxFields" id="partMakerColorExtraFields" style="align-items:flex-end;">
+          <div style="display:flex; flex-direction:column; gap:2px;">
+            <span style="font-size:11px; color:#666;">자주 쓰는 색</span>
+            <div id="partMakerColorPresets" style="display:flex; gap:4px;"></div>
+          </div>
+          <label style="width:44px;">R<input type="number" id="partMakerShapeColorR" min="0" max="255" step="1"></label>
+          <label style="width:44px;">G<input type="number" id="partMakerShapeColorG" min="0" max="255" step="1"></label>
+          <label style="width:44px;">B<input type="number" id="partMakerShapeColorB" min="0" max="255" step="1"></label>
+          <label style="width:90px;">밝기<input type="range" id="partMakerShapeBrightness" min="100" max="200" step="5" value="100" style="width:90px;"></label>
+        </div>
+        <div class="boxFields" id="partMakerOnlyFields">
+          <label>가로 w(mm)<input type="number" id="partMakerW" value="30" min="1" step="1"></label>
+          <label>높이 h(mm)<input type="number" id="partMakerH" value="10" min="1" step="1"></label>
+          <label>세로 d(mm)<input type="number" id="partMakerD" value="30" min="1" step="1"></label>
+        </div>
+        <div class="boxFields" id="partMakerRoundFields" hidden>
+          <label id="partMakerTextField" hidden>텍스트 내용<input type="text" id="partMakerShapeText" value="A" maxlength="10"></label>
+          <label><span id="partMakerShapeRadiusLabel">반지름(mm)</span><input type="number" id="partMakerShapeRadius" value="20" min="1" step="1"></label>
+          <label id="partMakerShapeWidthField"><span id="partMakerShapeWidthLabel">두께(mm)</span><input type="number" id="partMakerShapeWidth" value="10" min="1" step="1"></label>
+          <label id="partMakerTeethField" hidden>톱니 수<input type="number" id="partMakerShapeTeeth" value="12" min="4" max="40" step="1"></label>
+          <label id="partMakerKnexHolesField" hidden>구멍 수<input type="number" id="partMakerKnexHoles" value="6" min="3" max="8" step="1"></label>
+        </div>
+        </div>
+        <div class="btnRow"><button id="partMakerRedrawBtn" type="button" style="background:#fff;color:#2b6be0;">이 도형에 적용</button></div>
+        <div class="msg" id="partMakerEditorMsg"></div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <button id="ruleToggle" type="button" class="collapseToggle">▶ 기본 셋팅·넘버링 규칙 (펼치기)</button>
@@ -339,6 +472,19 @@ h4{margin:4px 0}
     </form>
   </div>
 </div>
+
+<!-- 도형 에디터/부품 만들기 공용 — "새 부품으로 등록" 버튼 옆에 이름 입력칸을 항상 붙여두면 버튼 줄이
+     너무 길어져서 화면 폭을 넘어가고, 그 옆(팔레트 등)이 밀려버린다(사용자 지적: "이부분이 너무 길어서
+     2번째 스샷부분이 밀리자나"). 버튼을 누른 순간에만 모달로 이름을 물어본다. -->
+<div id="newPartNameModal" class="modalOverlay" hidden>
+  <div class="modalBox" style="width:320px;">
+    <div class="modalHead"><h4>새 부품 이름</h4><button id="newPartNameClose" type="button">✕</button></div>
+    <form id="newPartNameForm">
+      <input type="text" id="newPartNameInput" placeholder="새 부품 이름" style="width:100%; box-sizing:border-box; padding:7px 9px; border:1px solid #ccc; border-radius:6px; font-size:13px; margin-bottom:10px;">
+      <button type="submit" style="width:100%; padding:8px 14px; border-radius:6px; border:1px solid #2b6be0; background:#2b6be0; color:#fff; cursor:pointer; font-size:13px;">등록</button>
+    </form>
+  </div>
+</div>
 <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
 <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -366,6 +512,7 @@ h4{margin:4px 0}
 <link rel="modulepreload" href="https://unpkg.com/three-mesh-bvh@0.9.15/src/index.js">
 <link rel="modulepreload" href="https://unpkg.com/three-bvh-csg@0.0.18/src/index.js">
 <link rel="modulepreload" href="parts-lab-box-editor.js">
+<link rel="modulepreload" href="parts-lab-partmaker.js">
 <script>
 (function(){
   const SUPABASE_URL = 'https://brfeszcyjsaprbakqsjl.supabase.co';
@@ -1595,7 +1742,7 @@ h4{margin:4px 0}
   // 이 화면의 공용 헬퍼(baseScene 등)와 adminApi를 쓸 수 있도록 window.__partsLab에 필요한 만큼만 내보낸다.
   window.__partsLab = {
     baseScene, orthoCam, setupOrbit, addZoomButtons, addEdgeOutline,
-    openPickerModal, adminApi,
+    openPickerModal, openNamePromptModal, adminApi,
     getAccessToken: () => window.__accessToken,
     getSubject: () => curSubject,
   };
@@ -1610,6 +1757,19 @@ h4{margin:4px 0}
       const start = Date.now();
       (function check(){
         if (window.initBoxEditor) return resolve();
+        if (Date.now() - start > (timeoutMs || 20000)) return reject(new Error('스크립트 로딩 시간 초과'));
+        setTimeout(check, 50);
+      })();
+    });
+  }
+
+  // "부품 만들기" 탭(parts-lab-partmaker.js) — 도형 에디터와 완전히 분리된 별도 파일이라 똑같은 대기 로직이
+  // 한 벌 더 필요하다.
+  function waitForPartMaker(timeoutMs){
+    return new Promise((resolve, reject) => {
+      const start = Date.now();
+      (function check(){
+        if (window.initPartMaker) return resolve();
         if (Date.now() - start > (timeoutMs || 20000)) return reject(new Error('스크립트 로딩 시간 초과'));
         setTimeout(check, 50);
       })();
@@ -1634,6 +1794,12 @@ h4{margin:4px 0}
       window.initBoxEditor();
     } catch (e) {
       document.querySelector('#boxEditorPanel .section-note').textContent = '⚠️ 도형 에디터 초기화 실패: ' + e.message;
+    }
+    try {
+      await waitForPartMaker();
+      window.initPartMaker();
+    } catch (e) {
+      document.querySelector('#partMakerEditorPanel .section-note').textContent = '⚠️ 부품 만들기 초기화 실패: ' + e.message;
     }
     initImporter(session ? session.access_token : null);
   })();
@@ -1753,9 +1919,12 @@ h4{margin:4px 0}
     // 구멍 번호처럼 항목이 여러 개인 값은 하나의 콤마 문자열로 뭉치면 구멍끼리 경계가 안 보여서
     // (사용자 지적: "장난치냐?" — 라벨 안에 콤마가 있는데 구멍 사이 구분도 콤마라 뒤섞여 보였음)
     // 배열로 넘어온 값은 항목마다 줄을 나눠서(<br>) 보여준다. 각 항목은 그대로 escape해서 안전하게 넣음.
-    return '<div class="specBlock" data-part-id="' + esc(p.id) + '"><div class="specBlockHead"><h5>부품 스펙 전체</h5>' + editBtnHtml + '</div>' + missingSpecWarning + shotThumbRowHtml(p) + '<table class="specTable">' +
+    // 평소엔 접어두고 필요할 때만 펼침(사용자 지시: "스펙을 접었다가 펼칠수 있게 해줘 평소에는 접혀있는걸로")
+    // — sketchToggle/ruleToggle과 같은 패턴이지만, 이건 buildSpecHtml이 부품마다 여러 번 다시 그려지는
+    // 문자열이라 그때마다 리스너를 새로 붙이는 대신, specEditBtn처럼 document에 한 번만 위임 리스너를 둔다.
+    return '<div class="specBlock" data-part-id="' + esc(p.id) + '"><div class="specBlockHead"><h5>부품 스펙 전체</h5><span class="btnGroup"><button type="button" class="specToggleBtn">▶ 펼치기</button>' + editBtnHtml + '</span></div>' + missingSpecWarning + '<div class="specBody" hidden>' + shotThumbRowHtml(p) + '<table class="specTable">' +
       rows.map(([k,v]) => '<tr><th>' + esc(k) + '</th><td>' + (Array.isArray(v) ? v.map(item => esc(String(item))).join('<br>') : esc(String(v))) + '</td></tr>').join('') +
-      '</table></div>';
+      '</table></div></div>';
   }
   // 부품스펙 오른쪽 "스펙 수정" 버튼 저장 후, 그 부품이 떠 있는 모든 .specBlock을 다시 그림(같은 부품이
   // 비교/수정 칸 양쪽에 동시에 떠 있을 수 있음).
@@ -1933,6 +2102,28 @@ h4{margin:4px 0}
   }
   document.getElementById('pickerModalClose').addEventListener('click', closePickerModal);
   document.getElementById('pickerModal').addEventListener('click', e => { if (e.target.id === 'pickerModal') closePickerModal(); });
+
+  // ===== 새 부품 이름 모달 — 도형 에디터/부품 만들기 "새 부품으로 등록" 버튼이 공용으로 씀 =====
+  let newPartNameResolve = null;
+  function openNamePromptModal(){
+    const input = document.getElementById('newPartNameInput');
+    input.value = '';
+    document.getElementById('newPartNameModal').hidden = false;
+    input.focus();
+    return new Promise((resolve) => { newPartNameResolve = resolve; });
+  }
+  function closeNamePromptModal(result){
+    document.getElementById('newPartNameModal').hidden = true;
+    if (newPartNameResolve) { newPartNameResolve(result); newPartNameResolve = null; }
+  }
+  document.getElementById('newPartNameClose').addEventListener('click', () => closeNamePromptModal(null));
+  document.getElementById('newPartNameModal').addEventListener('click', e => { if (e.target.id === 'newPartNameModal') closeNamePromptModal(null); });
+  document.getElementById('newPartNameForm').addEventListener('submit', e => {
+    e.preventDefault();
+    const name = document.getElementById('newPartNameInput').value.trim();
+    if (!name) return;
+    closeNamePromptModal(name);
+  });
   document.getElementById('compareRefPickBtn').addEventListener('click', () => openPickerModal('비교 대상 부품 고르기', loadPartForCompare));
   document.getElementById('editPartPickBtn').addEventListener('click', () => openPickerModal('수정할 부품 고르기', loadPartForEdit));
 
@@ -2021,6 +2212,14 @@ h4{margin:4px 0}
   document.getElementById('specEditClose').addEventListener('click', closeSpecEdit);
   document.getElementById('specEditModal').addEventListener('click', e => { if (e.target.id === 'specEditModal') closeSpecEdit(); });
   document.addEventListener('click', e => {
+    const toggleBtn = e.target.closest('.specToggleBtn');
+    if (toggleBtn) {
+      const body = toggleBtn.closest('.specBlock').querySelector('.specBody');
+      const open = body.hidden;
+      body.hidden = !open;
+      toggleBtn.textContent = open ? '▼ 접기' : '▶ 펼치기';
+      return;
+    }
     const btn = e.target.closest('.specEditBtn');
     if (!btn) return;
     const part = allParts.find(pp => pp.id === btn.dataset.partId);
@@ -2086,13 +2285,24 @@ h4{margin:4px 0}
     }
   });
 
-  // 도형 에디터는 평소엔 접어두고 필요할 때만 펼침(사용자 지시: "필요할때만 펼쳐서 하면되 평소엔 접어놔줘")
-  document.getElementById('sketchToggle').addEventListener('click', () => {
-    const panel = document.getElementById('boxEditorPanel');
-    const open = panel.hidden;
-    panel.hidden = !open;
-    document.getElementById('sketchToggle').textContent = open ? '▼ 도형 에디터 (접기)' : '▶ 도형 에디터 (펼치기)';
-  });
+  // "도형 에디터"/"부품 만들기"는 탭 방식 — 평소엔 둘 다 접어두고, 탭을 누르면 그 하나만 펼쳐지고
+  // 다른 하나는 접혀서 둘이 겹쳐 보이지 않는다(사용자 지시: "탭으로 만들어야 하는데~~ 두개가 겹치지 않게").
+  // 이미 펼쳐진 탭을 다시 누르면 접는다.
+  function selectEditorTab(which) {
+    const boxPanel = document.getElementById('boxEditorPanel');
+    const pmPanel = document.getElementById('partMakerEditorPanel');
+    const sketchBtn = document.getElementById('sketchToggle');
+    const pmBtn = document.getElementById('partMakerToggle');
+    const targetPanel = which === 'box' ? boxPanel : pmPanel;
+    const otherPanel = which === 'box' ? pmPanel : boxPanel;
+    const wasOpen = !targetPanel.hidden;
+    targetPanel.hidden = wasOpen;
+    otherPanel.hidden = true;
+    sketchBtn.classList.toggle('on', !boxPanel.hidden);
+    pmBtn.classList.toggle('on', !pmPanel.hidden);
+  }
+  document.getElementById('sketchToggle').addEventListener('click', () => selectEditorTab('box'));
+  document.getElementById('partMakerToggle').addEventListener('click', () => selectEditorTab('partMaker'));
   // 기본 셋팅/넘버링 규칙 문구도 평소엔 접어두고 필요할 때만 펼침(사용자 지시: "따로 적혀서 평소 접어놔야해")
   document.getElementById('ruleToggle').addEventListener('click', () => {
     const panel = document.getElementById('rulePanel');
@@ -2117,28 +2327,44 @@ h4{margin:4px 0}
       return { canvas: (() => { const c = document.createElement('canvas'); c.width = 300; c.height = 300; col.querySelector('.imgWrap').appendChild(c); return c; })(), dims: col.querySelector('.dims') };
     };
     const shot1 = mk('위'), shot2 = mk('정면'), shot3 = mk('뒷면');
-    if (isBracket) {
+    // 3D 우선(사용자 지시: "3D파일로 업데이트 된건 이제 3D가 우선 되어야해~ svg파일은 보관만") — 도형
+    // 에디터로 spec.shapes를 저장해둔 부품은 등록 이미지(svg) 대신 그 실제 3D 모델을 그린다. 이 화면은
+    // 옛날 three.js라 진짜 CSG가 안 돼서, 최신 three.js+CSG 모듈(parts-lab-box-editor.js)이 내보낸
+    // window.__boxEditorRenderShapes를 빌려 쓴다.
+    const hasShapes = p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.length;
+    if (hasShapes && window.__boxEditorRenderShapes) {
+      window.__boxEditorRenderShapes(shot1.canvas, p.spec.shapes, [0.001, 200, 0.001]);
+      window.__boxEditorRenderShapes(shot2.canvas, p.spec.shapes, [150, 150, 150]);
+      window.__boxEditorRenderShapes(shot3.canvas, p.spec.shapes, [-150, 150, -150]);
+    } else if (isBracket) {
       const spec = p.spec || {};
       const m = String(p.size||'').match(/(\d+(?:\.\d+)?)\s*[×xX]\s*(\d+(?:\.\d+)?)\s*[×xX]\s*(\d+(?:\.\d+)?)/);
       const arm1 = spec.armLen1 || (m ? Number(m[1]) : 30), arm2 = spec.armLen2 || (m ? Number(m[2]) : 30), armWidth = spec.armWidth || (m ? Number(m[3]) : 10);
       renderBracketPanel(shot1.canvas, arm1, arm2, armWidth, bracketTopCamPos(arm1), true);
       renderBracketPanel(shot2.canvas, arm1, arm2, armWidth, [70,90,110], false, true);
       renderBracketPanel(shot3.canvas, arm1, arm2, armWidth, bracketBackCamPos(arm1, arm2));
-      specEl.innerHTML = buildSpecHtml(p, bracketSpecRows(arm1, arm2, armWidth));
     } else {
       const svg = p.imageSvg || p.imageSvgDiagonal;
       if (!svg) {
         shot1.dims.textContent = shot2.dims.textContent = '등록된 이미지가 없어서 실제 모양을 그릴 수 없어요.';
         renderEmptyPanel(shot3.canvas);
-        specEl.innerHTML = buildSpecHtml(p, []);
-        return;
+      } else {
+        renderFramePanel(shot1.canvas, svg, [0,150,0.001], true);
+        renderFramePanel(shot2.canvas, svg, [70,90,110]);
+        renderEmptyPanel(shot3.canvas);
+        if (!parseSvgPlateOutline(svg)) shot1.dims.textContent = shot2.dims.textContent = '등록된 이미지에서 윤곽선을 못 읽었어요.';
       }
-      renderFramePanel(shot1.canvas, svg, [0,150,0.001], true);
-      renderFramePanel(shot2.canvas, svg, [70,90,110]);
-      renderEmptyPanel(shot3.canvas);
-      const outline = parseSvgPlateOutline(svg);
-      if (!outline) shot1.dims.textContent = shot2.dims.textContent = '등록된 이미지에서 윤곽선을 못 읽었어요.';
-      specEl.innerHTML = buildSpecHtml(p, frameSpecRows(svg, outline, p.spec));
+    }
+    // 스펙 표는 3D 렌더 방식과 별개로, 브라켓 공식이냐 프레임 스펙(spec.holeCoords 등, svg와 무관하게
+    // DB 값을 그대로 읽음)이냐로만 결정한다.
+    if (isBracket) {
+      const spec = p.spec || {};
+      const m = String(p.size||'').match(/(\d+(?:\.\d+)?)\s*[×xX]\s*(\d+(?:\.\d+)?)\s*[×xX]\s*(\d+(?:\.\d+)?)/);
+      const arm1 = spec.armLen1 || (m ? Number(m[1]) : 30), arm2 = spec.armLen2 || (m ? Number(m[2]) : 30), armWidth = spec.armWidth || (m ? Number(m[3]) : 10);
+      specEl.innerHTML = buildSpecHtml(p, bracketSpecRows(arm1, arm2, armWidth));
+    } else {
+      const svg = p.imageSvg || p.imageSvgDiagonal;
+      specEl.innerHTML = buildSpecHtml(p, frameSpecRows(svg, svg ? parseSvgPlateOutline(svg) : null, p.spec));
     }
   }
 
@@ -2294,4 +2520,5 @@ h4{margin:4px 0}
 })();
 </script>
 <script type="module" src="parts-lab-box-editor.js"></script>
+<script type="module" src="parts-lab-partmaker.js"></script>
 </body></html>

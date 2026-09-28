@@ -47,7 +47,7 @@ function materialColorForShape(shape, i) {
   return (r << 16) | (g << 8) | b;
 }
 // "텍스트" 도형용 — 모듈이 로드되는 시점에 한 번만 받아온다(top-level await, 페이지 전체를 막지 않고
-// 이 모듈 하나만 폰트가 올 때까지 잠깐 기다림 — gate()가 window.initBoxEditor를 폴링해서 기다리는 것과 맞물림).
+// 이 모듈 하나만 폰트가 올 때까지 잠깐 기다림 — gate()가 window.initPartMaker를 폴링해서 기다리는 것과 맞물림).
 // unpkg의 three npm 패키지엔 이제 examples/fonts가 안 들어있어서(0 files) three.js 깃허브 저장소를
 // jsDelivr로 직접 받는다. 이거 하나가 실패해도 에디터 전체가 죽지 않도록 try/catch로 감싼다 — 실패하면
 // textFont가 null로 남고, 텍스트 도형만 못 쓰고 나머지(박스/바퀴 등)는 그대로 동작한다.
@@ -410,13 +410,13 @@ function renderPaletteThumbnails(panel) {
   renderer.dispose();
 }
 
-function initBoxEditor() {
+function initPartMaker() {
   const { openPickerModal, openNamePromptModal, adminApi, getAccessToken, getSubject } = window.__partsLab;
-  // "부품 만들기" 탭이 이 파일의 복사본(parts-lab-partmaker.js)으로 따로 떠 있을 수 있는데, 그쪽도
-  // .paletteBtn/.paletteTabBtn/.tfModeBtn 같은 같은 클래스명을 그대로 쓴다. document.querySelectorAll로
-  // 페이지 전체를 뒤지면 서로 다른 편집기의 버튼까지 같이 걸려서 두 탭이 서로 간섭한다 — 반드시 이 패널
-  // 안에서만 찾아야 진짜 독립된 편집기가 된다.
-  const panel = document.getElementById('boxEditorPanel');
+  // 도형 에디터(parts-lab-box-editor.js)가 같은 페이지에 같이 떠 있고, 그쪽도 .paletteBtn/.paletteTabBtn/
+  // .tfModeBtn 같은 클래스명을 똑같이 쓴다. document.querySelectorAll로 페이지 전체를 뒤지면 서로 다른
+  // 편집기의 버튼까지 같이 걸려서 두 탭이 서로 간섭한다 — 반드시 이 패널 안에서만 찾아야 진짜 독립된
+  // 편집기가 된다.
+  const panel = document.getElementById('partMakerEditorPanel');
   let targetPart = null;
   // 빈 캔버스로 시작한다 — 3D 디자인 도구는 원래 처음엔 아무것도 없는 게 정상이다(사용자 지적: "3d
   // 디지인중에 처음부터 도형이 있는 경우가 어디있어?????"). 예전엔 기본 박스를 하나 깔아뒀는데, 그러면
@@ -433,8 +433,8 @@ function initBoxEditor() {
   }
   function freshCanvas() {
     const wrap = panel.querySelector('.imgWrap');
-    wrap.innerHTML = '<canvas id="boxEditorCanvas" width="500" height="500"></canvas>';
-    return document.getElementById('boxEditorCanvas');
+    wrap.innerHTML = '<canvas id="partMakerEditorCanvas" width="500" height="500"></canvas>';
+    return document.getElementById('partMakerEditorCanvas');
   }
   function setupCommon(canvas) {
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
@@ -453,7 +453,7 @@ function initBoxEditor() {
     return { renderer, scene, camera, controls };
   }
   // 사용자 지적("이상한 짓을 하고있네? 다른 3D 프로그램들은 이렇게 무거워지지 않던데") — 여기도 안 움직일
-  // 때는 다시 그리지 않는다. #boxEditorPanel 전체에 위임 리스너 하나(아래 initBoxEditor 끝부분)를 달아서
+  // 때는 다시 그리지 않는다. #partMakerEditorPanel 전체에 위임 리스너 하나(아래 initPartMaker 끝부분)를 달아서
   // 캔버스 드래그(오빗·기즈모)든 색상/밝기/뒤집기/각도 같은 바깥 입력칸 조작이든 뭐가 됐든 손대면
   // live.dirty를 세우고, 그 프레임만 그린 뒤 다시 잠잠해지면 렌더링을 건너뛴다.
   function startLoop(getState) {
@@ -508,7 +508,7 @@ function initBoxEditor() {
   // 회전된 상태에서도 정확히 맞도록, 로컬 지오메트리 치수가 아니라 실제 월드 좌표 바운딩박스(회전·크기
   // 반영)로 계산한다. 드래그(syncSelectedShapeFromMesh)와 15도 단위 각도 드롭다운 둘 다 이걸 같이 쓴다.
   function applyFloorClamp(mesh, shape) {
-    if (!document.getElementById('floorClampChk').checked) return;
+    if (!document.getElementById('partMakerFloorClampChk').checked) return;
     const worldBox = new THREE.Box3().setFromObject(mesh);
     if (worldBox.min.y < -0.001) {
       mesh.position.y -= worldBox.min.y;
@@ -607,7 +607,8 @@ function initBoxEditor() {
       if (dirty) { renderer.render(scene, camera); dirty = false; }
     })();
   }
-  window.__boxEditorRenderShapes = renderShapesPreview;
+  // (부품 만들기 쪽은 window.__boxEditorRenderShapes를 다시 등록하지 않음 — 원본 도형 에디터가 이미
+  // 만들어둔 창구 하나만 공용으로 쓴다. 여기서 또 등록하면 나중에 로드되는 쪽이 덮어써서 꼬인다.)
 
   // ---------- 미리보기 모드: 실제 CSG로 더하고 뺀 최종 결과 하나만 보여줌(읽기 전용) ----------
   function renderPreviewMode() {
@@ -618,10 +619,10 @@ function initBoxEditor() {
       live = { renderer, scene, camera, controls, transform: null, meshes: [], rafId: 0, dirty: true };
       renderer.render(scene, camera);
       startLoop(() => live);
-      document.getElementById('boxEditorMsg').textContent = '도형이 없어요 — 팔레트에서 추가해보세요.';
+      document.getElementById('partMakerEditorMsg').textContent = '도형이 없어요 — 팔레트에서 추가해보세요.';
       return;
     }
-    document.getElementById('boxEditorMsg').textContent = '';
+    document.getElementById('partMakerEditorMsg').textContent = '';
     const result = computeMergedBrush();
     // 최종 결과는 여러 도형을 합친 하나의 완성품이라 베이스 도형의 색 하나로 통일해서 보여준다.
     const finalColor = materialColorForShape(shapes[0], 0);
@@ -637,7 +638,7 @@ function initBoxEditor() {
   // 내보내기 하는 기능"). 화면에 보여주는 것과 같은 computeMergedBrush() 결과를 그대로 내보내서,
   // 미리보기에서 본 모양과 실제 파일이 항상 같게 한다.
   function exportSTL() {
-    const msg = document.getElementById('boxEditorMsg');
+    const msg = document.getElementById('partMakerEditorMsg');
     if (!shapes.length) { msg.className = 'msg err'; msg.textContent = '내보낼 도형이 없어요.'; return; }
     const result = computeMergedBrush();
     const exporter = new STLExporter();
@@ -657,13 +658,13 @@ function initBoxEditor() {
 
   function setMode(next) {
     mode = next;
-    document.getElementById('boxPreviewBtn').hidden = mode === 'preview';
-    document.getElementById('boxBackToEditBtn').hidden = mode === 'edit';
+    document.getElementById('partMakerPreviewBtn').hidden = mode === 'preview';
+    document.getElementById('partMakerBackToEditBtn').hidden = mode === 'edit';
     panel.querySelectorAll('.paletteBtn').forEach((b) => { b.disabled = mode === 'preview'; });
-    document.getElementById('shapeDeleteBtn').disabled = mode === 'preview';
-    document.getElementById('boxRedrawBtn').disabled = mode === 'preview';
-    document.getElementById('boxFlipBtn').disabled = mode === 'preview';
-    document.getElementById('boxFlipYBtn').disabled = mode === 'preview';
+    document.getElementById('partMakerShapeDeleteBtn').disabled = mode === 'preview';
+    document.getElementById('partMakerRedrawBtn').disabled = mode === 'preview';
+    document.getElementById('partMakerFlipBtn').disabled = mode === 'preview';
+    document.getElementById('partMakerFlipYBtn').disabled = mode === 'preview';
     if (mode === 'edit') renderEditMode(); else renderPreviewMode();
   }
 
@@ -674,7 +675,7 @@ function initBoxEditor() {
     return (i + 1) + '. ' + typeLabel + ' ' + opLabel;
   }
   function renderShapeListUI() {
-    const el = document.getElementById('shapeList');
+    const el = document.getElementById('partMakerShapeList');
     el.innerHTML = shapes.map((shape, i) => {
       const on = i === selectedIndex ? ' style="background:#2b6be0;color:#fff;border-color:#2b6be0;"' : '';
       return '<button type="button" class="shapeListRow" data-i="' + i + '"' + on + ' style="text-align:left; padding:6px 10px; border-radius:6px; border:1px solid #ccc; background:#fff; cursor:pointer;' + (i === selectedIndex ? 'background:#2b6be0;color:#fff;border-color:#2b6be0;' : '') + '">' + shapeLabel(shape, i) + '</button>';
@@ -694,16 +695,16 @@ function initBoxEditor() {
   function syncFieldVisibility(type) {
     // .hidden 속성은 이 파일의 CSS 명시도 때문에 안 먹혀서 style.display를 직접 건드린다.
     const boxLike = BOX_LIKE.includes(type);
-    document.getElementById('boxOnlyFields').style.display = boxLike ? 'contents' : 'none';
-    document.getElementById('roundFields').style.display = boxLike ? 'none' : 'contents';
-    document.getElementById('shapeWidthField').style.display = (RADIUS_ONLY.includes(type) || type === 'import') ? 'none' : 'flex';
-    document.getElementById('shapeRadiusLabel').closest('label').style.display = type === 'import' ? 'none' : '';
-    document.getElementById('shapeWidthLabel').textContent = WIDTH_FIELD_LABEL[type] || '두께(mm)';
-    document.getElementById('shapeRadiusLabel').textContent = RADIUS_FIELD_LABEL[type] || '반지름(mm)';
-    document.getElementById('teethField').style.display = type === 'gear' ? 'flex' : 'none';
-    document.getElementById('textField').style.display = type === 'text' ? 'flex' : 'none';
-    document.getElementById('knexHolesField').style.display = type === 'knexConnector' ? 'flex' : 'none';
-    document.getElementById('shapeOpField').style.display = selectedIndex === 0 ? 'none' : 'flex';
+    document.getElementById('partMakerOnlyFields').style.display = boxLike ? 'contents' : 'none';
+    document.getElementById('partMakerRoundFields').style.display = boxLike ? 'none' : 'contents';
+    document.getElementById('partMakerShapeWidthField').style.display = (RADIUS_ONLY.includes(type) || type === 'import') ? 'none' : 'flex';
+    document.getElementById('partMakerShapeRadiusLabel').closest('label').style.display = type === 'import' ? 'none' : '';
+    document.getElementById('partMakerShapeWidthLabel').textContent = WIDTH_FIELD_LABEL[type] || '두께(mm)';
+    document.getElementById('partMakerShapeRadiusLabel').textContent = RADIUS_FIELD_LABEL[type] || '반지름(mm)';
+    document.getElementById('partMakerTeethField').style.display = type === 'gear' ? 'flex' : 'none';
+    document.getElementById('partMakerTextField').style.display = type === 'text' ? 'flex' : 'none';
+    document.getElementById('partMakerKnexHolesField').style.display = type === 'knexConnector' ? 'flex' : 'none';
+    document.getElementById('partMakerShapeOpField').style.display = selectedIndex === 0 ? 'none' : 'flex';
   }
   // 캔버스가 비어있을 수도 있으니(사용자 지적: "3d 디지인중에 처음부터 도형이 있는 경우가 어디있어?????")
   // 고른 도형이 없으면 숫자칸들을 다 숨기고 여기서 끝낸다 — shape가 undefined인 채로 아래로 내려가면
@@ -712,35 +713,35 @@ function initBoxEditor() {
     const fieldsRow = panel.querySelector('.fieldsRow');
     if (!shape) {
       if (fieldsRow) fieldsRow.style.display = 'none';
-      document.getElementById('shapeOpField').style.display = 'none';
-      document.getElementById('boxRedrawBtn').disabled = true;
+      document.getElementById('partMakerShapeOpField').style.display = 'none';
+      document.getElementById('partMakerRedrawBtn').disabled = true;
       return;
     }
     if (fieldsRow) fieldsRow.style.display = 'flex';
-    document.getElementById('boxRedrawBtn').disabled = false;
-    document.getElementById('shapeOp').value = shape.op;
-    document.getElementById('boxX').value = round1(shape.x);
-    document.getElementById('boxY').value = round1(shape.y);
-    document.getElementById('boxZ').value = round1(shape.z);
+    document.getElementById('partMakerRedrawBtn').disabled = false;
+    document.getElementById('partMakerShapeOp').value = shape.op;
+    document.getElementById('partMakerX').value = round1(shape.x);
+    document.getElementById('partMakerY').value = round1(shape.y);
+    document.getElementById('partMakerZ').value = round1(shape.z);
     {
       const hex = '#' + colorForShape(shape, selectedIndex).toString(16).padStart(6, '0');
-      document.getElementById('shapeColor').value = hex;
-      document.getElementById('shapeColorR').value = parseInt(hex.slice(1, 3), 16);
-      document.getElementById('shapeColorG').value = parseInt(hex.slice(3, 5), 16);
-      document.getElementById('shapeColorB').value = parseInt(hex.slice(5, 7), 16);
-      document.getElementById('shapeBrightness').value = shape.brightness || 100;
+      document.getElementById('partMakerShapeColor').value = hex;
+      document.getElementById('partMakerShapeColorR').value = parseInt(hex.slice(1, 3), 16);
+      document.getElementById('partMakerShapeColorG').value = parseInt(hex.slice(3, 5), 16);
+      document.getElementById('partMakerShapeColorB').value = parseInt(hex.slice(5, 7), 16);
+      document.getElementById('partMakerShapeBrightness').value = shape.brightness || 100;
     }
     if (BOX_LIKE.includes(shape.type)) {
-      document.getElementById('boxW').value = round1(shape.w);
-      document.getElementById('boxH').value = round1(shape.h);
-      document.getElementById('boxD').value = round1(shape.d);
+      document.getElementById('partMakerW').value = round1(shape.w);
+      document.getElementById('partMakerH').value = round1(shape.h);
+      document.getElementById('partMakerD').value = round1(shape.d);
     } else if (shape.type !== 'import') {
       // 불러온 3D 파일은 크기가 파일 안 좌표로 정해져서(숫자로 계산하는 도형이 아님) 반지름/두께 칸이 없다.
-      document.getElementById('shapeRadius').value = round1(shape.radius);
-      if (!RADIUS_ONLY.includes(shape.type)) document.getElementById('shapeWidth').value = round1(shape.width);
-      if (shape.type === 'gear') document.getElementById('shapeTeeth').value = shape.teeth;
-      if (shape.type === 'text') document.getElementById('shapeText').value = shape.text;
-      if (shape.type === 'knexConnector') document.getElementById('knexHoles').value = shape.holes;
+      document.getElementById('partMakerShapeRadius').value = round1(shape.radius);
+      if (!RADIUS_ONLY.includes(shape.type)) document.getElementById('partMakerShapeWidth').value = round1(shape.width);
+      if (shape.type === 'gear') document.getElementById('partMakerShapeTeeth').value = shape.teeth;
+      if (shape.type === 'text') document.getElementById('partMakerShapeText').value = shape.text;
+      if (shape.type === 'knexConnector') document.getElementById('partMakerKnexHoles').value = shape.holes;
     }
     syncFieldVisibility(shape.type);
     syncRotateAngleUI();
@@ -749,49 +750,49 @@ function initBoxEditor() {
   // 자유롭게 돌린 각도는 15도의 배수가 아닐 수 있으니, "실제 값을 그대로"가 아니라 "가장 가까운 15도"를 표시.
   function syncRotateAngleUI() {
     if (!shapes[selectedIndex]) return;
-    const axis = document.getElementById('rotateAxis').value;
+    const axis = document.getElementById('partMakerRotateAxis').value;
     const rad = shapes[selectedIndex]['r' + axis] || 0;
     let deg = Math.round((rad * 180 / Math.PI) / 15) * 15;
     deg = ((deg % 360) + 360) % 360; // 0~359로
     if (deg > 180) deg -= 360; // -180~180로(사용자 지시: "각도를 +180까지 -180꺼지 해야지")
-    document.getElementById('rotateAngle').value = String(deg);
+    document.getElementById('partMakerRotateAngle').value = String(deg);
   }
   function readFieldsAsShape() {
     const prev = shapes[selectedIndex];
     const type = prev.type;
     const shape = {
-      type, op: selectedIndex === 0 ? 'add' : document.getElementById('shapeOp').value,
-      x: Number(document.getElementById('boxX').value) || 0,
-      y: Number(document.getElementById('boxY').value) || 0,
-      z: Number(document.getElementById('boxZ').value) || 0,
+      type, op: selectedIndex === 0 ? 'add' : document.getElementById('partMakerShapeOp').value,
+      x: Number(document.getElementById('partMakerX').value) || 0,
+      y: Number(document.getElementById('partMakerY').value) || 0,
+      z: Number(document.getElementById('partMakerZ').value) || 0,
       // 회전은 숫자칸이 없고 마우스(↻ 회전)로만 조절하므로, 숫자칸으로 다시 그릴 때 기존 회전값을 그대로 지킨다.
       rx: prev.rx || 0, ry: prev.ry || 0, rz: prev.rz || 0,
       // 색상 팔레트로 고른 색도(있으면) 그대로 이어받는다 — 위치만 바꾸려고 "적용"을 눌러도 색이 안 없어지게.
-      color: document.getElementById('shapeColor').value,
-      brightness: Number(document.getElementById('shapeBrightness').value) || 100,
+      color: document.getElementById('partMakerShapeColor').value,
+      brightness: Number(document.getElementById('partMakerShapeBrightness').value) || 100,
     };
     if (type === 'import') {
       // 불러온 파일 자체(지오메트리·원본 파일)는 숫자칸으로 다시 만드는 게 아니라 그대로 이어받는다 —
       // 안 그러면 위치만 바꾸려고 "이 도형에 적용"을 눌러도 불러온 모양이 사라져버린다.
       shape._geometry = prev._geometry; shape.fileName = prev.fileName; shape.fileDataUrl = prev.fileDataUrl;
     } else if (BOX_LIKE.includes(type)) {
-      shape.w = Math.max(1, Number(document.getElementById('boxW').value) || 1);
-      shape.h = Math.max(1, Number(document.getElementById('boxH').value) || 1);
-      shape.d = Math.max(1, Number(document.getElementById('boxD').value) || 1);
+      shape.w = Math.max(1, Number(document.getElementById('partMakerW').value) || 1);
+      shape.h = Math.max(1, Number(document.getElementById('partMakerH').value) || 1);
+      shape.d = Math.max(1, Number(document.getElementById('partMakerD').value) || 1);
     } else {
-      shape.radius = Math.max(1, Number(document.getElementById('shapeRadius').value) || 1);
-      if (!RADIUS_ONLY.includes(type)) shape.width = Math.max(1, Number(document.getElementById('shapeWidth').value) || 1);
-      if (type === 'gear') shape.teeth = Math.max(4, Number(document.getElementById('shapeTeeth').value) || 12);
-      if (type === 'text') shape.text = (document.getElementById('shapeText').value || 'A').slice(0, 10);
-      if (type === 'knexConnector') shape.holes = Math.max(3, Math.min(8, Number(document.getElementById('knexHoles').value) || 6));
+      shape.radius = Math.max(1, Number(document.getElementById('partMakerShapeRadius').value) || 1);
+      if (!RADIUS_ONLY.includes(type)) shape.width = Math.max(1, Number(document.getElementById('partMakerShapeWidth').value) || 1);
+      if (type === 'gear') shape.teeth = Math.max(4, Number(document.getElementById('partMakerShapeTeeth').value) || 12);
+      if (type === 'text') shape.text = (document.getElementById('partMakerShapeText').value || 'A').slice(0, 10);
+      if (type === 'knexConnector') shape.holes = Math.max(3, Math.min(8, Number(document.getElementById('partMakerKnexHoles').value) || 6));
     }
     return shape;
   }
 
   async function onBoxTargetPicked(p) {
     targetPart = p;
-    document.getElementById('boxTargetLabel').textContent = '선택된 부품: ' + p.name;
-    document.getElementById('boxSaveBtn').disabled = false;
+    document.getElementById('partMakerTargetLabel').textContent = '선택된 부품: ' + p.name;
+    document.getElementById('partMakerSaveBtn').disabled = false;
     // 캔버스에 이미 도형이 있으면(한창 만들다가 "이제 이 부품에 저장할래" 하는 경우) 그 작업을 지우지
     // 않는다 — 예전엔 무조건 덮어써서, STL 불러와 만들어둔 걸 대상 고르자마자 날려버렸다(사용자 지적:
     // "이거하려고 다 수정한건데???"). 캔버스가 비어있을 때만(처음 시작할 때) 그 부품에 저장돼 있던
@@ -813,7 +814,7 @@ function initBoxEditor() {
     }
   }
 
-  document.getElementById('boxRedrawBtn').addEventListener('click', () => {
+  document.getElementById('partMakerRedrawBtn').addEventListener('click', () => {
     if (!shapes[selectedIndex]) return;
     shapes[selectedIndex] = readFieldsAsShape();
     renderShapeListUI();
@@ -836,17 +837,17 @@ function initBoxEditor() {
   function applyShapeColor(hex) {
     if (!shapes[selectedIndex]) return;
     shapes[selectedIndex].color = hex;
-    document.getElementById('shapeColor').value = hex;
+    document.getElementById('partMakerShapeColor').value = hex;
     const rgb = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
-    document.getElementById('shapeColorR').value = rgb[0];
-    document.getElementById('shapeColorG').value = rgb[1];
-    document.getElementById('shapeColorB').value = rgb[2];
+    document.getElementById('partMakerShapeColorR').value = rgb[0];
+    document.getElementById('partMakerShapeColorG').value = rgb[1];
+    document.getElementById('partMakerShapeColorB').value = rgb[2];
     refreshLiveShapeColor();
   }
-  document.getElementById('shapeColor').addEventListener('input', (e) => applyShapeColor(e.target.value));
+  document.getElementById('partMakerShapeColor').addEventListener('input', (e) => applyShapeColor(e.target.value));
   // 밝기 슬라이더(사용자 지시: "명암을 더 밝게 해야할꺼 같아~ 안되면 명암조절 기능을 넣던가~~") — 100%가
   // 원래 색, 최대 200%까지 밝게. 색상 자체(shape.color)는 그대로 두고 렌더링에만 곱해서 적용.
-  document.getElementById('shapeBrightness').addEventListener('input', (e) => {
+  document.getElementById('partMakerShapeBrightness').addEventListener('input', (e) => {
     if (!shapes[selectedIndex]) return;
     shapes[selectedIndex].brightness = Number(e.target.value) || 100;
     refreshLiveShapeColor();
@@ -854,21 +855,21 @@ function initBoxEditor() {
   function rgbToHex(r, g, b) {
     return '#' + [r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(v) || 0)).toString(16).padStart(2, '0')).join('');
   }
-  ['shapeColorR', 'shapeColorG', 'shapeColorB'].forEach((id) => {
+  ['partMakerShapeColorR', 'partMakerShapeColorG', 'partMakerShapeColorB'].forEach((id) => {
     document.getElementById(id).addEventListener('input', () => {
-      const r = Number(document.getElementById('shapeColorR').value) || 0;
-      const g = Number(document.getElementById('shapeColorG').value) || 0;
-      const b = Number(document.getElementById('shapeColorB').value) || 0;
+      const r = Number(document.getElementById('partMakerShapeColorR').value) || 0;
+      const g = Number(document.getElementById('partMakerShapeColorG').value) || 0;
+      const b = Number(document.getElementById('partMakerShapeColorB').value) || 0;
       applyShapeColor(rgbToHex(r, g, b));
     });
   });
   // 자주 쓰는 색 10개 — 이 부품 체계에서 실제로 쓰는 아이보리(1열브라켓)·회색(90도 프레임)에, 팔레트
   // 기본색 몇 가지와 무채색(흰/검)을 더함.
   const COLOR_PRESETS = ['#f2ead9', '#c7cbd1', '#ffffff', '#555555', '#222222', '#5b8def', '#ff9f43', '#51cf66', '#e03b2b', '#fcc419'];
-  document.getElementById('colorPresets').innerHTML = COLOR_PRESETS.map((hex) =>
+  document.getElementById('partMakerColorPresets').innerHTML = COLOR_PRESETS.map((hex) =>
     '<button type="button" data-hex="' + hex + '" title="' + hex + '" style="width:22px;height:22px;padding:0;border-radius:5px;border:1px solid #ccc;background:' + hex + ';cursor:pointer;"></button>'
   ).join('');
-  document.getElementById('colorPresets').querySelectorAll('button').forEach((btn) => {
+  document.getElementById('partMakerColorPresets').querySelectorAll('button').forEach((btn) => {
     btn.addEventListener('click', () => applyShapeColor(btn.dataset.hex));
   });
   function addShape(shape) {
@@ -883,7 +884,7 @@ function initBoxEditor() {
   // 스케치북으로 이동하면 해당도형을 옮겨주면되").
   function dropPointOnGround(clientX, clientY) {
     if (!live) return null;
-    const canvas = document.getElementById('boxEditorCanvas');
+    const canvas = document.getElementById('partMakerEditorCanvas');
     const rect = canvas.getBoundingClientRect();
     const ndc = new THREE.Vector2(
       ((clientX - rect.left) / rect.width) * 2 - 1,
@@ -914,11 +915,11 @@ function initBoxEditor() {
     });
   });
   // 도형 팔레트 접기/펼치기(사용자 지시: "도형 팔레트 접었다 폈다 할수있게").
-  document.getElementById('paletteToggle').addEventListener('click', () => {
-    const wrap = document.getElementById('shapePaletteWrap');
+  document.getElementById('partMakerPaletteToggle').addEventListener('click', () => {
+    const wrap = document.getElementById('partMakerShapePaletteWrap');
     const nowHidden = wrap.style.display !== 'none';
     wrap.style.display = nowHidden ? 'none' : '';
-    document.getElementById('paletteToggle').textContent = nowHidden ? '▶ 펼치기' : '▼ 접기';
+    document.getElementById('partMakerPaletteToggle').textContent = nowHidden ? '▶ 펼치기' : '▼ 접기';
   });
   // 팔레트 탭(기본 도형/듀프로형/케이넥스형) — 탭에 안 맞는 도형 버튼은 숨긴다.
   panel.querySelectorAll('.paletteTabBtn').forEach((tabBtn) => {
@@ -956,7 +957,7 @@ function initBoxEditor() {
     pointerDownAt = null;
     if (!start || mode !== 'edit' || !live || !live.meshes.length) return;
     if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > 4) return;
-    const canvas = document.getElementById('boxEditorCanvas');
+    const canvas = document.getElementById('partMakerEditorCanvas');
     const rect = canvas.getBoundingClientRect();
     const ndc = new THREE.Vector2(
       ((e.clientX - rect.left) / rect.width) * 2 - 1,
@@ -973,7 +974,7 @@ function initBoxEditor() {
     renderShapeListUI();
     attachSelection();
   });
-  document.getElementById('shapeDeleteBtn').addEventListener('click', () => {
+  document.getElementById('partMakerShapeDeleteBtn').addEventListener('click', () => {
     if (!shapes.length || selectedIndex < 0) return;
     shapes.splice(selectedIndex, 1);
     selectedIndex = shapes.length ? Math.max(0, selectedIndex - 1) : -1;
@@ -984,7 +985,7 @@ function initBoxEditor() {
   panel.querySelectorAll('.tfModeBtn').forEach((b) => b.addEventListener('click', () => {
     panel.querySelectorAll('.tfModeBtn').forEach((x) => x.classList.toggle('on', x === b));
     if (live && live.transform) live.transform.setMode(b.dataset.mode);
-    document.getElementById('rotateAngleRow').style.display = b.dataset.mode === 'rotate' ? 'flex' : 'none';
+    document.getElementById('partMakerRotateAngleRow').style.display = b.dataset.mode === 'rotate' ? 'flex' : 'none';
     if (b.dataset.mode === 'rotate') syncRotateAngleUI();
   }));
   // 사용자 지시: "중심으로 반대로 뒤집는 버튼, 위아래로 뒤집는 버튼 추가해줘" / "3D 관련 프로그램에서
@@ -1001,16 +1002,16 @@ function initBoxEditor() {
     }
     fillFieldsFromShape(shape);
   }
-  document.getElementById('boxFlipBtn').addEventListener('click', () => flipSelectedShape('y'));
-  document.getElementById('boxFlipYBtn').addEventListener('click', () => flipSelectedShape('x'));
+  document.getElementById('partMakerFlipBtn').addEventListener('click', () => flipSelectedShape('y'));
+  document.getElementById('partMakerFlipYBtn').addEventListener('click', () => flipSelectedShape('x'));
   // 회전축 고르기(x/y/z) — 그 축의 지금 각도를 드롭다운에 보여준다.
-  document.getElementById('rotateAxis').addEventListener('change', syncRotateAngleUI);
+  document.getElementById('partMakerRotateAxis').addEventListener('change', syncRotateAngleUI);
   // 15도 단위 각도 드롭다운으로 정확한 각도를 바로 지정(사용자 지시: "x,y,z선택후 15도 단위로 회전 각도
   // 선택할수 있게 해줘") — 마우스 드래그와 별개로, 캔버스의 도형 회전값을 그 자리에서 바로 반영한다.
-  document.getElementById('rotateAngle').addEventListener('change', () => {
+  document.getElementById('partMakerRotateAngle').addEventListener('change', () => {
     if (!shapes[selectedIndex]) return;
-    const axis = document.getElementById('rotateAxis').value;
-    const deg = Number(document.getElementById('rotateAngle').value) || 0;
+    const axis = document.getElementById('partMakerRotateAxis').value;
+    const deg = Number(document.getElementById('partMakerRotateAngle').value) || 0;
     const rad = deg * Math.PI / 180;
     shapes[selectedIndex]['r' + axis] = rad;
     if (mode === 'edit' && live && live.meshes[selectedIndex]) {
@@ -1020,23 +1021,23 @@ function initBoxEditor() {
       fillFieldsFromShape(shapes[selectedIndex]);
     }
   });
-  document.getElementById('boxPreviewBtn').addEventListener('click', () => setMode('preview'));
-  document.getElementById('boxBackToEditBtn').addEventListener('click', () => setMode('edit'));
+  document.getElementById('partMakerPreviewBtn').addEventListener('click', () => setMode('preview'));
+  document.getElementById('partMakerBackToEditBtn').addEventListener('click', () => setMode('edit'));
   // showAll=true — 프레임/브라켓뿐 아니라 등록된 부품 전체를 보여줘서, 어떤 부품이든 열어서 지금 만든
   // 도형(들)로 교체 저장할 수 있게 함(사용자 지시: "기존의 등록된 부품을 수정으로 열어서 교체하는 기능").
-  document.getElementById('boxTargetPickBtn').addEventListener('click', () => {
+  document.getElementById('partMakerTargetPickBtn').addEventListener('click', () => {
     openPickerModal('기존 부품 열어서 교체', onBoxTargetPicked, true);
   });
   // 지금 만든 도형(들)을 완전히 새 부품으로 등록(사용자 지시: "부품등록쪽으로 저장하는기능") — 이름만
   // 입력받고, 나머지(아이콘·과목 등)는 기본값으로 채운 뒤 "스펙 수정" 등 기존 화면에서 더 정리할 수 있다.
-  document.getElementById('boxNewPartBtn').addEventListener('click', async () => {
-    const msg = document.getElementById('boxEditorMsg');
+  document.getElementById('partMakerNewPartBtn').addEventListener('click', async () => {
+    const msg = document.getElementById('partMakerEditorMsg');
     if (!shapes.length) { msg.className = 'msg err'; msg.textContent = '등록할 도형이 없어요.'; return; }
     // 이름 입력칸을 버튼 옆에 항상 붙여두면 버튼 줄이 너무 길어져서 옆 팔레트가 화면 밖으로 밀려난다
     // (사용자 지적: "이부분이 너무 길어서 2번째 스샷부분이 밀리자나") — 버튼을 누른 순간에만 모달로 물어본다.
     const name = (await openNamePromptModal() || '').trim();
     if (!name) return;
-    const btn = document.getElementById('boxNewPartBtn');
+    const btn = document.getElementById('partMakerNewPartBtn');
     btn.disabled = true; msg.textContent = '';
     try {
       const shapesToSave = shapes.map((s) => { const { _geometry, ...rest } = s; return rest; });
@@ -1049,8 +1050,8 @@ function initBoxEditor() {
       const created = (res.parts || []).slice().reverse().find((p) => p.name === name);
       if (created) {
         targetPart = created;
-        document.getElementById('boxTargetLabel').textContent = '선택된 부품: ' + created.name;
-        document.getElementById('boxSaveBtn').disabled = false;
+        document.getElementById('partMakerTargetLabel').textContent = '선택된 부품: ' + created.name;
+        document.getElementById('partMakerSaveBtn').disabled = false;
       }
       msg.className = 'msg ok';
       msg.textContent = '"' + name + '" 새 부품으로 등록했어요.';
@@ -1061,17 +1062,17 @@ function initBoxEditor() {
       btn.disabled = false;
     }
   });
-  document.getElementById('boxExportStlBtn').addEventListener('click', exportSTL);
+  document.getElementById('partMakerExportStlBtn').addEventListener('click', exportSTL);
   // 팅커캐드처럼 GLB/GLTF·STL·OBJ 파일을 불러와서 다른 도형들과 똑같이 더하기/빼기 목록에 추가한다
   // (사용자 지시: "저장할 부품고르기 3D파일 불러올수있게 해줘" → "3가지 모두 불러올수 있게 해줘").
-  document.getElementById('boxImportBtn').addEventListener('click', () => {
-    document.getElementById('boxImportInput').click();
+  document.getElementById('partMakerImportBtn').addEventListener('click', () => {
+    document.getElementById('partMakerImportInput').click();
   });
-  document.getElementById('boxImportInput').addEventListener('change', async (e) => {
+  document.getElementById('partMakerImportInput').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     e.target.value = '';
     if (!file) return;
-    const msg = document.getElementById('boxImportMsg');
+    const msg = document.getElementById('partMakerImportMsg');
     msg.textContent = '불러오는 중...';
     try {
       const geometry = await loadImportedGeometry(file);
@@ -1084,7 +1085,7 @@ function initBoxEditor() {
     }
   });
   async function saveToTargetPart() {
-    const msg = document.getElementById('boxEditorMsg'), btn = document.getElementById('boxSaveBtn');
+    const msg = document.getElementById('partMakerEditorMsg'), btn = document.getElementById('partMakerSaveBtn');
     // 이 부품에 이미 있던 다른 spec 필드(holeLabels 등)를 지우지 않도록 합쳐서 보낸다.
     // _geometry(불러온 3D 파일을 메모리에 캐시해둔 것)는 숫자·문자열이 아니라 저장(JSON)이 안 되므로 뺀다
     // — 대신 fileDataUrl(원본 파일 자체)이 저장되어 있어서, 다시 열 때 그걸로 지오메트리를 새로 만든다.
@@ -1112,7 +1113,7 @@ function initBoxEditor() {
   // 바로 부품 목록을 띄운다(사용자 지적: "저장하기를 클릭하고 기존부품리스트에서 선택을 해야하는데 저장하기가
   // 안된다니까" — 버튼이 disabled라 그냥 눌리지 않는 것으로 보였음). 이미 도형이 있으면 onBoxTargetPicked가
   // shapes를 안 건드리고 targetPart만 채워주므로, 고른 직후 바로 이어서 저장까지 진행한다.
-  document.getElementById('boxSaveBtn').addEventListener('click', async () => {
+  document.getElementById('partMakerSaveBtn').addEventListener('click', async () => {
     if (!targetPart) {
       openPickerModal('저장할 부품 고르기', async (p) => {
         await onBoxTargetPicked(p);
@@ -1126,9 +1127,9 @@ function initBoxEditor() {
   // 색상칸·밝기 슬라이더·뒤집기 버튼·회전 각도 드롭다운·바닥붙이기 체크박스처럼 캔버스 바깥에서 라이브
   // 메쉬를 직접 건드리는 조작을 하나하나 다 찾아 고치는 대신, 이 패널 전체에 위임 리스너 하나로 걸어서
   // 뭐가 됐든 손대면 dirty를 세운다(사용자 지적: "다 최적화를 해" — 놓치는 곳 없게 넓게 잡음).
-  document.getElementById('boxEditorPanel').addEventListener('input', () => { if (live) live.dirty = true; });
-  document.getElementById('boxEditorPanel').addEventListener('change', () => { if (live) live.dirty = true; });
-  document.getElementById('boxEditorPanel').addEventListener('click', () => { if (live) live.dirty = true; });
+  document.getElementById('partMakerEditorPanel').addEventListener('input', () => { if (live) live.dirty = true; });
+  document.getElementById('partMakerEditorPanel').addEventListener('change', () => { if (live) live.dirty = true; });
+  document.getElementById('partMakerEditorPanel').addEventListener('click', () => { if (live) live.dirty = true; });
 
   // 처음엔 "기본 도형" 탭만 보이게 — 듀프로형/케이넥스형 버튼은 그 탭을 눌러야 나온다.
   const initialTab = panel.querySelector('.paletteTabBtn.on') || panel.querySelector('.paletteTabBtn');
@@ -1143,4 +1144,4 @@ function initBoxEditor() {
   renderEditMode();
 }
 
-window.initBoxEditor = initBoxEditor;
+window.initPartMaker = initPartMaker;
