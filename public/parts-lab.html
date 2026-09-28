@@ -397,40 +397,46 @@ h4{margin:4px 0}
         <div class="msg" id="partMakerEditorMsg"></div>
       </div>
     </div>
-    <div class="section-note" style="margin-top:14px;">✂️ 나누기 — 지금 만든 모양을 바닥에 붙인 뒤, 고른 축 방향으로 똑같은 크기 여러 조각으로 잘라요. 마음에 드는 조각만 STL로 저장하고, 나머지는 삭제하세요.</div>
-    <div class="btnRow">
-      <label style="font-size:11px;color:#666;display:flex;flex-direction:column;gap:2px;">자르는 축
-        <select id="partMakerCutAxis">
-          <option value="x">가로(X)</option>
-          <option value="z">세로(Z)</option>
-        </select>
-      </label>
-      <label style="font-size:11px;color:#666;display:flex;flex-direction:column;gap:2px;">등분 수
-        <input type="number" id="partMakerCutCount" value="2" min="2" step="1" style="width:64px;">
-      </label>
-      <button id="partMakerCutPreviewBtn" type="button" style="background:#fff;color:#2b6be0;">✂️ 자르기 미리보기</button>
-      <span id="partMakerCutMsg" class="msg" style="margin:0;"></span>
+    <button id="partMakerCutToggle" type="button" class="collapseToggle" style="margin-top:14px;">▶ ✂️ 나누기 (펼치기)</button>
+    <div id="partMakerCutPanel" hidden>
+      <div class="section-note">✂️ 나누기 — 지금 만든 모양을 바닥에 붙인 뒤, 고른 축 방향으로 똑같은 크기 여러 조각으로 잘라요. 마음에 드는 조각만 STL로 저장하고, 나머지는 삭제하세요.</div>
+      <div class="btnRow">
+        <label style="font-size:11px;color:#666;display:flex;flex-direction:column;gap:2px;">자르는 축
+          <select id="partMakerCutAxis">
+            <option value="x">가로(X)</option>
+            <option value="z">세로(Z)</option>
+          </select>
+        </label>
+        <label style="font-size:11px;color:#666;display:flex;flex-direction:column;gap:2px;">등분 수
+          <input type="number" id="partMakerCutCount" value="2" min="2" step="1" style="width:64px;">
+        </label>
+        <button id="partMakerCutPreviewBtn" type="button" style="background:#fff;color:#2b6be0;">✂️ 자르기 미리보기</button>
+        <span id="partMakerCutMsg" class="msg" style="margin:0;"></span>
+      </div>
+      <div id="partMakerCutResults" style="display:flex; flex-wrap:wrap; gap:10px; margin-top:8px;"></div>
     </div>
-    <div id="partMakerCutResults" style="display:flex; flex-wrap:wrap; gap:10px; margin-top:8px;"></div>
-    <div class="section-note" style="margin-top:14px;">🔗 붙이기 — 기존 부품 하나를 골라 이어 붙일 개수와 방향을 정하면, 나란히 이어 붙인 하나의 새 부품을 만들어요.</div>
-    <div class="btnRow">
-      <button id="partMakerJoinPickBtn" type="button">🔍 이어붙일 부품 고르기</button>
-      <span id="partMakerJoinLabel" class="section-note" style="margin:0;">선택 안 됨</span>
+    <button id="partMakerJoinToggle" type="button" class="collapseToggle" style="margin-top:14px;">▶ 🔗 붙이기 (펼치기)</button>
+    <div id="partMakerJoinPanel" hidden>
+      <div class="section-note">🔗 붙이기 — 기존 부품 하나를 골라 이어 붙일 개수와 방향을 정하면, 나란히 이어 붙인 하나의 새 부품을 만들어요.</div>
+      <div class="btnRow">
+        <button id="partMakerJoinPickBtn" type="button">🔍 이어붙일 부품 고르기</button>
+        <span id="partMakerJoinLabel" class="section-note" style="margin:0;">선택 안 됨</span>
+      </div>
+      <div class="btnRow">
+        <label style="font-size:11px;color:#666;display:flex;flex-direction:column;gap:2px;">이어붙이는 축
+          <select id="partMakerJoinAxis">
+            <option value="x">가로(X)</option>
+            <option value="z">세로(Z)</option>
+          </select>
+        </label>
+        <label style="font-size:11px;color:#666;display:flex;flex-direction:column;gap:2px;">개수
+          <input type="number" id="partMakerJoinCount" value="2" min="2" step="1" style="width:64px;">
+        </label>
+        <button id="partMakerJoinPreviewBtn" type="button" style="background:#fff;color:#2b6be0;">🔗 붙이기 미리보기</button>
+        <span id="partMakerJoinMsg" class="msg" style="margin:0;"></span>
+      </div>
+      <div id="partMakerJoinResult" style="margin-top:8px;"></div>
     </div>
-    <div class="btnRow">
-      <label style="font-size:11px;color:#666;display:flex;flex-direction:column;gap:2px;">이어붙이는 축
-        <select id="partMakerJoinAxis">
-          <option value="x">가로(X)</option>
-          <option value="z">세로(Z)</option>
-        </select>
-      </label>
-      <label style="font-size:11px;color:#666;display:flex;flex-direction:column;gap:2px;">개수
-        <input type="number" id="partMakerJoinCount" value="2" min="2" step="1" style="width:64px;">
-      </label>
-      <button id="partMakerJoinPreviewBtn" type="button" style="background:#fff;color:#2b6be0;">🔗 붙이기 미리보기</button>
-      <span id="partMakerJoinMsg" class="msg" style="margin:0;"></span>
-    </div>
-    <div id="partMakerJoinResult" style="margin-top:8px;"></div>
   </div>
 </div>
 
@@ -2343,6 +2349,21 @@ h4{margin:4px 0}
     const open = panel.hidden;
     panel.hidden = !open;
     document.getElementById('ruleToggle').textContent = open ? '▼ 기본 셋팅·넘버링 규칙 (접기)' : '▶ 기본 셋팅·넘버링 규칙 (펼치기)';
+  });
+
+  // 나누기/붙이기도 평소엔 접어두고, 버튼을 눌러야 축/개수 등 조작 컨트롤이 나타나게 함
+  // (사용자 지적: 부품/STL을 불러오지도 않았는데 몇 등분·몇 개로 할지 컨트롤이 기본으로 보이고 있었음)
+  document.getElementById('partMakerCutToggle').addEventListener('click', () => {
+    const panel = document.getElementById('partMakerCutPanel');
+    const open = panel.hidden;
+    panel.hidden = !open;
+    document.getElementById('partMakerCutToggle').textContent = open ? '▼ ✂️ 나누기 (접기)' : '▶ ✂️ 나누기 (펼치기)';
+  });
+  document.getElementById('partMakerJoinToggle').addEventListener('click', () => {
+    const panel = document.getElementById('partMakerJoinPanel');
+    const open = panel.hidden;
+    panel.hidden = !open;
+    document.getElementById('partMakerJoinToggle').textContent = open ? '▼ 🔗 붙이기 (접기)' : '▶ 🔗 붙이기 (펼치기)';
   });
 
   // "비교 대상 부품"도 모달로 고른 부품 하나를 위/정면/뒷면 3컷으로 보여줌(기본은 90도프레임+1열브라켓 예시)
