@@ -493,13 +493,17 @@ function initBoxEditor() {
     startLoop(() => live);
   }
   function attachSelection() {
-    if (!live || !live.meshes.length || selectedIndex < 0 || !live.meshes[selectedIndex]) {
+    const activeBtn = panel.querySelector('.tfModeBtn.on');
+    // 이동/회전/크기 버튼을 다시 눌러 끄면(아래 클릭 핸들러) 셋 다 off 상태가 될 수 있다 — 그럴 땐 도형을
+    // 골랐어도 기즈모(조작 손잡이)를 보여주지 않는다(사용자 지시: "이동클릭하고 한번더 클릭하면 아무기능도
+    // 활성화가 안되게끔").
+    if (!live || !live.meshes.length || selectedIndex < 0 || !live.meshes[selectedIndex] || !activeBtn) {
       if (live && live.transform) live.transform.detach();
       return;
     }
     const mesh = live.meshes[selectedIndex];
     live.transform.attach(mesh);
-    live.transform.setMode(panel.querySelector('.tfModeBtn.on').dataset.mode);
+    live.transform.setMode(activeBtn.dataset.mode);
   }
   // 드래그(이동/크기)한 결과를 그 도형의 숫자로 되읽어 온다. "크기" 모드는 mesh.scale을 곱하는 방식이라,
   // 매번 실제 치수(w/h/d 또는 radius/width) 숫자에 구워넣고 scale은 1로 되돌린 뒤 지오메트리를 다시 만든다 —
@@ -981,11 +985,16 @@ function initBoxEditor() {
     renderShapeListUI();
     renderEditMode();
   });
+  // 이동/회전/크기 버튼 — 이미 켜져 있는 버튼을 다시 누르면 끄고(기즈모 없음), 아닌 버튼을 누르면 그
+  // 버튼만 켠다(사용자 지시: "이동클릭하고 한번더 클릭하면 아무기능도 활성화가 안되게끔").
   panel.querySelectorAll('.tfModeBtn').forEach((b) => b.addEventListener('click', () => {
-    panel.querySelectorAll('.tfModeBtn').forEach((x) => x.classList.toggle('on', x === b));
-    if (live && live.transform) live.transform.setMode(b.dataset.mode);
-    document.getElementById('rotateAngleRow').style.display = b.dataset.mode === 'rotate' ? 'flex' : 'none';
-    if (b.dataset.mode === 'rotate') syncRotateAngleUI();
+    const wasOn = b.classList.contains('on');
+    panel.querySelectorAll('.tfModeBtn').forEach((x) => x.classList.remove('on'));
+    if (!wasOn) b.classList.add('on');
+    attachSelection();
+    const showRotateRow = !wasOn && b.dataset.mode === 'rotate';
+    document.getElementById('rotateAngleRow').style.display = showRotateRow ? 'flex' : 'none';
+    if (showRotateRow) syncRotateAngleUI();
   }));
   // 사용자 지시: "중심으로 반대로 뒤집는 버튼, 위아래로 뒤집는 버튼 추가해줘" / "3D 관련 프로그램에서
   // 누가 시각을 뒤집니?" — 카메라가 아니라 선택된 도형 자체를 180도 돌린다(회전값이 shape에 저장되므로

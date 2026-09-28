@@ -147,10 +147,10 @@ h4{margin:4px 0}
         -->
         <div id="rotateAngleRow" style="position:absolute; top:6px; left:6px; z-index:5; display:none; gap:6px; background:rgba(255,255,255,0.9); border:1px solid #ddd; border-radius:6px; padding:5px 6px;">
           <label style="font-size:11px;color:#666;display:flex;flex-direction:column;gap:2px;">회전축
-            <select id="rotateAxis">
-              <option value="x">X</option>
-              <option value="y">Y</option>
-              <option value="z">Z</option>
+            <select id="rotateAxis" class="axisSelect">
+              <option value="x" style="color:#ff0000;">X</option>
+              <option value="y" style="color:#00b300;">Y</option>
+              <option value="z" style="color:#0000ff;">Z</option>
             </select>
           </label>
           <label style="font-size:11px;color:#666;display:flex;flex-direction:column;gap:2px;">각도(15도 단위)
@@ -292,10 +292,10 @@ h4{margin:4px 0}
         </div>
         <div id="partMakerRotateAngleRow" style="position:absolute; top:6px; left:6px; z-index:5; display:none; gap:6px; background:rgba(255,255,255,0.9); border:1px solid #ddd; border-radius:6px; padding:5px 6px;">
           <label style="font-size:11px;color:#666;display:flex;flex-direction:column;gap:2px;">회전축
-            <select id="partMakerRotateAxis">
-              <option value="x">X</option>
-              <option value="y">Y</option>
-              <option value="z">Z</option>
+            <select id="partMakerRotateAxis" class="axisSelect">
+              <option value="x" style="color:#ff0000;">X</option>
+              <option value="y" style="color:#00b300;">Y</option>
+              <option value="z" style="color:#0000ff;">Z</option>
             </select>
           </label>
           <label style="font-size:11px;color:#666;display:flex;flex-direction:column;gap:2px;">각도(15도 단위)
@@ -402,9 +402,9 @@ h4{margin:4px 0}
       <div class="section-note">✂️ 나누기 — 지금 만든 모양을 바닥에 붙인 뒤, 고른 축 방향으로 똑같은 크기 여러 조각으로 잘라요. 마음에 드는 조각만 STL로 저장하고, 나머지는 삭제하세요.</div>
       <div class="btnRow">
         <label style="font-size:11px;color:#666;display:flex;flex-direction:column;gap:2px;">자르는 축
-          <select id="partMakerCutAxis">
-            <option value="x">가로(X)</option>
-            <option value="z">세로(Z)</option>
+          <select id="partMakerCutAxis" class="axisSelect">
+            <option value="x" style="color:#ff0000;">가로(X)</option>
+            <option value="z" style="color:#0000ff;">세로(Z)</option>
           </select>
         </label>
         <label style="font-size:11px;color:#666;display:flex;flex-direction:column;gap:2px;">등분 수
@@ -424,9 +424,9 @@ h4{margin:4px 0}
       </div>
       <div class="btnRow">
         <label style="font-size:11px;color:#666;display:flex;flex-direction:column;gap:2px;">이어붙이는 축
-          <select id="partMakerJoinAxis">
-            <option value="x">가로(X)</option>
-            <option value="z">세로(Z)</option>
+          <select id="partMakerJoinAxis" class="axisSelect">
+            <option value="x" style="color:#ff0000;">가로(X)</option>
+            <option value="z" style="color:#0000ff;">세로(Z)</option>
           </select>
         </label>
         <label style="font-size:11px;color:#666;display:flex;flex-direction:column;gap:2px;">개수
@@ -442,9 +442,9 @@ h4{margin:4px 0}
       <div class="section-note">🖼️ 테두리 만들기 — 자르거나 이어붙인 뒤 한쪽엔 테두리가 있고 반대쪽엔 없을 때, 있는 쪽 모양을 그대로 거울 대칭시켜서 없는 쪽에 채워요. 두께를 직접 정하지 않아도 항상 원본과 똑같이 대칭이 돼요.</div>
       <div class="btnRow">
         <label style="font-size:11px;color:#666;display:flex;flex-direction:column;gap:2px;">대칭시킬 축
-          <select id="partMakerBorderAxis">
-            <option value="x">가로(X)</option>
-            <option value="z">세로(Z)</option>
+          <select id="partMakerBorderAxis" class="axisSelect">
+            <option value="x" style="color:#ff0000;">가로(X)</option>
+            <option value="z" style="color:#0000ff;">세로(Z)</option>
           </select>
         </label>
         <button id="partMakerBorderPreviewBtn" type="button" style="background:#fff;color:#2b6be0;">🖼️ 테두리 만들기</button>
@@ -2385,6 +2385,14 @@ h4{margin:4px 0}
     const open = panel.hidden;
     panel.hidden = !open;
     document.getElementById('partMakerBorderToggle').textContent = open ? '▼ 🖼️ 테두리 만들기 (접기)' : '▶ 🖼️ 테두리 만들기 (펼치기)';
+  });
+  // 나누기/붙이기/테두리 만들기의 축 선택 드롭다운 — 3D 화면의 축 색(X=빨강/Z=파랑, makeAxesRods)과
+  // 맞춰서 닫혀있을 때도 어느 축인지 색으로 바로 보이게 한다(<option style>은 펼친 목록에만 먹고 닫힌
+  // 칸 자체엔 브라우저마다 안 먹혀서, select 자신의 글자색도 같이 맞춰준다).
+  document.querySelectorAll('select.axisSelect').forEach((sel) => {
+    const syncColor = () => { sel.style.color = sel.options[sel.selectedIndex].style.color; };
+    syncColor();
+    sel.addEventListener('change', syncColor);
   });
 
   // "비교 대상 부품"도 모달로 고른 부품 하나를 위/정면/뒷면 3컷으로 보여줌(기본은 90도프레임+1열브라켓 예시)

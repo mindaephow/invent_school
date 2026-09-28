@@ -503,13 +503,17 @@ function initPartMaker() {
     startLoop(() => live);
   }
   function attachSelection() {
-    if (!live || !live.meshes.length || selectedIndex < 0 || !live.meshes[selectedIndex]) {
+    const activeBtn = panel.querySelector('.tfModeBtn.on');
+    // 이동/회전/크기 버튼을 다시 눌러 끄면(아래 클릭 핸들러) 셋 다 off 상태가 될 수 있다 — 그럴 땐 도형을
+    // 골랐어도 기즈모(조작 손잡이)를 보여주지 않는다(사용자 지시: "이동클릭하고 한번더 클릭하면 아무기능도
+    // 활성화가 안되게끔").
+    if (!live || !live.meshes.length || selectedIndex < 0 || !live.meshes[selectedIndex] || !activeBtn) {
       if (live && live.transform) live.transform.detach();
       return;
     }
     const mesh = live.meshes[selectedIndex];
     live.transform.attach(mesh);
-    live.transform.setMode(panel.querySelector('.tfModeBtn.on').dataset.mode);
+    live.transform.setMode(activeBtn.dataset.mode);
   }
   // 드래그(이동/크기)한 결과를 그 도형의 숫자로 되읽어 온다. "크기" 모드는 mesh.scale을 곱하는 방식이라,
   // 매번 실제 치수(w/h/d 또는 radius/width) 숫자에 구워넣고 scale은 1로 되돌린 뒤 지오메트리를 다시 만든다 —
@@ -965,10 +969,39 @@ function initPartMaker() {
       '<div style="width:150px; border:1px solid #ddd; border-radius:8px; padding:8px; text-align:center; background:#fff;">' +
       '<img src="' + thumb + '" width="130" height="130" style="width:130px;height:130px;border-radius:4px;background:#f3f5f8;">' +
       '<div style="font-size:11px; color:#666; margin:6px 0;">' + borderResult.size.x + ' × ' + borderResult.size.y + ' × ' + borderResult.size.z + 'mm</div>' +
-      '<div style="display:flex; gap:4px; justify-content:center;">' +
+      '<div style="display:flex; gap:4px; justify-content:center; flex-wrap:wrap;">' +
+      '<button type="button" id="partMakerBorderEditBtn" style="font-size:11px; padding:4px 8px; border-radius:5px; border:1px solid #2b6be0; background:#fff; color:#2b6be0; cursor:pointer;">✏️ 에디터에서 보기</button>' +
       '<button type="button" id="partMakerBorderNewPartBtn" style="font-size:11px; padding:4px 8px; border-radius:5px; border:1px solid #2b6be0; background:#2b6be0; color:#fff; cursor:pointer;">🆕 새 부품으로 등록</button>' +
       '<button type="button" id="partMakerBorderExportBtn" style="font-size:11px; padding:4px 8px; border-radius:5px; border:1px solid #2b6be0; background:#fff; color:#2b6be0; cursor:pointer;">⬇️ STL</button>' +
       '</div></div>';
+    // "에디터에서 보기" — 결과를 캔버스로 가져와서 회전·확대해서 눈으로 확인하고, 기존 "저장(불러온
+    // 부품에 덮어쓰기)"/"새 부품으로 등록" 버튼으로 그대로 저장할 수 있게 한다(사용자 지시: "테두리
+    // 만들고 나서 수정된 모습을 에디터에서 보고 저장하고 싶어"). 3D 파일을 직접 불러왔을 때와 똑같은
+    // import 도형 하나로 캔버스를 통째로 바꿔치기 — buildShapeGeometry('import')가 shape._geometry를
+    // 그대로 쓰므로 다시 파싱할 필요 없이 바로 렌더된다.
+    document.getElementById('partMakerBorderEditBtn').addEventListener('click', async () => {
+      const msg = document.getElementById('partMakerBorderMsg');
+      try {
+        const exporter = new STLExporter();
+        const mesh = new THREE.Mesh(borderResult.geometry);
+        const stlText = exporter.parse(mesh, { binary: false });
+        const blob = new Blob([stlText], { type: 'model/stl' });
+        const fileDataUrl = await fileToDataUrl(blob);
+        shapes = [{
+          type: 'import', op: 'add', x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0,
+          fileName: '테두리결과.stl', fileDataUrl, _geometry: borderResult.geometry,
+        }];
+        selectedIndex = 0;
+        renderShapeListUI();
+        fillFieldsFromShape(shapes[0]);
+        setMode('edit');
+        msg.className = 'msg ok';
+        msg.textContent = '에디터로 불러왔어요 — 위 "결과 미리보기" 아래 저장/등록 버튼을 쓰면 돼요.';
+      } catch (err) {
+        msg.className = 'msg err';
+        msg.textContent = '에디터로 불러오기 실패: ' + err.message;
+      }
+    });
     document.getElementById('partMakerBorderExportBtn').addEventListener('click', () => {
       const mesh = new THREE.Mesh(borderResult.geometry);
       const exporter = new STLExporter();
@@ -1339,11 +1372,16 @@ function initPartMaker() {
     renderShapeListUI();
     renderEditMode();
   });
+  // 이동/회전/크기 버튼 — 이미 켜져 있는 버튼을 다시 누르면 끄고(기즈모 없음), 아닌 버튼을 누르면 그
+  // 버튼만 켠다(사용자 지시: "이동클릭하고 한번더 클릭하면 아무기능도 활성화가 안되게끔").
   panel.querySelectorAll('.tfModeBtn').forEach((b) => b.addEventListener('click', () => {
-    panel.querySelectorAll('.tfModeBtn').forEach((x) => x.classList.toggle('on', x === b));
-    if (live && live.transform) live.transform.setMode(b.dataset.mode);
-    document.getElementById('partMakerRotateAngleRow').style.display = b.dataset.mode === 'rotate' ? 'flex' : 'none';
-    if (b.dataset.mode === 'rotate') syncRotateAngleUI();
+    const wasOn = b.classList.contains('on');
+    panel.querySelectorAll('.tfModeBtn').forEach((x) => x.classList.remove('on'));
+    if (!wasOn) b.classList.add('on');
+    attachSelection();
+    const showRotateRow = !wasOn && b.dataset.mode === 'rotate';
+    document.getElementById('partMakerRotateAngleRow').style.display = showRotateRow ? 'flex' : 'none';
+    if (showRotateRow) syncRotateAngleUI();
   }));
   // 사용자 지시: "중심으로 반대로 뒤집는 버튼, 위아래로 뒤집는 버튼 추가해줘" / "3D 관련 프로그램에서
   // 누가 시각을 뒤집니?" — 카메라가 아니라 선택된 도형 자체를 180도 돌린다(회전값이 shape에 저장되므로
