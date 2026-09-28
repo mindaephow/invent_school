@@ -1710,8 +1710,12 @@ h4{margin:4px 0}
       const btn = document.createElement('button');
       btn.innerHTML = esc(p.name) + '<span class="sz">' + esc(p.size||'') + '</span>';
       btn.addEventListener('click', () => {
+        // closePickerModal()이 pickerModalCallback을 null로 지우므로, 먼저 지금 콜백을 변수에 잡아두고
+        // 나서 닫아야 한다 — 순서가 반대였을 때는 항상 아무 일도 안 일어났다(부품을 골라도 저장/불러오기가
+        // 전혀 실행되지 않던 버그, 사용자 지적으로 발견).
+        const cb = pickerModalCallback;
         closePickerModal();
-        if (pickerModalCallback) pickerModalCallback(p);
+        if (cb) cb(p);
       });
       el.appendChild(btn);
     });
