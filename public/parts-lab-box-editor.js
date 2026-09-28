@@ -692,6 +692,7 @@ function initBoxEditor() {
     document.getElementById('boxRedrawBtn').disabled = mode === 'preview';
     document.getElementById('boxFlipBtn').disabled = mode === 'preview';
     document.getElementById('boxFlipYBtn').disabled = mode === 'preview';
+    document.getElementById('boxPlaceOnPlaneBtn').disabled = mode === 'preview';
     if (mode === 'edit') renderEditMode(); else renderPreviewMode();
   }
 
@@ -1053,6 +1054,35 @@ function initBoxEditor() {
   }
   document.getElementById('boxFlipBtn').addEventListener('click', () => flipSelectedShape('y'));
   document.getElementById('boxFlipYBtn').addEventListener('click', () => flipSelectedShape('x'));
+  // "작업 평면에 놓기"(팅커캐드 D 단축키) — 사용자 지시: "D는 각도를 수평을 만들고 바닥에 두는거야".
+  // "바닥 위에 붙이기" 체크박스(이동할 때마다 자동으로, 바닥 아래로 파고들 때만 밀어올림)와 다르게
+  // 버튼을 눌렀을 때 한 번만 실행되고, 체크박스 상태와 무관하게 항상 동작하며 떠 있어도 끌어내린다.
+  // 기울어진 각도(rx/rz, 눕히는 방향)만 0으로 되돌리고 세로축 회전(ry, 어느 쪽을 보는지)은 그대로 둔다.
+  function placeSelectedOnWorkplane() {
+    const shape = shapes[selectedIndex];
+    if (!shape || !live || !live.meshes[selectedIndex]) return;
+    shape.rx = 0; shape.rz = 0;
+    const mesh = live.meshes[selectedIndex];
+    mesh.rotation.x = 0; mesh.rotation.z = 0;
+    mesh.updateMatrixWorld(true);
+    const worldBox = new THREE.Box3().setFromObject(mesh);
+    mesh.position.y -= worldBox.min.y;
+    shape.y = round1(mesh.position.y);
+    syncRotateAngleUI();
+    fillFieldsFromShape(shape);
+  }
+  document.getElementById('boxPlaceOnPlaneBtn').addEventListener('click', placeSelectedOnWorkplane);
+  // 이름 입력칸 등에서 "d"를 칠 때 단축키가 끼어들면 안 되므로 입력 요소에 포커스가 있으면 무시하고,
+  // 이 패널이 화면에 안 보이는 동안(다른 탭이 열려있을 때)도 무시한다(두 탭 다 이 리스너를 각자 갖고
+  // 있어서, 안 보이는 탭 것까지 같이 반응하면 이중 실행됨).
+  document.addEventListener('keydown', (e) => {
+    if (e.key.toLowerCase() !== 'd') return;
+    const tag = document.activeElement && document.activeElement.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (!panel.getClientRects().length || mode !== 'edit') return;
+    e.preventDefault();
+    placeSelectedOnWorkplane();
+  });
   // 회전축 고르기(x/y/z) — 그 축의 지금 각도를 드롭다운에 보여준다.
   document.getElementById('rotateAxis').addEventListener('change', syncRotateAngleUI);
   // 15도 단위 각도 드롭다운으로 정확한 각도를 바로 지정(사용자 지시: "x,y,z선택후 15도 단위로 회전 각도
