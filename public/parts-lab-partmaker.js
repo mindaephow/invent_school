@@ -765,7 +765,8 @@ function initPartMaker() {
       '<div class="cutPieceCard" data-i="' + i + '" style="width:130px; border:1px solid #ddd; border-radius:8px; padding:6px; text-align:center; background:#fff;">' +
       '<img class="cutThumb" width="110" height="110" style="width:110px;height:110px;border-radius:4px;background:#f3f5f8;">' +
       '<div style="font-size:11px; color:#666; margin:4px 0;">' + (i + 1) + '. ' + p.size.x + ' × ' + p.size.y + ' × ' + p.size.z + 'mm</div>' +
-      '<div style="display:flex; gap:4px; justify-content:center;">' +
+      '<div style="display:flex; gap:4px; justify-content:center; flex-wrap:wrap;">' +
+      '<button type="button" class="cutEditBtn" data-i="' + i + '" style="font-size:11px; padding:3px 6px; border-radius:5px; border:1px solid #2b6be0; background:#fff; color:#2b6be0; cursor:pointer;">✏️ 에디터</button>' +
       '<button type="button" class="cutSaveBtn" data-i="' + i + '" style="font-size:11px; padding:3px 6px; border-radius:5px; border:1px solid #2b6be0; background:#fff; color:#2b6be0; cursor:pointer;">⬇️ STL</button>' +
       '<button type="button" class="cutDeleteBtn" data-i="' + i + '" style="font-size:11px; padding:3px 6px; border-radius:5px; border:1px solid #c0392b; background:#fff; color:#c0392b; cursor:pointer;">삭제</button>' +
       '</div></div>'
@@ -793,6 +794,20 @@ function initPartMaker() {
       mesh.children.forEach((c) => { c.material && c.material.dispose(); });
     });
     renderer.dispose();
+    wrap.querySelectorAll('.cutEditBtn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const i = Number(btn.dataset.i);
+        const msg = document.getElementById('partMakerCutMsg');
+        try {
+          await loadResultIntoEditor(cutPieces[i].geometry, '조각' + (i + 1) + '.stl');
+          msg.className = 'msg ok';
+          msg.textContent = '에디터로 불러왔어요 — 위 "결과 미리보기" 아래 저장/등록 버튼을 쓰면 돼요.';
+        } catch (err) {
+          msg.className = 'msg err';
+          msg.textContent = '에디터로 불러오기 실패: ' + err.message;
+        }
+      });
+    });
     wrap.querySelectorAll('.cutSaveBtn').forEach((btn) => {
       btn.addEventListener('click', () => exportPieceSTL(cutPieces[Number(btn.dataset.i)], Number(btn.dataset.i)));
     });
@@ -1021,6 +1036,28 @@ function initPartMaker() {
     return dataUrl;
   }
 
+  // "에디터에서 보기" — 나누기/붙이기 결과를 캔버스로 가져와서 회전·확대해서 눈으로 확인하고, 기존
+  // "저장(불러온 부품에 덮어쓰기)"/"새 부품으로 등록" 버튼으로 그대로 저장할 수 있게 한다("테두리
+  // 만들기"에 이미 있던 기능과 같은 패턴, 사용자 지시: "나누기와 붙이기에도 에디터에서 확인을 할수있게
+  // 해줘"). 3D 파일을 직접 불러왔을 때와 똑같은 import 도형 하나로 캔버스를 통째로 바꿔치기 —
+  // fileDataUrl까지 만들어둬야 나중에 "저장"/"새 부품으로 등록"에서 _geometry가 빠져도(저장 시 제외됨)
+  // 그 자리를 대신할 수 있다(테두리 만들기의 partMakerBorderEditBtn과 동일한 이유).
+  async function loadResultIntoEditor(geometry, fileName) {
+    const exporter = new STLExporter();
+    const mesh = new THREE.Mesh(geometry);
+    const stlText = exporter.parse(mesh, { binary: false });
+    const blob = new Blob([stlText], { type: 'model/stl' });
+    const fileDataUrl = await fileToDataUrl(blob);
+    shapes = [{
+      type: 'import', op: 'add', x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0,
+      fileName, fileDataUrl, _geometry: geometry,
+    }];
+    selectedIndex = 0;
+    renderShapeListUI();
+    fillFieldsFromShape(shapes[0]);
+    setMode('edit');
+  }
+
   function renderJoinResult() {
     const wrap = document.getElementById('partMakerJoinResult');
     if (!joinResult) { wrap.innerHTML = ''; return; }
@@ -1029,10 +1066,22 @@ function initPartMaker() {
       '<div style="width:150px; border:1px solid #ddd; border-radius:8px; padding:8px; text-align:center; background:#fff;">' +
       '<img src="' + thumb + '" width="130" height="130" style="width:130px;height:130px;border-radius:4px;background:#f3f5f8;">' +
       '<div style="font-size:11px; color:#666; margin:6px 0;">' + joinResult.size.x + ' × ' + joinResult.size.y + ' × ' + joinResult.size.z + 'mm</div>' +
-      '<div style="display:flex; gap:4px; justify-content:center;">' +
+      '<div style="display:flex; gap:4px; justify-content:center; flex-wrap:wrap;">' +
+      '<button type="button" id="partMakerJoinEditBtn" style="font-size:11px; padding:4px 8px; border-radius:5px; border:1px solid #2b6be0; background:#fff; color:#2b6be0; cursor:pointer;">✏️ 에디터에서 보기</button>' +
       '<button type="button" id="partMakerJoinNewPartBtn" style="font-size:11px; padding:4px 8px; border-radius:5px; border:1px solid #2b6be0; background:#2b6be0; color:#fff; cursor:pointer;">🆕 새 부품으로 등록</button>' +
       '<button type="button" id="partMakerJoinExportBtn" style="font-size:11px; padding:4px 8px; border-radius:5px; border:1px solid #2b6be0; background:#fff; color:#2b6be0; cursor:pointer;">⬇️ STL</button>' +
       '</div></div>';
+    document.getElementById('partMakerJoinEditBtn').addEventListener('click', async () => {
+      const msg = document.getElementById('partMakerJoinMsg');
+      try {
+        await loadResultIntoEditor(joinResult.geometry, '붙이기결과.stl');
+        msg.className = 'msg ok';
+        msg.textContent = '에디터로 불러왔어요 — 위 "결과 미리보기" 아래 저장/등록 버튼을 쓰면 돼요.';
+      } catch (err) {
+        msg.className = 'msg err';
+        msg.textContent = '에디터로 불러오기 실패: ' + err.message;
+      }
+    });
     document.getElementById('partMakerJoinExportBtn').addEventListener('click', () => {
       const mesh = new THREE.Mesh(joinResult.geometry);
       const exporter = new STLExporter();
