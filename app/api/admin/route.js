@@ -125,7 +125,7 @@ function parseSpec(body) {
   // 도형 에디터(부품 수리실 스케치북 자리) — 도형 하나 이상의 위치·크기를 그대로 저장. svg 없이도 이
   // 숫자만으로 모양이 재현됨(브라켓의 armLen1/armLen2/armWidth와 같은 목적).
   // parts-lab-box-editor.js의 SHAPE_TYPES/BOX_LIKE/RADIUS_ONLY와 반드시 같이 맞춰야 한다.
-  const SHAPE_TYPES = ['box', 'wheel', 'gear', 'sphere', 'cone', 'pyramid', 'torus', 'hexprism', 'icosahedron', 'dome', 'wedge', 'ring', 'star', 'heart', 'text', 'duplo', 'knexRod', 'knexConnector', 'technicBeam']
+  const SHAPE_TYPES = ['box', 'wheel', 'gear', 'sphere', 'cone', 'pyramid', 'torus', 'hexprism', 'icosahedron', 'dome', 'wedge', 'ring', 'star', 'heart', 'text', 'duplo', 'knexRod', 'knexConnector', 'technicBeam', 'import']
   const BOX_LIKE = ['box', 'wedge', 'duplo', 'technicBeam']
   const RADIUS_ONLY = ['sphere', 'icosahedron', 'dome']
   // op: 'add'(더하기)|'subtract'(빼기/뚫기) — 목록 순서대로 앞 결과에 CSG로 합치거나 깎아낸다. 첫 도형은
@@ -149,6 +149,18 @@ function parseSpec(body) {
           const w = Number(s.w), h = Number(s.h), d = Number(s.d)
           if (![w, h, d].every((n) => Number.isFinite(n) && n > 0)) return null
           return { type: s.type, op, x, y, z, rx, ry, rz, w, h, d }
+        }
+        // GLB/GLTF·STL·OBJ로 불러온 도형(나누기·붙이기·테두리 만들기 결과 포함, 전부 이 타입) — 숫자로
+        // 계산하는 다른 도형과 달리 파일 원본(fileDataUrl, base64)을 그대로 저장해서 다시 열 때 지오메트리를
+        // 재생성한다. w/h/d도 radius/width도 없으니 그 검증들을 타면 안 되므로 여기서 먼저 처리하고 return.
+        // 2026-09-29 발견: 이 분기가 아예 없어서 SHAPE_TYPES에도 'import'가 빠져있었고, 그 결과 나누기·
+        // 붙이기·테두리·3D 파일 불러오기 저장이 전부 "성공" 메시지는 뜨지만 실제로는 shapes가 조용히
+        // 빈 배열로 저장되는 버그가 있었음(사용자 지적: "115프레임은 등록했는데 왜 안보여?").
+        if (s.type === 'import') {
+          const fileDataUrl = typeof s.fileDataUrl === 'string' && s.fileDataUrl.startsWith('data:') ? s.fileDataUrl : null
+          if (!fileDataUrl) return null
+          const fileName = typeof s.fileName === 'string' && s.fileName ? s.fileName.slice(0, 200) : 'model'
+          return { type: 'import', op, x, y, z, rx, ry, rz, fileName, fileDataUrl }
         }
         const radius = Number(s.radius)
         if (!Number.isFinite(radius) || radius <= 0) return null
