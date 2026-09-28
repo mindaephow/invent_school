@@ -776,6 +776,127 @@ function initPartMaker() {
     });
   }
 
+  // ---------- 붙이기: 나누기의 반대 — 기존 부품 하나를 골라 이어 붙인 개수만큼 나란히 합쳐서 새 부품
+  // 하나로 만든다(사용자 설명: "1X1을 3개를 연달아 붙이면 13프레임이 되는거지"). 지금 캔버스에서 편집
+  // 중인 도형이 아니라, 카탈로그에서 새로 고른 부품(joinSourcePart)을 대상으로 동작 — 나누기와 달리
+  // 결과가 여러 조각이 아니라 하나라서 바로 등록/내보내기까지 한 화면에서 끝낸다.
+  let joinSourcePart = null;
+  let joinResult = null; // { geometry, size:{x,y,z} }
+
+  // 카탈로그에 저장된 spec.shapes는 import 도형이어도 fileDataUrl만 있고 _geometry(캐시)는 없다 —
+  // renderShapesPreview()와 같은 방식으로 여기서도 다시 만들어준다.
+  async function resolveShapesGeometry(shapesData) {
+    const list = (shapesData || []).map((s) => Object.assign({}, s));
+    await Promise.all(list.filter((s) => s.type === 'import' && s.fileDataUrl && !s._geometry).map(async (s) => {
+      s._geometry = await loadImportedGeometry(dataUrlToFile(s.fileDataUrl, s.fileName || 'model'));
+    }));
+    return list;
+  }
+
+  // 고른 부품 하나를 합친 결과(computeMergedBrush)의 바운딩박스 크기를 "칸 하나 길이"로 써서, 그만큼씩
+  // 축 방향으로 띄운 사본을 이어 붙인다(ADDITION) — computeMergedBrush()가 여러 도형을 합칠 때 쓰는
+  // 것과 똑같은 Evaluator/Brush 체인 패턴을 그대로 재사용.
+  function computeJoinedBrush(shapesData, axis, count) {
+    const single = computeMergedBrush(shapesData);
+    if (!single) return null;
+    single.geometry.computeBoundingBox();
+    const size = new THREE.Vector3();
+    single.geometry.boundingBox.getSize(size);
+    const step = size[axis];
+    const evaluator = new Evaluator();
+    let result = new Brush(single.geometry);
+    result.position.set(0, 0, 0);
+    result.updateMatrixWorld();
+    for (let i = 1; i < count; i++) {
+      const copy = new Brush(single.geometry);
+      copy.position[axis] = step * i;
+      copy.updateMatrixWorld();
+      result = evaluator.evaluate(result, copy, ADDITION);
+      result.updateMatrixWorld();
+    }
+    return result;
+  }
+
+  // "나누기" 조각 썸네일(renderCutThumbnails)과 같은 이유로 렌더러 하나만 써서 한 장 스냅샷을 만든다.
+  function renderJoinThumbnail(geometry, size) {
+    const px = 130;
+    const canvas0 = document.createElement('canvas');
+    const renderer = new THREE.WebGLRenderer({ canvas: canvas0, antialias: true, alpha: true });
+    renderer.setSize(px, px, false);
+    const s = Math.max(size.x, size.y, size.z, 1);
+    const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 5000);
+    camera.position.set(s, s * 0.9, s);
+    camera.lookAt(0, s * 0.15, 0);
+    const scene = new THREE.Scene();
+    scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+    const dir = new THREE.DirectionalLight(0xffffff, 0.7); dir.position.set(2, 3, 2); scene.add(dir);
+    const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: IMPORT_COLOR }));
+    addEdgeOutline(mesh, IMPORT_COLOR);
+    scene.add(mesh);
+    renderer.render(scene, camera);
+    const dataUrl = canvas0.toDataURL('image/png');
+    mesh.material.dispose();
+    mesh.children.forEach((c) => { c.material && c.material.dispose(); });
+    renderer.dispose();
+    return dataUrl;
+  }
+
+  function renderJoinResult() {
+    const wrap = document.getElementById('partMakerJoinResult');
+    if (!joinResult) { wrap.innerHTML = ''; return; }
+    const thumb = renderJoinThumbnail(joinResult.geometry, joinResult.size);
+    wrap.innerHTML =
+      '<div style="width:150px; border:1px solid #ddd; border-radius:8px; padding:8px; text-align:center; background:#fff;">' +
+      '<img src="' + thumb + '" width="130" height="130" style="width:130px;height:130px;border-radius:4px;background:#f3f5f8;">' +
+      '<div style="font-size:11px; color:#666; margin:6px 0;">' + joinResult.size.x + ' × ' + joinResult.size.y + ' × ' + joinResult.size.z + 'mm</div>' +
+      '<div style="display:flex; gap:4px; justify-content:center;">' +
+      '<button type="button" id="partMakerJoinNewPartBtn" style="font-size:11px; padding:4px 8px; border-radius:5px; border:1px solid #2b6be0; background:#2b6be0; color:#fff; cursor:pointer;">🆕 새 부품으로 등록</button>' +
+      '<button type="button" id="partMakerJoinExportBtn" style="font-size:11px; padding:4px 8px; border-radius:5px; border:1px solid #2b6be0; background:#fff; color:#2b6be0; cursor:pointer;">⬇️ STL</button>' +
+      '</div></div>';
+    document.getElementById('partMakerJoinExportBtn').addEventListener('click', () => {
+      const mesh = new THREE.Mesh(joinResult.geometry);
+      const exporter = new STLExporter();
+      const stlText = exporter.parse(mesh, { binary: false });
+      const blob = new Blob([stlText], { type: 'model/stl' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = (joinSourcePart ? joinSourcePart.name : '부품') + '_붙이기.stl';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    });
+    document.getElementById('partMakerJoinNewPartBtn').addEventListener('click', async () => {
+      const msg = document.getElementById('partMakerJoinMsg');
+      const name = (await openNamePromptModal() || '').trim();
+      if (!name) return;
+      const btn = document.getElementById('partMakerJoinNewPartBtn');
+      btn.disabled = true;
+      try {
+        const exporter = new STLExporter();
+        const mesh = new THREE.Mesh(joinResult.geometry);
+        const stlText = exporter.parse(mesh, { binary: false });
+        const blob = new Blob([stlText], { type: 'model/stl' });
+        const fileDataUrl = await fileToDataUrl(blob);
+        const shape = { type: 'import', op: 'add', x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0, fileName: name + '.stl', fileDataUrl };
+        await adminApi({
+          action: 'add_part', name, icon: '📦', subject: getSubject(), category: '',
+          volumes: [], color: null, size: null,
+          imageSvg: '', imageSvgDiagonal: '', primaryImage: 'front',
+          spec: { shapes: [shape] },
+        }, getAccessToken());
+        msg.className = 'msg ok';
+        msg.textContent = '"' + name + '" 새 부품으로 등록했어요.';
+      } catch (err) {
+        msg.className = 'msg err';
+        msg.textContent = '등록 실패: ' + err.message;
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+
   function setMode(next) {
     mode = next;
     document.getElementById('partMakerPreviewBtn').hidden = mode === 'preview';
@@ -1261,6 +1382,44 @@ function initPartMaker() {
     } catch (e) {
       msg.className = 'msg err';
       msg.textContent = '자르기 실패: ' + e.message;
+    }
+  });
+
+  // "붙이기" — 이어붙일 부품 고르기(showAll=true, 나누기/저장 대상 고르기와 같은 패턴)와 미리보기 버튼.
+  document.getElementById('partMakerJoinPickBtn').addEventListener('click', () => {
+    openPickerModal('이어붙일 부품 고르기', (p) => {
+      joinSourcePart = p;
+      document.getElementById('partMakerJoinLabel').textContent = '선택된 부품: ' + p.name;
+      joinResult = null;
+      renderJoinResult();
+    }, true);
+  });
+  document.getElementById('partMakerJoinPreviewBtn').addEventListener('click', async () => {
+    const msg = document.getElementById('partMakerJoinMsg');
+    if (!joinSourcePart) { msg.className = 'msg err'; msg.textContent = '이어붙일 부품을 먼저 골라주세요.'; return; }
+    const srcShapes = (joinSourcePart.spec && joinSourcePart.spec.shapes) || [];
+    if (!srcShapes.length) { msg.className = 'msg err'; msg.textContent = '이 부품엔 저장된 도형(spec.shapes)이 없어요.'; return; }
+    const axis = document.getElementById('partMakerJoinAxis').value;
+    const count = Math.max(2, Math.round(Number(document.getElementById('partMakerJoinCount').value) || 2));
+    document.getElementById('partMakerJoinCount').value = count;
+    msg.textContent = '붙이는 중...';
+    try {
+      const resolved = await resolveShapesGeometry(srcShapes);
+      const brush = computeJoinedBrush(resolved, axis, count);
+      brush.geometry.computeBoundingBox();
+      const c = new THREE.Vector3();
+      brush.geometry.boundingBox.getCenter(c);
+      brush.geometry.translate(-c.x, -brush.geometry.boundingBox.min.y, -c.z);
+      brush.geometry.computeBoundingBox();
+      const sz = new THREE.Vector3();
+      brush.geometry.boundingBox.getSize(sz);
+      joinResult = { geometry: brush.geometry, size: { x: round1(sz.x), y: round1(sz.y), z: round1(sz.z) } };
+      renderJoinResult();
+      msg.className = 'msg ok';
+      msg.textContent = count + '개를 이어 붙였어요.';
+    } catch (e) {
+      msg.className = 'msg err';
+      msg.textContent = '붙이기 실패: ' + e.message;
     }
   });
 
