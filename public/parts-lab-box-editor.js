@@ -1151,7 +1151,7 @@ function initBoxEditor() {
         spec, snapshot: targetPart.snapshot || null, snapshots: targetPart.snapshots || null,
       }, getAccessToken());
       targetPart.spec = spec;
-      msg.className = 'msg ok'; msg.textContent = '저장했어요.';
+      msg.className = 'msg ok'; msg.textContent = '"' + targetPart.name + '"에 저장했어요.';
     } catch (e) {
       msg.className = 'msg err'; msg.textContent = '저장 실패: ' + e.message;
     } finally {
