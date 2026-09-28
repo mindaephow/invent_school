@@ -1026,9 +1026,8 @@ function initBoxEditor() {
       msg.textContent = '불러오기 실패: ' + err.message;
     }
   });
-  document.getElementById('boxSaveBtn').addEventListener('click', async () => {
+  async function saveToTargetPart() {
     const msg = document.getElementById('boxEditorMsg'), btn = document.getElementById('boxSaveBtn');
-    if (!targetPart) { msg.className = 'msg err'; msg.textContent = '먼저 저장할 부품을 골라주세요.'; return; }
     // 이 부품에 이미 있던 다른 spec 필드(holeLabels 등)를 지우지 않도록 합쳐서 보낸다.
     // _geometry(불러온 3D 파일을 메모리에 캐시해둔 것)는 숫자·문자열이 아니라 저장(JSON)이 안 되므로 뺀다
     // — 대신 fileDataUrl(원본 파일 자체)이 저장되어 있어서, 다시 열 때 그걸로 지오메트리를 새로 만든다.
@@ -1051,6 +1050,20 @@ function initBoxEditor() {
     } finally {
       btn.disabled = false;
     }
+  }
+  // "저장"을 눌렀을 때 아직 저장할 부품을 안 골랐으면(위 "기존 부품 불러오기"를 안 눌렀으면) 그 자리에서
+  // 바로 부품 목록을 띄운다(사용자 지적: "저장하기를 클릭하고 기존부품리스트에서 선택을 해야하는데 저장하기가
+  // 안된다니까" — 버튼이 disabled라 그냥 눌리지 않는 것으로 보였음). 이미 도형이 있으면 onBoxTargetPicked가
+  // shapes를 안 건드리고 targetPart만 채워주므로, 고른 직후 바로 이어서 저장까지 진행한다.
+  document.getElementById('boxSaveBtn').addEventListener('click', async () => {
+    if (!targetPart) {
+      openPickerModal('저장할 부품 고르기', async (p) => {
+        await onBoxTargetPicked(p);
+        await saveToTargetPart();
+      }, true);
+      return;
+    }
+    await saveToTargetPart();
   });
 
   // 처음엔 "기본 도형" 탭만 보이게 — 듀프로형/케이넥스형 버튼은 그 탭을 눌러야 나온다.
