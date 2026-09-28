@@ -1382,7 +1382,19 @@ function initPartMaker() {
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(ndc, live.camera);
     const hit = raycaster.intersectObjects(live.meshes, false)[0];
-    if (!hit) return;
+    if (!hit) {
+      // 도형이 아니라 빈 바닥(모눈종이)을 클릭하면 선택을 해제한다(사용자 지적: "다른 바탕을 선택해도
+      // 하이라이트가 안 없어지는데?" — 도형을 클릭했을 때 선택되는 것만 있고 빈 곳을 클릭해 선택 해제하는
+      // 길이 없었음).
+      if (selectedIndex !== -1) {
+        selectedIndex = -1;
+        fillFieldsFromShape(undefined);
+        renderShapeListUI();
+        attachSelection();
+        updateSelectionHighlight();
+      }
+      return;
+    }
     const idx = live.meshes.indexOf(hit.object);
     if (idx < 0 || idx === selectedIndex) return;
     selectedIndex = idx;
