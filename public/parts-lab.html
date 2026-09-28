@@ -1300,20 +1300,38 @@ h4{margin:4px 0}
   }
   function parseSvgPlateOutline(svg){
     if (!svg) return null;
+    // 90도/135도/반원 프레임처럼 꺾이거나 둥근 모양은 실제 테두리를 #d5d8dc 색 polygon/path로 그려서
+    // 등록해뒀지만, 직선 프레임(15~713프레임 등, parts-lab-box-editor.js가 아니라 옛 SVG 생성기로 만든
+    // 부품)은 그냥 사각형 판이라 <rect fill="#4a4d52">로 그려져 있고 #d5d8dc polygon/path가 아예 없다.
+    // 이걸 못 찾으면 예전엔 하드코딩된 ㄱ자 모양(90도 프레임)으로 조용히 대체해버려서, 직선 프레임을
+    // "비교 대상 부품"/"수정할 부품"에서 보면 전부 ㄱ자로 나오는 버그가 있었다(사용자 지적:
+    // "29프레임을 90도 프레임처럼 그리고 있는데???").
     const m = svg.match(/<(polygon|path)\b[^>]*\bfill="#d5d8dc"[^>]*>/);
-    if (!m) return null;
-    const tag = m[0];
-    if (m[1]==='polygon'){
-      const ptsAttr = tag.match(/\bpoints="([^"]+)"/);
-      if (!ptsAttr) return null;
-      const nums=(ptsAttr[1].match(/-?[\d.]+/g)||[]).map(Number);
-      const pts=[]; for (let i=0;i+1<nums.length;i+=2) pts.push({x:nums[i],y:nums[i+1]});
+    if (m) {
+      const tag = m[0];
+      if (m[1]==='polygon'){
+        const ptsAttr = tag.match(/\bpoints="([^"]+)"/);
+        if (!ptsAttr) return null;
+        const nums=(ptsAttr[1].match(/-?[\d.]+/g)||[]).map(Number);
+        const pts=[]; for (let i=0;i+1<nums.length;i+=2) pts.push({x:nums[i],y:nums[i+1]});
+        return pts.length>=3?pts:null;
+      }
+      const dAttr = tag.match(/\bd="([^"]+)"/);
+      if (!dAttr) return null;
+      const pts = parseSvgPathPoints(dAttr[1]);
       return pts.length>=3?pts:null;
     }
-    const dAttr = tag.match(/\bd="([^"]+)"/);
-    if (!dAttr) return null;
-    const pts = parseSvgPathPoints(dAttr[1]);
-    return pts.length>=3?pts:null;
+    const rectM = svg.match(/<rect\b[^>]*\bfill="#4a4d52"[^>]*>/);
+    if (rectM) {
+      const tag = rectM[0];
+      const x = Number((tag.match(/\bx="(-?[\d.]+)"/)||[])[1]);
+      const y = Number((tag.match(/\by="(-?[\d.]+)"/)||[])[1]);
+      const w = Number((tag.match(/\bwidth="(-?[\d.]+)"/)||[])[1]);
+      const h = Number((tag.match(/\bheight="(-?[\d.]+)"/)||[])[1]);
+      if ([x,y,w,h].some(Number.isNaN)) return null;
+      return [{x,y},{x:x+w,y},{x:x+w,y:y+h},{x,y:y+h}];
+    }
+    return null;
   }
   // 윤곽선 점들 중 "오목한(concave)" 꼭짓점 찾기 — 부호 있는 다각형 면적으로 방향을 구한 뒤, 방향과 반대로 꺾이는 점.
   function findConcaveVertex(pts){
