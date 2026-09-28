@@ -420,22 +420,33 @@ h4{margin:4px 0}
       <div id="partMakerCutResults" style="display:flex; flex-wrap:wrap; gap:10px; margin-top:8px;"></div>
     </div>
     <div id="partMakerJoinPanel" hidden>
-      <div class="section-note">🔗 붙이기 — 기존 부품 하나를 골라 이어 붙일 개수와 방향을 정하면, 나란히 이어 붙인 하나의 새 부품을 만들어요.</div>
-      <div class="btnRow">
-        <button id="partMakerJoinPickBtn" type="button">🔍 이어붙일 부품 고르기</button>
-        <span id="partMakerJoinLabel" class="section-note" style="margin:0;">선택 안 됨</span>
+      <div class="section-note">🔗 붙이기 — 부품 두 개를 각각 고르고, 3D 미리보기에서 붙일 면을 클릭하세요. 클릭한 두 면이 마주보도록 자동으로 정렬해서 하나로 합쳐요.</div>
+      <div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:8px;">
+        <div style="width:250px;">
+          <div class="section-note" style="margin:0 0 6px;">부품 1</div>
+          <div class="btnRow" style="margin-top:0;">
+            <button id="partMakerJoin1PickBtn" type="button">🔍 카탈로그에서 고르기</button>
+            <button id="partMakerJoin1ImportBtn" type="button">📁 3D 파일 불러오기</button>
+            <input type="file" id="partMakerJoin1ImportInput" accept=".glb,.gltf,.stl,.obj" hidden>
+          </div>
+          <div id="partMakerJoin1Label" class="section-note" style="margin:4px 0;">선택 안 됨</div>
+          <canvas id="partMakerJoin1Canvas" width="240" height="240" style="width:240px;height:240px;border:1px solid #ddd;border-radius:6px;background:#f3f5f8;"></canvas>
+          <div id="partMakerJoin1FaceMsg" class="section-note" style="margin:4px 0;">부품을 고른 뒤 캔버스에서 붙일 면을 클릭하세요.</div>
+        </div>
+        <div style="width:250px;">
+          <div class="section-note" style="margin:0 0 6px;">부품 2</div>
+          <div class="btnRow" style="margin-top:0;">
+            <button id="partMakerJoin2PickBtn" type="button">🔍 카탈로그에서 고르기</button>
+            <button id="partMakerJoin2ImportBtn" type="button">📁 3D 파일 불러오기</button>
+            <input type="file" id="partMakerJoin2ImportInput" accept=".glb,.gltf,.stl,.obj" hidden>
+          </div>
+          <div id="partMakerJoin2Label" class="section-note" style="margin:4px 0;">선택 안 됨</div>
+          <canvas id="partMakerJoin2Canvas" width="240" height="240" style="width:240px;height:240px;border:1px solid #ddd;border-radius:6px;background:#f3f5f8;"></canvas>
+          <div id="partMakerJoin2FaceMsg" class="section-note" style="margin:4px 0;">부품을 고른 뒤 캔버스에서 붙일 면을 클릭하세요.</div>
+        </div>
       </div>
       <div class="btnRow">
-        <label style="font-size:11px;color:#666;display:flex;flex-direction:column;gap:2px;">이어붙이는 축
-          <select id="partMakerJoinAxis" class="axisSelect">
-            <option value="x" style="color:#ff0000;">가로(X)</option>
-            <option value="z" style="color:#0000ff;">세로(Z)</option>
-          </select>
-        </label>
-        <label style="font-size:11px;color:#666;display:flex;flex-direction:column;gap:2px;">개수
-          <input type="number" id="partMakerJoinCount" value="2" min="2" step="1" style="width:64px;">
-        </label>
-        <button id="partMakerJoinPreviewBtn" type="button" style="background:#fff;color:#2b6be0;">🔗 붙이기 미리보기</button>
+        <button id="partMakerJoinPreviewBtn" type="button" style="background:#fff;color:#2b6be0;" disabled>🔗 붙이기 미리보기</button>
         <span id="partMakerJoinMsg" class="msg" style="margin:0;"></span>
       </div>
       <div id="partMakerJoinResult" style="margin-top:8px;"></div>

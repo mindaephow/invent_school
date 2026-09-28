@@ -804,11 +804,16 @@ function initPartMaker() {
     });
   }
 
-  // ---------- 붙이기: 나누기의 반대 — 기존 부품 하나를 골라 이어 붙인 개수만큼 나란히 합쳐서 새 부품
-  // 하나로 만든다(사용자 설명: "1X1을 3개를 연달아 붙이면 13프레임이 되는거지"). 지금 캔버스에서 편집
-  // 중인 도형이 아니라, 카탈로그에서 새로 고른 부품(joinSourcePart)을 대상으로 동작 — 나누기와 달리
-  // 결과가 여러 조각이 아니라 하나라서 바로 등록/내보내기까지 한 화면에서 끝낸다.
-  let joinSourcePart = null;
+  // ---------- 붙이기(2026-09-28 재설계): 처음엔 "같은 부품을 축+개수로 반복 배치"하는 방식이었는데,
+  // 사용자 지적("붙일게 2개가 있어야 하는건데~~ 1번 선택한 다음 면을 선택하고 2번을 선택한다음 면을
+  // 선택해야할꺼 같은데?")을 받고 완전히 새로 만듦: 서로 다른 부품 두 개를 각각 고르고(카탈로그 또는
+  // 3D 파일), 각자의 3D 미리보기에서 붙일 면을 직접 클릭하면, 그 두 면이 정확히 마주보도록 자동으로
+  // 회전·이동을 계산해 CSG ADDITION으로 합친다. 6면 드롭다운 같은 단순화 없이 클릭한 삼각형의 실제
+  // 법선(normal)을 그대로 쓴다.
+  const joinSlots = [
+    { part: null, geometry: null, size: null, pick: null, mesh: null, marker: null, renderer: null },
+    { part: null, geometry: null, size: null, pick: null, mesh: null, marker: null, renderer: null },
+  ];
   let joinResult = null; // { geometry, size:{x,y,z} }
   let borderResult = null; // { geometry, size:{x,y,z} } — "테두리 만들기" 결과
 
@@ -822,27 +827,114 @@ function initPartMaker() {
     return list;
   }
 
-  // 고른 부품 하나를 합친 결과(computeMergedBrush)의 바운딩박스 크기를 "칸 하나 길이"로 써서, 그만큼씩
-  // 축 방향으로 띄운 사본을 이어 붙인다(ADDITION) — computeMergedBrush()가 여러 도형을 합칠 때 쓰는
-  // 것과 똑같은 Evaluator/Brush 체인 패턴을 그대로 재사용.
-  function computeJoinedBrush(shapesData, axis, count) {
-    const single = computeMergedBrush(shapesData);
-    if (!single) return null;
-    single.geometry.computeBoundingBox();
-    const size = new THREE.Vector3();
-    single.geometry.boundingBox.getSize(size);
-    const step = size[axis];
+  function updateJoinPreviewBtnState() {
+    document.getElementById('partMakerJoinPreviewBtn').disabled = !(joinSlots[0].pick && joinSlots[1].pick);
+  }
+
+  // 부품 1/2 슬롯에 지오메트리를 채워 넣고(원점 중심·바닥 정렬은 다른 곳과 같은 관례), 그 미니 3D
+  // 미리보기를 새로 그린다 — 다시 고르면 이전에 찍어둔 면 선택은 초기화됨.
+  function loadJoinSlotGeometry(idx, geometry, name) {
+    const slot = joinSlots[idx];
+    geometry.computeBoundingBox();
+    const c = new THREE.Vector3();
+    geometry.boundingBox.getCenter(c);
+    geometry.translate(-c.x, -geometry.boundingBox.min.y, -c.z);
+    geometry.computeBoundingBox();
+    const sz = new THREE.Vector3();
+    geometry.boundingBox.getSize(sz);
+    slot.part = { name };
+    slot.geometry = geometry;
+    slot.size = { x: sz.x, y: sz.y, z: sz.z };
+    slot.pick = null;
+    document.getElementById('partMakerJoin' + (idx + 1) + 'Label').textContent = '선택된 부품: ' + name;
+    document.getElementById('partMakerJoin' + (idx + 1) + 'FaceMsg').textContent = '캔버스에서 붙일 면을 클릭하세요.';
+    renderJoinSlotPreview(idx);
+    updateJoinPreviewBtnState();
+  }
+
+  // 슬롯 하나의 미니 3D 뷰 — 마우스로 돌려볼 수 있고(OrbitControls), 클릭하면 그 자리 삼각형의 실제
+  // 위치·법선을 Raycaster로 재서 slot.pick에 저장한다(나누기/도형 에디터의 캔버스 클릭 선택과 같은
+  // pointerdown/up 위치 비교로 드래그와 클릭을 구분하는 패턴 재사용).
+  function renderJoinSlotPreview(idx) {
+    const slot = joinSlots[idx];
+    const canvas = document.getElementById('partMakerJoin' + (idx + 1) + 'Canvas');
+    if (slot.renderer) slot.renderer.dispose();
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    renderer.setSize(canvas.width, canvas.height, false);
+    const scene = new THREE.Scene();
+    scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.7); dirLight.position.set(2, 3, 2); scene.add(dirLight);
+    const s = Math.max(slot.size.x, slot.size.y, slot.size.z, 1);
+    // 카메라가 바라보는 y는 부품의 실제 세로 중심(size.y/2)으로 맞춘다 — s*비율처럼 대충 잡으면 315프레임
+    // 같은 얇고 넓은 부품에서 화면 정중앙이 부품 위 빈 허공을 가리켜서, 캔버스 한가운데를 클릭해도
+    // 레이캐스트가 부품을 완전히 빗나가는 문제가 있었다(실제로 겪음 — 클릭이 항상 안 먹히는 것처럼 보임).
+    const targetY = slot.size.y / 2;
+    const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 5000);
+    camera.position.set(s, s * 0.9 + targetY, s);
+    camera.lookAt(0, targetY, 0);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(0, targetY, 0);
+    controls.enableDamping = true; controls.dampingFactor = 0.08;
+    controls.update();
+    const mesh = new THREE.Mesh(slot.geometry, new THREE.MeshBasicMaterial({ color: IMPORT_COLOR }));
+    addEdgeOutline(mesh, IMPORT_COLOR);
+    scene.add(mesh);
+    const marker = new THREE.Mesh(new THREE.SphereGeometry(Math.max(s * 0.03, 0.5), 12, 12), new THREE.MeshBasicMaterial({ color: 0xe03b2b }));
+    marker.visible = false;
+    scene.add(marker);
+    slot.mesh = mesh; slot.marker = marker; slot.renderer = renderer;
+
+    let dirty = true;
+    controls.addEventListener('change', () => { dirty = true; });
+    (function loop() {
+      if (!document.body.contains(canvas)) { renderer.dispose(); return; }
+      requestAnimationFrame(loop);
+      controls.update();
+      if (dirty) { renderer.render(scene, camera); dirty = false; }
+    })();
+    renderer.render(scene, camera);
+
+    const raycaster = new THREE.Raycaster();
+    let downAt = null;
+    canvas.addEventListener('pointerdown', (e) => { downAt = { x: e.clientX, y: e.clientY }; });
+    canvas.addEventListener('pointerup', (e) => {
+      const start = downAt; downAt = null;
+      if (!start || Math.hypot(e.clientX - start.x, e.clientY - start.y) > 4) return;
+      const rect = canvas.getBoundingClientRect();
+      const ndc = new THREE.Vector2(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1
+      );
+      raycaster.setFromCamera(ndc, camera);
+      const hit = raycaster.intersectObject(mesh, false)[0];
+      if (!hit || !hit.face) return;
+      const normal = hit.face.normal.clone().transformDirection(mesh.matrixWorld).normalize();
+      slot.pick = { point: hit.point.clone(), normal };
+      marker.position.copy(hit.point);
+      marker.visible = true;
+      dirty = true;
+      document.getElementById('partMakerJoin' + (idx + 1) + 'FaceMsg').textContent = '면을 골랐어요 ✓ (다시 클릭하면 바꿀 수 있어요)';
+      updateJoinPreviewBtnState();
+    });
+  }
+
+  // 부품2를 회전시켜 그 면의 법선이 부품1 면의 법선과 정반대(-n1)가 되도록(최단 회전, 별도 기준축 없이
+  // 결정적인 하나의 결과가 나옴) 맞추고, 찍은 두 지점이 맞닿도록 이동한 뒤 ADDITION으로 합친다.
+  function computeFaceJoinedBrush() {
+    const s1 = joinSlots[0], s2 = joinSlots[1];
     const evaluator = new Evaluator();
-    let result = new Brush(single.geometry);
-    result.position.set(0, 0, 0);
-    result.updateMatrixWorld();
-    for (let i = 1; i < count; i++) {
-      const copy = new Brush(single.geometry);
-      copy.position[axis] = step * i;
-      copy.updateMatrixWorld();
-      result = evaluator.evaluate(result, copy, ADDITION);
-      result.updateMatrixWorld();
-    }
+    const brush1 = new Brush(s1.geometry);
+    brush1.updateMatrixWorld();
+    const targetN2 = s1.pick.normal.clone().negate();
+    const q = new THREE.Quaternion().setFromUnitVectors(s2.pick.normal, targetN2);
+    const brush2 = new Brush(s2.geometry);
+    brush2.quaternion.copy(q);
+    brush2.updateMatrixWorld();
+    const p2Rotated = s2.pick.point.clone().applyQuaternion(q);
+    brush2.position.copy(s1.pick.point.clone().sub(p2Rotated));
+    brush2.updateMatrixWorld();
+    const result = evaluator.evaluate(brush1, brush2, ADDITION);
+    result.geometry.computeBoundingBox();
     return result;
   }
 
@@ -949,7 +1041,7 @@ function initPartMaker() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = (joinSourcePart ? joinSourcePart.name : '부품') + '_붙이기.stl';
+      a.download = (joinSlots[0].part && joinSlots[1].part ? joinSlots[0].part.name + '_' + joinSlots[1].part.name : '부품') + '_붙이기.stl';
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -1580,28 +1672,44 @@ function initPartMaker() {
     }
   });
 
-  // "붙이기" — 이어붙일 부품 고르기(showAll=true, 나누기/저장 대상 고르기와 같은 패턴)와 미리보기 버튼.
-  document.getElementById('partMakerJoinPickBtn').addEventListener('click', () => {
-    openPickerModal('이어붙일 부품 고르기', (p) => {
-      joinSourcePart = p;
-      document.getElementById('partMakerJoinLabel').textContent = '선택된 부품: ' + p.name;
-      joinResult = null;
-      renderJoinResult();
+  // "붙이기" — 부품 1/2 각각 카탈로그 고르기(showAll=true, 나누기/저장 대상 고르기와 같은 패턴) 또는
+  // 3D 파일 불러오기, 그리고 두 면을 다 고른 뒤 미리보기 버튼.
+  function openJoinPicker(idx) {
+    openPickerModal('부품 ' + (idx + 1) + ' 고르기', async (p) => {
+      const shapes = (p.spec && p.spec.shapes) || [];
+      const faceMsg = document.getElementById('partMakerJoin' + (idx + 1) + 'FaceMsg');
+      if (!shapes.length) { faceMsg.textContent = '이 부품엔 저장된 도형(spec.shapes)이 없어요.'; return; }
+      const resolved = await resolveShapesGeometry(shapes);
+      const merged = computeMergedBrush(resolved);
+      loadJoinSlotGeometry(idx, merged.geometry, p.name);
     }, true);
-  });
-  document.getElementById('partMakerJoinPreviewBtn').addEventListener('click', async () => {
+  }
+  async function handleJoinFileImport(idx, e) {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    const faceMsg = document.getElementById('partMakerJoin' + (idx + 1) + 'FaceMsg');
+    faceMsg.textContent = '불러오는 중...';
+    try {
+      const geometry = await loadImportedGeometry(file);
+      loadJoinSlotGeometry(idx, geometry, file.name);
+    } catch (err) {
+      faceMsg.textContent = '불러오기 실패: ' + err.message;
+    }
+  }
+  document.getElementById('partMakerJoin1PickBtn').addEventListener('click', () => openJoinPicker(0));
+  document.getElementById('partMakerJoin2PickBtn').addEventListener('click', () => openJoinPicker(1));
+  document.getElementById('partMakerJoin1ImportBtn').addEventListener('click', () => document.getElementById('partMakerJoin1ImportInput').click());
+  document.getElementById('partMakerJoin2ImportBtn').addEventListener('click', () => document.getElementById('partMakerJoin2ImportInput').click());
+  document.getElementById('partMakerJoin1ImportInput').addEventListener('change', (e) => handleJoinFileImport(0, e));
+  document.getElementById('partMakerJoin2ImportInput').addEventListener('change', (e) => handleJoinFileImport(1, e));
+  document.getElementById('partMakerJoinPreviewBtn').addEventListener('click', () => {
     const msg = document.getElementById('partMakerJoinMsg');
-    if (!joinSourcePart) { msg.className = 'msg err'; msg.textContent = '이어붙일 부품을 먼저 골라주세요.'; return; }
-    const srcShapes = (joinSourcePart.spec && joinSourcePart.spec.shapes) || [];
-    if (!srcShapes.length) { msg.className = 'msg err'; msg.textContent = '이 부품엔 저장된 도형(spec.shapes)이 없어요.'; return; }
-    const axis = document.getElementById('partMakerJoinAxis').value;
-    const count = Math.max(2, Math.round(Number(document.getElementById('partMakerJoinCount').value) || 2));
-    document.getElementById('partMakerJoinCount').value = count;
+    if (!joinSlots[0].geometry || !joinSlots[1].geometry) { msg.className = 'msg err'; msg.textContent = '부품 두 개를 모두 골라주세요.'; return; }
+    if (!joinSlots[0].pick || !joinSlots[1].pick) { msg.className = 'msg err'; msg.textContent = '각 부품에서 붙일 면을 클릭해주세요.'; return; }
     msg.textContent = '붙이는 중...';
     try {
-      const resolved = await resolveShapesGeometry(srcShapes);
-      const brush = computeJoinedBrush(resolved, axis, count);
-      brush.geometry.computeBoundingBox();
+      const brush = computeFaceJoinedBrush();
       const c = new THREE.Vector3();
       brush.geometry.boundingBox.getCenter(c);
       brush.geometry.translate(-c.x, -brush.geometry.boundingBox.min.y, -c.z);
@@ -1611,7 +1719,7 @@ function initPartMaker() {
       joinResult = { geometry: brush.geometry, size: { x: round1(sz.x), y: round1(sz.y), z: round1(sz.z) } };
       renderJoinResult();
       msg.className = 'msg ok';
-      msg.textContent = count + '개를 이어 붙였어요.';
+      msg.textContent = '붙였어요.';
     } catch (e) {
       msg.className = 'msg err';
       msg.textContent = '붙이기 실패: ' + e.message;
