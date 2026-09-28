@@ -467,17 +467,46 @@ h4{margin:4px 0}
     scene.add(win);
   }
   const spinnables = [];
+  // 사용자 지적("이상한 짓을 하고있네? 다른 3D 프로그램들은 이렇게 무거워지지 않던데") — 맞는 말이라,
+  // 여기서도 "뭔가 바뀔 때만 다시 그리기"(render-on-demand) 방식으로 바꾼다. OrbitControls는 드래그·
+  // 관성감쇠(damping) 중에 'change' 이벤트를 실제로 쏘므로, 그때만 dirty를 세우고 그 프레임만 그린 뒤
+  // 다시 잠잠해지면(더 이상 움직이지 않으면) 렌더링을 아예 건너뛴다. 처음 뜰 때 한 번은 보여야 하니
+  // dirty를 true로 시작한다.
   function setupOrbit(renderer, scene, camera, target){
     const controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.target.set(target[0], target[1], target[2]);
     controls.enableDamping = true; controls.dampingFactor = 0.08;
     controls.update();
-    spinnables.push({ renderer, scene, camera, controls });
+    const entry = { renderer, scene, camera, controls, dirty: true };
+    controls.addEventListener('change', () => { entry.dirty = true; });
+    // OrbitControls의 'change'만 믿으면 "📦 물체 이동"(카메라는 안 건드리고 mesh만 옮김), 꼭지점 드래그,
+    // 구멍 블라인드 토글, 낙서(오버레이 캔버스)처럼 카메라가 아니라 물체·장면 자체를 바꾸는 조작을 놓친다.
+    // 캔버스 위에 낙서용 오버레이가 겹쳐 있어서 클릭이 캔버스가 아니라 오버레이로 갈 수도 있으므로,
+    // 그 둘의 공통 부모(래퍼)에 캡처 단계로 걸어서 어느 쪽이 받든 다 잡히게 한다. 손을 대고 있는 동안
+    // (누르기/움직이기/떼기/휠)은 무조건 다시 그리게 해서 이런 조작을 전부 포함시킨다.
+    const interactionRoot = renderer.domElement.parentElement || renderer.domElement;
+    ['pointerdown', 'pointermove', 'pointerup', 'wheel'].forEach((evt) => {
+      interactionRoot.addEventListener(evt, () => { entry.dirty = true; }, true);
+    });
+    spinnables.push(entry);
     return controls;
   }
+  // 사용자 지적("접속해두면 PC가 무거워진다") 원인: 부품을 바꿀 때마다 setupOrbit이 spinnables에 계속
+  // push만 하고 빼는 코드가 없어서, 화면에서 이미 사라진(교체된) 옛 캔버스도 계속 렌더링되며 쌓여갔다.
+  // 그 캔버스가 더 이상 문서에 붙어있지 않으면(다른 부품으로 교체됨) 그 자리에서 빼고 렌더러도 dispose
+  // 해서 GPU 리소스까지 실제로 반납한다.
   (function animateAll(){
     requestAnimationFrame(animateAll);
-    spinnables.forEach(s => { s.controls.update(); s.renderer.render(s.scene, s.camera); });
+    for (let i = spinnables.length - 1; i >= 0; i--) {
+      const s = spinnables[i];
+      if (!document.body.contains(s.renderer.domElement)) {
+        s.renderer.dispose();
+        spinnables.splice(i, 1);
+        continue;
+      }
+      s.controls.update(); // damping 진행 중이면 여기서 'change'가 나서 dirty가 다시 세워짐
+      if (s.dirty) { s.renderer.render(s.scene, s.camera); s.dirty = false; }
+    }
   })();
   // "✋ 이동" 전용 화면 밀기 — 카메라 오른쪽/정면 방향을 바닥(XZ평면)에 투영해서 딱 x,z로만 움직이고
   // (사용자 지시: "x,z만 움직이면 됨") y(높이)는 절대 안 바뀜. 매 이동마다 바닥(y=0) 아래로는 못 내려가게

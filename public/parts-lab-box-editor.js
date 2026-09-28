@@ -442,13 +442,20 @@ function initBoxEditor() {
     controls.target.set(0, 0, 0);
     controls.enableDamping = true; controls.dampingFactor = 0.08;
     controls.update();
+    // 관성감쇠(damping)가 가라앉는 동안은 마우스를 놓아도 몇 프레임 더 카메라가 움직이므로, 그 프레임들도
+    // 계속 그려지게 controls 자체의 'change' 이벤트로 dirty를 세운다.
+    controls.addEventListener('change', () => { if (live) live.dirty = true; });
     return { renderer, scene, camera, controls };
   }
+  // 사용자 지적("이상한 짓을 하고있네? 다른 3D 프로그램들은 이렇게 무거워지지 않던데") — 여기도 안 움직일
+  // 때는 다시 그리지 않는다. #boxEditorPanel 전체에 위임 리스너 하나(아래 initBoxEditor 끝부분)를 달아서
+  // 캔버스 드래그(오빗·기즈모)든 색상/밝기/뒤집기/각도 같은 바깥 입력칸 조작이든 뭐가 됐든 손대면
+  // live.dirty를 세우고, 그 프레임만 그린 뒤 다시 잠잠해지면 렌더링을 건너뛴다.
   function startLoop(getState) {
     function loop() {
       const s = getState();
       s.controls.update();
-      s.renderer.render(s.scene, s.camera);
+      if (s.dirty) { s.renderer.render(s.scene, s.camera); s.dirty = false; }
       live.rafId = requestAnimationFrame(loop);
     }
     live.rafId = requestAnimationFrame(loop);
@@ -472,8 +479,10 @@ function initBoxEditor() {
     const transform = new TransformControls(camera, renderer.domElement);
     transform.addEventListener('dragging-changed', (e) => { controls.enabled = !e.value; });
     transform.addEventListener('objectChange', () => syncSelectedShapeFromMesh(meshes));
+    // 기즈모(이동/회전/크기 손잡이) 드래그 중에도 계속 다시 그려야 하므로 이것도 dirty를 세운다.
+    transform.addEventListener('change', () => { if (live) live.dirty = true; });
     scene.add(transform.getHelper ? transform.getHelper() : transform);
-    live = { renderer, scene, camera, controls, transform, meshes, rafId: 0 };
+    live = { renderer, scene, camera, controls, transform, meshes, rafId: 0, dirty: true };
     attachSelection();
     renderer.render(scene, camera);
     startLoop(() => live);
@@ -553,7 +562,7 @@ function initBoxEditor() {
     const canvas = freshCanvas();
     const { renderer, scene, camera, controls } = setupCommon(canvas);
     if (!shapes.length) {
-      live = { renderer, scene, camera, controls, transform: null, meshes: [], rafId: 0 };
+      live = { renderer, scene, camera, controls, transform: null, meshes: [], rafId: 0, dirty: true };
       renderer.render(scene, camera);
       startLoop(() => live);
       document.getElementById('boxEditorMsg').textContent = '도형이 없어요 — 팔레트에서 추가해보세요.';
@@ -566,7 +575,7 @@ function initBoxEditor() {
     result.material = new THREE.MeshBasicMaterial({ color: finalColor });
     addEdgeOutline(result, finalColor);
     scene.add(result);
-    live = { renderer, scene, camera, controls, transform: null, meshes: [], rafId: 0 };
+    live = { renderer, scene, camera, controls, transform: null, meshes: [], rafId: 0, dirty: true };
     renderer.render(scene, camera);
     startLoop(() => live);
   }
@@ -1065,6 +1074,13 @@ function initBoxEditor() {
     }
     await saveToTargetPart();
   });
+
+  // 색상칸·밝기 슬라이더·뒤집기 버튼·회전 각도 드롭다운·바닥붙이기 체크박스처럼 캔버스 바깥에서 라이브
+  // 메쉬를 직접 건드리는 조작을 하나하나 다 찾아 고치는 대신, 이 패널 전체에 위임 리스너 하나로 걸어서
+  // 뭐가 됐든 손대면 dirty를 세운다(사용자 지적: "다 최적화를 해" — 놓치는 곳 없게 넓게 잡음).
+  document.getElementById('boxEditorPanel').addEventListener('input', () => { if (live) live.dirty = true; });
+  document.getElementById('boxEditorPanel').addEventListener('change', () => { if (live) live.dirty = true; });
+  document.getElementById('boxEditorPanel').addEventListener('click', () => { if (live) live.dirty = true; });
 
   // 처음엔 "기본 도형" 탭만 보이게 — 듀프로형/케이넥스형 버튼은 그 탭을 눌러야 나온다.
   const initialTab = document.querySelector('.paletteTabBtn.on') || document.querySelector('.paletteTabBtn');
