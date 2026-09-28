@@ -1857,6 +1857,11 @@ h4{margin:4px 0}
     const { data: { session } } = await sb.auth.getSession();
     document.getElementById('gate').style.display = 'none';
     document.getElementById('app').classList.add('shown');
+    // 부품 목록(모달용)은 3D 에디터 초기화와 무관하니 기다리지 않고 바로 불러온다 — 예전엔 아래 두 await가
+    // 끝난 뒤에야 시작했는데, 그 안에서 모달 탭(#modalSubjectTabs)의 클릭 리스너도 같이 붙기 때문에 3D 모듈
+    // 로딩이 느리면 부품 목록도 안 불러와지고 "다른 부품에 저장" 모달의 탭도 아예 안 눌렸음(사용자 지적:
+    // "불러오는게 너무 느려"/"탭은 클릭도 안돼").
+    initImporter(session ? session.access_token : null);
     // 조용히 아무 것도 안 뜨면 뭐가 문제인지 알 길이 없어서(사용자가 빈 캔버스만 보고된 적 있음) — 스크립트가
     // 끝내 안 실려왔거나 초기화 중 에러가 나면 화면에 바로 보이게 한다.
     try {
@@ -1871,7 +1876,6 @@ h4{margin:4px 0}
     } catch (e) {
       document.querySelector('#partMakerEditorPanel .section-note').textContent = '⚠️ 부품 만들기 초기화 실패: ' + e.message;
     }
-    initImporter(session ? session.access_token : null);
   })();
 
   // ===== 부품 가져오기 =====
