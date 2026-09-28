@@ -145,10 +145,19 @@ function parseSpec(body) {
         const rx = Number.isFinite(Number(s.rx)) ? Number(s.rx) : 0
         const ry = Number.isFinite(Number(s.ry)) ? Number(s.ry) : 0
         const rz = Number.isFinite(Number(s.rz)) ? Number(s.rz) : 0
+        // 색상 팔레트로 고른 색(color)·밝기(brightness) — 2026-09-29 발견: 이 필드들이 여기 화이트리스트에
+        // 아예 없어서, 도형마다 색을 골라 저장해도 서버가 조용히 걸러 항상 기본 팔레트 색으로 되돌아가고
+        // 있었다('import' 타입이 빠졌던 것과 같은 종류의 버그). 유효한 값일 때만 포함한다.
+        const colorHex = typeof s.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(s.color) ? s.color : null
+        const brightnessNum = Number(s.brightness)
+        const colorFields = Object.assign(
+          { brightness: Number.isFinite(brightnessNum) && brightnessNum >= 100 && brightnessNum <= 200 ? brightnessNum : 100 },
+          colorHex ? { color: colorHex } : {}
+        )
         if (BOX_LIKE.includes(s.type)) {
           const w = Number(s.w), h = Number(s.h), d = Number(s.d)
           if (![w, h, d].every((n) => Number.isFinite(n) && n > 0)) return null
-          return { type: s.type, op, x, y, z, rx, ry, rz, w, h, d }
+          return Object.assign({ type: s.type, op, x, y, z, rx, ry, rz, w, h, d }, colorFields)
         }
         // GLB/GLTF·STL·OBJ로 불러온 도형(나누기·붙이기·테두리 만들기 결과 포함, 전부 이 타입) — 숫자로
         // 계산하는 다른 도형과 달리 파일 원본(fileDataUrl, base64)을 그대로 저장해서 다시 열 때 지오메트리를
@@ -160,14 +169,14 @@ function parseSpec(body) {
           const fileDataUrl = typeof s.fileDataUrl === 'string' && s.fileDataUrl.startsWith('data:') ? s.fileDataUrl : null
           if (!fileDataUrl) return null
           const fileName = typeof s.fileName === 'string' && s.fileName ? s.fileName.slice(0, 200) : 'model'
-          return { type: 'import', op, x, y, z, rx, ry, rz, fileName, fileDataUrl }
+          return Object.assign({ type: 'import', op, x, y, z, rx, ry, rz, fileName, fileDataUrl }, colorFields)
         }
         const radius = Number(s.radius)
         if (!Number.isFinite(radius) || radius <= 0) return null
-        if (RADIUS_ONLY.includes(s.type)) return { type: s.type, op, x, y, z, rx, ry, rz, radius }
+        if (RADIUS_ONLY.includes(s.type)) return Object.assign({ type: s.type, op, x, y, z, rx, ry, rz, radius }, colorFields)
         const width = Number(s.width)
         if (!Number.isFinite(width) || width <= 0) return null
-        const out = { type: s.type, op, x, y, z, rx, ry, rz, radius, width }
+        const out = Object.assign({ type: s.type, op, x, y, z, rx, ry, rz, radius, width }, colorFields)
         if (s.type === 'gear') {
           const teeth = Number(s.teeth)
           out.teeth = Number.isFinite(teeth) && teeth >= 4 ? Math.round(teeth) : 12

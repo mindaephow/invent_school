@@ -777,7 +777,53 @@ function initBoxEditor() {
     }
     syncFieldVisibility(shape.type);
     syncRotateAngleUI();
+    updateSpecInfo();
   }
+  // 선택한 도형의 스펙(전체 크기·구멍 정보)을 사람이 읽기 좋은 한 줄로 요약해서 색상 편집 칸 바로 아래
+  // 보여준다(사용자 지시: "스펙(사이즈, 홀사이즈 등 필요한 스펙)을 색상 아래쪽에 보여주고 저장하게 해줘").
+  // 여기서 쓰는 w/h/d/radius/width/teeth/holes는 이미 shapes[]에 그대로 저장되는 값이라 이 함수는 그 값을
+  // 화면에 보여주기만 하고 새로 저장할 값을 만들지 않는다 — 입력칸을 바꾸는 즉시(적용 버튼을 누르기 전에도)
+  // 갱신돼서 지금 뭘 저장하게 될지 바로 알 수 있다.
+  function shapeSpecText(type) {
+    if (type === 'import') return '가져온 파일 — 치수는 불러온 모양 그대로 저장돼요.';
+    if (BOX_LIKE.includes(type)) {
+      const w = Number(document.getElementById('boxW').value) || 0;
+      const h = Number(document.getElementById('boxH').value) || 0;
+      const d = Number(document.getElementById('boxD').value) || 0;
+      let text = '크기 ' + w + '×' + h + '×' + d + 'mm (가로×높이×세로)';
+      if (type === 'technicBeam') {
+        const holeCount = Math.max(1, Math.floor(w / 8));
+        const holeR = round1(Math.min(h, d) * 0.32);
+        text += ' · 구멍 ' + holeCount + '개(반지름 ' + holeR + 'mm, 8mm 피치 고정)';
+      }
+      return text;
+    }
+    const radius = Number(document.getElementById('shapeRadius').value) || 0;
+    if (RADIUS_ONLY.includes(type)) return '반지름 ' + radius + 'mm';
+    const width = Number(document.getElementById('shapeWidth').value) || 0;
+    let text = '반지름 ' + radius + 'mm · 두께 ' + width + 'mm';
+    if (type === 'gear') text += ' · 톱니 ' + (Number(document.getElementById('shapeTeeth').value) || 0) + '개';
+    if (type === 'knexConnector') {
+      const holes = Number(document.getElementById('knexHoles').value) || 0;
+      const holeR = round1(Math.max(1.2, radius * 0.14));
+      text += ' · 구멍 ' + holes + '개(반지름 ' + holeR + 'mm)';
+    }
+    return text;
+  }
+  function updateSpecInfo() {
+    const el = document.getElementById('shapeSpecInfo');
+    const shape = shapes[selectedIndex];
+    if (!shape) { el.textContent = ''; return; }
+    let text = shapeSpecText(shape.type);
+    if (selectedIndex !== 0 && document.getElementById('shapeOp').value === 'subtract') {
+      text += ' · 빼기 도형(다른 도형에 구멍을 뚫어요)';
+    }
+    el.textContent = text;
+  }
+  // 입력칸을 바꿀 때마다(적용 버튼을 누르기 전에도) 스펙 요약이 바로 갱신되게 — .fieldsRow 안 모든 입력칸에
+  // 위임 리스너 하나만 둔다(칸마다 따로 붙이지 않음).
+  panel.querySelector('.fieldsRow').addEventListener('input', updateSpecInfo);
+  document.getElementById('shapeOp').addEventListener('change', updateSpecInfo);
   // 회전축(x/y/z)을 고르면 그 축의 지금 각도를 15도 단위로 반올림해서 드롭다운에 보여준다 — 마우스로
   // 자유롭게 돌린 각도는 15도의 배수가 아닐 수 있으니, "실제 값을 그대로"가 아니라 "가장 가까운 15도"를 표시.
   function syncRotateAngleUI() {
