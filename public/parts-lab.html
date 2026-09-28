@@ -1321,7 +1321,11 @@ h4{margin:4px 0}
       const pts = parseSvgPathPoints(dAttr[1]);
       return pts.length>=3?pts:null;
     }
-    const rectM = svg.match(/<rect\b[^>]*\bfill="#4a4d52"[^>]*>/);
+    // 판 색깔(fill)이 프레임마다 다를 수 있어서(예: 115프레임은 #e7e3d6, 다른 건 #4a4d52) 특정 색으로
+    // 찾으면 안 되고, "모서리가 둥글고(rx="1") 테두리선(stroke)이 있는" 판 자체의 특징으로 찾는다 —
+    // clipPath 안의 같은 좌표 rect는 rx="1"은 있어도 stroke가 없어서 안 걸린다(사용자 지적:
+    // "115프레임도 직사각형인데 아직도 90도로 꺽여나오고").
+    const rectM = svg.match(/<rect\b[^>]*\brx="1"[^>]*\bstroke=[^>]*>/);
     if (rectM) {
       const tag = rectM[0];
       const x = Number((tag.match(/\bx="(-?[\d.]+)"/)||[])[1]);
@@ -1373,7 +1377,11 @@ h4{margin:4px 0}
   const SVG_90 = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50" width="200" height="200"><defs><clipPath id="clip90ref"><path d="M40,10 L10,10 L10,20 L30,20 L30,40 L40,40 Z"/></clipPath><radialGradient id="boss90ref" cx="35%" cy="28%" r="80%"><stop offset="0%" stop-color="#ffffff"/><stop offset="55%" stop-color="#dfe2e6"/><stop offset="100%" stop-color="#a9aeb5"/></radialGradient><mask id="mask90ref" maskUnits="userSpaceOnUse" x="0" y="0" width="50" height="50"><rect x="0" y="0" width="50" height="50" fill="#fff"/><circle cx="35" cy="15" r="2.8" fill="#000"/><circle cx="35" cy="25" r="2.8" fill="#000"/><circle cx="35" cy="35" r="2.8" fill="#000"/><circle cx="25" cy="15" r="2.8" fill="#000"/><circle cx="15" cy="15" r="2.8" fill="#000"/></mask></defs><g mask="url(#mask90ref)"><path d="M40,10 L10,10 L10,20 L30,20 L30,40 L40,40 Z" fill="#d5d8dc" stroke="#9aa0a8" stroke-width="0.6"/><g clip-path="url(#clip90ref)"><circle cx="35" cy="15" r="4.3" fill="url(#boss90ref)" stroke="#7d8288" stroke-width="0.35"/><circle cx="35" cy="25" r="4.3" fill="url(#boss90ref)" stroke="#7d8288" stroke-width="0.35"/><circle cx="35" cy="35" r="4.3" fill="url(#boss90ref)" stroke="#7d8288" stroke-width="0.35"/><circle cx="25" cy="15" r="4.3" fill="url(#boss90ref)" stroke="#7d8288" stroke-width="0.35"/><circle cx="15" cy="15" r="4.3" fill="url(#boss90ref)" stroke="#7d8288" stroke-width="0.35"/></g></g></svg>`;
   function renderFramePanel(canvas, svg, camPos, showHoleLabels){
     camPos = camPos || [70,90,110];
-    const outline = parseSvgPlateOutline(svg) || [{x:10,y:10},{x:40,y:10},{x:40,y:20},{x:20,y:20},{x:20,y:40},{x:10,y:40}];
+    const outline = parseSvgPlateOutline(svg);
+    // 윤곽선을 못 읽으면 예전엔 90도 프레임 ㄱ자 모양으로 하드코딩해서 대충 때웠다(사용자 지적:
+    // "하드코딩을 삭제를 안했어?") — 대신 다른 곳과 똑같이 "실제로 못 그렸다"를 있는 그대로 빈 화면으로
+    // 보여준다. 호출한 쪽(loadPartForCompare 등)이 그 옆에 "윤곽선을 못 읽었어요" 안내를 이미 붙인다.
+    if (!outline) { renderEmptyPanel(canvas); return; }
     const xs = outline.map(p=>p.x), ys = outline.map(p=>p.y);
     const cx = (Math.min(...xs)+Math.max(...xs))/2, cy = (Math.min(...ys)+Math.max(...ys))/2;
     // 스케치북 배경 모눈종이가 10mm 한 칸이라, 도형의 실제 기하학적 중심(cx,cy — 10 단위가 아닐 수 있음)
@@ -1394,13 +1402,19 @@ h4{margin:4px 0}
         }
       : { xs:[], zs:[] };
     const dataUri = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+    // ExtrudeGeometry의 기본 UV는 도형 좌표값을 그대로 쓰므로(0~1로 정규화 안 됨), 텍스처가 SVG 전체를
+    // 딱 한 번만 덮게 하려면 그 SVG 자신의 viewBox 크기로 나눠야 한다. 예전엔 90도 프레임 크기에 맞춰
+    // "50"으로 고정해뒀는데, 직선 프레임은 viewBox 크기가 제각각(예: 115프레임 166×26)이라 그 값을 그대로
+    // 쓰면 이미지가 여러 번 반복되며 줄무늬처럼 보였다(사용자 지적: "25프레임/115프레임 이상하게 나옴").
+    const vbM = svg.match(/viewBox="[\d.\-]+\s+[\d.\-]+\s+([\d.]+)\s+([\d.]+)"/);
+    const vbW = vbM ? Number(vbM[1]) : 50, vbH = vbM ? Number(vbM[2]) : 50;
     const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true, preserveDrawingBuffer:true });
     renderer.setSize(300,300,false);
     const scene = baseScene();
     const camera = orthoCam(40);
     camera.position.set(camPos[0],camPos[1],camPos[2]); camera.lookAt(0,2.5,0);
     new THREE.TextureLoader().load(dataUri, tex => {
-      tex.repeat.set(1/50,1/50); tex.offset.set(0,1);
+      tex.repeat.set(1/vbW,1/vbH); tex.offset.set(0,1);
       const shape = new THREE.Shape();
       outline.forEach((p,i)=>{ if(i===0) shape.moveTo(p.x,-p.y); else shape.lineTo(p.x,-p.y); });
       shape.closePath();
