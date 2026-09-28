@@ -290,15 +290,9 @@ h4{margin:4px 0}
   <div class="section-title">비교 대상 부품 (이해를 도울 부품)</div>
   <button id="compareRefPickBtn" type="button" class="pickBtn">🔍 부품 고르기</button>
 </div>
-<div class="section-note">확정된 스타일(구멍 모양·블라인드 홀·안쪽 코너선)의 기준입니다. 아래 "수정할 부품"을 이 모습과 비교하면서 고치세요. "🔍 부품 고르기"로 다른 등록 부품을 추가로 불러와 비교할 수도 있어요.</div>
+<div class="section-note">"🔍 부품 고르기"로 부품을 선택하면 여기에 3D 모델(위/정면/뒷면)이 나타납니다. 아래 "수정할 부품"과 나란히 비교하면서 고치세요.</div>
 <div class="row" id="compareArea"></div>
 <div id="compareSpec"></div>
-<div class="row">
-  <div class="col"><h4>90도 프레임 (위)</h4><div class="imgWrap"><canvas id="refFrameTop" width="300" height="300"></canvas></div><div class="dims"></div></div>
-  <div class="col"><h4>90도 프레임 (정면)</h4><div class="imgWrap"><canvas id="refFrameFront" width="300" height="300"></canvas></div><div class="dims"></div></div>
-  <div class="col"><h4>90도 프레임 (뒷면)</h4><div class="imgWrap"><canvas id="refFrameBack" width="300" height="300"></canvas></div><div class="dims"></div></div>
-  <div class="col" id="refFrameSpecCol"></div>
-</div>
 
 <div class="section-title-row">
   <div class="section-title">수정할 부품</div>
@@ -306,13 +300,6 @@ h4{margin:4px 0}
 </div>
 <div class="section-note">"🔍 부품 고르기"로 부품을 선택하면 여기에 3D 모델(위/정면/뒷면)과 수정 칸이 나타납니다.</div>
 <div id="editArea"></div>
-
-<div class="row">
-  <div class="col"><h4>1열브라켓 (위)</h4><div class="imgWrap"><canvas id="refBracketTop" width="300" height="300"></canvas></div><div class="dims"></div></div>
-  <div class="col"><h4>1열브라켓 (정면)</h4><div class="imgWrap"><canvas id="refBracketFront" width="300" height="300"></canvas></div><div class="dims"></div></div>
-  <div class="col"><h4>1열브라켓 (뒷면)</h4><div class="imgWrap"><canvas id="refBracketBack" width="300" height="300"></canvas></div><div class="dims"></div></div>
-  <div class="col" id="refBracketSpecCol"></div>
-</div>
 
 </div>
 
@@ -1370,11 +1357,6 @@ h4{margin:4px 0}
     return { armLen1, armLen2, armWidth };
   }
 
-  // ===== 참고(비교 대상) 패널 — 90도 프레임 + 1열브라켓, 고정 =====
-  // 사용자 지시: "90도를 ㄱ자로 부품을 놔봐" — 꺾이는 지점이 왼쪽 위(Γ 모양)였던 걸 좌우로 뒤집어서 진짜
-  // 한글 ㄱ자(꺾이는 지점이 오른쪽 위, 세로 팔이 오른쪽으로 내려옴) 모양으로 맞춤. 구멍 좌표도 그대로 반전해서
-  // 옮겼기 때문에 구멍 번호(gridHoleLabels)는 새 좌표 기준으로 자동으로 다시 계산된다.
-  const SVG_90 = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50" width="200" height="200"><defs><clipPath id="clip90ref"><path d="M40,10 L10,10 L10,20 L30,20 L30,40 L40,40 Z"/></clipPath><radialGradient id="boss90ref" cx="35%" cy="28%" r="80%"><stop offset="0%" stop-color="#ffffff"/><stop offset="55%" stop-color="#dfe2e6"/><stop offset="100%" stop-color="#a9aeb5"/></radialGradient><mask id="mask90ref" maskUnits="userSpaceOnUse" x="0" y="0" width="50" height="50"><rect x="0" y="0" width="50" height="50" fill="#fff"/><circle cx="35" cy="15" r="2.8" fill="#000"/><circle cx="35" cy="25" r="2.8" fill="#000"/><circle cx="35" cy="35" r="2.8" fill="#000"/><circle cx="25" cy="15" r="2.8" fill="#000"/><circle cx="15" cy="15" r="2.8" fill="#000"/></mask></defs><g mask="url(#mask90ref)"><path d="M40,10 L10,10 L10,20 L30,20 L30,40 L40,40 Z" fill="#d5d8dc" stroke="#9aa0a8" stroke-width="0.6"/><g clip-path="url(#clip90ref)"><circle cx="35" cy="15" r="4.3" fill="url(#boss90ref)" stroke="#7d8288" stroke-width="0.35"/><circle cx="35" cy="25" r="4.3" fill="url(#boss90ref)" stroke="#7d8288" stroke-width="0.35"/><circle cx="35" cy="35" r="4.3" fill="url(#boss90ref)" stroke="#7d8288" stroke-width="0.35"/><circle cx="25" cy="15" r="4.3" fill="url(#boss90ref)" stroke="#7d8288" stroke-width="0.35"/><circle cx="15" cy="15" r="4.3" fill="url(#boss90ref)" stroke="#7d8288" stroke-width="0.35"/></g></g></svg>`;
   function renderFramePanel(canvas, svg, camPos, showHoleLabels){
     camPos = camPos || [70,90,110];
     const outline = parseSvgPlateOutline(svg);
@@ -1600,40 +1582,12 @@ h4{margin:4px 0}
   // x에 있어서 브라켓만 위/정면 화면이 90도 돌아간 것처럼 보였고, 그걸 라벨 코드에서 억지로 축을 바꿔
   // 보정했었음 — 이제 카메라 자체를 맞췄으니 그 보정은 필요 없어짐.
   function bracketTopCamPos(arm1){ return [arm1/2, 200, arm1/2+0.001]; }
-  renderFramePanel(document.getElementById('refFrameTop'), SVG_90, [0,150,0.001], true);
-  renderFramePanel(document.getElementById('refFrameFront'), SVG_90, [70,90,110]);
-  // 프레임은 앞뒤가 사실상 대칭인 얇은 판이라 "뒷면"에 새로 보여줄 게 없어서 빈 칸으로 둠
-  // (사용자 지시: "없으면 비워져 있으면 되는거야" / "사각형 스케치북은 항상 있고 안에 물품만 없으면 됨")
-  renderEmptyPanel(document.getElementById('refFrameBack'));
-  // 사용자 지시: "db에 자리 만들어서 저장하고 불러오라고" — 참고 브라켓 치수도 코드에 30,30,5로 박아두지 않고
-  // ivs_bracket_standards에서 불러온 값을 씀. renderBracketPanel(→attachFullToolkit)은 다시 부르면 버튼
-  // 줄이 정리 없이 새로 쌓이므로(사용자 지적: "하단에 버튼이 중복으로 들어가있음"), fallback으로 먼저 그렸다가
-  // DB 값으로 또 그리지 않고 — DB 로드를 기다린 뒤 딱 한 번만 그린다.
-  function drawRefBracket(){
-    const { refArmLen1:a1, refArmLen2:a2, refArmWidth:aw } = bracketStandards;
-    renderBracketPanel(document.getElementById('refBracketTop'), a1, a2, aw, bracketTopCamPos(a1), true);
-    renderBracketPanel(document.getElementById('refBracketFront'), a1, a2, aw, [70,90,110], false, true);
-    renderBracketPanel(document.getElementById('refBracketBack'), a1, a2, aw, bracketBackCamPos(a1,a2));
-    renderRefSpecCols();
-  }
-  loadBracketStandards().then(drawRefBracket);
-  // 위쪽 고정 참고 패널("90도 프레임"/"1열브라켓")도 실제 카탈로그에 같은 이름 부품이 있으면 좌표 표만
-  // 보여주던 걸 부품스펙 전체(썸네일·스펙수정 버튼 포함)로 업그레이드(사용자 지시: "부품 스펙에 표시가
-  // 되어야해 모든게 / 부품스펙에 지금 썸네일도 안 불러오고 있어"). allParts가 아직 안 왔으면 그냥 둔다
-  // (initImporter 끝에서, 그리고 drawRefBracket에서 한 번 더 호출해서 로드 순서 상관없이 반영됨).
-  function renderRefSpecCols(){
-    const frame90 = allParts.find(p => p.name === '90도 프레임');
-    if (frame90) {
-      const svg = frame90.imageSvg || frame90.imageSvgDiagonal;
-      document.getElementById('refFrameSpecCol').innerHTML = buildSpecHtml(frame90, frameSpecRows(svg, svg ? parseSvgPlateOutline(svg) : null, frame90.spec));
-    }
-    const bracket1 = allParts.find(p => p.name === '1열브라켓');
-    if (bracket1) {
-      const s = bracket1.spec || {};
-      const a1 = s.armLen1 ?? bracketStandards.refArmLen1, a2 = s.armLen2 ?? bracketStandards.refArmLen2, aw = s.armWidth ?? bracketStandards.refArmWidth;
-      document.getElementById('refBracketSpecCol').innerHTML = buildSpecHtml(bracket1, bracketSpecRows(a1, a2, aw));
-    }
-  }
+  // 예전엔 여기서 "90도 프레임"/"1열브라켓"을 별도의 고정 칸에 항상 그려뒀는데, 그건 사용자가 요청한 적
+  // 없는 별도 영역이었다(사용자 지적: "누가 의도적으로했다는거야? 니가?? 난 그렇게 요청을 한적이 없어~").
+  // "평소에는 안보여줘도 되" — 이제 "비교 대상 부품"/"수정할 부품"은 "🔍 부품 고르기"로 고르기 전엔
+  // 완전히 비어있고, 고른 부품이 그 자리에 그대로 나온다(loadPartForCompare/loadPartForEdit). 아래는
+  // 여전히 bracketPitch()/bracketMargin() 등 브라켓 공용 상수가 필요해서 DB에서 불러오기만 한다.
+  loadBracketStandards();
 
   // ===== 도형 에디터 (오른쪽 패널, 예전 자유낙서 스케치북 자리) =====
   // 실제 로직은 parts-lab-box-editor.js로 분리했다(사용자 지시: "코드가 너무 길어지면 따로 분리해서
@@ -1728,7 +1682,6 @@ h4{margin:4px 0}
       renderModalPartList();
     });
     renderModalPartList();
-    renderRefSpecCols();
   }
   function renderModalPartList(){
     const el = document.getElementById('modalPartList');
@@ -1824,9 +1777,9 @@ h4{margin:4px 0}
   // 소문자 a부터 매기고, 정면=대문자A·뒷면=대문자B. 팔 순서 같은 이름으로 추측하지 않고 3D에 실제로 찍는
   // 구멍 좌표(x,z)를 그대로 넣어서 계산하므로, 팔 길이가 같은 대칭 부품이라도 실제 좌표가 서로 다른 자리라
   // 라벨이 절대 겹치지 않는다(길이가 다르면 애초에 칸 수 자체가 달라서 더 안 겹침).
-  // const가 아니라 function 선언으로 둠 — 이 값이 실제로 쓰이는 renderFramePanel/renderBracketPanel의 최초
-  // 호출(파일 앞쪽의 refFrameTop/refBracketTop 등)이 이 줄보다 앞에 있어서, const였다면 호출 시점에 아직
-  // 초기화 전이라 "Cannot access before initialization" 에러가 났음 — function 선언은 완전히 끌어올려짐.
+  // const가 아니라 function 선언으로 둠 — 이 값을 쓰는 renderFramePanel/renderBracketPanel이 이 줄보다
+  // 앞에서 정의되므로, const였다면 "Cannot access before initialization" 에러가 났음 — function 선언은
+  // 완전히 끌어올려짐.
   function gridRnd(n){ return Math.round(n * 10) / 10; }
   function gridCellIndex(v){ return Math.floor(v / bracketPitch()); }
   function gridCellCenter(i){ return i * bracketPitch() + bracketPitch()/2; }
