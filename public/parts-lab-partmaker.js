@@ -782,6 +782,7 @@ function initPartMaker() {
   // 결과가 여러 조각이 아니라 하나라서 바로 등록/내보내기까지 한 화면에서 끝낸다.
   let joinSourcePart = null;
   let joinResult = null; // { geometry, size:{x,y,z} }
+  let borderResult = null; // { geometry, size:{x,y,z} } — "테두리 만들기" 결과
 
   // 카탈로그에 저장된 spec.shapes는 import 도형이어도 fileDataUrl만 있고 _geometry(캐시)는 없다 —
   // renderShapesPreview()와 같은 방식으로 여기서도 다시 만들어준다.
@@ -814,6 +815,65 @@ function initPartMaker() {
       result = evaluator.evaluate(result, copy, ADDITION);
       result.updateMatrixWorld();
     }
+    return result;
+  }
+
+  // ---------- 테두리 만들기: 있는 쪽 모양을 거울 대칭시켜서 없는 쪽에 채운다 ----------
+  // 자르거나 이어붙이면 그 단면엔 원본 테두리가 없어진다. 두께를 사람이 숫자로 정하면 실제 반대쪽
+  // 테두리와 어긋날 수 있으므로(사용자 지적: "그럴 다르게 하면 반대와 대칭이 또 안되는 거자나?"), 몇
+  // mm인지 몰라도 항상 맞도록 지금 있는 모양 자체를 거울 대칭시켜서 합친다(사용자 지시: "기존에 있는걸
+  // 대칭에서 하는거야"). 테두리가 있는 쪽이 어디인지 굳이 찾을 필요가 없다 — 원점 중심으로 맞춘 뒤
+  // 대칭시키면, 있던 쪽은 그대로 겹치고 없던 쪽엔 반대쪽 모양이 거울처럼 채워진다.
+  function mirrorGeometry(geometry, axis) {
+    const g = geometry.clone();
+    const scale = axis === 'x' ? [-1, 1, 1] : [1, 1, -1];
+    g.scale(scale[0], scale[1], scale[2]);
+    // 거울 대칭은 손잡이(handedness)가 뒤집혀서 삼각형이 안팎 반대로 뒤집힌다 — CSG가 안/밖을 헷갈리지
+    // 않도록 각 삼각형의 2·3번째 꼭짓점을 맞바꿔 방향(winding)을 원래대로 되돌린다.
+    const idx = g.getIndex();
+    if (idx) {
+      const arr = idx.array;
+      for (let i = 0; i < arr.length; i += 3) {
+        const t = arr[i + 1]; arr[i + 1] = arr[i + 2]; arr[i + 2] = t;
+      }
+      idx.needsUpdate = true;
+    } else {
+      ['position', 'normal', 'uv'].forEach((name) => {
+        const attr = g.getAttribute(name);
+        if (!attr) return;
+        const arr = attr.array;
+        const size = attr.itemSize;
+        for (let t = 0; t < arr.length; t += size * 3) {
+          for (let k = 0; k < size; k++) {
+            const a = t + size + k, b = t + size * 2 + k;
+            const tmp = arr[a]; arr[a] = arr[b]; arr[b] = tmp;
+          }
+        }
+        attr.needsUpdate = true;
+      });
+    }
+    g.computeVertexNormals();
+    return g;
+  }
+  function computeBorderedBrush(axis) {
+    const merged = computeMergedBrush();
+    if (!merged) return null;
+    merged.geometry.computeBoundingBox();
+    const box = merged.geometry.boundingBox;
+    const center = new THREE.Vector3();
+    box.getCenter(center);
+    // 나누기/붙이기 결과와 같은 관례로 원점 중심(X/Z)·바닥(Y=0) 정렬 — 이래야 축 중심(0)을 기준으로 한
+    // 거울 대칭이 실제로 "반대쪽"을 가리킨다.
+    merged.geometry.translate(-center.x, -box.min.y, -center.z);
+    merged.geometry.computeBoundingBox();
+    const mirroredGeom = mirrorGeometry(merged.geometry, axis);
+    const evaluator = new Evaluator();
+    const a = new Brush(merged.geometry);
+    a.updateMatrixWorld();
+    const b = new Brush(mirroredGeom);
+    b.updateMatrixWorld();
+    const result = evaluator.evaluate(a, b, ADDITION);
+    result.geometry.computeBoundingBox();
     return result;
   }
 
@@ -876,6 +936,62 @@ function initPartMaker() {
       try {
         const exporter = new STLExporter();
         const mesh = new THREE.Mesh(joinResult.geometry);
+        const stlText = exporter.parse(mesh, { binary: false });
+        const blob = new Blob([stlText], { type: 'model/stl' });
+        const fileDataUrl = await fileToDataUrl(blob);
+        const shape = { type: 'import', op: 'add', x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0, fileName: name + '.stl', fileDataUrl };
+        await adminApi({
+          action: 'add_part', name, icon: '📦', subject: getSubject(), category: '',
+          volumes: [], color: null, size: null,
+          imageSvg: '', imageSvgDiagonal: '', primaryImage: 'front',
+          spec: { shapes: [shape] },
+        }, getAccessToken());
+        msg.className = 'msg ok';
+        msg.textContent = '"' + name + '" 새 부품으로 등록했어요.';
+      } catch (err) {
+        msg.className = 'msg err';
+        msg.textContent = '등록 실패: ' + err.message;
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+
+  function renderBorderResult() {
+    const wrap = document.getElementById('partMakerBorderResult');
+    if (!borderResult) { wrap.innerHTML = ''; return; }
+    const thumb = renderJoinThumbnail(borderResult.geometry, borderResult.size);
+    wrap.innerHTML =
+      '<div style="width:150px; border:1px solid #ddd; border-radius:8px; padding:8px; text-align:center; background:#fff;">' +
+      '<img src="' + thumb + '" width="130" height="130" style="width:130px;height:130px;border-radius:4px;background:#f3f5f8;">' +
+      '<div style="font-size:11px; color:#666; margin:6px 0;">' + borderResult.size.x + ' × ' + borderResult.size.y + ' × ' + borderResult.size.z + 'mm</div>' +
+      '<div style="display:flex; gap:4px; justify-content:center;">' +
+      '<button type="button" id="partMakerBorderNewPartBtn" style="font-size:11px; padding:4px 8px; border-radius:5px; border:1px solid #2b6be0; background:#2b6be0; color:#fff; cursor:pointer;">🆕 새 부품으로 등록</button>' +
+      '<button type="button" id="partMakerBorderExportBtn" style="font-size:11px; padding:4px 8px; border-radius:5px; border:1px solid #2b6be0; background:#fff; color:#2b6be0; cursor:pointer;">⬇️ STL</button>' +
+      '</div></div>';
+    document.getElementById('partMakerBorderExportBtn').addEventListener('click', () => {
+      const mesh = new THREE.Mesh(borderResult.geometry);
+      const exporter = new STLExporter();
+      const stlText = exporter.parse(mesh, { binary: false });
+      const blob = new Blob([stlText], { type: 'model/stl' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = (targetPart ? targetPart.name : '부품') + '_테두리.stl';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    });
+    document.getElementById('partMakerBorderNewPartBtn').addEventListener('click', async () => {
+      const msg = document.getElementById('partMakerBorderMsg');
+      const name = (await openNamePromptModal() || '').trim();
+      if (!name) return;
+      const btn = document.getElementById('partMakerBorderNewPartBtn');
+      btn.disabled = true;
+      try {
+        const exporter = new STLExporter();
+        const mesh = new THREE.Mesh(borderResult.geometry);
         const stlText = exporter.parse(mesh, { binary: false });
         const blob = new Blob([stlText], { type: 'model/stl' });
         const fileDataUrl = await fileToDataUrl(blob);
@@ -1420,6 +1536,28 @@ function initPartMaker() {
     } catch (e) {
       msg.className = 'msg err';
       msg.textContent = '붙이기 실패: ' + e.message;
+    }
+  });
+
+  // "테두리 만들기" — 지금 캔버스 도형을 고른 축으로 거울 대칭시켜 원본과 합친다. 두께 입력칸이 없는 건
+  // 실수가 아니라 의도 — 사용자 지시: "기존에 있는걸 대칭에서 하는거야"(있는 쪽 형상을 그대로 복사해서
+  // 맞추는 것이지, 임의의 두께를 새로 정하는 게 아님).
+  document.getElementById('partMakerBorderPreviewBtn').addEventListener('click', () => {
+    const msg = document.getElementById('partMakerBorderMsg');
+    if (!shapes.length) { msg.className = 'msg err'; msg.textContent = '도형이 없어요 — 먼저 도형을 만들거나 3D 파일을 불러오세요.'; return; }
+    const axis = document.getElementById('partMakerBorderAxis').value;
+    msg.textContent = '테두리 만드는 중...';
+    try {
+      const brush = computeBorderedBrush(axis);
+      const sz = new THREE.Vector3();
+      brush.geometry.boundingBox.getSize(sz);
+      borderResult = { geometry: brush.geometry, size: { x: round1(sz.x), y: round1(sz.y), z: round1(sz.z) } };
+      renderBorderResult();
+      msg.className = 'msg ok';
+      msg.textContent = '테두리를 대칭으로 맞췄어요.';
+    } catch (e) {
+      msg.className = 'msg err';
+      msg.textContent = '테두리 만들기 실패: ' + e.message;
     }
   });
 
