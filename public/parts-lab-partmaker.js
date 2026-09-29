@@ -678,10 +678,27 @@ function initPartMaker() {
       addEdgeOutline(result, finalColor);
       scene.add(result);
       result.updateMatrixWorld(true);
+      // 정육면체를 안전하게 담을 수 있는 대각선 반지름(항상 안 잘림) 대신, 지금 이 카메라 각도에서 실제로
+      // 화면에 투영되는 가로/세로 폭만큼만 프레임을 잡는다 — 그래야 15프레임처럼 작은 부품도 정사각형
+      // 칸을 꽉 채운다(사용자 지적: "새로 저장하니까 수정되서 보임 근데 너무 작아~~ 사각형에 최대한
+      // 맞춰줘봐"). 예전의 최소 반경(70) 바닥값이 작은 부품을 가운데 작게 떠 있게 만들던 원인이었다.
+      camera.updateMatrixWorld();
+      const right = new THREE.Vector3(), up = new THREE.Vector3(), forward = new THREE.Vector3();
+      camera.matrixWorld.extractBasis(right, up, forward);
       const box = new THREE.Box3().setFromObject(result);
-      const boxSize = new THREE.Vector3();
-      box.getSize(boxSize);
-      const half = Math.max(70, (boxSize.length() / 2) * 1.15);
+      const center = new THREE.Vector3();
+      box.getCenter(center);
+      let maxRight = 0, maxUp = 0;
+      for (let i = 0; i < 8; i++) {
+        const corner = new THREE.Vector3(
+          i & 1 ? box.max.x : box.min.x,
+          i & 2 ? box.max.y : box.min.y,
+          i & 4 ? box.max.z : box.min.z
+        ).sub(center);
+        maxRight = Math.max(maxRight, Math.abs(corner.dot(right)));
+        maxUp = Math.max(maxUp, Math.abs(corner.dot(up)));
+      }
+      const half = Math.max(maxRight, maxUp, 1) * 1.08;
       camera.left = -half; camera.right = half; camera.top = half; camera.bottom = -half;
       camera.updateProjectionMatrix();
     }

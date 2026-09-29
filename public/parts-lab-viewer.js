@@ -361,13 +361,27 @@ async function renderShapesThumbnail(shapesData, size) {
   const mesh = meshFromShapes(list);
   if (mesh) {
     scene.add(mesh);
-    // 기본 ±70 프레임보다 큰 부품(예: 긴 프레임을 통째로 불러온 경우)은 카메라 밖으로 잘려서 썸네일이
-    // 빈 칸으로 보였다(사용자 지적) — 부품의 실제 크기를 재서 필요할 때만 프레임을 넓힌다.
+    // 정육면체를 안전하게 담을 수 있는 대각선 반지름 대신, 지금 이 카메라 각도에서 실제로 화면에
+    // 투영되는 가로/세로 폭만큼만 프레임을 잡는다 — 큰 부품은 안 잘리고, 작은 부품은 칸을 꽉 채운다
+    // (사용자 지적: "너무 작아~~ 사각형에 최대한 맞춰줘봐").
     mesh.updateMatrixWorld(true);
+    camera.updateMatrixWorld();
+    const right = new THREE.Vector3(), up = new THREE.Vector3(), forward = new THREE.Vector3();
+    camera.matrixWorld.extractBasis(right, up, forward);
     const box = new THREE.Box3().setFromObject(mesh);
-    const boxSize = new THREE.Vector3();
-    box.getSize(boxSize);
-    const half = Math.max(70, (boxSize.length() / 2) * 1.15);
+    const center = new THREE.Vector3();
+    box.getCenter(center);
+    let maxRight = 0, maxUp = 0;
+    for (let i = 0; i < 8; i++) {
+      const corner = new THREE.Vector3(
+        i & 1 ? box.max.x : box.min.x,
+        i & 2 ? box.max.y : box.min.y,
+        i & 4 ? box.max.z : box.min.z
+      ).sub(center);
+      maxRight = Math.max(maxRight, Math.abs(corner.dot(right)));
+      maxUp = Math.max(maxUp, Math.abs(corner.dot(up)));
+    }
+    const half = Math.max(maxRight, maxUp, 1) * 1.08;
     camera.left = -half; camera.right = half; camera.top = half; camera.bottom = -half;
     camera.updateProjectionMatrix();
   }
