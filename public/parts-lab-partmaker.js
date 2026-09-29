@@ -698,7 +698,11 @@ function initPartMaker() {
         maxRight = Math.max(maxRight, Math.abs(corner.dot(right)));
         maxUp = Math.max(maxUp, Math.abs(corner.dot(up)));
       }
-      const half = Math.max(maxRight, maxUp, 1) * 1.08;
+      // 지오메트리에 이상치(잘못된 정점 등)가 있으면 half가 NaN/Infinity가 될 수 있고, 그러면 카메라
+      // 투영 자체가 깨져서 완전히 빈 화면이 저장된다(사용자 지적: "25프레임이 자꾸 안보여") — 이럴 땐
+      // 안전한 기본값으로 대체해서 최소한 뭐라도 보이게 한다.
+      let half = Math.max(maxRight, maxUp, 1) * 1.08;
+      if (!Number.isFinite(half) || half <= 0) half = 60;
       camera.left = -half; camera.right = half; camera.top = half; camera.bottom = -half;
       camera.updateProjectionMatrix();
     }
@@ -738,7 +742,7 @@ function initPartMaker() {
     if (!shapes.length) { msg.className = 'msg err'; msg.textContent = '내보낼 도형이 없어요.'; return; }
     const result = computeMergedBrush();
     const exporter = new STLExporter();
-    const stlText = exporter.parse(result, { binary: false });
+    const stlText = exporter.parse(result, { binary: true });
     const blob = new Blob([stlText], { type: 'model/stl' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -803,7 +807,7 @@ function initPartMaker() {
   function exportPieceSTL(piece, index) {
     const mesh = new THREE.Mesh(piece.geometry);
     const exporter = new STLExporter();
-    const stlText = exporter.parse(mesh, { binary: false });
+    const stlText = exporter.parse(mesh, { binary: true });
     const blob = new Blob([stlText], { type: 'model/stl' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1019,6 +1023,10 @@ function initPartMaker() {
     brush2.updateMatrixWorld();
     const p2Rotated = s2.pick.point.clone().applyQuaternion(q);
     brush2.position.copy(s1.pick.point.clone().sub(p2Rotated));
+    // 두 면을 정확히 딱 맞닿게만 붙이면(두께 0인 접촉면) CSG가 그 경계에서 안/밖을 애매하게 판정해서
+    // 조각난 지오메트리를 만들 수 있다(테두리 만들기에서 겪은 것과 같은 원인) — 안쪽으로 아주 살짝(0.05mm)
+    // 밀어넣어서 접촉이 아니라 확실히 겹치게 만든다. 눈에 보이는 차이는 없다.
+    brush2.position.addScaledVector(s1.pick.normal, -0.05);
     brush2.updateMatrixWorld();
     const result = evaluator.evaluate(brush1, brush2, ADDITION);
     result.geometry.computeBoundingBox();
@@ -1074,6 +1082,14 @@ function initPartMaker() {
     merged.geometry.translate(-center.x, -box.min.y, -center.z);
     merged.geometry.computeBoundingBox();
     const mirroredGeom = mirrorGeometry(merged.geometry, axis);
+    // 원본과 거울 복사본이 축 중심(0)에서 정확히 딱 맞닿기만 하면(두께 0인 접촉면), CSG(three-bvh-csg)가
+    // 그 경계에서 안/밖을 애매하게 판정해서 삼각형이 조각조각 부서진 지오메트리를 만든다(사용자 지적:
+    // "팅커캐드에서 불러오니 아주 족같은 모습이네" / "잘라서 테두리를 만든것들 자체가 모두 용량이 엄청
+    // 크네" — 84,816개 삼각형짜리 깨진 메쉬가 나온 원인. 나누기로 만든 조각은 자른 단면이 딱 중심에
+    // 걸리기 쉬워서 특히 잘 터졌다). 거울 복사본을 중심 축 방향으로만 아주 살짝(0.2%) 부풀려서 접촉면이
+    // 아니라 확실히 겹치게 만들면 CSG가 안정적으로 계산한다 — 눈에 보이는 차이는 없다.
+    const bulge = axis === 'x' ? [1.002, 1, 1] : [1, 1, 1.002];
+    mirroredGeom.scale(bulge[0], bulge[1], bulge[2]);
     const evaluator = new Evaluator();
     const a = new Brush(merged.geometry);
     a.updateMatrixWorld();
@@ -1117,7 +1133,7 @@ function initPartMaker() {
   async function loadResultIntoEditor(geometry, fileName) {
     const exporter = new STLExporter();
     const mesh = new THREE.Mesh(geometry);
-    const stlText = exporter.parse(mesh, { binary: false });
+    const stlText = exporter.parse(mesh, { binary: true });
     const blob = new Blob([stlText], { type: 'model/stl' });
     const fileDataUrl = await fileToDataUrl(blob);
     shapes = [{
@@ -1159,7 +1175,7 @@ function initPartMaker() {
   async function buildResultShape(geometry, fileName) {
     const exporter = new STLExporter();
     const mesh = new THREE.Mesh(geometry);
-    const stlText = exporter.parse(mesh, { binary: false });
+    const stlText = exporter.parse(mesh, { binary: true });
     const blob = new Blob([stlText], { type: 'model/stl' });
     const fileDataUrl = await fileToDataUrl(blob);
     return { type: 'import', op: 'add', x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0, fileName, fileDataUrl };
@@ -1239,7 +1255,7 @@ function initPartMaker() {
     document.getElementById('partMakerJoinExportBtn').addEventListener('click', () => {
       const mesh = new THREE.Mesh(joinResult.geometry);
       const exporter = new STLExporter();
-      const stlText = exporter.parse(mesh, { binary: false });
+      const stlText = exporter.parse(mesh, { binary: true });
       const blob = new Blob([stlText], { type: 'model/stl' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -1259,7 +1275,7 @@ function initPartMaker() {
       try {
         const exporter = new STLExporter();
         const mesh = new THREE.Mesh(joinResult.geometry);
-        const stlText = exporter.parse(mesh, { binary: false });
+        const stlText = exporter.parse(mesh, { binary: true });
         const blob = new Blob([stlText], { type: 'model/stl' });
         const fileDataUrl = await fileToDataUrl(blob);
         const shape = { type: 'import', op: 'add', x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0, fileName: name + '.stl', fileDataUrl };
@@ -1307,7 +1323,7 @@ function initPartMaker() {
       try {
         const exporter = new STLExporter();
         const mesh = new THREE.Mesh(borderResult.geometry);
-        const stlText = exporter.parse(mesh, { binary: false });
+        const stlText = exporter.parse(mesh, { binary: true });
         const blob = new Blob([stlText], { type: 'model/stl' });
         const fileDataUrl = await fileToDataUrl(blob);
         shapes = [{
@@ -1328,7 +1344,7 @@ function initPartMaker() {
     document.getElementById('partMakerBorderExportBtn').addEventListener('click', () => {
       const mesh = new THREE.Mesh(borderResult.geometry);
       const exporter = new STLExporter();
-      const stlText = exporter.parse(mesh, { binary: false });
+      const stlText = exporter.parse(mesh, { binary: true });
       const blob = new Blob([stlText], { type: 'model/stl' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -1348,7 +1364,7 @@ function initPartMaker() {
       try {
         const exporter = new STLExporter();
         const mesh = new THREE.Mesh(borderResult.geometry);
-        const stlText = exporter.parse(mesh, { binary: false });
+        const stlText = exporter.parse(mesh, { binary: true });
         const blob = new Blob([stlText], { type: 'model/stl' });
         const fileDataUrl = await fileToDataUrl(blob);
         const shape = { type: 'import', op: 'add', x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0, fileName: name + '.stl', fileDataUrl };

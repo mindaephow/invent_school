@@ -687,7 +687,11 @@ function initBoxEditor() {
         maxRight = Math.max(maxRight, Math.abs(corner.dot(right)));
         maxUp = Math.max(maxUp, Math.abs(corner.dot(up)));
       }
-      const half = Math.max(maxRight, maxUp, 1) * 1.08;
+      // 지오메트리에 이상치(잘못된 정점 등)가 있으면 half가 NaN/Infinity가 될 수 있고, 그러면 카메라
+      // 투영 자체가 깨져서 완전히 빈 화면이 저장된다(사용자 지적: "25프레임이 자꾸 안보여") — 이럴 땐
+      // 안전한 기본값으로 대체해서 최소한 뭐라도 보이게 한다.
+      let half = Math.max(maxRight, maxUp, 1) * 1.08;
+      if (!Number.isFinite(half) || half <= 0) half = 60;
       camera.left = -half; camera.right = half; camera.top = half; camera.bottom = -half;
       camera.updateProjectionMatrix();
     }
@@ -727,7 +731,7 @@ function initBoxEditor() {
     if (!shapes.length) { msg.className = 'msg err'; msg.textContent = '내보낼 도형이 없어요.'; return; }
     const result = computeMergedBrush();
     const exporter = new STLExporter();
-    const stlText = exporter.parse(result, { binary: false });
+    const stlText = exporter.parse(result, { binary: true });
     const blob = new Blob([stlText], { type: 'model/stl' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

@@ -381,7 +381,8 @@ async function renderShapesThumbnail(shapesData, size) {
       maxRight = Math.max(maxRight, Math.abs(corner.dot(right)));
       maxUp = Math.max(maxUp, Math.abs(corner.dot(up)));
     }
-    const half = Math.max(maxRight, maxUp, 1) * 1.08;
+    let half = Math.max(maxRight, maxUp, 1) * 1.08;
+    if (!Number.isFinite(half) || half <= 0) half = 60;
     camera.left = -half; camera.right = half; camera.top = half; camera.bottom = -half;
     camera.updateProjectionMatrix();
   }
