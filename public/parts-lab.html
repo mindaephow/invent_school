@@ -1941,6 +1941,13 @@ h4{margin:4px 0}
   }
   function renderModalPartList(){
     const el = document.getElementById('modalPartList');
+    // 세션 만료는 다른 서버 에러와 성격이 달라서(부품 데이터 문제가 아니라 로그인이 오래돼서 생기는 것) —
+    // "부품을 못 불러왔어요: ..." 뒤에 파묻히지 않고, 뭘 해야 하는지(새로고침)까지 바로 알 수 있게 따로
+    // 보여준다(사용자 지시: "그럼 로그인세션이 만료되었습니다. 라고 표시를 해줘야지").
+    if (partsLoadError && partsLoadError.includes('만료')) {
+      el.innerHTML = '<span style="color:#c0392b;font-size:12px;">🔒 로그인 세션이 만료됐어요. 페이지를 새로고침(F5)한 뒤 다시 시도해주세요.</span>';
+      return;
+    }
     if (partsLoadError) { el.innerHTML = '<span style="color:#c0392b;font-size:12px;">부품을 못 불러왔어요: ' + esc(partsLoadError) + '</span>'; return; }
     if (!partsLoaded) { el.innerHTML = '<span style="color:#888;font-size:12px;">불러오는 중...</span>'; return; }
     // 도형 에디터의 "저장할 부품 고르기"는 프레임/브라켓이 아닌 부품(기어·바퀴 등)에도 shapes를 저장할 수
