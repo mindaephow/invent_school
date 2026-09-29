@@ -1902,6 +1902,11 @@ h4{margin:4px 0}
     if (!res.ok) throw new Error(data.error || '요청을 처리하지 못했어요.');
     return data;
   }
+  // list_parts 응답을 아직 못 받은 상태(fetch가 아직 안 끝남)와 "이 갈래엔 진짜로 부품이 없음"을 구분해야
+  // 한다 — 안 그러면 서버 콜드스타트 등으로 응답이 늦을 때 잠깐이라도 모달을 열면 "부품이 없어요"로 잘못
+  // 보인다(사용자 지적: "부품만들기에서 다른부품에 저장이 아직도 안되고 있어~" — 로봇 탭에 실제로는 49개
+  // 등록돼 있는데도 빈 걸로 보였던 원인).
+  let partsLoaded = false;
   async function initImporter(token){
     window.__accessToken = token;
     try {
@@ -1911,11 +1916,7 @@ h4{margin:4px 0}
       document.getElementById('modalPartList').textContent = '부품을 못 불러왔어요: ' + e.message;
       return;
     }
-    try {
-      const catData = await adminApi({ action:'list_robot_categories' }, token);
-      categoryNames = {};
-      (catData.categories || []).forEach(c => { categoryNames[c.id] = c.name; });
-    } catch (e) { /* 실패해도 UUID로 대체 표시되니 치명적이지 않음 */ }
+    partsLoaded = true;
     document.getElementById('modalSubjectTabs').addEventListener('click', e => {
       const btn = e.target.closest('button[data-subject]');
       if (!btn) return;
@@ -1924,9 +1925,17 @@ h4{margin:4px 0}
       renderModalPartList();
     });
     renderModalPartList();
+    // 로봇 카테고리 이름(UUID 대신 사람이 읽는 이름 — buildSpecHtml에서만 씀)은 부품 목록·모달 탭 클릭과
+    // 무관하니, 이 호출이 느려도 위 목록 표시가 덩달아 늦어지지 않게 따로 떼어낸다.
+    try {
+      const catData = await adminApi({ action:'list_robot_categories' }, token);
+      categoryNames = {};
+      (catData.categories || []).forEach(c => { categoryNames[c.id] = c.name; });
+    } catch (e) { /* 실패해도 UUID로 대체 표시되니 치명적이지 않음 */ }
   }
   function renderModalPartList(){
     const el = document.getElementById('modalPartList');
+    if (!partsLoaded) { el.innerHTML = '<span style="color:#888;font-size:12px;">불러오는 중...</span>'; return; }
     // 도형 에디터의 "저장할 부품 고르기"는 프레임/브라켓이 아닌 부품(기어·바퀴 등)에도 shapes를 저장할 수
     // 있어야 해서 modalShowAll이면 필터 없이 전체를 보여준다(사용자 지시: "기존의 등록된 부품을 수정으로
     // 열어서 교체하는 기능을 추가해줘"). 비교/스펙수정 쪽은 여전히 프레임/브라켓만 보여준다(기존 동작 유지).
