@@ -1469,13 +1469,17 @@
     // spec.shapes(부품 수리실에서 만든 3D 모델)가 있으면 svg 아이콘 대신 3D를 우선 보여준다(사용자 지시:
     // "부품수리실에서 새로 3D 모델이 업데이트 되면 보관해두고 대체된 3D모델을 보여줍니다") — svg 필드는
     // 이 화면에서 건드리지 않으니(update_part로 매번 그대로 다시 보냄) 따로 옮기지 않아도 자동으로
-    // "보관"된 상태가 된다. 썸네일은 렌더링 전엔 빈 칸으로 뒀다가 renderPart3DThumbnails()가 채운다
-    // (부품마다 새 WebGLRenderer를 만들면 컨텍스트가 소진되는 문제 방지, 아래 함수 주석 참고).
+    // "보관"된 상태가 된다. 부품 수리실이 저장할 때 미리 그려서 넣어준 thumbnail3d가 있으면 그걸 그대로
+    // <img>로 꽂는다(사용자 지시: "썸네일을 매번그리지 말고 썸네일을 저장해두고 그데로 보여줘") — 목록을
+    // 열 때마다 3D를 다시 렌더링하지 않아서 더 빠르고, 탭을 왔다갔다 해도 안 사라진다. thumbnail3d가 아직
+    // 없는 옛날 부품만 예전처럼 renderPart3DThumbnails()가 그때그때 렌더링해서 채운다.
     const has3d = !!(p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.length);
     const primarySvg = p.primaryImage === 'diagonal' ? p.imageSvgDiagonal : p.imageSvg;
     const thumbSrc = uniquifySvgIds(primarySvg || p.imageSvg || p.imageSvgDiagonal, p.id);
     const thumb = has3d
-      ? `<button type="button" class="part-thumb" data-view-image="${escapeHtml(p.id)}" data-thumb-3d="${escapeHtml(p.id)}"></button>`
+      ? (p.thumbnail3d
+          ? `<button type="button" class="part-thumb" data-view-image="${escapeHtml(p.id)}"><img src="${escapeHtml(p.thumbnail3d)}" style="width:100%;height:100%;object-fit:contain;"></button>`
+          : `<button type="button" class="part-thumb" data-view-image="${escapeHtml(p.id)}" data-thumb-3d="${escapeHtml(p.id)}"></button>`)
       : (thumbSrc ? `<button type="button" class="part-thumb" data-view-image="${escapeHtml(p.id)}">${thumbSrc}</button>` : '');
     return `<div class="design-row" style="align-items:center;"><div class="item-main"><div class="item-title">${newBadge}${escapeHtml(p.icon ? p.icon + ' ' : '')}${escapeHtml(p.name)}</div><div class="item-sub">${escapeHtml(sub)}</div></div><div style="display:flex; align-items:center; gap:8px; flex:none; flex-wrap:wrap;">${thumb}${addVolBtn}${editBtn}${delBtn}</div></div>`;
   }
@@ -1591,11 +1595,17 @@
       return;
     }
     for (const btn of btns) {
-      const p = allParts.find((x) => x.id === btn.dataset.thumb3d);
+      const partId = btn.dataset.thumb3d;
+      const p = allParts.find((x) => x.id === partId);
       if (!p || !document.body.contains(btn)) continue;
       try {
         const dataUrl = await window.__partsLabViewer.renderShapesThumbnail(p.spec.shapes, 88);
-        if (document.body.contains(btn)) btn.innerHTML = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:contain;">`;
+        // await 하는 동안(큰 STL일수록 오래 걸림) 사용자가 다른 탭을 눌러서 renderParts()가 다시 불리면
+        // 이 btn은 이미 문서에서 떨어져나간 헌 요소라 여기 값을 채워도 화면엔 반영이 안 됐다(사용자 지적:
+        // "썸네일이 아예 안 보인다니까" — 콘솔엔 에러가 없었던 이유이기도 함, 그냥 조용히 버려진 것).
+        // 캡처해둔 btn 대신, 지금 문서에 있는 같은 부품 id의 버튼을 다시 찾아서 채운다.
+        const liveBtn = document.querySelector('[data-thumb-3d="' + CSS.escape(partId) + '"]');
+        if (liveBtn) liveBtn.innerHTML = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:contain;">`;
       } catch (e) { console.error('3D 썸네일 렌더 실패: ' + p.name, e); }
     }
   }

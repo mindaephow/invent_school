@@ -648,6 +648,47 @@ function initPartMaker() {
   // (부품 만들기 쪽은 window.__boxEditorRenderShapes를 다시 등록하지 않음 — 원본 도형 에디터가 이미
   // 만들어둔 창구 하나만 공용으로 쓴다. 여기서 또 등록하면 나중에 로드되는 쪽이 덮어써서 꼬인다.)
 
+  // 부품관리 목록 썸네일용 — 저장할 때 딱 한 번 88×88 PNG로 미리 그려서 서버에 같이 저장해둔다(사용자
+  // 지시: "썸네일을 매번그리지 말고 썸네일을 저장해두고 그데로 보여줘"). index.html은 이제 이 저장된
+  // 이미지를 그대로 <img>로 꽂기만 하면 되고, 목록을 열 때마다 3D를 다시 렌더링하지 않는다.
+  let sharedThumbGenRenderer = null;
+  async function renderShapesToThumbnailDataUrl(shapesData, size) {
+    size = size || 88;
+    const list = (shapesData || []).map((s) => Object.assign({}, s));
+    await Promise.all(list.filter((s) => s.type === 'import' && s.fileDataUrl && !s._geometry).map(async (s) => {
+      try { s._geometry = await loadImportedGeometry(dataUrlToFile(s.fileDataUrl, s.fileName || 'model')); }
+      catch (e) { console.error('불러온 3D 파일을 다시 못 읽었어요.', e); }
+    }));
+    if (!sharedThumbGenRenderer) {
+      const c = document.createElement('canvas');
+      sharedThumbGenRenderer = new THREE.WebGLRenderer({ canvas: c, antialias: true, alpha: true, preserveDrawingBuffer: true });
+    }
+    sharedThumbGenRenderer.setSize(size, size, false);
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf3f5f8);
+    scene.add(new THREE.AmbientLight(0xffffff, 1.2));
+    const dir = new THREE.DirectionalLight(0xffffff, 0.8); dir.position.set(100, 200, 100); scene.add(dir);
+    const camera = new THREE.OrthographicCamera(-70, 70, 70, -70, 0.1, 6000);
+    camera.position.set(90, 90, 90);
+    camera.lookAt(0, 0, 0);
+    const result = computeMergedBrush(list);
+    if (result) {
+      const finalColor = materialColorForShape(list[0], 0);
+      result.material = new THREE.MeshBasicMaterial({ color: finalColor });
+      addEdgeOutline(result, finalColor);
+      scene.add(result);
+      result.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(result);
+      const boxSize = new THREE.Vector3();
+      box.getSize(boxSize);
+      const half = Math.max(70, (boxSize.length() / 2) * 1.15);
+      camera.left = -half; camera.right = half; camera.top = half; camera.bottom = -half;
+      camera.updateProjectionMatrix();
+    }
+    sharedThumbGenRenderer.render(scene, camera);
+    return sharedThumbGenRenderer.domElement.toDataURL('image/png');
+  }
+
   // ---------- 미리보기 모드: 실제 CSG로 더하고 뺀 최종 결과 하나만 보여줌(읽기 전용) ----------
   function renderPreviewMode() {
     teardownLive();
@@ -1113,11 +1154,12 @@ function initPartMaker() {
     btn.disabled = true; msgEl.textContent = '';
     try {
       const shape = await buildResultShape(geometry, name + '.stl');
+      const thumbnail3d = await renderShapesToThumbnailDataUrl([shape], 88);
       await adminApi({
         action: 'add_part', name, icon: '📦', subject: getSubject(), category: '',
         volumes: [], color: null, size: null,
         imageSvg: '', imageSvgDiagonal: '', primaryImage: 'front',
-        spec: { shapes: [shape] },
+        spec: { shapes: [shape] }, thumbnail3d,
       }, getAccessToken());
       msgEl.className = 'msg ok';
       msgEl.textContent = '"' + name + '" 새 부품으로 등록했어요.';
@@ -1134,12 +1176,13 @@ function initPartMaker() {
       try {
         const shape = await buildResultShape(geometry, fileNamePrefix + '.stl');
         const spec = Object.assign({}, p.spec || {}, { shapes: [shape] });
+        const thumbnail3d = await renderShapesToThumbnailDataUrl(spec.shapes, 88);
         await adminApi({
           action: 'update_part', partId: p.id,
           name: p.name, icon: p.icon, subject: p.subject, category: p.category || '',
           volumes: p.volumes || [], color: p.color, size: p.size,
           imageSvg: p.imageSvg, imageSvgDiagonal: p.imageSvgDiagonal, primaryImage: p.primaryImage || 'front',
-          spec, snapshot: p.snapshot || null, snapshots: p.snapshots || null,
+          spec, snapshot: p.snapshot || null, snapshots: p.snapshots || null, thumbnail3d,
         }, getAccessToken());
         msgEl.className = 'msg ok';
         msgEl.textContent = '"' + p.name + '"에 저장했어요.';
@@ -1201,11 +1244,12 @@ function initPartMaker() {
         const blob = new Blob([stlText], { type: 'model/stl' });
         const fileDataUrl = await fileToDataUrl(blob);
         const shape = { type: 'import', op: 'add', x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0, fileName: name + '.stl', fileDataUrl };
+        const thumbnail3d = await renderShapesToThumbnailDataUrl([shape], 88);
         await adminApi({
           action: 'add_part', name, icon: '📦', subject: getSubject(), category: '',
           volumes: [], color: null, size: null,
           imageSvg: '', imageSvgDiagonal: '', primaryImage: 'front',
-          spec: { shapes: [shape] },
+          spec: { shapes: [shape] }, thumbnail3d,
         }, getAccessToken());
         msg.className = 'msg ok';
         msg.textContent = '"' + name + '" 새 부품으로 등록했어요.';
@@ -1289,11 +1333,12 @@ function initPartMaker() {
         const blob = new Blob([stlText], { type: 'model/stl' });
         const fileDataUrl = await fileToDataUrl(blob);
         const shape = { type: 'import', op: 'add', x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0, fileName: name + '.stl', fileDataUrl };
+        const thumbnail3d = await renderShapesToThumbnailDataUrl([shape], 88);
         await adminApi({
           action: 'add_part', name, icon: '📦', subject: getSubject(), category: '',
           volumes: [], color: null, size: null,
           imageSvg: '', imageSvgDiagonal: '', primaryImage: 'front',
-          spec: { shapes: [shape] },
+          spec: { shapes: [shape] }, thumbnail3d,
         }, getAccessToken());
         msg.className = 'msg ok';
         msg.textContent = '"' + name + '" 새 부품으로 등록했어요.';
@@ -1790,11 +1835,12 @@ function initPartMaker() {
     btn.disabled = true; msg.textContent = '';
     try {
       const shapesToSave = shapes.map((s) => { const { _geometry, ...rest } = s; return rest; });
+      const thumbnail3d = await renderShapesToThumbnailDataUrl(shapesToSave, 88);
       const res = await adminApi({
         action: 'add_part', name, icon: '📦', subject: getSubject(), category: '',
         volumes: [], color: null, size: null,
         imageSvg: '', imageSvgDiagonal: '', primaryImage: 'front',
-        spec: { shapes: shapesToSave },
+        spec: { shapes: shapesToSave }, thumbnail3d,
       }, getAccessToken());
       const created = (res.parts || []).slice().reverse().find((p) => p.name === name);
       if (created) {
@@ -1842,14 +1888,16 @@ function initPartMaker() {
     });
     btn.disabled = true; msg.textContent = '';
     try {
+      const thumbnail3d = await renderShapesToThumbnailDataUrl(spec.shapes, 88);
       await adminApi({
         action: 'update_part', partId: targetPart.id,
         name: targetPart.name, icon: targetPart.icon, subject: targetPart.subject, category: targetPart.category || '',
         volumes: targetPart.volumes || [], color: targetPart.color, size: targetPart.size,
         imageSvg: targetPart.imageSvg, imageSvgDiagonal: targetPart.imageSvgDiagonal, primaryImage: targetPart.primaryImage || 'front',
-        spec, snapshot: targetPart.snapshot || null, snapshots: targetPart.snapshots || null,
+        spec, snapshot: targetPart.snapshot || null, snapshots: targetPart.snapshots || null, thumbnail3d,
       }, getAccessToken());
       targetPart.spec = spec;
+      targetPart.thumbnail3d = thumbnail3d;
       msg.className = 'msg ok'; msg.textContent = '"' + targetPart.name + '"에 저장했어요.';
     } catch (e) {
       showSaveError(msg, e, '저장 실패');

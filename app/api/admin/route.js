@@ -236,7 +236,7 @@ function parseSnapshots(body) {
 async function listParts(sb) {
   const { data, error } = await sb.from('ivs_part_catalog').select('id, data, created_at').order('created_at', { ascending: true })
   if (error) throw new Error(error.message)
-  return (data || []).map((r) => ({ id: r.id, name: r.data?.name || '', icon: r.data?.icon || '', subject: r.data?.subject || '', category: r.data?.category || '', volumes: Array.isArray(r.data?.volumes) ? r.data.volumes : [], color: r.data?.color || '', size: r.data?.size || '', imageSvg: r.data?.image_svg || '', imageSvgDiagonal: r.data?.image_svg_diagonal || '', primaryImage: r.data?.primary_image === 'diagonal' ? 'diagonal' : 'front', spec: r.data?.spec || null, snapshot: r.data?.snapshot || null, snapshots: r.data?.snapshots || null, createdAt: r.created_at }))
+  return (data || []).map((r) => ({ id: r.id, name: r.data?.name || '', icon: r.data?.icon || '', subject: r.data?.subject || '', category: r.data?.category || '', volumes: Array.isArray(r.data?.volumes) ? r.data.volumes : [], color: r.data?.color || '', size: r.data?.size || '', imageSvg: r.data?.image_svg || '', imageSvgDiagonal: r.data?.image_svg_diagonal || '', primaryImage: r.data?.primary_image === 'diagonal' ? 'diagonal' : 'front', spec: r.data?.spec || null, snapshot: r.data?.snapshot || null, snapshots: r.data?.snapshots || null, thumbnail3d: r.data?.thumbnail3d || null, createdAt: r.created_at }))
 }
 
 // 부품 하나가 여러 권에 걸쳐 쓰이는 걸 표현 — 이름·아이콘·이미지 등 "부품 자체"는 한 번만 등록하고, 어느
@@ -359,11 +359,12 @@ export async function POST(request) {
       const spec = parseSpec(body)
       const snapshot = parseOneSnapshot(body.snapshot)
       const snapshots = parseSnapshots(body)
+      const thumbnail3d = parseOneSnapshot(body.thumbnail3d)
       const { volumes, error: volErr } = parseVolumes(body)
       if (!name) return json({ error: '부품 이름을 입력해주세요.' }, 400)
       if (!PART_SUBJECTS.includes(subject)) return json({ error: '과목을 선택해주세요.' }, 400)
       if (volErr) return json({ error: volErr }, 400)
-      const { error } = await sb.from('ivs_part_catalog').insert({ data: { name, icon, subject, category: category || null, volumes, color: color || null, size: size || null, image_svg: imageSvg || null, image_svg_diagonal: imageSvgDiagonal || null, primary_image: primaryImage, spec, snapshot, snapshots, createdAt: Date.now() } })
+      const { error } = await sb.from('ivs_part_catalog').insert({ data: { name, icon, subject, category: category || null, volumes, color: color || null, size: size || null, image_svg: imageSvg || null, image_svg_diagonal: imageSvgDiagonal || null, primary_image: primaryImage, spec, snapshot, snapshots, thumbnail3d, createdAt: Date.now() } })
       if (error) throw new Error(error.message)
       return json({ ok: true, parts: await listParts(sb) })
     }
@@ -383,6 +384,7 @@ export async function POST(request) {
       const spec = parseSpec(body)
       const snapshot = parseOneSnapshot(body.snapshot)
       const snapshots = parseSnapshots(body)
+      const thumbnail3d = parseOneSnapshot(body.thumbnail3d)
       const { volumes, error: volErr } = parseVolumes(body)
       if (!name) return json({ error: '부품 이름을 입력해주세요.' }, 400)
       if (!PART_SUBJECTS.includes(subject)) return json({ error: '과목을 선택해주세요.' }, 400)
@@ -394,12 +396,15 @@ export async function POST(request) {
       // spec/snapshot을 안 보내면(예: 다른 화면에서 저장) 기존 값을 그대로 유지 — 부품 수리실에서 한 번
       // 확정해둔 정확한 치수·이미지가 다른 저장 경로 때문에 사라지지 않게 함. snapshots(위/정면/뒷면)도
       // 마찬가지 — 사용자 지시: "위에서 본거 정면 뒷면 모두 저장하고 스샷도 다 저장해놔, 불러올때 항상 똑같이".
+      // thumbnail3d(부품관리 목록용 저장된 3D 썸네일)도 같은 원칙 — 매번 다시 그리지 않고 저장해둔 걸
+      // 그대로 보여주기 위한 것(사용자 지시: "썸네일을 매번그리지 말고 썸네일을 저장해두고 그데로 보여줘").
       const nextSpec = spec || existing.data?.spec || null
       const nextSnapshot = snapshot || existing.data?.snapshot || null
       const nextSnapshots = snapshots || existing.data?.snapshots || null
+      const nextThumbnail3d = thumbnail3d || existing.data?.thumbnail3d || null
       // volumes도 안 보내면(예: 부품 수리실에서 스펙만 저장) 기존 권 배정을 그대로 유지한다.
       const nextVolumes = Array.isArray(body.volumes) ? volumes : (Array.isArray(existing.data?.volumes) ? existing.data.volumes : [])
-      const { error } = await sb.from('ivs_part_catalog').update({ data: { name, icon, subject, category: category || null, volumes: nextVolumes, color: color || null, size: size || null, image_svg: imageSvg || null, image_svg_diagonal: imageSvgDiagonal || null, primary_image: primaryImage, spec: nextSpec, snapshot: nextSnapshot, snapshots: nextSnapshots, createdAt } }).eq('id', partId)
+      const { error } = await sb.from('ivs_part_catalog').update({ data: { name, icon, subject, category: category || null, volumes: nextVolumes, color: color || null, size: size || null, image_svg: imageSvg || null, image_svg_diagonal: imageSvgDiagonal || null, primary_image: primaryImage, spec: nextSpec, snapshot: nextSnapshot, snapshots: nextSnapshots, thumbnail3d: nextThumbnail3d, createdAt } }).eq('id', partId)
       if (error) throw new Error(error.message)
       return json({ ok: true, parts: await listParts(sb) })
     }
