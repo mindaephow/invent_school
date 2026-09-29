@@ -359,7 +359,18 @@ async function renderShapesThumbnail(shapesData, size) {
   camera.position.set(90, 90, 90);
   camera.lookAt(0, 0, 0);
   const mesh = meshFromShapes(list);
-  if (mesh) scene.add(mesh);
+  if (mesh) {
+    scene.add(mesh);
+    // 기본 ±70 프레임보다 큰 부품(예: 긴 프레임을 통째로 불러온 경우)은 카메라 밖으로 잘려서 썸네일이
+    // 빈 칸으로 보였다(사용자 지적) — 부품의 실제 크기를 재서 필요할 때만 프레임을 넓힌다.
+    mesh.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(mesh);
+    const boxSize = new THREE.Vector3();
+    box.getSize(boxSize);
+    const half = Math.max(70, (boxSize.length() / 2) * 1.15);
+    camera.left = -half; camera.right = half; camera.top = half; camera.bottom = -half;
+    camera.updateProjectionMatrix();
+  }
   sharedThumbRenderer.render(scene, camera);
   const dataUrl = sharedThumbRenderer.domElement.toDataURL('image/png');
   if (mesh) { mesh.geometry.dispose(); mesh.material.dispose(); }
