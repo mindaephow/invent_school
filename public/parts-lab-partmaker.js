@@ -1708,16 +1708,15 @@ function initPartMaker() {
   }
   document.getElementById('partMakerFlipBtn').addEventListener('click', () => flipSelectedShape('y'));
   document.getElementById('partMakerFlipYBtn').addEventListener('click', () => flipSelectedShape('x'));
-  // "작업 평면에 놓기"(팅커캐드 D 단축키) — 사용자 지시: "D는 각도를 수평을 만들고 바닥에 두는거야".
-  // "바닥 위에 붙이기" 체크박스(이동할 때마다 자동으로, 바닥 아래로 파고들 때만 밀어올림)와 다르게
-  // 버튼을 눌렀을 때 한 번만 실행되고, 체크박스 상태와 무관하게 항상 동작하며 떠 있어도 끌어내린다.
-  // 기울어진 각도(rx/rz, 눕히는 방향)만 0으로 되돌리고 세로축 회전(ry, 어느 쪽을 보는지)은 그대로 둔다.
+  // "작업 평면에 놓기"(팅커캐드 D 단축키) — "바닥 위에 붙이기" 체크박스(이동할 때마다 자동으로, 바닥
+  // 아래로 파고들 때만 밀어올림)와 다르게 버튼을 눌렀을 때 한 번만 실행되고, 체크박스 상태와 무관하게
+  // 항상 동작하며 떠 있어도 끌어내린다. 지금 도형의 각도(rx/ry/rz)는 그대로 두고, y 위치만 바닥에
+  // 닿도록 옮긴다(사용자 지적: "평면에 놓기는 지금 있는 상태로 바닥에 수평으로 놓는거야, 각도를 멋대로
+  // 변경시키는게 아니라").
   function placeSelectedOnWorkplane() {
     const shape = shapes[selectedIndex];
     if (!shape || !live || !live.meshes[selectedIndex]) return;
-    shape.rx = 0; shape.rz = 0;
     const mesh = live.meshes[selectedIndex];
-    mesh.rotation.x = 0; mesh.rotation.z = 0;
     mesh.updateMatrixWorld(true);
     const worldBox = new THREE.Box3().setFromObject(mesh);
     mesh.position.y -= worldBox.min.y;
