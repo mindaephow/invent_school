@@ -1147,6 +1147,27 @@ function initBoxEditor() {
   });
   document.getElementById('boxPreviewBtn').addEventListener('click', () => setMode('preview'));
   document.getElementById('boxBackToEditBtn').addEventListener('click', () => setMode('edit'));
+  // 저장 API가 "로그인이 만료되었습니다" 에러를 주면 글자로만 안내하지 않고 바로 누를 수 있는 로그인
+  // 바로가기 버튼을 같이 보여준다(사용자 지시: "로그인이 만료되면 여기에 로그인 바로가기 버튼이 나와야지").
+  // 이 페이지(부품 수리실)는 로그인 없이도 열리지만, 저장 같은 서버 쓰기는 index.html에서 로그인해야 한다.
+  function showSaveError(msgEl, err, prefix) {
+    msgEl.className = 'msg err';
+    const text = prefix + ': ' + (err && err.message);
+    if (!err || typeof err.message !== 'string' || !err.message.includes('만료')) {
+      msgEl.textContent = text;
+      return;
+    }
+    msgEl.textContent = '';
+    const span = document.createElement('span');
+    span.textContent = text + ' ';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = '로그인 바로가기';
+    btn.style.cssText = 'margin-left:4px;padding:3px 10px;border-radius:5px;border:1px solid #2b6be0;background:#2b6be0;color:#fff;cursor:pointer;font-size:12px;';
+    btn.addEventListener('click', () => { location.href = 'index.html'; });
+    msgEl.appendChild(span);
+    msgEl.appendChild(btn);
+  }
   // showAll=true — 프레임/브라켓뿐 아니라 등록된 부품 전체를 보여줘서, 어떤 부품이든 열어서 지금 만든
   // 도형(들)로 교체 저장할 수 있게 함(사용자 지시: "기존의 등록된 부품을 수정으로 열어서 교체하는 기능").
   document.getElementById('boxTargetPickBtn').addEventListener('click', () => {
@@ -1180,8 +1201,7 @@ function initBoxEditor() {
       msg.className = 'msg ok';
       msg.textContent = '"' + name + '" 새 부품으로 등록했어요.';
     } catch (err) {
-      msg.className = 'msg err';
-      msg.textContent = '등록 실패: ' + err.message;
+      showSaveError(msg, err, '등록 실패');
     } finally {
       btn.disabled = false;
     }
@@ -1228,7 +1248,7 @@ function initBoxEditor() {
       targetPart.spec = spec;
       msg.className = 'msg ok'; msg.textContent = '"' + targetPart.name + '"에 저장했어요.';
     } catch (e) {
-      msg.className = 'msg err'; msg.textContent = '저장 실패: ' + e.message;
+      showSaveError(msg, e, '저장 실패');
     } finally {
       btn.disabled = false;
     }
