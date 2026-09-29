@@ -379,13 +379,15 @@
         <div><label>사이즈</label><input id="partSize" placeholder="예: 15cm, M3" autocomplete="off"></div>
         <div><label>이미지 — 위/정면 샷 (SVG 코드, 선택)</label><textarea id="partImageSvg" rows="3" placeholder="&lt;svg&gt;...&lt;/svg&gt; 코드를 붙여넣으면 목록에 썸네일로 보여요." autocomplete="off"></textarea></div>
         <div><label>이미지 — 대각선(입체) 샷 (SVG 코드, 선택)</label><textarea id="partImageSvgDiagonal" rows="3" placeholder="&lt;svg&gt;...&lt;/svg&gt; 코드를 붙여넣으면 위 이미지 옆에 나란히 보여요." autocomplete="off"></textarea></div>
-        <div id="partSpecWrap" hidden>
+        <div id="partSpecWrap">
           <label>3D 모델 (부품 수리실에서 저장)</label>
-          <div style="display:flex; align-items:center; gap:10px;">
-            <span id="partSpecStatus" class="item-sub" style="margin:0;">3D 모델 있음</span>
-            <button type="button" class="ghost" id="partClearSpecBtn">삭제</button>
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <button type="button" id="partSpecThumb" class="part-thumb" style="display:none;"></button>
+            <span id="partSpecStatus" class="item-sub" style="margin:0;"></span>
+            <button type="button" class="ghost" id="partSpecEditBtn">부품 수리실에서 등록</button>
+            <button type="button" class="ghost" id="partClearSpecBtn" hidden>삭제</button>
           </div>
-          <p class="note" style="margin:4px 0 0;">잘못 저장됐거나 깨진 3D 모델만 지워요 — 이름·색상 등 다른 정보는 그대로 남아요.</p>
+          <p class="note" style="margin:4px 0 0;">3D 모양은 여기서 직접 못 그려요 — "부품 수리실"에서 만들거나 고치고, 잘못 저장됐으면 여기서 지울 수 있어요.</p>
         </div>
         <div><label>학생 설계 화면에 대표로 보여줄 이미지</label>
           <div style="display:flex; gap:14px; align-items:center; padding-top:2px;">
@@ -1708,7 +1710,10 @@
           imageSvg: p.imageSvg, imageSvgDiagonal: p.imageSvgDiagonal, primaryImage: p.primaryImage || 'front',
           clearSpec: true,
         });
-        document.getElementById('partSpecWrap').hidden = true;
+        btn.hidden = true;
+        document.getElementById('partSpecThumb').style.display = 'none';
+        document.getElementById('partSpecStatus').textContent = '3D 모델 없음';
+        document.getElementById('partSpecEditBtn').textContent = '부품 수리실에서 등록';
         await loadParts();
       } catch (err) {
         alert(err.message);
@@ -1717,32 +1722,47 @@
       }
     });
   });
+  document.getElementById('partSpecThumb').addEventListener('click', (e) => {
+    const p = allParts.find((x) => x.id === e.currentTarget.dataset.partId);
+    if (p) openPartImageModal(p);
+  });
+  // "부품 수리실에서 등록/수정" — 3D 모양은 이 화면에서 직접 못 그리니, 그 과목의 부품 수리실을 새 탭으로
+  // 열어준다. 거기서 "기존 부품 열어서 교체"로 이름 검색해서 고르면 된다.
+  document.getElementById('partSpecEditBtn').addEventListener('click', (e) => {
+    const subject = e.currentTarget.dataset.subject || 'robot';
+    window.open('parts-lab.html?subject=' + encodeURIComponent(subject), '_blank');
+  });
+  // 부품 목록 카드와 수정 폼의 "3D 모델" 미리보기가 똑같이 쓰는 모달 열기 로직 — 하나로 모아서 양쪽에서
+  // 부른다(사용자 지시: "썸네일 보여주고 클릭하면 크게 보여주고").
+  function openPartImageModal(p){
+    const has3d = p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.length;
+    // spec.shapes(3D 모델)가 있으면 svg 대신 그걸 보여준다 — 회전·줌·카메라 이동만 되는 뷰어(편집 도구
+    // 없음, renderShapesPreview에 붙는 건 OrbitControls뿐)이고, svg는 그대로 DB에 남아있으니 보관된
+    // 상태 그대로다(사용자 지시, 위 partRowHtml 주석 참고).
+    if (has3d) {
+      document.getElementById('imgModalTitle').textContent = [p.name, p.size].filter(Boolean).join(' · ');
+      document.getElementById('imgModalBody').innerHTML = '<canvas id="imgModal3dCanvas" width="600" height="600" style="width:100%;max-width:600px;aspect-ratio:1;touch-action:none;"></canvas><div class="note" style="margin-top:6px;">마우스로 드래그하면 회전, 휠로 확대/축소, 오른쪽 버튼 드래그로 이동돼요.</div>';
+      document.getElementById('imgModalBackdrop').hidden = false;
+      const drawWhenReady = () => {
+        if (!window.__partsLabViewer) { setTimeout(drawWhenReady, 300); return; }
+        window.__partsLabViewer.renderShapesPreview(document.getElementById('imgModal3dCanvas'), p.spec.shapes);
+      };
+      drawWhenReady();
+    } else if (p.imageSvg || p.imageSvgDiagonal) {
+      document.getElementById('imgModalTitle').textContent = [p.name, p.size].filter(Boolean).join(' · ');
+      const shots = [];
+      if (p.imageSvg) shots.push(`<div class="img-modal-shot"><div class="note" style="margin-bottom:6px;">위/정면${p.primaryImage !== 'diagonal' ? ' · 대표' : ''}</div>${uniquifySvgIds(p.imageSvg, p.id)}</div>`);
+      if (p.imageSvgDiagonal) shots.push(`<div class="img-modal-shot"><div class="note" style="margin-bottom:6px;">대각선(입체)${p.primaryImage === 'diagonal' ? ' · 대표' : ''}</div>${uniquifySvgIds(p.imageSvgDiagonal, p.id)}</div>`);
+      document.getElementById('imgModalBody').innerHTML = `<div class="img-modal-shots">${shots.join('')}</div>`;
+      document.getElementById('imgModalBackdrop').hidden = false;
+    }
+  }
   document.getElementById('partListArea').addEventListener('click', (e) => {
     const viewBtn = e.target.closest('[data-view-image]');
     if (viewBtn) {
       const p = allParts.find((x) => x.id === viewBtn.dataset.viewImage);
       if (!p) return;
-      const has3d = p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.length;
-      // spec.shapes(3D 모델)가 있으면 svg 대신 그걸 보여준다 — 회전·줌·카메라 이동만 되는 뷰어(편집 도구
-      // 없음, renderShapesPreview에 붙는 건 OrbitControls뿐)이고, svg는 그대로 DB에 남아있으니 보관된
-      // 상태 그대로다(사용자 지시, 위 partRowHtml 주석 참고).
-      if (has3d) {
-        document.getElementById('imgModalTitle').textContent = [p.name, p.size].filter(Boolean).join(' · ');
-        document.getElementById('imgModalBody').innerHTML = '<canvas id="imgModal3dCanvas" width="600" height="600" style="width:100%;max-width:600px;aspect-ratio:1;touch-action:none;"></canvas><div class="note" style="margin-top:6px;">마우스로 드래그하면 회전, 휠로 확대/축소, 오른쪽 버튼 드래그로 이동돼요.</div>';
-        document.getElementById('imgModalBackdrop').hidden = false;
-        const drawWhenReady = () => {
-          if (!window.__partsLabViewer) { setTimeout(drawWhenReady, 300); return; }
-          window.__partsLabViewer.renderShapesPreview(document.getElementById('imgModal3dCanvas'), p.spec.shapes);
-        };
-        drawWhenReady();
-      } else if (p.imageSvg || p.imageSvgDiagonal) {
-        document.getElementById('imgModalTitle').textContent = [p.name, p.size].filter(Boolean).join(' · ');
-        const shots = [];
-        if (p.imageSvg) shots.push(`<div class="img-modal-shot"><div class="note" style="margin-bottom:6px;">위/정면${p.primaryImage !== 'diagonal' ? ' · 대표' : ''}</div>${uniquifySvgIds(p.imageSvg, p.id)}</div>`);
-        if (p.imageSvgDiagonal) shots.push(`<div class="img-modal-shot"><div class="note" style="margin-bottom:6px;">대각선(입체)${p.primaryImage === 'diagonal' ? ' · 대표' : ''}</div>${uniquifySvgIds(p.imageSvgDiagonal, p.id)}</div>`);
-        document.getElementById('imgModalBody').innerHTML = `<div class="img-modal-shots">${shots.join('')}</div>`;
-        document.getElementById('imgModalBackdrop').hidden = false;
-      }
+      openPartImageModal(p);
       return;
     }
     const cancelBtn = e.target.closest('.qa-cancel');
@@ -1788,11 +1808,24 @@
       document.getElementById('partSize').value = p.size || '';
       document.getElementById('partImageSvg').value = p.imageSvg || '';
       document.getElementById('partImageSvgDiagonal').value = p.imageSvgDiagonal || '';
-      // 부품 수리실에서 만든 3D 모델(spec.shapes)이 있으면 여기서 보여주고 지울 수 있게 한다(사용자 지적:
-      // "이 부품등록안에 왜 3D정보는 없어? 3D 잘못저장된거 삭제할수 있어야 하는데") — 편집 화면 자체는
-      // spec을 직접 다루지 않으니(수정 저장을 눌러도 spec은 그대로 보존됨) 삭제는 이 버튼으로만 한다.
+      // 부품 수리실에서 만든 3D 모델(spec.shapes)이 있으면 썸네일로 보여주고(클릭하면 목록과 똑같은 큰
+      // 모달), 부품 수리실로 바로 이어지는 버튼과 삭제 버튼도 같이 둔다(사용자 지적: "썸네일 보여주고
+      // 클릭하면 크게 보여주고 등록,수정,삭제버튼이 다 있어야지"). 편집 화면 자체는 spec을 직접 다루지
+      // 않으니(수정 저장을 눌러도 spec은 그대로 보존됨) 3D 모델 생성/교체는 부품 수리실에서, 삭제만 여기서.
       const has3d = !!(p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.length);
-      document.getElementById('partSpecWrap').hidden = !has3d;
+      const thumbBtn = document.getElementById('partSpecThumb');
+      if (has3d && p.thumbnail3d) {
+        thumbBtn.style.display = '';
+        thumbBtn.innerHTML = `<img src="${escapeHtml(p.thumbnail3d)}" style="width:100%;height:100%;object-fit:contain;">`;
+      } else {
+        thumbBtn.style.display = 'none';
+        thumbBtn.innerHTML = '';
+      }
+      thumbBtn.dataset.partId = p.id;
+      document.getElementById('partSpecStatus').textContent = has3d ? '3D 모델 있음' : '3D 모델 없음';
+      document.getElementById('partSpecEditBtn').textContent = has3d ? '부품 수리실에서 수정' : '부품 수리실에서 등록';
+      document.getElementById('partSpecEditBtn').dataset.subject = p.subject || 'robot';
+      document.getElementById('partClearSpecBtn').hidden = !has3d;
       document.getElementById('partClearSpecBtn').dataset.partId = p.id;
       const primaryRadio = document.querySelector('input[name="partPrimaryImage"][value="' + (p.primaryImage === 'diagonal' ? 'diagonal' : 'front') + '"]');
       if (primaryRadio) primaryRadio.checked = true;
