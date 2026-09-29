@@ -398,10 +398,15 @@ export async function POST(request) {
       // 마찬가지 — 사용자 지시: "위에서 본거 정면 뒷면 모두 저장하고 스샷도 다 저장해놔, 불러올때 항상 똑같이".
       // thumbnail3d(부품관리 목록용 저장된 3D 썸네일)도 같은 원칙 — 매번 다시 그리지 않고 저장해둔 걸
       // 그대로 보여주기 위한 것(사용자 지시: "썸네일을 매번그리지 말고 썸네일을 저장해두고 그데로 보여줘").
-      const nextSpec = spec || existing.data?.spec || null
+      // 다만 잘못 저장된 3D 모델(예: CSG 버그로 깨진 지오메트리)을 지우고 싶을 때도 있어서(사용자 지시:
+      // "3D 잘못저장된거 삭제할수 있어야 하는데"), body.clearSpec===true면 "안 보냄"이 아니라 "확실히
+      // 지움"으로 취급해 spec/thumbnail3d를 null로 되돌린다. snapshot(들)은 부품 수리실과 무관한 옛
+      // SVG/스냅샷 체계라 그대로 둔다.
+      const clearSpec = body.clearSpec === true
+      const nextSpec = clearSpec ? null : (spec || existing.data?.spec || null)
       const nextSnapshot = snapshot || existing.data?.snapshot || null
       const nextSnapshots = snapshots || existing.data?.snapshots || null
-      const nextThumbnail3d = thumbnail3d || existing.data?.thumbnail3d || null
+      const nextThumbnail3d = clearSpec ? null : (thumbnail3d || existing.data?.thumbnail3d || null)
       // volumes도 안 보내면(예: 부품 수리실에서 스펙만 저장) 기존 권 배정을 그대로 유지한다.
       const nextVolumes = Array.isArray(body.volumes) ? volumes : (Array.isArray(existing.data?.volumes) ? existing.data.volumes : [])
       const { error } = await sb.from('ivs_part_catalog').update({ data: { name, icon, subject, category: category || null, volumes: nextVolumes, color: color || null, size: size || null, image_svg: imageSvg || null, image_svg_diagonal: imageSvgDiagonal || null, primary_image: primaryImage, spec: nextSpec, snapshot: nextSnapshot, snapshots: nextSnapshots, thumbnail3d: nextThumbnail3d, createdAt } }).eq('id', partId)

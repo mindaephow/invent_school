@@ -379,6 +379,14 @@
         <div><label>사이즈</label><input id="partSize" placeholder="예: 15cm, M3" autocomplete="off"></div>
         <div><label>이미지 — 위/정면 샷 (SVG 코드, 선택)</label><textarea id="partImageSvg" rows="3" placeholder="&lt;svg&gt;...&lt;/svg&gt; 코드를 붙여넣으면 목록에 썸네일로 보여요." autocomplete="off"></textarea></div>
         <div><label>이미지 — 대각선(입체) 샷 (SVG 코드, 선택)</label><textarea id="partImageSvgDiagonal" rows="3" placeholder="&lt;svg&gt;...&lt;/svg&gt; 코드를 붙여넣으면 위 이미지 옆에 나란히 보여요." autocomplete="off"></textarea></div>
+        <div id="partSpecWrap" hidden>
+          <label>3D 모델 (부품 수리실에서 저장)</label>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span id="partSpecStatus" class="item-sub" style="margin:0;">3D 모델 있음</span>
+            <button type="button" class="ghost" id="partClearSpecBtn">삭제</button>
+          </div>
+          <p class="note" style="margin:4px 0 0;">잘못 저장됐거나 깨진 3D 모델만 지워요 — 이름·색상 등 다른 정보는 그대로 남아요.</p>
+        </div>
         <div><label>학생 설계 화면에 대표로 보여줄 이미지</label>
           <div style="display:flex; gap:14px; align-items:center; padding-top:2px;">
             <label style="display:flex; align-items:center; gap:6px; font-weight:400;"><input type="radio" name="partPrimaryImage" value="front" checked> 위/정면 샷</label>
@@ -1682,6 +1690,33 @@
     document.getElementById('partForm').hidden = true;
     document.getElementById('togglePartForm').textContent = '+ 부품 등록';
   });
+  // 3D 모델만 지우기 — 이름/색상/이미지 등 나머지 정보는 그대로 두고 spec(3D)·thumbnail3d만 비운다
+  // (사용자 지시: "3D 잘못저장된거 삭제할수 있어야 하는데"). 폼의 다른 입력칸이 수정 중이어도 그건 아직
+  // 저장 안 된 상태니, 서버에 보내는 값은 항상 지금 목록에 있는(=마지막으로 저장된) p를 그대로 쓴다.
+  document.getElementById('partClearSpecBtn').addEventListener('click', (e) => {
+    armDeleteButton(e.currentTarget, async () => {
+      const btn = e.currentTarget;
+      const partId = btn.dataset.partId;
+      const p = allParts.find((x) => x.id === partId);
+      if (!p) return;
+      btn.disabled = true;
+      try {
+        await adminApi({
+          action: 'update_part', partId: p.id,
+          name: p.name, icon: p.icon, subject: p.subject, category: p.category || '',
+          volumes: p.volumes || [], color: p.color, size: p.size,
+          imageSvg: p.imageSvg, imageSvgDiagonal: p.imageSvgDiagonal, primaryImage: p.primaryImage || 'front',
+          clearSpec: true,
+        });
+        document.getElementById('partSpecWrap').hidden = true;
+        await loadParts();
+      } catch (err) {
+        alert(err.message);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
   document.getElementById('partListArea').addEventListener('click', (e) => {
     const viewBtn = e.target.closest('[data-view-image]');
     if (viewBtn) {
@@ -1753,6 +1788,12 @@
       document.getElementById('partSize').value = p.size || '';
       document.getElementById('partImageSvg').value = p.imageSvg || '';
       document.getElementById('partImageSvgDiagonal').value = p.imageSvgDiagonal || '';
+      // 부품 수리실에서 만든 3D 모델(spec.shapes)이 있으면 여기서 보여주고 지울 수 있게 한다(사용자 지적:
+      // "이 부품등록안에 왜 3D정보는 없어? 3D 잘못저장된거 삭제할수 있어야 하는데") — 편집 화면 자체는
+      // spec을 직접 다루지 않으니(수정 저장을 눌러도 spec은 그대로 보존됨) 삭제는 이 버튼으로만 한다.
+      const has3d = !!(p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.length);
+      document.getElementById('partSpecWrap').hidden = !has3d;
+      document.getElementById('partClearSpecBtn').dataset.partId = p.id;
       const primaryRadio = document.querySelector('input[name="partPrimaryImage"][value="' + (p.primaryImage === 'diagonal' ? 'diagonal' : 'front') + '"]');
       if (primaryRadio) primaryRadio.checked = true;
       document.getElementById('partSubmitBtn').textContent = '수정 저장';
