@@ -1227,7 +1227,10 @@ function initBoxEditor() {
     btn.disabled = true; msg.textContent = '';
     try {
       const shapesToSave = shapes.map((s) => { const { _geometry, ...rest } = s; return rest; });
-      const thumbnail3d = await renderShapesToThumbnailDataUrl(shapesToSave, 88);
+      // _geometry가 이미 메모리에 있으면(불러온 파일이 지금 화면에 떠 있는 상태) 그걸 그대로 쓰고, 굳이
+      // fileDataUrl에서 다시 읽어들이지 않는다 — shapesToSave(_geometry 뺀 것)를 넘기면 매번 blob URL을
+      // 새로 fetch해야 해서 "Failed to fetch"로 저장이 실패하던 원인이었다.
+      const thumbnail3d = await renderShapesToThumbnailDataUrl(shapes, 88);
       const res = await adminApi({
         action: 'add_part', name, icon: '📦', subject: getSubject(), category: '',
         volumes: [], color: null, size: null,
@@ -1280,7 +1283,9 @@ function initBoxEditor() {
     });
     btn.disabled = true; msg.textContent = '';
     try {
-      const thumbnail3d = await renderShapesToThumbnailDataUrl(spec.shapes, 88);
+      // spec.shapes(_geometry 뺀 것) 대신 지금 화면의 shapes(있으면 _geometry 포함)를 넘겨서 불필요한
+      // blob URL 재로딩을 피한다 — "Failed to fetch"로 저장 실패하던 원인.
+      const thumbnail3d = await renderShapesToThumbnailDataUrl(shapes, 88);
       await adminApi({
         action: 'update_part', partId: targetPart.id,
         name: targetPart.name, icon: targetPart.icon, subject: targetPart.subject, category: targetPart.category || '',

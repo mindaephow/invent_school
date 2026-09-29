@@ -1154,7 +1154,9 @@ function initPartMaker() {
     btn.disabled = true; msgEl.textContent = '';
     try {
       const shape = await buildResultShape(geometry, name + '.stl');
-      const thumbnail3d = await renderShapesToThumbnailDataUrl([shape], 88);
+      // 방금 만든 geometry가 이미 메모리에 있으니 그걸 그대로 넘긴다 — shape(fileDataUrl만 있고
+      // _geometry는 없음)를 넘기면 blob URL을 다시 fetch해야 해서 "Failed to fetch"로 실패할 수 있었다.
+      const thumbnail3d = await renderShapesToThumbnailDataUrl([Object.assign({}, shape, { _geometry: geometry })], 88);
       await adminApi({
         action: 'add_part', name, icon: '📦', subject: getSubject(), category: '',
         volumes: [], color: null, size: null,
@@ -1176,7 +1178,7 @@ function initPartMaker() {
       try {
         const shape = await buildResultShape(geometry, fileNamePrefix + '.stl');
         const spec = Object.assign({}, p.spec || {}, { shapes: [shape] });
-        const thumbnail3d = await renderShapesToThumbnailDataUrl(spec.shapes, 88);
+        const thumbnail3d = await renderShapesToThumbnailDataUrl([Object.assign({}, shape, { _geometry: geometry })], 88);
         await adminApi({
           action: 'update_part', partId: p.id,
           name: p.name, icon: p.icon, subject: p.subject, category: p.category || '',
@@ -1244,7 +1246,7 @@ function initPartMaker() {
         const blob = new Blob([stlText], { type: 'model/stl' });
         const fileDataUrl = await fileToDataUrl(blob);
         const shape = { type: 'import', op: 'add', x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0, fileName: name + '.stl', fileDataUrl };
-        const thumbnail3d = await renderShapesToThumbnailDataUrl([shape], 88);
+        const thumbnail3d = await renderShapesToThumbnailDataUrl([Object.assign({}, shape, { _geometry: joinResult.geometry })], 88);
         await adminApi({
           action: 'add_part', name, icon: '📦', subject: getSubject(), category: '',
           volumes: [], color: null, size: null,
@@ -1333,7 +1335,7 @@ function initPartMaker() {
         const blob = new Blob([stlText], { type: 'model/stl' });
         const fileDataUrl = await fileToDataUrl(blob);
         const shape = { type: 'import', op: 'add', x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0, fileName: name + '.stl', fileDataUrl };
-        const thumbnail3d = await renderShapesToThumbnailDataUrl([shape], 88);
+        const thumbnail3d = await renderShapesToThumbnailDataUrl([Object.assign({}, shape, { _geometry: borderResult.geometry })], 88);
         await adminApi({
           action: 'add_part', name, icon: '📦', subject: getSubject(), category: '',
           volumes: [], color: null, size: null,
@@ -1835,7 +1837,9 @@ function initPartMaker() {
     btn.disabled = true; msg.textContent = '';
     try {
       const shapesToSave = shapes.map((s) => { const { _geometry, ...rest } = s; return rest; });
-      const thumbnail3d = await renderShapesToThumbnailDataUrl(shapesToSave, 88);
+      // shapesToSave(_geometry 뺀 것) 대신 원본 shapes를 넘겨서 blob URL 재로딩을 피한다 —
+      // "Failed to fetch"로 저장 실패하던 원인.
+      const thumbnail3d = await renderShapesToThumbnailDataUrl(shapes, 88);
       const res = await adminApi({
         action: 'add_part', name, icon: '📦', subject: getSubject(), category: '',
         volumes: [], color: null, size: null,
@@ -1888,7 +1892,8 @@ function initPartMaker() {
     });
     btn.disabled = true; msg.textContent = '';
     try {
-      const thumbnail3d = await renderShapesToThumbnailDataUrl(spec.shapes, 88);
+      // spec.shapes(_geometry 뺀 것) 대신 원본 shapes를 넘겨서 blob URL 재로딩을 피한다.
+      const thumbnail3d = await renderShapesToThumbnailDataUrl(shapes, 88);
       await adminApi({
         action: 'update_part', partId: targetPart.id,
         name: targetPart.name, icon: targetPart.icon, subject: targetPart.subject, category: targetPart.category || '',
