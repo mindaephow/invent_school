@@ -516,6 +516,7 @@ h4{margin:4px 0}
       <button data-subject="robot">로봇</button>
       <button data-subject="aviation">항공</button>
     </div>
+    <input type="text" id="modalPartSearch" placeholder="🔍 부품 이름 검색" style="width:100%; box-sizing:border-box; margin:0 0 8px; padding:6px 8px; border:1px solid #ccc; border-radius:6px; font-size:13px;">
     <div class="partList" id="modalPartList"><span style="color:#888;font-size:12px;">불러오는 중...</span></div>
   </div>
 </div>
@@ -1953,8 +1954,12 @@ h4{margin:4px 0}
     // 도형 에디터의 "저장할 부품 고르기"는 프레임/브라켓이 아닌 부품(기어·바퀴 등)에도 shapes를 저장할 수
     // 있어야 해서 modalShowAll이면 필터 없이 전체를 보여준다(사용자 지시: "기존의 등록된 부품을 수정으로
     // 열어서 교체하는 기능을 추가해줘"). 비교/스펙수정 쪽은 여전히 프레임/브라켓만 보여준다(기존 동작 유지).
-    const items = allParts.filter(p => p.subject === curSubject && (modalShowAll || /프레임|브라켓/.test(p.name||'')));
-    if (!items.length) { el.innerHTML = '<span style="color:#888;font-size:12px;">이 갈래엔 ' + (modalShowAll ? '' : '프레임/브라켓 ') + '부품이 없어요.</span>'; return; }
+    const items = allParts.filter(p => p.subject === curSubject && (modalShowAll || /프레임|브라켓/.test(p.name||'')) && (!modalSearchQuery || (p.name||'').includes(modalSearchQuery)));
+    if (!items.length) {
+      const emptyMsg = modalSearchQuery ? ('"' + esc(modalSearchQuery) + '"와 일치하는 부품이 없어요.') : ('이 갈래엔 ' + (modalShowAll ? '' : '프레임/브라켓 ') + '부품이 없어요.');
+      el.innerHTML = '<span style="color:#888;font-size:12px;">' + emptyMsg + '</span>';
+      return;
+    }
     el.innerHTML = '';
     items.forEach(p => {
       const btn = document.createElement('button');
@@ -2188,10 +2193,13 @@ h4{margin:4px 0}
   // (사용자 지시: "비교부품대상 오른쪽에 [부품고르기] 버튼... 수정할부품 오른쪽에 [부품고르기]버튼") =====
   let pickerModalCallback = null;
   let modalShowAll = false;
+  let modalSearchQuery = '';
   function openPickerModal(title, onPick, showAll){
     document.getElementById('pickerModalTitle').textContent = title;
     pickerModalCallback = onPick;
     modalShowAll = !!showAll;
+    modalSearchQuery = '';
+    document.getElementById('modalPartSearch').value = '';
     document.getElementById('pickerModal').hidden = false;
     renderModalPartList();
   }
@@ -2201,6 +2209,13 @@ h4{margin:4px 0}
   }
   document.getElementById('pickerModalClose').addEventListener('click', closePickerModal);
   document.getElementById('pickerModal').addEventListener('click', e => { if (e.target.id === 'pickerModal') closePickerModal(); });
+  // 부품 이름 검색(사용자 지시: "검색기능도 있어야지" / "기본 부품불러오기에도") — 이 모달은 비교 대상
+  // 부품·수정할 부품·저장할 부품·다른 부품에 저장 등 여러 곳에서 공용으로 쓰여서, 여기 한 곳에만 달아도
+  // 그 전부에 자동으로 적용된다.
+  document.getElementById('modalPartSearch').addEventListener('input', (e) => {
+    modalSearchQuery = e.target.value.trim();
+    renderModalPartList();
+  });
 
   // ===== 새 부품 이름 모달 — 도형 에디터/부품 만들기 "새 부품으로 등록" 버튼이 공용으로 씀 =====
   let newPartNameResolve = null;
