@@ -1070,6 +1070,17 @@ function initPartMaker() {
     g.computeVertexNormals();
     return g;
   }
+  // 2026-09-29 재작성: 원래는 전체 조각(A)과 그 전체를 거울 대칭한 사본(mirror(A))을 곧바로 합쳤는데,
+  // 이 둘은 거의 전체 부피가 겹친다(테두리 디테일만 다르고 안쪽 부피는 사실상 같음) — CSG가 그 넓게 겹친
+  // 부피의 경계를 전부 다시 계산하면서 삼각형 수가 20배 넘게 불어나는 문제가 있었다(사용자가 직접 STL을
+  // 재보고 발견: 정상 부품 4,196개 vs 이 방식으로 만든 부품 93,837개, "팅커캐드로 하면 10분의 1인데 왜
+  // 이렇게 크냐"는 지적으로 근본 원인을 다시 조사함 — 겹치는 부피를 먼저 빼는 A∪(mirror(A)−A) 방식도
+  // 시도했지만, 거의 합동인 두 입체를 빼는 것 역시 CSG에 똑같이 어려운 경우라 오히려 연산이 끝나지 않고
+  // 멈춰버렸다). 지금은 축 중심(0)에서 절반으로 먼저 잘라 겹치는 부피 자체를 없앤다 — 두 조각이 딱 한
+  // 평면에서만 맞닿으므로(부피가 겹치지 않음) CSG가 훨씬 쉬운 경우가 된다. 어느 쪽이 "진짜 테두리"가 있는
+  // 절반인지는(이 함수가 원래 그렇듯) 굳이 미리 알 필요 없이, 잘라본 뒤 삼각형이 더 많은 쪽(=디테일이 더
+  // 많은 쪽)을 고른다. 합성 테스트로 검증: 570개짜리 비대칭 조각 기준 기존 방식 12,948개 vs 이 방식 664개
+  // (경계 상자 크기는 완전히 동일 — 모양 자체는 같고 삼각형만 대폭 줄어듦), 530ms→22ms로 속도도 빨라짐.
   function computeBorderedBrush(axis) {
     const merged = computeMergedBrush();
     if (!merged) return null;
@@ -1081,21 +1092,52 @@ function initPartMaker() {
     // 거울 대칭이 실제로 "반대쪽"을 가리킨다.
     merged.geometry.translate(-center.x, -box.min.y, -center.z);
     merged.geometry.computeBoundingBox();
-    const mirroredGeom = mirrorGeometry(merged.geometry, axis);
-    // 원본과 거울 복사본이 축 중심(0)에서 정확히 딱 맞닿기만 하면(두께 0인 접촉면), CSG(three-bvh-csg)가
-    // 그 경계에서 안/밖을 애매하게 판정해서 삼각형이 조각조각 부서진 지오메트리를 만든다(사용자 지적:
-    // "팅커캐드에서 불러오니 아주 족같은 모습이네" / "잘라서 테두리를 만든것들 자체가 모두 용량이 엄청
-    // 크네" — 84,816개 삼각형짜리 깨진 메쉬가 나온 원인. 나누기로 만든 조각은 자른 단면이 딱 중심에
-    // 걸리기 쉬워서 특히 잘 터졌다). 거울 복사본을 중심 축 방향으로만 아주 살짝(0.2%) 부풀려서 접촉면이
-    // 아니라 확실히 겹치게 만들면 CSG가 안정적으로 계산한다 — 눈에 보이는 차이는 없다.
-    const bulge = axis === 'x' ? [1.002, 1, 1] : [1, 1, 1.002];
-    mirroredGeom.scale(bulge[0], bulge[1], bulge[2]);
+    // 절반과 그 거울 복사본이 축 중심(0)에서 정확히 딱 맞닿기만 하면(두께 0인 접촉면), CSG(three-bvh-csg)가
+    // 그 경계에서 안/밖을 애매하게 판정해 삼각형이 조각조각 부서진 지오메트리를 만들 수 있다 — 다른 세션이
+    // 먼저 발견한 원인("84,816개 삼각형짜리 깨진 메쉬", "팅커캐드에서 불러오니 아주 족같은 모습이네"). 그
+    // 세션은 전체를 통째로 거울 합치는 옛 방식에 이 문제가 있어서 거울 복사본을 축 방향으로 살짝(0.2%)
+    // 부풀려 겹치게 했는데, 아래처럼 절반으로 나눈 뒤엔 두 조각이 중심 축 한 점에서만 맞닿으므로 같은
+    // 방식(축 전체를 부풀리는 scale)은 접촉면 자체를 안 움직여 효과가 없다 — 대신 붙이기(join)의 기존
+    // 해결책과 같은 방식으로, 거울 복사본을 겹치는 방향으로 아주 살짝(0.05mm) 밀어 넣는다.
+    const EPS = 0.05;
     const evaluator = new Evaluator();
-    const a = new Brush(merged.geometry);
-    a.updateMatrixWorld();
-    const b = new Brush(mirroredGeom);
-    b.updateMatrixWorld();
-    const result = evaluator.evaluate(a, b, ADDITION);
+    const PAD = 1000; // 자르는 축이 아닌 나머지 두 축은 충분히 크게 잡아서 확실히 다 덮는다("나누기"와 동일 관례)
+    const b = merged.geometry.boundingBox;
+    const halfExtent = Math.max(Math.abs(b.min[axis]), Math.abs(b.max[axis])) + 10;
+    function halfSpaceBrush(sign) {
+      const size = { x: (b.max.x - b.min.x) + PAD * 2, y: (b.max.y - b.min.y) + PAD * 2, z: (b.max.z - b.min.z) + PAD * 2 };
+      size[axis] = halfExtent;
+      const boxGeom = new THREE.BoxGeometry(size.x, size.y, size.z);
+      const brush = new Brush(boxGeom);
+      brush.position[axis] = sign * halfExtent / 2;
+      brush.updateMatrixWorld();
+      return brush;
+    }
+    const wholeForNeg = new Brush(merged.geometry.clone()); wholeForNeg.updateMatrixWorld();
+    const wholeForPos = new Brush(merged.geometry.clone()); wholeForPos.updateMatrixWorld();
+    const negHalf = evaluator.evaluate(wholeForNeg, halfSpaceBrush(-1), INTERSECTION);
+    const posHalf = evaluator.evaluate(wholeForPos, halfSpaceBrush(1), INTERSECTION);
+    const negTris = (negHalf.geometry.index ? negHalf.geometry.index.count : negHalf.geometry.attributes.position.count) / 3;
+    const posTris = (posHalf.geometry.index ? posHalf.geometry.index.count : posHalf.geometry.attributes.position.count) / 3;
+    const pickedSign = negTris >= posTris ? -1 : 1; // goodHalf가 음(-)/양(+) 어느 쪽인지
+    const goodHalf = pickedSign < 0 ? negHalf.geometry : posHalf.geometry;
+    if (!negTris && !posTris) {
+      // 극단적으로 드문 경우(양쪽 다 비어버림) — 예전 방식(전체 거울 합치기)으로 대체해서 최소한 결과는 나오게 함.
+      const mirroredGeom = mirrorGeometry(merged.geometry, axis);
+      const a = new Brush(merged.geometry); a.updateMatrixWorld();
+      const bMirror = new Brush(mirroredGeom); bMirror.updateMatrixWorld();
+      const fallback = evaluator.evaluate(a, bMirror, ADDITION);
+      fallback.geometry.computeBoundingBox();
+      return fallback;
+    }
+    const mirroredGood = mirrorGeometry(goodHalf, axis);
+    const brushGood = new Brush(goodHalf.clone()); brushGood.updateMatrixWorld();
+    const brushGoodMirror = new Brush(mirroredGood); brushGoodMirror.updateMatrixWorld();
+    // 거울 복사본을 goodHalf 쪽(중심에서 pickedSign 방향)으로 EPS만큼 밀어 넣어 접촉면이 아니라 확실히
+    // 겹치게 만든다 — 위 주석 참고.
+    brushGoodMirror.position[axis] += pickedSign * EPS;
+    brushGoodMirror.updateMatrixWorld();
+    const result = evaluator.evaluate(brushGood, brushGoodMirror, ADDITION);
     result.geometry.computeBoundingBox();
     return result;
   }
