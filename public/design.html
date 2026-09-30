@@ -4182,6 +4182,16 @@
     serialize(){ return serializeParts(); },
     restore(list){ restoreParts(list, {}, true); },
     camera(c){ target.set(c.target[0], c.target[1], c.target[2]); orbit.radius = c.radius; orbit.theta = c.theta; orbit.phi = c.phi; },
+    // 지금 보이는 부품들이 화면에 알맞게 차도록 카메라 거리·중심만 맞춘다(보는 각도는 그대로).
+    frame(points){
+      if (!points || !points.length) return;
+      const min = [1e9, 1e9, 1e9], max = [-1e9, -1e9, -1e9], M = 22; // 부품 크기만큼 여유
+      points.forEach(p => p.forEach((v, i) => { min[i] = Math.min(min[i], v - M); max[i] = Math.max(max[i], v + M); }));
+      const size = max.map((v, i) => v - min[i]);
+      const diag = Math.hypot(size[0], size[1], size[2]);
+      target.set((min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2);
+      orbit.radius = Math.min(Math.max(diag * 1.25, 80), MAX_RADIUS);
+    },
     setViewing(){},
     status(text, kind){ setStatus(text, kind); },
   };

@@ -109,13 +109,15 @@
     const b = bridge();
     const { list, guides, missing, targets } = buildList(step);
     b.show(list.map(({ isNew, name, final, ...d }) => d), targets);
+    // 지금 단계에 보이는 부품(끼우기 직전 위치 포함)에 카메라를 맞춘다 — 처음부터 너무 멀리서 보이지 않게
+    b.frame(list.map((d) => d.pos).concat(guides.map((g) => g.to)));
     b.guides(guides);
     const n = total();
     $('asmLabel').textContent = step === 0 ? '시작 전' : (step === last() ? '완성!' : step + ' / ' + n + ' 단계');
     $('asmNote').textContent = step === 0 ? '빈 판에서 시작해요. ▶ 를 눌러 한 단계씩 만들어 봐요.'
       : (step === last() ? '완성! 부품이 모두 제자리에 끼워졌어요.' : (def.steps[step - 1].note || ''));
     $('asmSlider').value = String(step);
-    $('asmStageNote').textContent = $('asmLabel').textContent + ' · ' + $('asmNote').textContent;
+    $('asmStageNote').textContent = step === last() ? $('asmNote').textContent : $('asmLabel').textContent + ' · ' + $('asmNote').textContent;
     markStepButtons();
     $('asmFirst').disabled = $('asmPrev').disabled = step === 0;
     $('asmNext').disabled = $('asmLast').disabled = step === last();
