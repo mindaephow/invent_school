@@ -2228,7 +2228,11 @@
     function items(list, child){
       const count = {};
       const numbered = list.map(part => ({ part, n: (count[part.type] = (count[part.type] || 0) + 1) }));
-      numbered.sort((x, y) => (order.indexOf(x.part.type) - order.indexOf(y.part.type)) || (x.n - y.n));
+      // 같은 종류끼리 모은다 — 알려진 골드버그 부품은 정해 둔 순서로, 로봇 부품 같은 나머지는 처음 나온 순서로(종류가 섞여 번호만 따라 흩어지던 문제)
+      const firstSeen = {};
+      list.forEach(part => { if (!(part.type in firstSeen)) firstSeen[part.type] = Object.keys(firstSeen).length; });
+      const rank = (t) => (order.indexOf(t) >= 0 ? order.indexOf(t) : 1000 + firstSeen[t]);
+      numbered.sort((x, y) => (rank(x.part.type) - rank(y.part.type)) || (x.n - y.n));
       numbered.forEach(({ part, n }) => {
         const b = document.createElement('button');
         b.type = 'button';
