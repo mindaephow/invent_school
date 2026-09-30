@@ -935,23 +935,29 @@ function initBoxEditor() {
     document.getElementById('boxSaveBtn').disabled = false;
     // 캔버스에 이미 도형이 있으면(한창 만들다가 "이제 이 부품에 저장할래" 하는 경우) 그 작업을 지우지
     // 않는다 — 예전엔 무조건 덮어써서, STL 불러와 만들어둔 걸 대상 고르자마자 날려버렸다(사용자 지적:
-    // "이거하려고 다 수정한건데???"). 캔버스가 비어있을 때만(처음 시작할 때) 그 부품에 저장돼 있던
-    // 도형을 불러와서 이어서 편집할 수 있게 한다.
-    if (!shapes.length) {
-      const saved = p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.length ? p.spec.shapes : null;
-      shapes = saved ? saved.map((s) => Object.assign({}, s)) : [];
-      // 저장된 도형 중 "3D 파일 불러오기"로 만든 게 있으면(type:'import'), 그때 저장해둔 원본 파일
-      // (fileDataUrl)을 다시 읽어서 지오메트리를 새로 만들어야 화면에 그릴 수 있다 — 숫자만으로는
-      // 못 그리는 도형이라(사용자 지시: "그 숫자로 매번 다시그린다는게 뭐야???" 질문에 답한 그 이유).
-      await Promise.all(shapes.filter((s) => s.type === 'import' && s.fileDataUrl && !s._geometry).map(async (s) => {
-        try { s._geometry = await loadImportedGeometry(dataUrlToFile(s.fileDataUrl, s.fileName || 'model')); }
-        catch (e) { console.error('불러온 3D 파일을 다시 못 읽었어요.', e); }
-      }));
-      selectedIndex = shapes.length ? 0 : -1;
-      fillFieldsFromShape(shapes[0]);
-      renderShapeListUI();
-      setMode('edit');
+    // "이거하려고 다 수정한건데???"). 다만 그러다 보니 캔버스에 뭔가 하나라도 있으면(3D 파일을 먼저
+    // 불러왔거나, 이미 다른 부품을 한 번 불러온 뒤 또 다른 부품을 고르는 경우 등) 저장된 모양이 조용히
+    // 전혀 안 불러와지는 문제가 있었다(사용자 지적: "기존에 저장된 3D부품을 불러오지 않고 있음") — 라벨만
+    // "선택된 부품: OOO"로 바뀌고 화면엔 아무 변화·안내도 없어서 "안 불러와진다"로만 보였다. 이제 캔버스가
+    // 비어있지 않아도, 불러올 저장된 모양이 있으면 덮어써도 되는지 확인만 받고 실제로 불러온다.
+    const saved = p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.length ? p.spec.shapes : null;
+    if (shapes.length) {
+      if (!saved) return; // 이 부품엔 저장된 모양이 없으니, 지금 작업은 그대로 두고 저장 대상만 바뀐 채로 끝낸다.
+      const ok = confirm('캔버스에 이미 도형이 있어요. "' + p.name + '"에 저장된 모양을 불러와서 지금 캔버스를 덮어쓸까요?\n(취소하면 지금 작업은 그대로 두고, 저장 대상만 "' + p.name + '"로 바뀝니다.)');
+      if (!ok) return;
     }
+    shapes = saved ? saved.map((s) => Object.assign({}, s)) : [];
+    // 저장된 도형 중 "3D 파일 불러오기"로 만든 게 있으면(type:'import'), 그때 저장해둔 원본 파일
+    // (fileDataUrl)을 다시 읽어서 지오메트리를 새로 만들어야 화면에 그릴 수 있다 — 숫자만으로는
+    // 못 그리는 도형이라(사용자 지시: "그 숫자로 매번 다시그린다는게 뭐야???" 질문에 답한 그 이유).
+    await Promise.all(shapes.filter((s) => s.type === 'import' && s.fileDataUrl && !s._geometry).map(async (s) => {
+      try { s._geometry = await loadImportedGeometry(dataUrlToFile(s.fileDataUrl, s.fileName || 'model')); }
+      catch (e) { console.error('불러온 3D 파일을 다시 못 읽었어요.', e); }
+    }));
+    selectedIndex = shapes.length ? 0 : -1;
+    fillFieldsFromShape(shapes[0]);
+    renderShapeListUI();
+    setMode('edit');
   }
 
   document.getElementById('boxRedrawBtn').addEventListener('click', () => {
@@ -1247,15 +1253,18 @@ function initBoxEditor() {
   document.getElementById('boxTargetPickBtn').addEventListener('click', () => {
     openPickerModal('기존 부품 열어서 교체', onBoxTargetPicked, true);
   });
-  // 지금 만든 도형(들)을 완전히 새 부품으로 등록(사용자 지시: "부품등록쪽으로 저장하는기능") — 이름만
-  // 입력받고, 나머지(아이콘·과목 등)는 기본값으로 채운 뒤 "스펙 수정" 등 기존 화면에서 더 정리할 수 있다.
+  // 지금 만든 도형(들)을 완전히 새 부품으로 등록(사용자 지시: "부품등록쪽으로 저장하는기능") — 이름과
+  // 함께 과목/카테고리(로봇만)/권(로봇만)도 모달에서 같이 받는다. 예전엔 이름만 받고 과목은 지금 탭으로,
+  // 카테고리·권은 항상 빈 채로 등록해서 "부품 관리"에서 매번 다시 채워야 했다(사용자 지적: "로봇인지
+  // 어떤로봇인지 몇권에 있는지 선택을 하고 등록을 해야하는거아니야?").
   document.getElementById('boxNewPartBtn').addEventListener('click', async () => {
     const msg = document.getElementById('boxEditorMsg');
     if (!shapes.length) { msg.className = 'msg err'; msg.textContent = '등록할 도형이 없어요.'; return; }
-    // 이름 입력칸을 버튼 옆에 항상 붙여두면 버튼 줄이 너무 길어져서 옆 팔레트가 화면 밖으로 밀려난다
+    // 입력칸을 버튼 옆에 항상 붙여두면 버튼 줄이 너무 길어져서 옆 팔레트가 화면 밖으로 밀려난다
     // (사용자 지적: "이부분이 너무 길어서 2번째 스샷부분이 밀리자나") — 버튼을 누른 순간에만 모달로 물어본다.
-    const name = (await openNamePromptModal() || '').trim();
-    if (!name) return;
+    const picked = await openNamePromptModal(getSubject());
+    if (!picked || !picked.name) return;
+    const { name, subject, category, volumes } = picked;
     const btn = document.getElementById('boxNewPartBtn');
     btn.disabled = true; msg.textContent = '';
     try {
@@ -1265,8 +1274,8 @@ function initBoxEditor() {
       // 새로 fetch해야 해서 "Failed to fetch"로 저장이 실패하던 원인이었다.
       const thumbnail3d = await renderShapesToThumbnailDataUrl(shapes, 88);
       const res = await adminApi({
-        action: 'add_part', name, icon: '📦', subject: getSubject(), category: '',
-        volumes: [], color: null, size: null,
+        action: 'add_part', name, icon: '📦', subject, category,
+        volumes, color: null, size: null,
         imageSvg: '', imageSvgDiagonal: '', primaryImage: 'front',
         spec: { shapes: shapesToSave }, thumbnail3d,
       }, getAccessToken());
