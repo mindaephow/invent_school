@@ -431,7 +431,6 @@
             <h3 style="margin:0 0 4px;">조립 순서</h3>
             <ol id="asmOrderList" style="list-style:none; margin:0 0 8px; padding:0; display:flex; flex-direction:column; gap:2px; font-size:12.5px; line-height:1.35;"></ol>
             <div id="asmSteps" style="display:flex; flex-wrap:wrap; gap:4px; margin:0 0 8px;" aria-label="단계 바로가기"></div>
-            <button id="asmOpen" class="primary" type="button">🧩 조립 보기</button>
             <details id="asmRulesBox" style="margin-top:6px;">
               <summary style="cursor:pointer; font-size:13px; font-weight:700;">📖 큐보 조립 방식</summary>
               <ul id="asmRules" style="margin:6px 0 0; padding-left:18px; font-size:13px; line-height:1.5;"></ul>
@@ -449,6 +448,10 @@
                 <button id="asmReverse" class="ghost" type="button" style="flex:1;">◀ 역재생</button>
                 <button id="asmPlay" class="ghost" type="button" style="flex:1;">▶ 재생</button>
               </div>
+              <label style="display:flex; align-items:center; gap:8px; font-size:12.5px; margin:2px 0 4px;">재생 속도
+                <input id="asmSpeed" type="range" min="0.5" max="3" step="0.25" value="1" style="flex:1;" aria-label="재생 속도">
+                <b id="asmSpeedLabel" style="min-width:34px; text-align:right;">1×</b>
+              </label>
               <p id="asmNote" class="note" style="margin:0;"></p>
             </div>
           </div>
@@ -4115,6 +4118,11 @@
   // 저장 요청이 겹쳐도 한 번에 하나씩 (새 설계가 두 번 만들어지는 것을 막는다)
   // 조립 보기(design-assembly.js)가 쓰는 연결부 — 부품을 놓고·강조하고·카메라를 옮기는 것만 열어준다.
   // 조립 보기의 초록 안내를 지운다(부품에 붙여 둔 칠한 점까지)
+  let assemblyDotsVisible = true;
+  function setGuideDots(v){
+    if (!assemblyGuideGroup) return;
+    assemblyGuideGroup.children.forEach(c => { c.traverse(o => { if (o.userData && o.userData.dot) o.visible = v; }); (c.userData.attached || []).forEach(m => { if (m.userData && m.userData.dot) m.visible = v; }); });
+  }
   function clearAssemblyGuides(){
     if (!assemblyGuideGroup) return;
     assemblyGuideGroup.children.forEach(c => (c.userData.attached || []).forEach(m => { if (m.parent) m.parent.remove(m); if (m.geometry) m.geometry.dispose(); if (m.material) m.material.dispose(); }));
@@ -4151,6 +4159,24 @@
         assemblyGuideGroup.children.filter(c => c.userData.idx === idx).forEach(c => { (c.userData.attached || []).forEach(m => { if (m.parent) m.parent.remove(m); }); assemblyGuideGroup.remove(c); c.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); });
       }
       return 'ok';
+    },
+    // 이번 단계에 떠 있는 부품 전부를 제자리로 부드럽게 끼운다(재생용) — 안내(화살표·점)는 지운다.
+    combineNew(ms){
+      const DUR = ms || 500, t0 = performance.now(), moves = [];
+      parts.forEach((part, idx) => {
+        const t = assemblyTargets[idx];
+        if (!t) return;
+        assemblyTargets[idx] = null;
+        const p = part.body.position;
+        moves.push({ part, from: { x: p.x, y: p.y, z: p.z }, t });
+      });
+      clearAssemblyGuides();
+      (function step(now){
+        const k = Math.min(1, (now - t0) / DUR), e = 1 - Math.pow(1 - k, 3);
+        moves.forEach(({ part, from, t }) => { if (parts.includes(part)) part.body.position.set(from.x + (t[0] - from.x) * e, from.y + (t[1] - from.y) * e, from.z + (t[2] - from.z) * e); });
+        if (k < 1) requestAnimationFrame(step);
+      })(t0);
+      return moves.length;
     },
     // 바닥(모눈) 위에 X·Z 방향선을 깔고, Y(위)는 같은 모서리에서 세운다 — 구멍 위치를 말할 때 기준으로 쓴다.
     axes(on){
@@ -4198,6 +4224,7 @@
         const dot = (r, point, normal, onPart) => {
           const m = new THREE.Mesh(new THREE.CircleGeometry(r, 32), paint());
           m.renderOrder = 10;
+          m.userData.dot = true; // 재생 중에는 초록 점을 숨기고 화살표만 보여준다(guideDots)
           if (onPart && moving && moving.mesh) {
             moving.mesh.position.copy(moving.body.position); moving.mesh.quaternion.copy(moving.body.quaternion); moving.mesh.updateMatrixWorld(true);
             m.position.copy(moving.mesh.worldToLocal(point.clone()));
@@ -4244,7 +4271,10 @@
       });
       scene.add(g);
       assemblyGuideGroup = g;
+      setGuideDots(assemblyDotsVisible);
     },
+    // 초록 점(돌기 끝·구멍 칠)을 보이거나 숨긴다 — 화살표는 그대로
+    guideDots(visible){ assemblyDotsVisible = !!visible; setGuideDots(assemblyDotsVisible); },
     // 지금 놓인 부품 중 몸통이 겹치는 쌍(검증용) — 조립 데이터가 겹침 금지 규칙을 지키는지 볼 때 쓴다
     overlaps(){
       const out = [];

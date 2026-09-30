@@ -66,7 +66,7 @@
             targets.forEach((m) => guides.push({ from: add(m, dirH, hv - depth), to: m, dir: dirH, idx: list.length }));
           }
         }
-        list.push({ name: pt.n, type, mount: 'floor', pos: pos.slice(), quat: b.quat(rot), rot: rot.slice(), isNew, final: isNew && dirH ? base.slice() : null });
+        list.push({ name: pt.n, type, mount: 'floor', pos: pos.slice(), quat: b.quat(rot), rot: rot.slice(), isNew, final: (isNew && dirH) || ex ? base.slice() : null }); // ex: 14단계처럼 "결합 전"으로 띄운 부품도 제자리(결합 후)가 있다
       });
     });
     return { list, guides, missing, targets: list.map((d) => d.final || null) };
@@ -149,40 +149,69 @@
   }
 
   function stop() {
-    clearInterval(timer); timer = null; timerDir = 0;
+    clearInterval(timer); clearTimeout(timer); timer = null; timerDir = 0;
     $('asmPlay').textContent = '▶ 재생';
     $('asmReverse').textContent = '◀ 역재생';
+    const br = bridge(); if (br && br.guideDots) br.guideDots(true); // 멈추면 초록 점이 다시 보인다
   }
   function go(target) {
     step = Math.max(0, Math.min(last(), target));
     render();
   }
+  // 재생: 화살표 표시 → 결합 → 다음 단계 화살표 표시 → 결합 … 을 쭉 이어서 보여준다(재생 중에는 초록 점을 숨기고 화살표만).
+  // 역재생은 단계를 거꾸로 한 칸씩 넘긴다.
+  const ARROW_MS = 1100, JOIN_MS = 700;
+  // 재생 속도(0.5×~3×): 숫자가 클수록 빠르다. 재생 도중에 바꿔도 다음 단계부터 바로 적용된다.
+  let speed = 1;
+  try { const v = Number(localStorage.getItem('ivs-asm-speed')); if (v >= 0.5 && v <= 3) speed = v; } catch (e) { /* 저장 못 해도 기본 속도 */ }
+  const arrowMs = () => ARROW_MS / speed, joinMs = () => JOIN_MS / speed;
   function play(dir) {
     const wasPlaying = timerDir === dir;
     stop();
     if (wasPlaying) return; // 같은 재생 버튼을 다시 누르면 멈춤
+    const b = bridge();
     if (dir > 0 && step >= last()) step = 0;
     if (dir < 0 && step <= 0) step = last();
+    if (dir > 0 && step === 0) step = 1; // 빈 판에서 바로 첫 단계 화살표부터
     render();
     timerDir = dir;
-    timer = setInterval(() => {
-      const next = step + dir;
-      if (next < 0 || next > last()) { stop(); return; }
-      go(next);
-      if (next === 0 || next === last()) stop();
-    }, PLAY_MS);
-    if (dir > 0) $('asmPlay').textContent = '⏸ 멈춤'; else $('asmReverse').textContent = '⏸ 멈춤';
+    if (b && b.guideDots) b.guideDots(false); // 재생 중에는 화살표만(초록 점 숨김)
+    if (dir > 0) {
+      $('asmPlay').textContent = '⏸ 멈춤';
+      const tick = () => {
+        if (timerDir !== 1) return;
+        const jm = joinMs(); if (b.combineNew) b.combineNew(Math.max(150, jm - 150)); // 결합
+        timer = setTimeout(() => {
+          if (timerDir !== 1) return;
+          const next = step + 1;
+          if (next > last()) { stop(); return; }
+          go(next); // 다음 단계 화살표 표시
+          if (next === last()) { stop(); return; }
+          timer = setTimeout(tick, arrowMs());
+        }, jm);
+      };
+      timer = setTimeout(tick, arrowMs());
+    } else {
+      $('asmReverse').textContent = '⏸ 멈춤';
+      const back = () => {
+        if (timerDir !== -1) return;
+        const next = step - 1;
+        if (next < 0) { stop(); return; }
+        go(next);
+        if (next === 0) { stop(); return; }
+        timer = setTimeout(back, PLAY_MS / speed);
+      };
+      timer = setTimeout(back, PLAY_MS / speed);
+    }
   }
 
   async function open() {
     const b = bridge();
     if (!def || !b) return;
-    $('asmOpen').disabled = true;
     b.status('3D 부품을 불러오는 중이에요...', null);
     // 등록된 3D 모델을 먼저 받아 두면 부품이 처음부터 제 모양으로 나온다(받는 동안 단순 모양이 잠깐 보이는 것을 막음)
     const names = [...new Set(def.steps.flatMap((s) => (s.parts || []).map((pt) => pt.n)))];
     try { await b.preload(names, catId); } catch (e) { /* 못 받아도 단순 모양으로 계속 보여준다 */ }
-    $('asmOpen').disabled = false;
     if (!def || viewing) return;
     snapshot = b.serialize();
     viewing = true;
@@ -193,7 +222,6 @@
     $('asmStageBar').hidden = false;
     $('historyPanel').hidden = true;
     b.axes(true);
-    $('asmOpen').hidden = true;
     $('asmSlider').max = String(last());
     buildStepButtons();
     go(last()); // 처음엔 완성된 모습부터 보여준다
@@ -208,20 +236,20 @@
     $('asmStageBar').hidden = true;
     $('historyPanel').hidden = false;
     if (b) b.axes(false);
-    $('asmOpen').hidden = !def;
     if (b) { b.guides([]); b.restore(snapshot || []); b.setViewing(false); }
     snapshot = null;
   }
 
   function stopPlayClick(fn) { return () => { stop(); fn(); }; }
   document.addEventListener('DOMContentLoaded', () => {
-    if (!$('asmOpen')) return;
-    $('asmOpen').addEventListener('click', open);
+    if (!$('asmClose')) return;
     $('asmClose').addEventListener('click', close);
     $('asmFirst').addEventListener('click', stopPlayClick(() => go(0)));
     $('asmPrev').addEventListener('click', stopPlayClick(() => go(step - 1)));
     $('asmNext').addEventListener('click', stopPlayClick(() => go(step + 1)));
     $('asmLast').addEventListener('click', stopPlayClick(() => go(last())));
+    const sp = $('asmSpeed'), spl = $('asmSpeedLabel');
+    if (sp) { sp.value = String(speed); spl.textContent = speed + '×'; sp.addEventListener('input', () => { speed = Number(sp.value) || 1; spl.textContent = speed + '×'; try { localStorage.setItem('ivs-asm-speed', String(speed)); } catch (e) { /* 저장 못 해도 계속 */ } }); }
     $('asmPlay').addEventListener('click', () => play(1));
     $('asmReverse').addEventListener('click', () => play(-1));
     $('asmSlider').addEventListener('input', (e) => { stop(); go(Number(e.target.value)); });
@@ -269,7 +297,6 @@
       buildOrderList();
       if (def) buildStepButtons(); // 번호 줄도 조립 보기를 열기 전부터 보인다
       $('asmRules').innerHTML = (window.IVS_ASSEMBLY_RULES || []).map((r) => '<li>' + r + '</li>').join('');
-      if (!viewing) $('asmOpen').hidden = !found;
     },
     isViewing() { return viewing; },
   };
