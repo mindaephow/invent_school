@@ -77,7 +77,12 @@
   }
   function setMode(m) { mode = mode === m ? null : m; sync(); }
   drawBtn.onclick = () => setMode('draw');
-  memoBtn.onclick = () => setMode('memo');
+  // 메모 버튼을 누르면 바로 메모지가 스케치북 가운데쯤에 나온다(누를 때마다 하나씩, 조금씩 비껴서). 끌어서 옮기고 ✕로 지운다.
+  let memoCount = 0;
+  memoBtn.onclick = () => {
+    const w = noteLayer.clientWidth || 300, h = noteLayer.clientHeight || 300, k = memoCount++ % 6;
+    addNote(Math.max(8, w / 2 - 70 + k * 18), Math.max(8, h / 3 + k * 18));
+  };
 
   // 그리기
   let last = null;
