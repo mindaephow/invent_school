@@ -4152,10 +4152,10 @@
       const mk = (hex, len, dir) => {
         const mat = new THREE.MeshBasicMaterial({ color: hex, transparent: true, opacity: 0.95, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
         const flat = dir.y === 0;
-        const shaft = new THREE.Mesh(flat ? new THREE.BoxGeometry(dir.x ? len : 2.2, 0.4, dir.z ? len : 2.2) : new THREE.CylinderGeometry(0.8, 0.8, len, 8), mat);
+        const shaft = new THREE.Mesh(flat ? new THREE.BoxGeometry(dir.x ? len : 0.7, 0.3, dir.z ? len : 0.7) : new THREE.CylinderGeometry(0.35, 0.35, len, 8), mat);
         shaft.position.copy(dir).multiplyScalar(len / 2);
-        const head = new THREE.Mesh(new THREE.ConeGeometry(3, 7, 12), mat);
-        head.position.copy(dir).multiplyScalar(len + 3.5);
+        const head = new THREE.Mesh(new THREE.ConeGeometry(1.6, 5, 12), mat);
+        head.position.copy(dir).multiplyScalar(len + 2.5);
         head.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
         g.add(shaft); g.add(head);
       };
