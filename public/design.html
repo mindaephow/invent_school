@@ -4113,6 +4113,7 @@
   // 저장 요청이 겹쳐도 한 번에 하나씩 (새 설계가 두 번 만들어지는 것을 막는다)
   // 조립 보기(design-assembly.js)가 쓰는 연결부 — 부품을 놓고·강조하고·카메라를 옮기는 것만 열어준다.
   let assemblyGuideGroup = null; // 조립 보기의 초록 화살표·구멍 원 묶음
+  let assemblyAxesGroup = null; // 조립 보기의 베이스 X·Y·Z 방향선
   window.__ivsAssemblyBridge = {
     resolve(name, categoryId){
       const p = robotPartsCache.find(x => x.name === name && (!categoryId || x.category === categoryId));
@@ -4141,6 +4142,30 @@
         assemblyGuideGroup.children.filter(c => c.userData.idx === idx).forEach(c => { assemblyGuideGroup.remove(c); c.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); });
       }
       return 'ok';
+    },
+    // 베이스 모서리에 X·Y·Z 방향선(플레이트 윗면 모서리에서 뻗는다) — 조립 보기에서 구멍 위치를 말할 때 기준으로 쓴다.
+    axes(on){
+      if (assemblyAxesGroup) { scene.remove(assemblyAxesGroup); assemblyAxesGroup.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } }); assemblyAxesGroup = null; }
+      if (!on) return;
+      const g = new THREE.Group();
+      g.position.set(-20, 20, -25);
+      const LEN = 30;
+      [['X', '#E5484D', 0xE5484D, new THREE.Vector3(1, 0, 0)], ['Y', '#30A46C', 0x30A46C, new THREE.Vector3(0, 1, 0)], ['Z', '#3E63DD', 0x3E63DD, new THREE.Vector3(0, 0, 1)]].forEach(([name, css, hex, dir]) => {
+        const mat = new THREE.MeshBasicMaterial({ color: hex, depthTest: false, transparent: true });
+        const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, LEN, 8), mat);
+        shaft.position.copy(dir).multiplyScalar(LEN / 2);
+        const head = new THREE.Mesh(new THREE.ConeGeometry(2.4, 7, 12), mat);
+        head.position.copy(dir).multiplyScalar(LEN + 3.5);
+        const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+        shaft.quaternion.copy(q); head.quaternion.copy(q);
+        shaft.renderOrder = 998; head.renderOrder = 998;
+        const label = makeAxisLabel(name, css);
+        label.scale.set(11, 11, 1);
+        label.position.copy(dir).multiplyScalar(LEN + 12);
+        g.add(shaft); g.add(head); g.add(label);
+      });
+      scene.add(g);
+      assemblyAxesGroup = g;
     },
     // 교재 그림의 초록 화살표+구멍 원: { from, to, dir }마다 from→to 화살표와 to에 원(꽂는 구멍 자리)을 그린다.
     guides(list){

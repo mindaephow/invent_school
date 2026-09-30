@@ -172,6 +172,7 @@
     $('asmBar').hidden = false;
     $('asmStageBar').hidden = false;
     $('historyPanel').hidden = true;
+    b.axes(true);
     $('asmOpen').hidden = true;
     $('asmSlider').max = String(last());
     buildStepButtons();
@@ -186,6 +187,7 @@
     $('asmBar').hidden = true;
     $('asmStageBar').hidden = true;
     $('historyPanel').hidden = false;
+    if (b) b.axes(false);
     $('asmOpen').hidden = !def;
     if (b) { b.guides([]); b.restore(snapshot || []); b.setViewing(false); }
     snapshot = null;
