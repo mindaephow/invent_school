@@ -1465,8 +1465,19 @@
     part.mesh.add(g);
   }
   const connBtn = document.getElementById('connToggle');
-  // 연결점은 계산에 쓰는 내부 정보라 평소엔 화면에 보이지 않는다(사용자 지시). 확인이 필요할 때만 주소에 &connectors=1 을 붙이면 버튼이 나온다.
-  connBtn.hidden = SUBJECT !== 'robot' || new URLSearchParams(location.search).get('connectors') !== '1';
+  // 연결점은 계산에 쓰는 내부 정보라 평소엔 화면에 보이지 않는다(사용자 지시). 확인용 버튼은 본사 관리자 계정에게만 보인다 —
+  // 로그인 토큰(JWT)의 app_metadata.role 이 admin 인지 본다(보이기만 정하는 것이고, 데이터 접근 권한은 서버가 따로 지킨다).
+  function isAdminToken(tok){
+    try { const p = JSON.parse(atob(tok.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))); return !!(p.app_metadata && p.app_metadata.role === 'admin'); }
+    catch (e) { return false; }
+  }
+  function refreshConnBtn(){
+    let admin = false;
+    try { admin = !!accessToken && isAdminToken(accessToken); } catch (e) { /* 아직 로그인 전 */ }
+    connBtn.hidden = SUBJECT !== 'robot' || !admin;
+  }
+  connBtn.hidden = true;
+  setInterval(refreshConnBtn, 1500); // 로그인·로그아웃이 여러 경로라 가볍게 주기적으로 맞춘다
   connBtn.addEventListener('click', () => {
     showConnectors = !showConnectors;
     connBtn.setAttribute('aria-pressed', String(showConnectors));
