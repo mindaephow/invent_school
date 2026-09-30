@@ -1864,6 +1864,18 @@ function initPartMaker() {
     fillFieldsFromShape(shape);
   }
   document.getElementById('partMakerPlaceOnPlaneBtn').addEventListener('click', placeSelectedOnWorkplane);
+  // "중심정렬" — 사용자 지시: "에디터 바닥 중심점에 정열하는 기능이야". 높이(y)·각도·크기는 그대로 두고
+  // 가로/세로(x/z) 위치만 바닥 중심점(0,0)으로 옮긴다.
+  function centerSelectedOnOrigin() {
+    const shape = shapes[selectedIndex];
+    if (!shape || !live || !live.meshes[selectedIndex]) return;
+    const mesh = live.meshes[selectedIndex];
+    shape.x = 0; shape.z = 0;
+    mesh.position.x = 0; mesh.position.z = 0;
+    mesh.updateMatrixWorld(true);
+    fillFieldsFromShape(shape);
+  }
+  document.getElementById('partMakerCenterAlignBtn').addEventListener('click', centerSelectedOnOrigin);
   // 이름 입력칸 등에서 "d"를 칠 때 단축키가 끼어들면 안 되므로 입력 요소에 포커스가 있으면 무시하고,
   // 이 패널이 화면에 안 보이는 동안(다른 탭이 열려있을 때)도 무시한다(두 탭 다 이 리스너를 각자 갖고
   // 있어서, 안 보이는 탭 것까지 같이 반응하면 이중 실행됨).
