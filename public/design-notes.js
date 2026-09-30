@@ -2,8 +2,7 @@
 // 켜면 스케치북 드래그가 "회전" 대신 "그리기"가 되고, 끄면 그림·메모는 그대로 보이면서 다시 3D를 돌릴 수 있다.
 (function () {
   const wrap = document.querySelector('.scene-wrap');
-  const tools = wrap && wrap.querySelector('.view-tools');
-  if (!wrap || !tools) return;
+  if (!wrap) return;
 
   const COLORS = ['#e53935', '#1e88e5', '#43a047', '#111111'];
   let mode = null, color = COLORS[0], width = 4, erasing = false;
@@ -28,17 +27,22 @@
   new ResizeObserver(fit).observe(wrap); fit();
 
   // 버튼
+  // 스케치북 아래쪽 오른쪽 끝에 둔다(위쪽 버튼 줄은 "스케치북" 글자와 겹친다)
+  const dock = document.createElement('div');
+  dock.style.cssText = 'position:absolute;right:10px;bottom:10px;z-index:5;display:flex;gap:6px;';
+  wrap.appendChild(dock);
   function mkBtn(text, title) {
     const b = document.createElement('button');
     b.type = 'button'; b.textContent = text; b.title = title; b.setAttribute('aria-pressed', 'false');
-    tools.appendChild(b); return b;
+    b.style.cssText = 'padding:6px 12px;font-size:12px;font-weight:600;border-radius:999px;background:var(--panel);border:1px solid var(--panel-border);color:var(--ink);';
+    dock.appendChild(b); return b;
   }
   const drawBtn = mkBtn('✏️ 그리기', '켜고 스케치북 위에 손으로 그려요');
   const memoBtn = mkBtn('📝 메모', '켜고 스케치북을 누르면 메모지가 붙어요');
 
   // 그리기 옵션줄
   const bar = document.createElement('div');
-  bar.style.cssText = 'position:absolute;left:10px;bottom:10px;z-index:3;display:none;gap:6px;align-items:center;padding:6px 10px;border-radius:999px;background:var(--panel);border:1px solid var(--panel-border);box-shadow:var(--shadow);font-size:12px;';
+  bar.style.cssText = 'position:absolute;right:10px;top:76px;z-index:5;display:none;flex-direction:column;gap:6px;align-items:center;padding:8px 6px;border-radius:16px;background:var(--panel);border:1px solid var(--panel-border);box-shadow:var(--shadow);font-size:12px;';
   const swatches = COLORS.map((c) => {
     const s = document.createElement('button');
     s.type = 'button'; s.title = '색'; s.style.cssText = 'width:22px;height:22px;padding:0;border-radius:50%;border:2px solid #fff;outline:1px solid var(--panel-border);background:' + c + ';';
@@ -60,6 +64,8 @@
     drawBtn.classList.toggle('on', mode === 'draw'); drawBtn.setAttribute('aria-pressed', mode === 'draw');
     memoBtn.classList.toggle('on', mode === 'memo'); memoBtn.setAttribute('aria-pressed', mode === 'memo');
     bar.style.display = mode === 'draw' ? 'flex' : 'none';
+    drawBtn.style.background = mode === 'draw' ? 'var(--blueprint)' : 'var(--panel)'; drawBtn.style.color = mode === 'draw' ? '#fff' : 'var(--ink)';
+    memoBtn.style.background = mode === 'memo' ? 'var(--blueprint)' : 'var(--panel)'; memoBtn.style.color = mode === 'memo' ? '#fff' : 'var(--ink)';
     swatches.forEach((s, i) => { s.style.outline = (!erasing && COLORS[i] === color) ? '2px solid var(--blueprint)' : '1px solid var(--panel-border)'; });
     eraser.style.background = erasing ? 'var(--blueprint)' : 'var(--panel)'; eraser.style.color = erasing ? '#fff' : 'var(--ink)';
     // 켜져 있는 동안만 이 층이 마우스를 받는다(3D 회전 대신)
