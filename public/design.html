@@ -1386,8 +1386,8 @@
       const summary = mismatchCount === 0
         ? '<div class="required-summary ok">✅ 필요한 부품을 다 썼어요!</div>'
         : '<div class="required-summary warn">⚠️ 아직 ' + mismatchCount + '종류가 안 맞아요</div>';
-      // 사용 부품 숫자와 같은 단위(개수)로 센다 — 종류 수(12)가 아니라 필요한 부품 개수의 합
-      document.getElementById('requiredListCount').textContent = String(chapterParts.reduce((n, cp) => n + (Number(cp.qty) || 0), 0));
+      // 부품 "종류" 수로 센다(사용 부품 숫자도 같은 종류 수)
+      document.getElementById('requiredListCount').textContent = String(chapterParts.length);
       document.getElementById('requiredListBody').innerHTML = summary + rows;
       return;
     }
@@ -1406,7 +1406,7 @@
     const summary = mismatchCount === 0
       ? '<div class="required-summary ok">✅ 필요한 부품을 다 썼어요!</div>'
       : '<div class="required-summary warn">⚠️ 아직 ' + mismatchCount + '종류가 안 맞아요</div>';
-    document.getElementById('requiredListCount').textContent = String(trackable.reduce((n, p) => n + (Number(p.qty) || 0), 0)); // 개수의 합(사용 부품과 같은 단위)
+    document.getElementById('requiredListCount').textContent = String(trackable.length); // 종류 수
     document.getElementById('requiredListBody').innerHTML = summary + rows;
   }
   function setRequiredListFolded(folded){
@@ -2138,7 +2138,7 @@
   try { if (localStorage.getItem('ivs-partlist-folded') === '1') setPartListFolded(true); } catch (e) {}
   const foldedSets = new Set(); // 접어 둔 세트 (세트 번호)
   function refreshPartList(){
-    document.getElementById('partListCount').textContent = String(parts.length);
+    document.getElementById('partListCount').textContent = String(new Set(parts.map(p => p.type)).size); // 놓은 부품의 "종류" 수(필요 부품 숫자와 같은 단위)
     partListBody.textContent = '';
     if (!parts.length) {
       const empty = document.createElement('p');
