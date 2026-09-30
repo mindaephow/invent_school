@@ -1756,6 +1756,41 @@
     try { allParts = (await adminApi({ action: 'list_parts', light: true })).parts || []; }
     catch (err) { allParts = []; }
   }
+  // 부품 관리 탭 열기 — 서버가 부품 목록을 만드는 데 1.5초 안팎이 걸려서(DB 처리 시간), 지난번에 받은 목록을
+  // 브라우저에 저장해 두었다가 탭을 열자마자 먼저 보여주고 뒤에서 최신 목록을 받아온다(사용자 지시:
+  // "빠르게 할수있는 방법이 있으면 그렇게"). 최신 목록이 저장본과 같으면 화면을 다시 그리지 않아 펼침 상태도 그대로다.
+  const PARTS_CACHE_KEY = 'ivs-parts-tab-cache-v1';
+  let partsShownJson = '', catsShownJson = '', partsTabOpenedOnce = false;
+  async function openPartsTab(){
+    partFullCache.clear();
+    const listEl = document.getElementById('partListArea');
+    if (!partsTabOpenedOnce) {
+      partsTabOpenedOnce = true;
+      try {
+        const c = JSON.parse(localStorage.getItem(PARTS_CACHE_KEY) || 'null');
+        if (c && Array.isArray(c.parts) && c.parts.length && Array.isArray(c.categories)) {
+          robotCategories = c.categories; allParts = c.parts;
+          renderCategories(); renderParts(allParts);
+          partsShownJson = JSON.stringify(c.parts); catsShownJson = JSON.stringify(c.categories);
+        }
+      } catch (e) { /* 저장본이 없거나 깨졌으면 그냥 새로 받는다 */ }
+    }
+    try {
+      const [cats, parts] = await Promise.all([
+        adminApi({ action: 'list_robot_categories' }),
+        adminApi({ action: 'list_parts', stripSpecFiles: true }),
+      ]);
+      const catList = cats.categories || [], partList = parts.parts || [];
+      const cj = JSON.stringify(catList), pj = JSON.stringify(partList);
+      const changed = cj !== catsShownJson || pj !== partsShownJson || !listEl.innerHTML;
+      robotCategories = catList; allParts = partList;
+      if (changed) { renderCategories(); renderParts(allParts); }
+      catsShownJson = cj; partsShownJson = pj;
+      try { localStorage.setItem(PARTS_CACHE_KEY, JSON.stringify({ categories: catList, parts: partList })); } catch (e) { /* 용량 초과 등은 무시 */ }
+    } catch (err) {
+      if (!listEl.innerHTML) { document.getElementById('partListEmpty').hidden = false; document.getElementById('partListEmpty').textContent = err.message; }
+    }
+  }
   async function loadParts(){
     // stripSpecFiles: 이 목록 화면은 has3d 여부·저장된 thumbnail3d만 보여주면 되고 3D 원본 파일
     // (fileDataUrl, 부품마다 수백 KB~몇 MB)은 필요 없다 — 그런데도 전체를 매번 통째로 받아와서 카테고리
@@ -2639,7 +2674,7 @@
       document.getElementById('tab-textbooks').hidden = btn.dataset.tab !== 'textbooks';
       if (btn.dataset.tab === 'home') renderHome();
       if (btn.dataset.tab === 'curriculum') { loadCategories().then(() => { fillCurriculumCategoryOptions(curriculumSubjectSel.value, curriculumCategorySel); syncCurriculumSubjectUI(); renderCurriculumList(); }); }
-      if (btn.dataset.tab === 'parts') { partFullCache.clear(); Promise.all([loadCategories(), loadParts()]).then(() => renderParts(allParts)); }  // 카테고리·부품을 동시에 받고 둘 다 오면 한 번 더 맞춰 그린다
+      if (btn.dataset.tab === 'parts') openPartsTab();
       if (btn.dataset.tab === 'textbooks') {
         // 카테고리·부품·교재를 동시에 요청(예전엔 카테고리를 기다린 뒤에야 나머지를 요청해서 왕복이 두 번이었음)
         // 부품은 화면에 필요한 이름만 받고, 부품 탭 화면을 다시 그리지도 않는다.
