@@ -89,7 +89,7 @@ export function registerCuboAssemblyTools(server, getSupabase) {
       'get_assembly',
       {
         title: '조립 단계 데이터 조회',
-        description: '한 차시의 조립 단계 데이터(JSON)를 돌려준다: 단계별 부품 이름, 위치 p, 회전 r, 끼우는 방향 dir, 꽂히는 구멍 자리 marks, 옆자리 조립 side. 수정은 저장소의 public/design-assemblies.js 를 고쳐서 올린다.',
+        description: '한 차시의 조립 단계 데이터(JSON)를 돌려준다: 단계별 설명 note·카메라 각도 view, 부품 이름, 위치 p, 회전 r, 끼우는 방향 dir, 안내 위치 marks(recv 부품은 고정된 돌기 끝), 구멍 받는 쪽 recv, 옆자리 조립 side·settleDir, 결합 전 표시 explode, 결합 순서 joinOrder, 띄우는 거리 hover 등(필드 설명은 get_assembly_guide). 수정은 저장소의 public/design-assemblies.js 를 고쳐서 올리고, 고친 뒤 validate_assembly 로 문제 0건을 확인한다.',
         inputSchema: { assemblyId: z.string().describe('list_assemblies 의 id. 예: cubo-1-rabbit') },
       },
       async ({ assemblyId }) => {
