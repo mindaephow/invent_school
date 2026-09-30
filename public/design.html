@@ -687,6 +687,7 @@
 <script src="design-lessons.js"></script>
 <script src="design-assemblies.js"></script>
 <script src="design-assembly.js"></script>
+<script src="design-collision.js"></script>
 <script src="design-robot-categories.js"></script>
 <script>
 (function(){
@@ -1387,6 +1388,7 @@
   // 받는 동안엔 예전 모양으로 두었다가 도착하면 바꿔 끼운다. 모델 크기는 수십 KB~1MB 정도라 부품별로 따로 받는다.
   const robotModelCache = new Map();   // partId → { position, normal, index, color, bbox } | null(모델 없음/실패)
   const robotModelLoading = new Map(); // partId → Promise
+  const robotCores = new Map();        // partId → 몸통 상자 목록 | null(검사 안 함) — design-collision.js 규칙
   function robotModelKnown(type){ return type && type.indexOf('robot:') === 0 ? robotModelCache.get(type.slice(6)) : null; }
   function ensureRobotModel(partId){
     if (robotModelCache.has(partId)) return Promise.resolve(robotModelCache.get(partId));
@@ -1407,7 +1409,15 @@
         if (!spec || !Array.isArray(spec.shapes) || !spec.shapes.length) return null;
         return await window.__partsLabViewer.buildPartGeometryData(spec.shapes);
       } catch (err) { console.error('3D 모델 불러오기 실패', err); return null; }
-    })().then((data) => { robotModelCache.set(partId, data); robotModelLoading.delete(partId); return data; });
+    })().then((data) => {
+      robotModelCache.set(partId, data);
+      robotModelLoading.delete(partId);
+      if (data && window.IVS_COLLISION) {
+        const b = data.bbox;
+        robotCores.set(partId, window.IVS_COLLISION.coreBoxes(cached && cached.name, [b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]]));
+      }
+      return data;
+    });
     robotModelLoading.set(partId, job);
     return job;
   }
@@ -1433,7 +1443,45 @@
     scene.remove(oldMesh);
     scene.add(m);
     part.mesh = m;
+    if (part.userSpawn) { liftOutOfOverlap(part); part.userSpawn = false; }
     if (selected === part) updateSelectionOutline();
+  }
+  // ----- 부품끼리 겹침 방지: 홀에 돌기가 끼워지는 것 외에는 서로를 통과할 수 없다 -----
+  const COLLISION_TOL = 0.6; // mm — 맞닿는 것·약간의 오차는 겹침으로 세지 않는다
+  function coresOf(part){ return part && part.type && part.type.indexOf('robot:') === 0 ? (robotCores.get(part.type.slice(6)) || null) : null; }
+  function overlappingPart(part){
+    const a = coresOf(part);
+    if (!a) return null;
+    for (const other of parts) {
+      if (other === part) continue;
+      const b = coresOf(other);
+      if (b && window.IVS_COLLISION.boxesOverlap(a, part.body.position, part.body.quaternion, b, other.body.position, other.body.quaternion, COLLISION_TOL)) return other;
+    }
+    return null;
+  }
+  let lastBlockedMsg = 0;
+  function noteBlocked(){
+    const now = Date.now();
+    if (now - lastBlockedMsg < 1500) return;
+    lastBlockedMsg = now;
+    setStatus('다른 부품과 겹칠 수 없어요. 돌기를 홀에 끼우는 방향으로 넣어 주세요.', 'warn');
+  }
+  // 움직인 뒤 겹치면 되돌린다. 전부 막히진 않게, 겹치지 않는 축으로만 미끄러지듯 움직인다(x→z→y 순).
+  function guardRobotMove(part, prev){
+    if (!overlappingPart(part)) return;
+    const p = part.body.position;
+    const target = { x: p.x, y: p.y, z: p.z };
+    p.set(prev.x, prev.y, prev.z);
+    ['x', 'z', 'y'].forEach(ax => {
+      const before = p[ax];
+      p[ax] = target[ax];
+      if (overlappingPart(part)) p[ax] = before;
+    });
+    noteBlocked();
+  }
+  // 새로 놓은 부품이 다른 부품 안에 떨어지면 위로 들어 올려 빈자리에 둔다(불러온 저장 설계는 건드리지 않는다)
+  function liftOutOfOverlap(part){
+    for (let i = 0; i < 60 && overlappingPart(part); i++) part.body.position.y += 10;
   }
   function upgradeRobotMesh(part){
     if (!part.type || part.type.indexOf('robot:') !== 0) return;
@@ -2882,6 +2930,7 @@
     const part = { type, mount, body, mesh };
     if (type === 'pin') part.len = pinLen;
     mesh.userData.partRef = part;
+    if (!forcedPos) part.userSpawn = true; // 팔레트에서 새로 놓은 부품(불러온 설계는 해당 없음)
     parts.push(part);
     upgradeRobotMesh(part); // 등록된 3D 모델이 있으면 단순 모양을 그 모델로 바꿔 끼운다
     select(part);
@@ -3094,8 +3143,14 @@
       return;
     }
     unjoin(selected);
+    const prevQ = selected.body.quaternion.clone(), prevRot = selected.rot;
     selected.body.quaternion.set(q.x, q.y, q.z, q.w);
     selected.rot = r;
+    if (overlappingPart(selected)) { // 돌리면 다른 부품과 겹치면 돌리지 않는다
+      selected.body.quaternion.set(prevQ.x, prevQ.y, prevQ.z, prevQ.w);
+      selected.rot = prevRot;
+      noteBlocked();
+    }
     refreshAxisPanel();
   }
   const rotPanel = document.getElementById('rotPanel'), movePanel = document.getElementById('movePanel');
@@ -3143,10 +3198,12 @@
     unjoin(selected);
     if (selected.type === 'goal') dy = 0; // 도착 지점은 바닥 위에서만 옮긴다
     const p = selected.body.position;
+    const prev = { x: p.x, y: p.y, z: p.z };
     let nx = Math.min(Math.max(p.x + dx, -ROOM_HALF + 8), ROOM_HALF - 8);
     let ny = Math.min(Math.max(p.y + dy, 6), CEIL_Y - 6);
     let nz = Math.min(Math.max(p.z + dz, -ROOM_HALF + 8), ROOM_HALF - 8);
     selected.body.position.set(nx, ny, nz);
+    guardRobotMove(selected, prev);
   }
   document.getElementById('mvLeft').addEventListener('click', () => nudge(-GRID_UNIT, 0, 0));
   document.getElementById('mvRight').addEventListener('click', () => nudge(GRID_UNIT, 0, 0));
@@ -3407,12 +3464,14 @@
   // 방 안으로 한계를 두되, 움직이지 않은 축의 값은 건드리지 않는다
   function moveSelectedTo(x, y, z){
     const p = selected.body.position;
+    const prev = { x: p.x, y: p.y, z: p.z };
     const fit = (v, cur, lo, hi) => (v === cur ? v : Math.min(Math.max(v, lo), hi));
     selected.body.position.set(
       fit(x, p.x, -ROOM_HALF + 8, ROOM_HALF - 8),
       fit(y, p.y, 6, CEIL_Y - 6),
       fit(z, p.z, -ROOM_HALF + 8, ROOM_HALF - 8)
     );
+    guardRobotMove(selected, prev);
   }
 
   function dragSelectedTo(e){
@@ -3438,6 +3497,7 @@
       : new THREE.Plane(new THREE.Vector3(0, 1, 0), -p.y);
     const hit = new THREE.Vector3();
     if (!raycaster.ray.intersectPlane(plane, hit)) return;
+    const prevDrag = { x: p.x, y: p.y, z: p.z };
     if (onWall) {
       const ny = Math.min(Math.max(hit.y, 6), CEIL_Y - 6);
       const nz = Math.min(Math.max(hit.z, -ROOM_HALF + 8), ROOM_HALF - 8);
@@ -3448,6 +3508,7 @@
       if (selected.type.startsWith('robot:')) { nx = snapRobotGrid(nx); nz = snapRobotGrid(nz); }
       selected.body.position.set(nx, p.y, nz);
     }
+    guardRobotMove(selected, prevDrag);
   }
 
   let pointerDown = false, lastX = 0, lastY = 0, moved = false, draggingPart = false;
@@ -3960,6 +4021,15 @@
       });
       scene.add(g);
       assemblyGuideGroup = g;
+    },
+    // 지금 놓인 부품 중 몸통이 겹치는 쌍(검증용) — 조립 데이터가 겹침 금지 규칙을 지키는지 볼 때 쓴다
+    overlaps(){
+      const out = [];
+      parts.forEach((a, i) => { for (let j = i + 1; j < parts.length; j++) {
+        const ca = coresOf(a), cb = coresOf(parts[j]);
+        if (ca && cb && window.IVS_COLLISION.boxesOverlap(ca, a.body.position, a.body.quaternion, cb, parts[j].body.position, parts[j].body.quaternion, COLLISION_TOL)) out.push([i, j, a.type, parts[j].type]);
+      } });
+      return out;
     },
     serialize(){ return serializeParts(); },
     restore(list){ restoreParts(list, {}, true); },
