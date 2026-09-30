@@ -44,6 +44,12 @@
         // 옆자리 조립품이 제자리로 합쳐지는 단계(settle)에는 settleDir(없으면 dir)로 띄우고, settleMarks(있는 부품만) 자리로 안내한다
         const settling = !!(pt.side && !useSide);
         const dirH = settling ? (pt.settleDir || pt.dir) : pt.dir;
+        // 앞 단계에서 만든 부품을 이번 단계에서 "결합되기 전" 모습으로 띄워 보여준다(예: 14단계 T축+기어를 15프레임 위로)
+        const ex = pt.explode && pt.explode.step === target ? pt.explode : null;
+        if (ex) {
+          pos = add(base, ex.offset, 1);
+          (ex.marks || []).forEach((m) => guides.push({ from: ex.from, to: m, dir: [0, -1, 0], idx: list.length }));
+        }
         if (isNew && dirH) {
           // 띄우는 거리·돌기가 들어가는 깊이·판 두께는 부품마다 정할 수 있다(T축처럼 길게 꽂히는 것, 두꺼운 부시)
           const hv = settling ? HOVER : (pt.hover || (pt.recv ? HOVER_RECV : HOVER)); // 합쳐지는 묶음은 모두 같은 거리로 띄워야 모양이 흐트러지지 않는다
