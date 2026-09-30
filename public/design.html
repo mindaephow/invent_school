@@ -4181,11 +4181,14 @@
         if (len < 1) return;
         const dir = v.clone().normalize();
         const HEAD = 6;
-        const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, Math.max(len - HEAD, 0.1), 8), mat());
-        shaft.position.copy(a).addScaledVector(dir, (len - HEAD) / 2);
+        // 화살표는 돌기 칠한 점·구멍 칠한 점에서 조금씩 떨어뜨려 그린다(점과 화살표가 겹쳐 보이지 않게)
+        const gap = Math.min(4, Math.max(0, (len - 10) / 2));
+        const a2 = a.clone().addScaledVector(dir, gap), b2 = b.clone().addScaledVector(dir, -gap), len2 = len - 2 * gap;
+        const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, Math.max(len2 - HEAD, 0.1), 8), mat());
+        shaft.position.copy(a2).addScaledVector(dir, (len2 - HEAD) / 2);
         shaft.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
         const head = new THREE.Mesh(new THREE.ConeGeometry(2.6, HEAD, 12), mat());
-        head.position.copy(b).addScaledVector(dir, -HEAD / 2);
+        head.position.copy(b2).addScaledVector(dir, -HEAD / 2);
         head.quaternion.copy(shaft.quaternion);
         // 구멍 자리를 고리 대신 초록으로 칠한 원판으로 표시한다(프레임 구멍에 색칠한 것처럼 보이게)
         const ring = new THREE.Mesh(new THREE.CircleGeometry(3.6, 28), new THREE.MeshBasicMaterial({ color: 0x22c55e, depthTest: false, transparent: true, opacity: 0.9, side: THREE.DoubleSide }));
