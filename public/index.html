@@ -1714,7 +1714,15 @@
     for (const p of targets) {
       msg.textContent = `다시 그리는 중... (${done + failed + 1}/${targets.length})`;
       try {
-        const dataUrl = await window.__partsLabViewer.renderShapesThumbnail(p.spec.shapes, 88);
+        // 목록(allParts)은 stripSpecFiles로 받아서 'import' 도형의 3D 원본(fileDataUrl)이 빠져있다 — 그대로
+        // 그리면 기본 큐브가 나오고 그 큐브가 thumbnail3d로 저장돼 버린다. 원본이 필요한 부품만 하나씩 받아서 그린다.
+        let shapes = p.spec.shapes;
+        if (shapes.some((s) => s.type === 'import' && !s.fileDataUrl)) {
+          const full = (await adminApi({ action: 'get_part', partId: p.id })).part;
+          shapes = full && full.spec && Array.isArray(full.spec.shapes) ? full.spec.shapes : shapes;
+          if (shapes.some((s) => s.type === 'import' && !s.fileDataUrl)) throw new Error('3D 원본 파일을 받지 못했어요');
+        }
+        const dataUrl = await window.__partsLabViewer.renderShapesThumbnail(shapes, 88);
         await adminApi({
           action: 'update_part', partId: p.id, name: p.name, icon: p.icon, subject: p.subject,
           category: p.category || '', color: p.color || '', size: p.size || '',
