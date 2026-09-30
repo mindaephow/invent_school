@@ -180,6 +180,10 @@
     border-radius:16px; padding:16px; box-shadow:var(--shadow);
     z-index:901;
   }
+  /* 조립 보기: 부품 창을 스케치북 밖(아래)에 붙여 스케치북을 가리지 않게 한다. 조립도에서는 삭제 버튼이 없다. */
+  .selected-controls.docked{position:static; transform:none; left:auto; bottom:auto; width:100%; margin-top:10px; box-sizing:border-box;}
+  .selected-controls.docked .modal-head{cursor:default;}
+  .selected-controls.docked #deletePart{display:none !important;}
   .selected-controls .modal-head{
     display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;
     cursor:grab; touch-action:none;
@@ -2432,6 +2436,7 @@
     selected = p;
     const demoMode = !!(window.__ivsAssembly && window.__ivsAssembly.isViewing()); // 조립 보기 시연 중엔 부품 창 없이 끌어서 움직인다
     selectedControls.hidden = !p;
+    selectedControls.classList.toggle('docked', demoMode); // 조립 보기에선 스케치북 밖에 붙인다
     modalBackdrop.hidden = !p || demoMode; // 조립 보기에선 뒷배경을 깔지 않아 부품을 계속 끌 수 있다
     document.getElementById('asmDemoBlock').hidden = !demoMode; // 🔗 결합·움직임 방식·원위치는 이 창 안에
     if (p) {
@@ -3156,7 +3161,7 @@
   const modalHead = document.getElementById('modalHead');
   let modalDrag = null;
   modalHead.addEventListener('pointerdown', (e) => {
-    if (e.target.closest('#closeSelected')) return;
+    if (e.target.closest('#closeSelected') || selectedControls.classList.contains('docked')) return;
     const rect = selectedControls.getBoundingClientRect();
     modalDrag = { offsetX: e.clientX - rect.left, offsetY: e.clientY - rect.top };
     selectedControls.style.left = rect.left + 'px';
