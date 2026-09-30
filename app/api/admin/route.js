@@ -8,7 +8,10 @@
 // POST { action: 'set_approved', teacherId, approved }              선생님 승인 / 승인 취소 — 관리자만
 // POST { action: 'create_teacher', name, email, phone?, password? } 본사에서 선생님 등록 (바로 승인됨) — 관리자만
 // POST { action: 'delete_teacher', teacherId }                      선생님 삭제 (수업·학생·학생 로그인 계정·과제까지 함께 삭제) — 관리자만
-// POST { action: 'list_parts', light? }                                      부품 카탈로그 목록 (이름·아이콘·과목만, 3D 모양은 코드로 별도 구현)
+// POST { action: 'list_parts', light?, stripSpecFiles? }                     부품 카탈로그 목록 (light: 이름·아이콘·과목만 /
+//   stripSpecFiles: spec.shapes는 남기되 각 도형의 fileDataUrl만 빼서 목록 응답을 가볍게 함 — 3D 모양은 코드로 별도 구현)
+// POST { action: 'get_part', partId }                                       부품 하나를 spec.shapes.fileDataUrl까지 전부 포함해 조회
+//   (목록은 stripSpecFiles로 가볍게 받고, 3D를 실제로 그려야 할 때만 이걸로 그 부품 하나만 온전히 받는다)
 // POST { action: 'add_part', name, icon, subject, category?, volumes?: [{volume, qty?}], color?, size? } 부품 카탈로그에 등록
 //   — volumes는 이 부품이 필요한 권과 그 권에서 필요한 수량 목록(비우면 전체 공통). 이름·이미지 등은 한 번만
 //     등록하고 권마다 volumes 항목만 늘려서 쓴다 — 권마다 부품 전체를 새로 등록하지 않는다.
@@ -233,12 +236,39 @@ function parseSnapshots(body) {
   return Object.keys(result).length ? result : null
 }
 
-async function listParts(sb, light = false) {
+// spec.shapes 중 'import'(3D 파일 불러오기) 도형의 fileDataUrl(base64 STL/GLB/OBJ 원본)이 부품 하나당
+// 수백 KB~몇 MB까지 나간다 — 실측: 부품 69개 spec 합계 16MB(썸네일 97KB·SVG 218KB와 비교가 안 됨). "부품
+// 관리" 목록 화면은 이 원본 파일이 필요 없다(has3d 여부·이미 저장된 thumbnail3d만 보여줌 — 3D 편집은
+// "부품 수리실"에서 따로 함) — 그런데도 탭을 열 때마다 카탈로그 전체의 원본 파일까지 통째로 받아와서
+// "큐보 부품리스트를 불러오는데 시간이 좀 걸리는" 원인이었다(사용자 지적). stripSpecFiles가 true면 도형
+// 목록·개수(has3d 판정에 필요)는 그대로 두고 fileDataUrl만 빼서 응답을 가볍게 만든다.
+function stripSpecFileData(spec) {
+  if (!spec || !Array.isArray(spec.shapes)) return spec
+  return Object.assign({}, spec, {
+    shapes: spec.shapes.map((s) => {
+      if (!s || typeof s !== 'object' || !s.fileDataUrl) return s
+      const { fileDataUrl, ...rest } = s
+      return rest
+    }),
+  })
+}
+function mapPartRow(r, { light = false, stripSpecFiles = false } = {}) {
+  const base = { id: r.id, name: r.data?.name || '', icon: r.data?.icon || '', subject: r.data?.subject || '', category: r.data?.category || '', volumes: Array.isArray(r.data?.volumes) ? r.data.volumes : [], color: r.data?.color || '', size: r.data?.size || '', createdAt: r.created_at }
+  // 교재관리처럼 이름·과목만 필요한 화면용 — 부품마다 수십 KB인 SVG/스냅샷/spec은 빼서 응답을 가볍게 한다.
+  if (light) return base
+  const spec = stripSpecFiles ? stripSpecFileData(r.data?.spec || null) : (r.data?.spec || null)
+  return Object.assign(base, { imageSvg: r.data?.image_svg || '', imageSvgDiagonal: r.data?.image_svg_diagonal || '', primaryImage: r.data?.primary_image === 'diagonal' ? 'diagonal' : 'front', spec, snapshot: r.data?.snapshot || null, snapshots: r.data?.snapshots || null, thumbnail3d: r.data?.thumbnail3d || null })
+}
+async function listParts(sb, light = false, stripSpecFiles = false) {
   const { data, error } = await sb.from('ivs_part_catalog').select('id, data, created_at').order('created_at', { ascending: true })
   if (error) throw new Error(error.message)
-  // 교재관리처럼 이름·과목만 필요한 화면용 — 부품마다 수십 KB인 SVG/스냅샷/spec은 빼서 응답을 가볍게 한다.
-  if (light) return (data || []).map((r) => ({ id: r.id, name: r.data?.name || '', icon: r.data?.icon || '', subject: r.data?.subject || '', category: r.data?.category || '', volumes: Array.isArray(r.data?.volumes) ? r.data.volumes : [], color: r.data?.color || '', size: r.data?.size || '', createdAt: r.created_at }))
-  return (data || []).map((r) => ({ id: r.id, name: r.data?.name || '', icon: r.data?.icon || '', subject: r.data?.subject || '', category: r.data?.category || '', volumes: Array.isArray(r.data?.volumes) ? r.data.volumes : [], color: r.data?.color || '', size: r.data?.size || '', imageSvg: r.data?.image_svg || '', imageSvgDiagonal: r.data?.image_svg_diagonal || '', primaryImage: r.data?.primary_image === 'diagonal' ? 'diagonal' : 'front', spec: r.data?.spec || null, snapshot: r.data?.snapshot || null, snapshots: r.data?.snapshots || null, thumbnail3d: r.data?.thumbnail3d || null, createdAt: r.created_at }))
+  return (data || []).map((r) => mapPartRow(r, { light, stripSpecFiles }))
+}
+async function getPart(sb, partId) {
+  const { data, error } = await sb.from('ivs_part_catalog').select('id, data, created_at').eq('id', partId).maybeSingle()
+  if (error) throw new Error(error.message)
+  if (!data) return null
+  return mapPartRow(data, {}) // light/stripSpecFiles 둘 다 기본값(false) — fileDataUrl까지 전부 포함해서 돌려준다.
 }
 
 // 부품 하나가 여러 권에 걸쳐 쓰이는 걸 표현 — 이름·아이콘·이미지 등 "부품 자체"는 한 번만 등록하고, 어느
@@ -271,7 +301,7 @@ async function listRobotCategories(sb) {
 }
 
 const TEACHER_ACTIONS = new Set([
-  'list_parts', 'add_part', 'update_part', 'delete_part',
+  'list_parts', 'get_part', 'add_part', 'update_part', 'delete_part',
   'list_robot_categories', 'add_robot_category', 'update_robot_category', 'delete_robot_category',
   'list_textbooks', 'add_textbook', 'update_textbook', 'delete_textbook',
 ])
@@ -392,7 +422,15 @@ export async function POST(request) {
       return json({ ok: true, teachers: await listTeachers(sb) })
     }
 
-    if (body?.action === 'list_parts') return json({ parts: await listParts(sb, body.light === true) })
+    if (body?.action === 'list_parts') return json({ parts: await listParts(sb, body.light === true, body.stripSpecFiles === true) })
+
+    if (body?.action === 'get_part') {
+      const partId = body.partId
+      if (typeof partId !== 'string') return json({ error: '잘못된 요청입니다.' }, 400)
+      const part = await getPart(sb, partId)
+      if (!part) return json({ error: '부품을 찾을 수 없어요.' }, 404)
+      return json({ part })
+    }
 
     if (body?.action === 'add_part') {
       const name = String(body.name || '').trim()

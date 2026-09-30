@@ -1735,7 +1735,11 @@
     catch (err) { allParts = []; }
   }
   async function loadParts(){
-    try { renderParts((await adminApi({ action: 'list_parts' })).parts || []); }
+    // stripSpecFiles: 이 목록 화면은 has3d 여부·저장된 thumbnail3d만 보여주면 되고 3D 원본 파일
+    // (fileDataUrl, 부품마다 수백 KB~몇 MB)은 필요 없다 — 그런데도 전체를 매번 통째로 받아와서 카테고리
+    // 탭을 열 때마다 느렸다(사용자 지적: "큐보 부품리스트를 불러오는데 시간이 좀 걸리는데 최적화좀 해줘").
+    // 실제 3D를 그려야 하는 "크게 보기"는 openPartImageModal에서 get_part로 그 부품 하나만 따로 받는다.
+    try { renderParts((await adminApi({ action: 'list_parts', stripSpecFiles: true })).parts || []); }
     catch (err) { document.getElementById('partListArea').innerHTML = ''; document.getElementById('partListEmpty').hidden = false; document.getElementById('partListEmpty').textContent = err.message; }
   }
 
@@ -2387,16 +2391,38 @@
   });
   // 부품 목록 카드와 수정 폼의 "3D 모델" 미리보기가 똑같이 쓰는 모달 열기 로직 — 하나로 모아서 양쪽에서
   // 부른다(사용자 지시: "썸네일 보여주고 클릭하면 크게 보여주고").
-  function openPartImageModal(p){
+  async function openPartImageModal(p){
     const has3d = p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.length;
     // spec.shapes(3D 모델)가 있으면 svg 대신 그걸 보여준다 — 회전·줌·카메라 이동만 되는 뷰어(편집 도구
     // 없음, renderShapesPreview에 붙는 건 OrbitControls뿐)이고, svg는 그대로 DB에 남아있으니 보관된
     // 상태 그대로다(사용자 지시, 위 partRowHtml 주석 참고).
     if (has3d) {
       document.getElementById('imgModalTitle').textContent = [p.name, p.size].filter(Boolean).join(' · ');
-      document.getElementById('imgModalBody').innerHTML = '<canvas id="imgModal3dCanvas" width="600" height="600" style="width:100%;max-width:600px;aspect-ratio:1;touch-action:none;"></canvas><div class="note" style="margin-top:6px;">마우스로 드래그하면 회전, 휠로 확대/축소, 오른쪽 버튼 드래그로 이동돼요.</div>';
+      document.getElementById('imgModalBody').innerHTML = '<canvas id="imgModal3dCanvas" width="600" height="600" style="width:100%;max-width:600px;aspect-ratio:1;touch-action:none;"></canvas><div class="note" id="imgModalNote" style="margin-top:6px;">불러오는 중...</div>';
       document.getElementById('imgModalBackdrop').hidden = false;
+      // allParts는 stripSpecFiles로 받아와서(위 loadParts 참고) 'import' 도형이면 fileDataUrl이 빠져있다 —
+      // 실제로 그려야 하는 지금만 이 부품 하나를 get_part로 온전히 다시 받는다(목록 전체를 다시 무겁게
+      // 받지 않기 위함). 이미 fileDataUrl이 있으면(예: 방금 등록 직후) 다시 안 받는다.
+      const needsFull = p.spec.shapes.some((s) => s.type === 'import' && !s.fileDataUrl);
+      if (needsFull) {
+        try {
+          const full = (await adminApi({ action: 'get_part', partId: p.id })).part;
+          if (full) {
+            p = Object.assign({}, p, full);
+            const idx = allParts.findIndex((x) => x.id === p.id);
+            if (idx !== -1) allParts[idx] = p;
+          }
+        } catch (err) {
+          const noteEl = document.getElementById('imgModalNote');
+          if (noteEl) { noteEl.className = 'note err'; noteEl.textContent = '3D 모델을 못 불러왔어요: ' + err.message; }
+          return;
+        }
+      }
+      if (!document.getElementById('imgModal3dCanvas')) return; // 받아오는 사이에 모달을 닫았으면 그만둔다
+      const noteEl = document.getElementById('imgModalNote');
+      if (noteEl) noteEl.textContent = '마우스로 드래그하면 회전, 휠로 확대/축소, 오른쪽 버튼 드래그로 이동돼요.';
       const drawWhenReady = () => {
+        if (!document.getElementById('imgModal3dCanvas')) return;
         if (!window.__partsLabViewer) { setTimeout(drawWhenReady, 300); return; }
         window.__partsLabViewer.renderShapesPreview(document.getElementById('imgModal3dCanvas'), p.spec.shapes);
       };
