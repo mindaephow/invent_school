@@ -703,10 +703,20 @@
       const cat = currentCategory();
       for (let i = 1; i <= cat.volumes; i++) { const o = document.createElement('option'); o.value = i; o.textContent = i + '권'; volSel.appendChild(o); }
     }
+    // 등록된 교재의 실제 차시 수가 기본값(12)보다 많으면 그만큼 드롭다운을 늘린다(사용자 지적:
+    // "11차시까지 보이는데?" — 13개를 등록했는데 드롭다운이 고정 12개(0~11차시)로만 떠서 마지막
+    // 차시(12차시)를 아예 고를 수 없었음).
+    function sessionCountFor(categoryId, volume){
+      const tb = textbooksCache.find(t => t.subject === 'robot' && t.category === categoryId && Number(t.volume) === Number(volume));
+      return tb ? Math.max(sessionsPerVolume, tb.chapters.length) : sessionsPerVolume;
+    }
     // 사용자 지시: "0차시부터" — 준비 단계(오리엔테이션 등)를 1차시 앞에 둘 수 있게 0차시부터 시작한다.
     function fillSessions(){
+      const cur = sessionSel.value;
+      const count = sessionCountFor(currentCategory().id, Number(volSel.value));
       sessionSel.innerHTML = '';
-      for (let i = 0; i < sessionsPerVolume; i++) { const o = document.createElement('option'); o.value = i; o.textContent = i + '차시'; sessionSel.appendChild(o); }
+      for (let i = 0; i < count; i++) { const o = document.createElement('option'); o.value = i; o.textContent = i + '차시'; sessionSel.appendChild(o); }
+      if ([...sessionSel.options].some((o) => o.value === cur)) sessionSel.value = cur;
     }
     function update(){
       const cat = currentCategory();
@@ -720,11 +730,17 @@
       if (window.__renderVolumeParts) window.__renderVolumeParts(cat.id, volume);
       if (window.__refreshRequiredList) window.__refreshRequiredList(cat.id, volume, session);
     }
-    catSel.addEventListener('change', () => { fillVolumes(); update(); });
-    volSel.addEventListener('change', update);
+    catSel.addEventListener('change', () => { fillVolumes(); fillSessions(); update(); });
+    volSel.addEventListener('change', () => { fillSessions(); update(); });
     sessionSel.addEventListener('change', update);
     fillVolumes();
     fillSessions();
+    // loadTextbooksFromDb()가 (카테고리·권 드롭다운이 이미 그려진 뒤) 나중에 비동기로 끝나는 경우가
+    // 대부분이라, 그때 이 화면이 이미 "0차시"처럼 첫 옵션을 그대로 보여주고 있으면(사용자가 다른 값으로
+    // 바꾼 적이 없으면) change 이벤트가 한 번도 안 일어나서 차시 제목·차시 개수가 영영 예전 상태로
+    // 남아있었다(사용자 지적: "어디가 나와???" — 데이터는 등록돼 있는데 화면이 그걸 반영 못 함). 데이터를
+    // 다 불러온 뒤 이 함수로 강제로 한 번 더 갱신한다.
+    window.__refreshLessonFromTextbooks = () => { fillSessions(); update(); };
     picker.appendChild(catSel);
     picker.appendChild(volSel);
     picker.appendChild(sessionSel);
@@ -1362,6 +1378,9 @@
         name: r.data && r.data.name,
         chapters: (r.data && Array.isArray(r.data.chapters)) ? r.data.chapters : [],
       }));
+      // 카테고리·권 드롭다운은 이미 그려져 있고(위 renderRobotPicker), 사용자가 그 사이 값을 안 바꿨으면
+      // change 이벤트가 없어서 지금 막 불러온 데이터가 화면에 절대 반영되지 않는다 — 강제로 한 번 갱신.
+      if (window.__refreshLessonFromTextbooks) window.__refreshLessonFromTextbooks();
     } catch (err) { /* 못 불러오면 빈 상태 그대로 둔다 — 교재 없이도 화면은 그대로 동작 */ }
   }
   // (categoryId, 권, 차시)에 해당하는 차시 데이터(제목·필요 부품)를 찾는다 — 교재가 아직 없거나 그
