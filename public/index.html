@@ -1745,8 +1745,29 @@
     const m = String(name || '').match(/^(\d+)/);
     return m ? [0, Number(m[1]), name] : [1, 0, name];
   }
+  // design.html의 ROBOT_PART_GROUPS/robotPartGroupTitle과 같은 분류 — 사용자 지시: "브라켓은
+  // 브라켓끼리 모아져있어야지~~ 프레임은 프레임끼리". datalist는 <optgroup> 헤더를 못 보여주지만, 같은
+  // 갈래끼리 목록에서 이어서 나오게는 할 수 있다.
+  const PART_PICKER_GROUPS = [
+    { title: '프레임', test: (n) => n.includes('프레임') },
+    { title: '브라켓', test: (n) => n.includes('브라켓') },
+    { title: '블록', test: (n) => n.includes('블록') },
+    { title: '바퀴', test: (n) => n.includes('바퀴') },
+    { title: '기어', test: (n) => n.includes('기어') },
+    { title: '축', test: (n) => n.includes('축') },
+    { title: '모터·서보', test: (n) => n.includes('모터') || n.includes('서보') },
+    { title: '센서', test: (n) => n.includes('센서') },
+    { title: '볼트·너트·부속', test: (n) => n.includes('볼트') || n.includes('너트') || n.includes('리벳') || n.includes('부시') },
+  ];
+  function partGroupIndex(name){
+    const n = name || '';
+    const idx = PART_PICKER_GROUPS.findIndex((g) => g.test(n));
+    return idx === -1 ? PART_PICKER_GROUPS.length : idx;
+  }
   function sortPartsForPicker(list){
     return list.slice().sort((a, b) => {
+      const ga = partGroupIndex(a.name), gb = partGroupIndex(b.name);
+      if (ga !== gb) return ga - gb;
       const ka = partSortKey(a.name), kb = partSortKey(b.name);
       if (ka[0] !== kb[0]) return ka[0] - kb[0];
       if (ka[0] === 0) return ka[1] - kb[1];
