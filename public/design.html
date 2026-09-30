@@ -539,6 +539,7 @@
         <div class="view-tools">
           <button id="panToggle" type="button" aria-pressed="false" title="켜고 빈 곳을 끌면 화면이 밀려요 (마우스 오른쪽 버튼이나 손가락 두 개로도 돼요)">✋ 이동</button>
           <button id="viewHome" type="button" title="처음 화면으로">⌂ 처음</button>
+          <button id="connToggle" type="button" aria-pressed="false" hidden title="부품의 돌기(초록 원판)와 구멍(초록 고리) 연결점을 보여요">🟢 연결점</button>
           <button id="clearBtn" type="button" class="ghost" title="스케치북을 싹 비우고 새로 시작해요">🔄 초기화</button>
         </div>
         <div class="side-cards">
@@ -1438,6 +1439,39 @@
     // 그만큼 낮춰서 칠한다 — 팔레트 썸네일(조명 없이 등록된 색 그대로)과 같은 색으로 보인다.
     return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: new THREE.Color(data.color).multiplyScalar(0.72) }));
   }
+  // ----- 연결점 보기: 부품 DB(data.connectors)의 돌기·구멍을 초록색으로 표시 — 돌기는 끝에 초록 원판, 구멍은 입구에 초록 고리 -----
+  // 좌표는 3D 모델 bbox 가운데 기준이라 부품 메시(가운데 기준)의 자식으로 붙이면 부품과 함께 움직인다.
+  let showConnectors = false;
+  function decorateConnectors(part){
+    if (!part || !part.mesh) return;
+    part.mesh.children.filter(c => c.userData.connMarks).forEach(c => { part.mesh.remove(c); c.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); });
+    if (!showConnectors || !part.type || part.type.indexOf('robot:') !== 0) return;
+    const info = robotPartsCache.find(x => x.id === part.type.slice(6));
+    const c = info && info.connectors;
+    if (!c) return;
+    const g = new THREE.Group();
+    g.userData.connMarks = true;
+    const mat = () => new THREE.MeshBasicMaterial({ color: 0x22c55e, depthTest: false, transparent: true, opacity: 0.9, side: THREE.DoubleSide });
+    const place = (m, pos, dir) => { m.position.set(pos[0], pos[1], pos[2]); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(dir[0], dir[1], dir[2]).normalize()); m.renderOrder = 998; g.add(m); };
+    (c.pegs || []).forEach(p => {
+      const tip = [p.pos[0] + p.dir[0] * (p.len || 0) / 2, p.pos[1] + p.dir[1] * (p.len || 0) / 2, p.pos[2] + p.dir[2] * (p.len || 0) / 2];
+      place(new THREE.Mesh(new THREE.CircleGeometry(Math.max(1.6, (p.r || 2.5) * 0.8), 20), mat()), tip, p.dir);
+    });
+    (c.holes || []).forEach(h => {
+      const half = (h.len || 0) / 2, entrance = [h.pos[0] - h.dir[0] * half, h.pos[1] - h.dir[1] * half, h.pos[2] - h.dir[2] * half];
+      const r = Math.max(1.4, h.r || 3);
+      place(new THREE.Mesh(new THREE.RingGeometry(r * 0.8, r * 1.15, 24), mat()), entrance, h.dir);
+    });
+    part.mesh.add(g);
+  }
+  const connBtn = document.getElementById('connToggle');
+  connBtn.hidden = SUBJECT !== 'robot';
+  connBtn.addEventListener('click', () => {
+    showConnectors = !showConnectors;
+    connBtn.setAttribute('aria-pressed', String(showConnectors));
+    connBtn.classList.toggle('on', showConnectors);
+    parts.forEach(decorateConnectors);
+  });
   function swapRobotMesh(part, data){
     if (!parts.includes(part) || part.mesh.userData.robotModel) return;
     const oldMesh = part.mesh;
@@ -1449,6 +1483,7 @@
     scene.remove(oldMesh);
     scene.add(m);
     part.mesh = m;
+    decorateConnectors(part);
     if (part.userSpawn) { liftOutOfOverlap(part); part.userSpawn = false; }
     if (selected === part) updateSelectionOutline();
   }
@@ -1510,17 +1545,17 @@
       const headers = { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + accessToken };
       // spec(3D 모델 원본)은 부품 50개 합쳐 17MB라 로딩이 오래 걸리던 주범 — 설계 화면은 미리 저장된
       // thumbnail3d만 쓰므로 spec을 빼고 필요한 필드만 골라서 받는다. 이 형식이 안 통하면 예전 방식으로 대신 받는다.
-      const lightSel = 'id,name:data->>name,icon:data->>icon,category:data->>category,volumes:data->volumes,color:data->>color,size:data->>size,image_svg:data->>image_svg,image_svg_diagonal:data->>image_svg_diagonal,primary_image:data->>primary_image,thumbnail3d:data->>thumbnail3d';
+      const lightSel = 'id,name:data->>name,icon:data->>icon,category:data->>category,volumes:data->volumes,color:data->>color,size:data->>size,image_svg:data->>image_svg,image_svg_diagonal:data->>image_svg_diagonal,primary_image:data->>primary_image,thumbnail3d:data->>thumbnail3d,connectors:data->connectors';
       let rows;
       let res = await fetch(`${SUPABASE_URL}/rest/v1/ivs_part_catalog?select=${encodeURIComponent(lightSel)}&data->>subject=eq.robot`, { headers });
       if (res.ok) {
-        rows = (await res.json() || []).map(r => ({ id: r.id, data: { name: r.name, icon: r.icon, category: r.category, volumes: r.volumes, color: r.color, size: r.size, image_svg: r.image_svg, image_svg_diagonal: r.image_svg_diagonal, primary_image: r.primary_image, thumbnail3d: r.thumbnail3d } }));
+        rows = (await res.json() || []).map(r => ({ id: r.id, data: { name: r.name, icon: r.icon, category: r.category, volumes: r.volumes, color: r.color, size: r.size, image_svg: r.image_svg, image_svg_diagonal: r.image_svg_diagonal, primary_image: r.primary_image, thumbnail3d: r.thumbnail3d, connectors: r.connectors } }));
       } else {
         res = await fetch(`${SUPABASE_URL}/rest/v1/ivs_part_catalog?select=id,data&data->>subject=eq.robot`, { headers });
         if (!res.ok) return;
         rows = await res.json();
       }
-      robotPartsCache = (rows || []).map(r => ({ id: r.id, name: r.data && r.data.name, icon: r.data && r.data.icon, category: r.data && r.data.category, volumes: (r.data && Array.isArray(r.data.volumes)) ? r.data.volumes : [], color: r.data && r.data.color, size: r.data && r.data.size, imageSvg: r.data && r.data.image_svg, imageSvgDiagonal: r.data && r.data.image_svg_diagonal, primaryImage: r.data && r.data.primary_image, spec: r.data && r.data.spec, thumbnail3d: r.data && r.data.thumbnail3d }));
+      robotPartsCache = (rows || []).map(r => ({ id: r.id, name: r.data && r.data.name, icon: r.data && r.data.icon, category: r.data && r.data.category, volumes: (r.data && Array.isArray(r.data.volumes)) ? r.data.volumes : [], color: r.data && r.data.color, size: r.data && r.data.size, imageSvg: r.data && r.data.image_svg, imageSvgDiagonal: r.data && r.data.image_svg_diagonal, primaryImage: r.data && r.data.primary_image, spec: r.data && r.data.spec, thumbnail3d: r.data && r.data.thumbnail3d, connectors: r.data && r.data.connectors }));
       // 저장된 프로젝트를 불러올 때 restoreParts가 즉시 PART_DEFS를 찾을 수 있도록, 화면에 아직 안 띄운 권까지 전부 미리 등록해 둔다.
       robotPartsCache.forEach(registerRobotPartDef);
       await textbooksPromise;
