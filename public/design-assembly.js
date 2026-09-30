@@ -33,6 +33,29 @@
     return { list, missing };
   }
 
+  // 1, 2, 3 … 단계 번호 버튼 — 눌러서 그 단계로 바로 가고, 지금 단계는 진하게 보인다.
+  function buildStepButtons() {
+    const box = $('asmSteps');
+    box.innerHTML = '';
+    for (let i = 1; i <= total(); i++) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.dataset.step = String(i);
+      b.textContent = String(i);
+      b.title = i + '단계: ' + (def.steps[i - 1].note || '');
+      b.style.cssText = 'min-width:32px; padding:5px 0; font-size:13px;';
+      box.appendChild(b);
+    }
+  }
+  function markStepButtons() {
+    document.querySelectorAll('#asmSteps button').forEach((b) => {
+      const n = Number(b.dataset.step);
+      const cur = n === step;
+      b.className = cur ? 'primary' : 'ghost';
+      b.style.opacity = n < step ? '0.75' : '1'; // 이미 지나온 단계는 살짝 연하게
+      b.setAttribute('aria-current', cur ? 'step' : 'false');
+    });
+  }
   function render() {
     const b = bridge();
     const { list, missing } = buildList(step);
@@ -43,6 +66,7 @@
     $('asmLabel').textContent = step === 0 ? '시작 전' : (step === n ? '완성!' : step + ' / ' + n + ' 단계');
     $('asmNote').textContent = step === 0 ? '빈 판에서 시작해요. ▶ 를 눌러 한 단계씩 만들어 봐요.' : (def.steps[step - 1].note || '');
     $('asmSlider').value = String(step);
+    markStepButtons();
     $('asmFirst').disabled = $('asmPrev').disabled = step === 0;
     $('asmNext').disabled = $('asmLast').disabled = step === n;
     if (missing.length) $('asmNote').textContent += ' (부품을 못 찾았어요: ' + missing.join(', ') + ')';
@@ -92,6 +116,7 @@
     $('asmBar').hidden = false;
     $('asmOpen').hidden = true;
     $('asmSlider').max = String(total());
+    buildStepButtons();
     go(total()); // 처음엔 완성된 모습부터 보여준다
     b.status('조립 보기 중이에요. 닫으면 하던 작업으로 돌아가요.', 'success');
   }
@@ -118,6 +143,10 @@
     $('asmPlay').addEventListener('click', () => play(1));
     $('asmReverse').addEventListener('click', () => play(-1));
     $('asmSlider').addEventListener('input', (e) => { stop(); go(Number(e.target.value)); });
+    $('asmSteps').addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-step]');
+      if (b) { stop(); go(Number(b.dataset.step)); }
+    });
   });
 
   // 차시 카드에서 카테고리·권·차시를 바꿀 때마다 design.html이 알려준다 — 맞는 조립 데이터가 있을 때만 버튼을 보여준다.
