@@ -430,6 +430,7 @@
           <div id="assemblyBox" hidden style="margin:8px 0;">
             <h3 style="margin:0 0 4px;">조립 순서</h3>
             <ol id="asmOrderList" style="list-style:none; margin:0 0 8px; padding:0; display:flex; flex-direction:column; gap:2px; font-size:12.5px; line-height:1.35;"></ol>
+            <div id="asmSteps" style="display:flex; flex-wrap:wrap; gap:4px; margin:0 0 8px;" aria-label="단계 바로가기"></div>
             <button id="asmOpen" class="primary" type="button">🧩 조립 보기</button>
             <details id="asmRulesBox" style="margin-top:6px;">
               <summary style="cursor:pointer; font-size:13px; font-weight:700;">📖 큐보 조립 방식</summary>
@@ -448,7 +449,6 @@
                 <button id="asmReverse" class="ghost" type="button" style="flex:1;">◀ 역재생</button>
                 <button id="asmPlay" class="ghost" type="button" style="flex:1;">▶ 재생</button>
               </div>
-              <div id="asmSteps" style="display:flex; flex-wrap:wrap; gap:4px;" aria-label="단계 바로가기"></div>
               <p id="asmNote" class="note" style="margin:0;"></p>
             </div>
           </div>
@@ -802,6 +802,9 @@
     // 로봇은 미션 대신 "조립 순서"를 보여준다(사용자 지시: 미션 삭제, 조립순서 보이게)
     card.querySelector('.lesson-mission').hidden = true;
     document.getElementById('lessonMissionHead').hidden = true;
+    // "따라하기"(골드버그 따라 놓기 연습)도 로봇엔 없다(사용자 지시: 따라하기 삭제)
+    card.querySelector('.lesson-steps-head').style.display = 'none';
+    card.querySelector('.lesson-steps').style.display = 'none';
     card.querySelector('.lesson-steps').innerHTML = '';
     update();
   }

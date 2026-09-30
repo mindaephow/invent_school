@@ -214,9 +214,13 @@
       const b = e.target.closest('button[data-step]');
       if (b) { stop(); go(Number(b.dataset.step)); }
     });
-    $('asmSteps').addEventListener('click', (e) => {
+    $('asmSteps').addEventListener('click', async (e) => {
       const b = e.target.closest('button[data-step]');
-      if (b) { stop(); go(Number(b.dataset.step)); }
+      if (!b) return;
+      stop();
+      const n = Number(b.dataset.step);
+      if (!viewing) await open();
+      if (viewing) go(n);
     });
   });
 
@@ -232,6 +236,7 @@
       catId = found ? cat.id : null;
       box.hidden = !found;
       buildOrderList();
+      if (def) buildStepButtons(); // 번호 줄도 조립 보기를 열기 전부터 보인다
       $('asmRules').innerHTML = (window.IVS_ASSEMBLY_RULES || []).map((r) => '<li>' + r + '</li>').join('');
       if (!viewing) $('asmOpen').hidden = !found;
     },
