@@ -15,7 +15,6 @@
   let snapshot = null;   // 조립 보기 들어가기 전 작업(닫으면 그대로 되돌린다)
   let timer = null;      // setInterval 번호
   let timerDir = 0;      // 자동재생 방향(1 앞으로, -1 뒤로, 0 멈춤)
-  let vertical = false;  // 부품을 끌 때 위아래로 움직이는 모드인지(아니면 옆으로)
 
   function bridge() { return window.__ivsAssemblyBridge; }
   function total() { return def ? def.steps.length : 0; }
@@ -169,12 +168,6 @@
       if (r === 'none') bridge().status('먼저 끼울 부품을 눌러서 고르세요.', 'warn');
       else if (r === 'notTarget') bridge().status('이 부품은 이번 단계에서 끼우는 부품이 아니에요. 떠 있는 부품을 눌러 보세요.', 'warn');
     });
-    $('asmMoveMode').addEventListener('click', () => {
-      vertical = !vertical;
-      $('asmMoveMode').textContent = vertical ? '↕ 위아래로 움직이기' : '↔ 옆으로 움직이기';
-      $('asmMoveMode').setAttribute('aria-pressed', String(vertical));
-      $('asmMoveMode').className = vertical ? 'primary' : 'ghost';
-    });
     $('asmReset').addEventListener('click', () => { stop(); go(step); });
     $('asmSteps').addEventListener('click', (e) => {
       const b = e.target.closest('button[data-step]');
@@ -197,6 +190,5 @@
       if (!viewing) $('asmOpen').hidden = !found;
     },
     isViewing() { return viewing; },
-    moveVertical() { return vertical; },
   };
 })();

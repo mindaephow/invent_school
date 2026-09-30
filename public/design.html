@@ -439,12 +439,6 @@
                 <button id="asmReverse" class="ghost" type="button" style="flex:1;">◀ 역재생</button>
                 <button id="asmPlay" class="ghost" type="button" style="flex:1;">▶ 재생</button>
               </div>
-              <button id="asmCombine" class="primary" type="button" title="끼울 부품을 눌러 고른 뒤 누르면 그 부품이 제자리 구멍으로 가서 딱 붙어요">🔗 결합</button>
-              <div style="display:flex; gap:4px;">
-                <button id="asmMoveMode" class="ghost" type="button" style="flex:1;" aria-pressed="false" title="부품을 끌 때 옆으로 움직일지 위아래로 움직일지">↔ 옆으로 움직이기</button>
-                <button id="asmReset" class="ghost" type="button" style="flex:1;" title="움직인 부품을 이 단계의 처음 자리로">↺ 원위치</button>
-              </div>
-              <p class="note" style="margin:0;">부품을 눌러 끌면 움직여요(저장되지 않아요). 제자리에 가까워지면 딱 붙어요.</p>
               <div id="asmSteps" style="display:flex; flex-wrap:wrap; gap:4px;" aria-label="단계 바로가기"></div>
               <p id="asmNote" class="note" style="margin:0;"></p>
             </div>
@@ -570,6 +564,13 @@
         <div class="modal-head" id="modalHead">
           <p><span class="drag-handle">⠿</span>선택한 부품: <span id="selectedLabel"></span></p>
           <button id="closeSelected" class="ghost">✕</button>
+        </div>
+        <div id="asmDemoBlock" hidden>
+          <div style="display:flex; flex-direction:column; gap:6px; margin:6px 0 8px;">
+            <button id="asmCombine" class="primary" type="button" title="이 부품이 제자리 구멍으로 가서 딱 붙어요">🔗 결합</button>
+            <button id="asmReset" class="ghost" type="button" title="움직인 부품을 이 단계의 처음 자리로">↺ 원위치</button>
+            <p class="note" style="margin:0;">부품을 끌어서 움직여요(저장되지 않아요). 제자리에 가까워지면 딱 붙어요.</p>
+          </div>
         </div>
         <div class="mount-select" id="selectedMountSelect" role="group" aria-label="설치 위치 변경">
           <button type="button" class="mount-btn" data-mount="floor">바닥</button>
@@ -2401,8 +2402,9 @@
     syncAxisButtons();
     selected = p;
     const demoMode = !!(window.__ivsAssembly && window.__ivsAssembly.isViewing()); // 조립 보기 시연 중엔 부품 창 없이 끌어서 움직인다
-    selectedControls.hidden = !p || demoMode;
-    modalBackdrop.hidden = !p || demoMode;
+    selectedControls.hidden = !p;
+    modalBackdrop.hidden = !p || demoMode; // 조립 보기에선 뒷배경을 깔지 않아 부품을 계속 끌 수 있다
+    document.getElementById('asmDemoBlock').hidden = !demoMode; // 🔗 결합·움직임 방식·원위치는 이 창 안에
     if (p) {
       selectedLabel.textContent = p.isGroup ? `${p.set.label} 전체 · 부품 ${p.members.length}개` : `${PART_DEFS[p.type].label} · ${MOUNT_LABEL[p.mount]}`;
       const baseMount = p.mount.startsWith('wall') ? 'wall' : p.mount;
@@ -3559,14 +3561,7 @@
       const prev = { x: p0.x, y: p0.y, z: p0.z };
       const hit = new THREE.Vector3();
       const g = 2.5;
-      if (window.__ivsAssembly.moveVertical()) {
-        // 위아래: 카메라가 보는 방향(수평)에 수직인 세로 평면과 만나는 높이로 옮긴다
-        const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); fwd.y = 0;
-        if (fwd.lengthSq() < 1e-6) return;
-        const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(fwd.normalize(), new THREE.Vector3(p0.x, p0.y, p0.z));
-        if (!raycaster.ray.intersectPlane(plane, hit)) return;
-        p0.set(p0.x, Math.max(6, Math.round(hit.y)), p0.z);
-      } else {
+      {
         const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -p0.y);
         if (!raycaster.ray.intersectPlane(plane, hit)) return;
         p0.set(Math.round(hit.x / g) * g, p0.y, Math.round(hit.z / g) * g);
