@@ -3920,6 +3920,7 @@
   // 화면을 닫는 중에도 보낼 수 있도록 fetch keepalive PATCH 한 가지 경로만 쓴다
   // 저장 요청이 겹쳐도 한 번에 하나씩 (새 설계가 두 번 만들어지는 것을 막는다)
   // 조립 보기(design-assembly.js)가 쓰는 연결부 — 부품을 놓고·강조하고·카메라를 옮기는 것만 열어준다.
+  let assemblyGuideGroup = null; // 조립 보기의 초록 화살표·구멍 원 묶음
   window.__ivsAssemblyBridge = {
     resolve(name, categoryId){
       const p = robotPartsCache.find(x => x.name === name && (!categoryId || x.category === categoryId));
@@ -3935,12 +3936,38 @@
         part.mesh.traverse(o => { if (o.material && o.material.color && o.isMesh) o.material.color.set(hex); });
       });
     },
+    // 교재 그림의 초록 화살표+구멍 원: { from, to, dir }마다 from→to 화살표와 to에 원(꽂는 구멍 자리)을 그린다.
+    guides(list){
+      if (assemblyGuideGroup) { scene.remove(assemblyGuideGroup); assemblyGuideGroup.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); assemblyGuideGroup = null; }
+      if (!list || !list.length) return;
+      const g = new THREE.Group();
+      const mat = () => new THREE.MeshBasicMaterial({ color: 0x22c55e, depthTest: false, transparent: true });
+      list.forEach(({ from, to }) => {
+        const a = new THREE.Vector3(from[0], from[1], from[2]), b = new THREE.Vector3(to[0], to[1], to[2]);
+        const v = b.clone().sub(a), len = v.length();
+        if (len < 1) return;
+        const dir = v.clone().normalize();
+        const HEAD = 6;
+        const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, Math.max(len - HEAD, 0.1), 8), mat());
+        shaft.position.copy(a).addScaledVector(dir, (len - HEAD) / 2);
+        shaft.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+        const head = new THREE.Mesh(new THREE.ConeGeometry(2.6, HEAD, 12), mat());
+        head.position.copy(b).addScaledVector(dir, -HEAD / 2);
+        head.quaternion.copy(shaft.quaternion);
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(4.8, 0.8, 8, 28), mat());
+        ring.position.copy(b);
+        ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
+        [shaft, head, ring].forEach(m => { m.renderOrder = 999; g.add(m); });
+      });
+      scene.add(g);
+      assemblyGuideGroup = g;
+    },
     highlight(indices){
       indices.forEach(i => {
         const part = parts[i];
         if (!part || !part.mesh) return;
         part.mesh.traverse(o => {
-          (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { if (m && m.emissive) m.emissive.setHex(0x6a4300); });
+          (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { if (m && m.emissive) m.emissive.setHex(0x0b2447); });
         });
       });
     },
