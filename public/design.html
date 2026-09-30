@@ -4220,6 +4220,8 @@
       target.set((min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2);
       orbit.radius = Math.min(Math.max(diag * 1.25, 80), MAX_RADIUS);
     },
+    // 보는 방향(가로 회전)만 바꾼다 — 벽이 반대편에 있는 단계를 앞에서 볼 때 쓴다
+    turn(theta){ orbit.theta = theta; },
     setViewing(){},
     status(text, kind){ setStatus(text, kind); },
   };
