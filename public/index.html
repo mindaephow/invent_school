@@ -1812,12 +1812,22 @@
     const { data } = db.client.storage.from('textbook-files').getPublicUrl(path);
     return { fileUrl: data.publicUrl, fileName: file.name };
   }
+  // 엑셀·워드·파워포인트는 브라우저 자체에 뷰어가 없어서 그냥 링크를 열면 다운로드만 되고 "열어볼" 수는
+  // 없다(사용자 지적: "엑셀이나 다른 파일은 못보나?? 기능이 없어?") — 이건 우리 코드 문제가 아니라
+  // 브라우저의 원천적 한계라, 마이크로소프트 오피스 온라인 뷰어(공개 URL이면 누구나 무료로 쓸 수 있는
+  // iframe 미리보기 서비스)로 우회해서 그 파일 형식만 이 뷰어 주소로 열어준다. PDF·이미지는 브라우저가
+  // 이미 볼 수 있으니 그대로 원본 링크를 연다.
+  const OFFICE_VIEWABLE_EXT = ['xlsx', 'xls', 'csv', 'docx', 'doc', 'pptx', 'ppt'];
+  function fileViewUrl(fileUrl, fileName){
+    const ext = ((fileName || fileUrl).split('.').pop() || '').toLowerCase();
+    if (OFFICE_VIEWABLE_EXT.includes(ext)) return 'https://view.officeapps.live.com/op/view.aspx?src=' + encodeURIComponent(fileUrl);
+    return fileUrl;
+  }
   function fileAttachHtml(fileUrl, fileName, uploadAttr, removeAttr){
     // download 속성을 넣으면 PDF도 미리보기 없이 무조건 다운로드부터 되어서 "열어볼 수 있냐"는 질문이
     // 나왔다 — target="_blank"만 두면 PDF는 새 탭에서 바로 열려 보이고(브라우저 자체 뷰어), 그 화면
-    // 안에서도 다운로드할 수 있어 "열기"·"다운로드" 둘 다 된다. 엑셀처럼 브라우저가 못 여는 파일은
-    // 어차피 그대로 다운로드된다.
-    if (fileUrl) return `<a href="${escapeHtml(fileUrl)}" target="_blank" rel="noopener" style="font-size:12px;">📎 ${escapeHtml(fileName || '열기')}</a><button type="button" class="ghost" ${removeAttr}="1" style="font-size:11px;">삭제</button>`;
+    // 안에서도 다운로드할 수 있어 "열기"·"다운로드" 둘 다 된다.
+    if (fileUrl) return `<a href="${escapeHtml(fileViewUrl(fileUrl, fileName))}" target="_blank" rel="noopener" style="font-size:12px;">📎 ${escapeHtml(fileName || '열기')}</a><button type="button" class="ghost" ${removeAttr}="1" style="font-size:11px;">삭제</button>`;
     return `<button type="button" class="ghost" ${uploadAttr}="1" style="font-size:11px;">📎 파일 업로드(PDF·엑셀)</button>`;
   }
   function chapterRowHtml(tb, c, i){
