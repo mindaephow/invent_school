@@ -153,7 +153,11 @@ window.__buildConnectorFor = async function (name, id, env) {
   else if (/도 프레임/.test(name)) { pegs = []; note = '꺾인 프레임 — 구멍 위치는 자동 탐지(확인 필요).'; }
   else if (name === '리벳') { holes = []; pegs = [{ id: 'p1', pos: [0, -3, 0], dir: [0, -1, 0], len: 3, r: 3.2 }, { id: 'p2', pos: [0, 3, 0], dir: [0, 1, 0], len: 3, r: 3.2 }]; conf = 'checked'; note = '양 끝이 같은 체결 핀(축 y, 길이 9): 겹친 두 프레임(또는 부품) 구멍을 관통해 고정한다.'; }
   else if (name === '부시') { pegs = []; note = '스페이서. 가운데 구멍에 T축이 지나간다.'; }
-  else if (name === 'T축' || name === '축') { pegs = []; holes = []; note = '십자 단면 축. 기어·바퀴·부시의 가운데 구멍을 지나간다.' + (name === 'T축' ? ' 둥근 덮개가 모델 위(+y) 끝 — 기어 윗면과 같은 높이에 온다.' : ''); }
+  else if (name === 'T축' || name === '축') {
+    // 십자 단면 축은 원통 탐지가 못 잡으므로, 축 전체를 "긴 돌기 하나"로 기록한다 — 지나가는 기어·부시·프레임의 가운데 구멍마다 결합으로 센다.
+    holes = []; pegs = [{ id: 'p1', pos: [0, 0, 0], dir: [0, 1, 0], len: name === 'T축' ? 30 : 65, r: 3.5 }];
+    note = '십자 단면 축(축 y, 길이 ' + (name === 'T축' ? 30 : 65) + '). 축 전체를 긴 돌기 하나로 기록: 기어·바퀴·부시의 가운데 구멍을 지나간다.' + (name === 'T축' ? ' 둥근 덮개가 모델 위(+y) 끝 — 기어 윗면과 같은 높이에 온다.' : '');
+  }
   else if (/브라켓/.test(name)) { pegs = []; note = 'ㄴ자: 바닥 팔(y 0~5)과 세로 팔(z −15~−10). 구멍 위치는 자동 탐지(확인 필요).'; }
   else note = '자동 탐지 — 확인 필요.';
   const re = (a) => a.map(({ id, pos, dir, len, r, through }) => { const o = { id, pos, dir }; if (len != null) o.len = len; if (r != null) o.r = r; if (through != null) o.through = through; return o; });
