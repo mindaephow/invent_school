@@ -411,7 +411,8 @@
       </div>
       <div class="crumbs" id="partCategoryTabs" hidden style="margin-top:6px;"></div>
       <div style="display:flex; align-items:center; gap:8px; margin:8px 0;">
-        <button type="button" class="ghost" id="regenThumbsBtn">🔄 3D 썸네일 다시 그리기</button>
+        <button type="button" class="ghost" id="regenMissingThumbsBtn">🖼 안 그려진 것만 그리기</button>
+        <button type="button" class="ghost" id="regenThumbsBtn">🔄 3D 썸네일 전체 다시 그리기</button>
         <span class="note" id="regenThumbsMsg" style="margin:0;"></span>
       </div>
       <div class="list" id="partListArea"></div>
@@ -1703,13 +1704,15 @@
   // 있는 부품 전부를 최신 렌더링 로직으로 다시 그려서 thumbnail3d만 갱신한다. update_part는 body에
   // 안 담아 보낸 필드(spec 등)는 기존 값을 그대로 유지하지만, image_svg 등 몇몇 필드는 안 보내면 빈 값으로
   // 덮어써지므로 allParts에 이미 있는 값을 전부 그대로 다시 실어 보낸다(사용자 데이터 유실 방지).
-  document.getElementById('regenThumbsBtn').addEventListener('click', async () => {
+  // onlyMissing: 저장된 thumbnail3d가 아직 없는 부품만 그린다(사용자 지시: "매번 다 그리지 말고 안그려진것만").
+  async function regenThumbs(onlyMissing){
     const msg = document.getElementById('regenThumbsMsg');
     const btn = document.getElementById('regenThumbsBtn');
-    const targets = allParts.filter((p) => p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.length);
-    if (!targets.length) { msg.textContent = '3D 모델이 있는 부품이 없어요.'; return; }
+    const btn2 = document.getElementById('regenMissingThumbsBtn');
+    const targets = allParts.filter((p) => p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.length && (!onlyMissing || !p.thumbnail3d));
+    if (!targets.length) { msg.textContent = onlyMissing ? '안 그려진 부품이 없어요.' : '3D 모델이 있는 부품이 없어요.'; return; }
     if (!window.__partsLabViewer) { msg.textContent = '3D 모듈이 아직 로딩 중이에요 — 잠시 후 다시 시도해주세요.'; return; }
-    btn.disabled = true;
+    btn.disabled = true; btn2.disabled = true;
     let done = 0, failed = 0;
     for (const p of targets) {
       msg.textContent = `다시 그리는 중... (${done + failed + 1}/${targets.length})`;
@@ -1733,9 +1736,11 @@
       } catch (e) { failed++; console.error('썸네일 재생성 실패: ' + p.name, e); }
     }
     msg.textContent = `완료 — ${done}개 갱신${failed ? `, ${failed}개 실패` : ''}.`;
-    btn.disabled = false;
+    btn.disabled = false; btn2.disabled = false;
     loadParts();
-  });
+  }
+  document.getElementById('regenThumbsBtn').addEventListener('click', () => regenThumbs(false));
+  document.getElementById('regenMissingThumbsBtn').addEventListener('click', () => regenThumbs(true));
   // 교재관리 탭용 — 이름·과목만 받아서(SVG/스냅샷 제외) 빠르게 allParts만 채운다. 부품 탭은 열 때마다
   // loadParts로 전체를 다시 받으니 여기서 가벼운 목록으로 덮어써도 문제없다.
   async function loadPartsLite(){
