@@ -483,6 +483,7 @@
             <button type="button" id="quickAddPartSelect" style="min-width:150px; max-width:200px; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">부품 선택 ▾</button>
             <div id="quickAddPartPanel" hidden style="position:absolute; z-index:50; top:100%; left:0; margin-top:4px; width:360px; max-width:90vw; background:#fff; border:1px solid #ccd; border-radius:10px; box-shadow:0 6px 20px rgba(0,0,0,.18); padding:8px;">
               <input type="text" id="quickAddPartSearch" placeholder="🔍 부품 이름 검색" autocomplete="off" style="width:100%; box-sizing:border-box;">
+              <label class="item-sub" style="display:flex; align-items:center; gap:4px; margin:6px 0 0; cursor:pointer;"><input type="checkbox" id="quickAddShowAll"> 다른 권·카테고리 부품도 보기</label>
               <div id="quickAddPartTabs" style="display:flex; flex-wrap:wrap; gap:4px; margin:6px 0;"></div>
               <div id="quickAddPartChips" style="display:flex; flex-wrap:wrap; gap:5px; max-height:240px; overflow-y:auto;"></div>
             </div>
@@ -1751,6 +1752,8 @@
   let selectedTextbookId = null;
   let quickAddPartsByName = new Map();
   let quickAddParts = [];
+  let quickAddPartsAll = [];
+  let quickAddShowAll = false;
   let quickAddPartPickedName = '';
   let quickAddPartTab = '전체';
   // 사용자 지시: "부품리스트를 숫자들 부품을 위쪽으로 먼저 표시 그다음 ㄱㄴㄷㄹ, abcd 순서로" — 이름이
@@ -1961,12 +1964,13 @@
     const q = document.getElementById('quickAddPartSearch').value.trim().toLowerCase();
     const groupTitles = PART_PICKER_GROUPS.map((g) => g.title).concat(['기타']);
     const groupOf = (name) => { const i = partGroupIndex(name); return i >= PART_PICKER_GROUPS.length ? '기타' : PART_PICKER_GROUPS[i].title; };
-    const present = new Set(quickAddParts.map((p) => groupOf(p.name)));
+    const source = quickAddShowAll ? quickAddPartsAll : quickAddParts;
+    const present = new Set(source.map((p) => groupOf(p.name)));
     const tabs = ['전체'].concat(groupTitles.filter((t) => present.has(t)));
     if (!tabs.includes(quickAddPartTab)) quickAddPartTab = '전체';
     const tabBtn = (t) => `<button type="button" data-qa-tab="${escapeHtml(t)}" class="${t === quickAddPartTab ? 'primary' : 'ghost'}" style="padding:2px 9px; font-size:12px;">${escapeHtml(t)}</button>`;
     document.getElementById('quickAddPartTabs').innerHTML = tabs.map(tabBtn).join('');
-    const list = quickAddParts.filter((p) => (quickAddPartTab === '전체' || groupOf(p.name) === quickAddPartTab) && (!q || String(p.name).toLowerCase().includes(q)));
+    const list = source.filter((p) => (quickAddPartTab === '전체' || groupOf(p.name) === quickAddPartTab) && (!q || String(p.name).toLowerCase().includes(q)));
     document.getElementById('quickAddPartChips').innerHTML = list.length
       ? list.map((p) => `<button type="button" data-qa-part="${escapeHtml(p.name)}" class="ghost" style="padding:3px 9px; font-size:12px;${p.name === quickAddPartPickedName ? ' outline:2px solid #2b6be0;' : ''}">${escapeHtml(p.name)}</button>`).join('')
       : '<span class="item-sub">일치하는 부품이 없어요.</span>';
@@ -1978,11 +1982,14 @@
     const search = document.getElementById('quickAddPartSearch');
     search.value = '';
     quickAddPartTab = '전체';
+    quickAddShowAll = false;
+    document.getElementById('quickAddShowAll').checked = false;
     renderQuickAddPartPanel();
     panel.hidden = false;
     search.focus();
   });
   document.getElementById('quickAddPartSearch').addEventListener('input', renderQuickAddPartPanel);
+  document.getElementById('quickAddShowAll').addEventListener('change', (e) => { quickAddShowAll = e.target.checked; renderQuickAddPartPanel(); });
   document.getElementById('quickAddPartSearch').addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeQuickAddPartPanel();
     if (e.key === 'Enter') { e.preventDefault(); const first = document.querySelector('#quickAddPartChips [data-qa-part]'); if (first) first.click(); }
@@ -2003,8 +2010,14 @@
     // (사용자 지시: "부품검색도 가능하게"). 고른 이름은 datalist의 옵션 텍스트일 뿐이라, 실제 저장에
     // 쓰는 partId는 이름→id 맵(quickAddPartsByName)으로 따로 찾는다.
     const sortedParts = sortPartsForPicker(allParts.filter((p) => p.subject === tb.subject));
+    // 사용자 지시: "해당꺼만 나와야하는데" — 이 교재의 카테고리·권에 등록된 부품(카테고리/권을 안 정한
+    // 공통 부품 포함)만 보여준다. 카테고리·권 정보가 없는 교재는 과목 전체.
+    const relevant = sortedParts.filter((p) =>
+      (!tb.category || !p.category || p.category === tb.category) &&
+      (tb.volume == null || !Array.isArray(p.volumes) || !p.volumes.length || p.volumes.some((v) => Number(v.volume) === Number(tb.volume))));
+    quickAddPartsAll = sortedParts;
     quickAddPartsByName = new Map(sortedParts.map((p) => [p.name, p.id]));
-    quickAddParts = sortedParts;
+    quickAddParts = relevant;
     if (!quickAddPartsByName.has(quickAddPartPickedName)) {
       quickAddPartPickedName = '';
       document.getElementById('quickAddPartSelect').textContent = '부품 선택 ▾';
