@@ -260,9 +260,23 @@ function mapPartRow(r, { light = false, stripSpecFiles = false } = {}) {
   return Object.assign(base, { imageSvg: r.data?.image_svg || '', imageSvgDiagonal: r.data?.image_svg_diagonal || '', primaryImage: r.data?.primary_image === 'diagonal' ? 'diagonal' : 'front', spec, snapshot: r.data?.snapshot || null, snapshots: r.data?.snapshots || null, thumbnail3d: r.data?.thumbnail3d || null })
 }
 async function listParts(sb, light = false, stripSpecFiles = false) {
+  // light·stripSpecFiles 목록은 spec(3D 원본, 부품 50개 합쳐 24MB)이 필요 없다 — data 통째로 읽으면 응답은 작아도
+  // DB→서버로 24MB가 넘어와서 목록이 3초 넘게 걸렸다(실측: 필요한 열만 읽으면 367KB). 그래서 DB에서 필요한
+  // 항목만 골라 읽고, spec은 "3D 모양 있음" 표시(첫 도형의 type)만 받는다. 실제 도형은 get_part로 따로 받는다.
+  if (light || stripSpecFiles) {
+    const base = 'id, created_at, name:data->>name, icon:data->>icon, subject:data->>subject, category:data->>category, volumes:data->volumes, color:data->>color, size:data->>size'
+    const extra = ', image_svg:data->>image_svg, image_svg_diagonal:data->>image_svg_diagonal, primary_image:data->>primary_image, snapshot:data->snapshot, snapshots:data->snapshots, thumbnail3d:data->thumbnail3d, spec_type:data->spec->shapes->0->>type'
+    const { data, error } = await sb.from('ivs_part_catalog').select(light ? base : base + extra).order('created_at', { ascending: true })
+    if (error) throw new Error(error.message)
+    return (data || []).map((r) => {
+      const out = { id: r.id, name: r.name || '', icon: r.icon || '', subject: r.subject || '', category: r.category || '', volumes: Array.isArray(r.volumes) ? r.volumes : [], color: r.color || '', size: r.size || '', createdAt: r.created_at }
+      if (light) return out
+      return Object.assign(out, { imageSvg: r.image_svg || '', imageSvgDiagonal: r.image_svg_diagonal || '', primaryImage: r.primary_image === 'diagonal' ? 'diagonal' : 'front', spec: r.spec_type ? { shapes: [{ type: r.spec_type }], partial: true } : null, snapshot: r.snapshot || null, snapshots: r.snapshots || null, thumbnail3d: r.thumbnail3d || null })
+    })
+  }
   const { data, error } = await sb.from('ivs_part_catalog').select('id, data, created_at').order('created_at', { ascending: true })
   if (error) throw new Error(error.message)
-  return (data || []).map((r) => mapPartRow(r, { light, stripSpecFiles }))
+  return (data || []).map((r) => mapPartRow(r, {}))
 }
 async function getPart(sb, partId) {
   const { data, error } = await sb.from('ivs_part_catalog').select('id, data, created_at').eq('id', partId).maybeSingle()

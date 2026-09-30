@@ -1676,6 +1676,20 @@
   // spec.shapes가 있는 부품의 목록 썸네일을 실제 3D 렌더로 채운다. renderParts()가 다시 불릴 때마다
   // 매번 새로 그리므로(권 탭 전환 등으로 자주 재호출됨) 화면에 남아있는 칸만 골라서 순서대로 채우고,
   // parts-lab-viewer.js가 아직 안 떴으면(모듈 로딩 중) 잠깐 기다렸다 재시도한다.
+  // 목록은 spec을 "3D 모양이 있다는 표시"(partial)만 받아온다 — 실제 도형·3D 원본은 필요한 부품 하나씩만
+  // get_part로 받고 partFullCache에 보관한다. 원본이 빠진 채 그리면 기본 큐브가 나오므로 항상 이 함수로 얻는다.
+  async function getPartShapes(p){
+    const incomplete = p.spec.partial || p.spec.shapes.some((s) => s.type === 'import' && !s.fileDataUrl);
+    if (!incomplete) return p.spec.shapes;
+    let full = partFullCache.get(p.id);
+    if (!full) {
+      full = (await adminApi({ action: 'get_part', partId: p.id })).part;
+      if (full) partFullCache.set(p.id, full);
+    }
+    const shapes = full && full.spec && Array.isArray(full.spec.shapes) ? full.spec.shapes : null;
+    if (!shapes || shapes.some((s) => s.type === 'import' && !s.fileDataUrl)) throw new Error('3D 원본 파일을 받지 못했어요');
+    return shapes;
+  }
   async function renderPart3DThumbnails(){
     const btns = Array.from(document.querySelectorAll('[data-thumb-3d]'));
     if (!btns.length) return;
@@ -1688,7 +1702,7 @@
       const p = allParts.find((x) => x.id === partId);
       if (!p || !document.body.contains(btn)) continue;
       try {
-        const dataUrl = await window.__partsLabViewer.renderShapesThumbnail(p.spec.shapes, 88);
+        const dataUrl = await window.__partsLabViewer.renderShapesThumbnail(await getPartShapes(p), 88);
         // await 하는 동안(큰 STL일수록 오래 걸림) 사용자가 다른 탭을 눌러서 renderParts()가 다시 불리면
         // 이 btn은 이미 문서에서 떨어져나간 헌 요소라 여기 값을 채워도 화면엔 반영이 안 됐다(사용자 지적:
         // "썸네일이 아예 안 보인다니까" — 콘솔엔 에러가 없었던 이유이기도 함, 그냥 조용히 버려진 것).
@@ -1718,14 +1732,8 @@
     for (const p of targets) {
       msg.textContent = `다시 그리는 중... (${done + failed + 1}/${targets.length})`;
       try {
-        // 목록(allParts)은 stripSpecFiles로 받아서 'import' 도형의 3D 원본(fileDataUrl)이 빠져있다 — 그대로
-        // 그리면 기본 큐브가 나오고 그 큐브가 thumbnail3d로 저장돼 버린다. 원본이 필요한 부품만 하나씩 받아서 그린다.
-        let shapes = p.spec.shapes;
-        if (shapes.some((s) => s.type === 'import' && !s.fileDataUrl)) {
-          const full = (await adminApi({ action: 'get_part', partId: p.id })).part;
-          shapes = full && full.spec && Array.isArray(full.spec.shapes) ? full.spec.shapes : shapes;
-          if (shapes.some((s) => s.type === 'import' && !s.fileDataUrl)) throw new Error('3D 원본 파일을 받지 못했어요');
-        }
+        // 목록엔 3D 모양 원본이 없다 — 그대로 그리면 기본 큐브가 나오고 그 큐브가 thumbnail3d로 저장돼 버린다.
+        const shapes = await getPartShapes(p);
         const dataUrl = await window.__partsLabViewer.renderShapesThumbnail(shapes, 88);
         await adminApi({
           action: 'update_part', partId: p.id, name: p.name, icon: p.icon, subject: p.subject,
@@ -2417,7 +2425,7 @@
       // allParts는 stripSpecFiles로 받아와서(위 loadParts 참고) 'import' 도형이면 fileDataUrl이 빠져있다 —
       // 실제로 그려야 하는 지금만 이 부품 하나를 get_part로 온전히 다시 받는다(목록 전체를 다시 무겁게
       // 받지 않기 위함). 이미 fileDataUrl이 있으면(예: 방금 등록 직후) 다시 안 받는다.
-      const needsFull = p.spec.shapes.some((s) => s.type === 'import' && !s.fileDataUrl);
+      const needsFull = p.spec.partial || p.spec.shapes.some((s) => s.type === 'import' && !s.fileDataUrl);
       if (needsFull) {
         try {
           // 한 번 받은 3D 원본은 partFullCache에 따로 보관한다 — 목록이 다시 로드돼도(수정·탭 전환 때마다)
@@ -2631,7 +2639,7 @@
       document.getElementById('tab-textbooks').hidden = btn.dataset.tab !== 'textbooks';
       if (btn.dataset.tab === 'home') renderHome();
       if (btn.dataset.tab === 'curriculum') { loadCategories().then(() => { fillCurriculumCategoryOptions(curriculumSubjectSel.value, curriculumCategorySel); syncCurriculumSubjectUI(); renderCurriculumList(); }); }
-      if (btn.dataset.tab === 'parts') { partFullCache.clear(); loadCategories().then(loadParts); }
+      if (btn.dataset.tab === 'parts') { partFullCache.clear(); Promise.all([loadCategories(), loadParts()]).then(() => renderParts(allParts)); }  // 카테고리·부품을 동시에 받고 둘 다 오면 한 번 더 맞춰 그린다
       if (btn.dataset.tab === 'textbooks') {
         // 카테고리·부품·교재를 동시에 요청(예전엔 카테고리를 기다린 뒤에야 나머지를 요청해서 왕복이 두 번이었음)
         // 부품은 화면에 필요한 이름만 받고, 부품 탭 화면을 다시 그리지도 않는다.
