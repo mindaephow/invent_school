@@ -929,7 +929,10 @@ function initBoxEditor() {
     return shape;
   }
 
-  async function onBoxTargetPicked(p) {
+  // forSave: "저장"/"다른 부품에 저장"처럼 고른 직후 바로 저장까지 이어지는 경로 — 캔버스에 작업이 있으면 그 부품의
+  // 옛 모양을 절대 불러오지 않는다(불러오면 방금 고친 색·모양이 옛것으로 되돌아간 채 그대로 저장돼 버린다).
+  // 캔버스를 덮어쓸지 묻는 확인창은 "기존 부품 열어서 교체"(불러오기)에서만 뜬다.
+  async function onBoxTargetPicked(p, forSave) {
     targetPart = p;
     document.getElementById('boxTargetLabel').textContent = '선택된 부품: ' + p.name;
     document.getElementById('boxSaveBtn').disabled = false;
@@ -942,7 +945,7 @@ function initBoxEditor() {
     // 비어있지 않아도, 불러올 저장된 모양이 있으면 덮어써도 되는지 확인만 받고 실제로 불러온다.
     const saved = p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.length ? p.spec.shapes : null;
     if (shapes.length) {
-      if (!saved) return; // 이 부품엔 저장된 모양이 없으니, 지금 작업은 그대로 두고 저장 대상만 바뀐 채로 끝낸다.
+      if (!saved || forSave) return; // 이 부품엔 저장된 모양이 없으니, 지금 작업은 그대로 두고 저장 대상만 바뀐 채로 끝낸다.
       const ok = confirm('캔버스에 이미 도형이 있어요. "' + p.name + '"에 저장된 모양을 불러와서 지금 캔버스를 덮어쓸까요?\n(취소하면 지금 작업은 그대로 두고, 저장 대상만 "' + p.name + '"로 바뀝니다.)');
       if (!ok) return;
     }
@@ -1351,7 +1354,7 @@ function initBoxEditor() {
   document.getElementById('boxSaveBtn').addEventListener('click', async () => {
     if (!targetPart) {
       openPickerModal('저장할 부품 고르기', async (p) => {
-        await onBoxTargetPicked(p);
+        await onBoxTargetPicked(p, true);
         await saveToTargetPart();
       }, true);
       return;
@@ -1365,7 +1368,7 @@ function initBoxEditor() {
   // 용도라는 게 전혀 안 드러났음). 부품을 고르면 그 즉시 그 부품에 저장까지 진행(다시 "저장"을 누를 필요 없음).
   document.getElementById('boxChangeTargetBtn').addEventListener('click', () => {
     openPickerModal('다른 부품에 저장', async (p) => {
-      await onBoxTargetPicked(p);
+      await onBoxTargetPicked(p, true);
       await saveToTargetPart();
     }, true);
   });
