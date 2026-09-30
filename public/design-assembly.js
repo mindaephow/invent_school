@@ -10,7 +10,7 @@
   const PEG_DEPTH = 5;   // 돌기가 구멍 안으로 들어가는 깊이(mm) — 프레임 두께와 같다
   let def = null;        // 지금 고른 차시에 맞는 조립 데이터
   let catId = null;      // 지금 고른 카테고리 id (부품 이름으로 부품을 찾을 때 씀)
-  let lastFlip = false;  // 지금 반대편에서 보고 있는지
+  let lastView = 0;      // 지금 보고 있는 각도(90도 단위)
   let viewing = false;   // 조립 보기 중인지
   let step = 0;          // 0 = 빈 판, 1..N = 각 단계, N+1 = 완성
   let snapshot = null;   // 조립 보기 들어가기 전 작업(닫으면 그대로 되돌린다)
@@ -121,8 +121,8 @@
     b.frame(focus.length ? focus : list.map((d) => d.pos));
     b.guides(guides);
     // 앞 벽이 뒤쪽 끝에 있는 단계(flip)는 반대편에서 보여준다
-    const flip = !!(step > 0 && step < last() && def.steps[step - 1].flip);
-    if (b.turn && def.camera && flip !== lastFlip) { b.turn(def.camera.theta + (flip ? Math.PI / 2 : 0)); lastFlip = flip; } // 방향이 바뀌는 단계에서만 돌린다(직접 돌린 화면은 그대로)
+    const view = (step > 0 && step < last() && def.steps[step - 1].view) || 0; // 0: 기본 각도, 1·2: 90도씩 돌려서(부품이 들어오는 쪽에서) 보여준다
+    if (b.turn && def.camera && view !== lastView) { b.turn(def.camera.theta + view * Math.PI / 2); lastView = view; } // 각도가 바뀌는 단계에서만 돌린다(직접 돌린 화면은 그대로)
     const n = total();
     $('asmLabel').textContent = step === 0 ? '시작 전' : (step === last() ? '완성!' : step + ' / ' + n + ' 단계');
     $('asmNote').textContent = step === 0 ? '빈 판에서 시작해요. ▶ 를 눌러 한 단계씩 만들어 봐요.'
@@ -173,7 +173,7 @@
     if (!def || viewing) return;
     snapshot = b.serialize();
     viewing = true;
-    lastFlip = false;
+    lastView = 0;
     b.setViewing(true);
     b.camera(def.camera);
     $('asmBar').hidden = false;
