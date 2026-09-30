@@ -68,7 +68,10 @@ ${rulesText}
 ## 7. 연결점(돌기·구멍) 기록 — 부품 DB
 부품마다 돌기·구멍 위치를 ivs_part_catalog.data.connectors 에 기록하면 다음 클로드가 "돌기가 어느 쪽인지" 짐작하지 않아도 된다. get_part_connectors / set_part_connectors 로 읽고 쓴다.
 형식(모델 로컬 좌표, 원점 = 3D 모델 bbox 가운데): { pegs: [{ id, pos:[x,y,z], dir:[x,y,z](돌기가 뻗는 방향 단위벡터), len, r }], holes: [{ id, pos:[x,y,z], dir:[x,y,z](구멍으로 들어가는 방향), r, through: true|false }], note: '설명' }.
-부품 수정(update_part)은 이 필드를 지우지 않는다.
+부품 수정(update_part)은 이 필드를 지우지 않는다(body.connectors 로 주면 새로 기록).
+**현재 상태(2026-10-01): 큐보 1권 부품 30종(3D 모델이 없는 반원프레임·리모컨 제외)에 기록돼 있다.** confidence 가 'checked' 인 것(직선 프레임 12종 — 구멍 수가 이름의 칸 수와 일치 검증, 2·3단블록·눈블록 — 돌기 위치 측정 일치, 리벳)은 믿어도 되고, 'auto' 인 것(꺾인 프레임, 브라켓, 기어, 바퀴, 모터, 메인보드, 분리기, 부시, 축)은 자동 탐지 결과라 확인 후 써야 한다. 십자(+) 모양 돌기·구멍(축 끼움)은 원통 탐지가 못 잡아 기록돼 있지 않다.
+생성·기록 도구: public/connector-tools.js (브라우저에서 로그인 후 __buildAllConnectors → __writeAllConnectors). 새 부품은 __CONNECTOR_PARTS 에 [이름, id]를 더해 다시 돌린다.
+확인: 설계 화면(로봇) 위쪽 "🟢 연결점" 버튼 — 돌기는 끝에 초록 원판, 구멍은 입구에 초록 고리로 표시된다.
 
 ## 8. 화면·코드 위치
 - public/design-assemblies.js: 규칙(IVS_ASSEMBLY_RULES) + 조립 단계 데이터(IVS_ASSEMBLIES) — 여기가 원본
