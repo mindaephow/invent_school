@@ -181,7 +181,7 @@
     z-index:901;
   }
   /* 조립 보기: 부품 창을 스케치북 밖(아래)에 붙여 스케치북을 가리지 않게 한다. 조립도에서는 삭제 버튼이 없다. */
-  .selected-controls.docked{position:static; transform:none; left:auto; bottom:auto; width:100%; margin-top:10px; box-sizing:border-box;}
+  .selected-controls.docked{position:static; transform:none; left:auto; bottom:auto; width:100%; margin:0 0 10px; box-sizing:border-box;}
   .selected-controls.docked .modal-head{cursor:default;}
   .selected-controls.docked #deletePart{display:none !important;}
   .selected-controls .modal-head{
@@ -2430,13 +2430,21 @@
   });
   document.getElementById('pinLenInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('pinLenApply').click(); });
 
+  // 조립 보기 중 부품 창은 왼쪽 "부품" 목록 바로 위에 놓는다(스케치북을 가리지 않게). 끝나면 원래 자리로.
+  const selectedHome = { parent: selectedControls.parentNode, next: selectedControls.nextSibling };
+  function dockSelectedControls(on){
+    const palette = document.querySelector('.side-group.palette');
+    if (on && palette && palette.parentNode) { if (selectedControls.nextSibling !== palette) palette.parentNode.insertBefore(selectedControls, palette); }
+    else if (!on && selectedHome.parent && selectedControls.parentNode !== selectedHome.parent) selectedHome.parent.insertBefore(selectedControls, selectedHome.next && selectedHome.next.parentNode === selectedHome.parent ? selectedHome.next : null);
+  }
   function select(p){
     if (p !== selected) activeAxis = null;
     syncAxisButtons();
     selected = p;
     const demoMode = !!(window.__ivsAssembly && window.__ivsAssembly.isViewing()); // 조립 보기 시연 중엔 부품 창 없이 끌어서 움직인다
     selectedControls.hidden = !p;
-    selectedControls.classList.toggle('docked', demoMode); // 조립 보기에선 스케치북 밖에 붙인다
+    selectedControls.classList.toggle('docked', demoMode); // 조립 보기에선 스케치북 밖(왼쪽 부품 목록 위)에 붙인다
+    dockSelectedControls(demoMode);
     modalBackdrop.hidden = !p || demoMode; // 조립 보기에선 뒷배경을 깔지 않아 부품을 계속 끌 수 있다
     document.getElementById('asmDemoBlock').hidden = !demoMode; // 🔗 결합·움직임 방식·원위치는 이 창 안에
     if (p) {
@@ -4125,6 +4133,29 @@
   // 저장 요청이 겹쳐도 한 번에 하나씩 (새 설계가 두 번 만들어지는 것을 막는다)
   // 조립 보기(design-assembly.js)가 쓰는 연결부 — 부품을 놓고·강조하고·카메라를 옮기는 것만 열어준다.
   // 조립 보기의 초록 안내를 지운다(부품에 붙여 둔 칠한 점까지)
+  // 딱! — 부품이 제자리에 붙을 때 나는 짧은 소리(테트리스 블록이 붙는 느낌). 파일 없이 브라우저 오디오로 만든다.
+  let snapAudio = null;
+  function playSnap(){
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      snapAudio = snapAudio || new AC();
+      const ctx = snapAudio, t = ctx.currentTime;
+      if (ctx.state === 'suspended') ctx.resume();
+      const out = ctx.createGain(); out.gain.value = 0.5; out.connect(ctx.destination);
+      // 낮은 "툭" — 빠르게 떨어지는 음
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'triangle'; o.frequency.setValueAtTime(260, t); o.frequency.exponentialRampToValueAtTime(70, t + 0.09);
+      g.gain.setValueAtTime(0.9, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+      o.connect(g); g.connect(out); o.start(t); o.stop(t + 0.13);
+      // 짧은 "딱" — 잡음 클릭
+      const len = Math.floor(ctx.sampleRate * 0.03), buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+      const n = ctx.createBufferSource(), ng = ctx.createGain(), hp = ctx.createBiquadFilter();
+      hp.type = 'highpass'; hp.frequency.value = 1800; ng.gain.value = 0.6;
+      n.buffer = buf; n.connect(hp); hp.connect(ng); ng.connect(out); n.start(t);
+    } catch (e) { /* 소리를 못 내도 조립은 계속 */ }
+  }
   let assemblyOrders = []; // 결합 순서 번호(부품별)
   let assemblyDotsVisible = true;
   function setGuideDots(v){
@@ -4163,7 +4194,7 @@
         const k = Math.min(1, (now - t0) / DUR), e = 1 - Math.pow(1 - k, 3); // 끝에서 부드럽게 멈춘다
         part.body.position.set(from.x + (t[0] - from.x) * e, from.y + (t[1] - from.y) * e, from.z + (t[2] - from.z) * e);
         if (k < 1) requestAnimationFrame(step);
-        else { part.body.position.set(t[0], t[1], t[2]); setStatus('딱! 결합했어요.', 'success'); }
+        else { part.body.position.set(t[0], t[1], t[2]); setStatus('딱! 결합했어요.', 'success'); playSnap(); }
       })(t0);
       if (assemblyGuideGroup) {
         assemblyGuideGroup.children.filter(c => c.userData.idx === idx).forEach(c => { (c.userData.attached || []).forEach(m => { if (m.parent) m.parent.remove(m); }); assemblyGuideGroup.remove(c); c.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); });
@@ -4189,6 +4220,7 @@
         const k = Math.min(1, (now - t0) / DUR), e = 1 - Math.pow(1 - k, 3);
         moves.forEach(({ part, from, t }) => { if (parts.includes(part)) part.body.position.set(from.x + (t[0] - from.x) * e, from.y + (t[1] - from.y) * e, from.z + (t[2] - from.z) * e); });
         if (k < 1) requestAnimationFrame(step);
+        else if (moves.length) playSnap(); // 재생 중 결합도 "딱"
       })(t0);
       return moves.length;
     },
