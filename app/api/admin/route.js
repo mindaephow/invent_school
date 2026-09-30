@@ -509,7 +509,8 @@ export async function POST(request) {
       const nextThumbnail3d = clearSpec ? null : (thumbnail3d || existing.data?.thumbnail3d || null)
       // volumes도 안 보내면(예: 부품 수리실에서 스펙만 저장) 기존 권 배정을 그대로 유지한다.
       const nextVolumes = Array.isArray(body.volumes) ? volumes : (Array.isArray(existing.data?.volumes) ? existing.data.volumes : [])
-      const { error } = await sb.from('ivs_part_catalog').update({ data: { name, icon, subject, category: category || null, volumes: nextVolumes, color: color || null, size: size || null, image_svg: imageSvg || null, image_svg_diagonal: imageSvgDiagonal || null, primary_image: primaryImage, spec: nextSpec, snapshot: nextSnapshot, snapshots: nextSnapshots, thumbnail3d: nextThumbnail3d, createdAt } }).eq('id', partId)
+      // connectors(돌기·구멍 연결점, 큐보 조립 MCP가 기록)는 이 화면이 모르는 필드라 그대로 이어 붙인다 — 안 그러면 부품을 수정할 때마다 지워진다.
+      const { error } = await sb.from('ivs_part_catalog').update({ data: { name, icon, subject, category: category || null, volumes: nextVolumes, color: color || null, size: size || null, image_svg: imageSvg || null, image_svg_diagonal: imageSvgDiagonal || null, primary_image: primaryImage, spec: nextSpec, snapshot: nextSnapshot, snapshots: nextSnapshots, thumbnail3d: nextThumbnail3d, createdAt, ...(existing.data?.connectors ? { connectors: existing.data.connectors } : {}) } }).eq('id', partId)
       if (error) throw new Error(error.message)
       return json({ ok: true, parts: await listParts(sb) })
     }
