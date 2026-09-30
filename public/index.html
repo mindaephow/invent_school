@@ -479,7 +479,8 @@
       <div style="background:var(--panel); border-radius:8px; padding:10px; margin:8px 0; display:flex; flex-direction:column; gap:10px;">
         <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
           <b style="font-size:12px; flex:none;">⚡ 부품 빠르게 배정</b>
-          <select id="quickAddPartSelect" style="max-width:160px;"></select>
+          <input type="text" id="quickAddPartSelect" list="quickAddPartList" placeholder="부품 검색/선택" style="max-width:160px;" autocomplete="off">
+          <datalist id="quickAddPartList"></datalist>
           <input type="number" id="quickAddPartQty" min="1" step="1" value="1" style="width:52px;">
           <span class="item-sub" style="flex:none;">→</span>
           <select id="quickAddPartChapter" style="max-width:160px;"></select>
@@ -1736,6 +1737,22 @@
   let textbookSubjectTab = 'robot';
   let textbookCategoryTab = null;
   let selectedTextbookId = null;
+  let quickAddPartsByName = new Map();
+  // 사용자 지시: "부품리스트를 숫자들 부품을 위쪽으로 먼저 표시 그다음 ㄱㄴㄷㄹ, abcd 순서로" — 이름이
+  // 숫자로 시작하는 부품(15프레임, 215프레임 등)은 그 숫자 크기 순으로 먼저, 나머지는 가나다/알파벳
+  // 순으로 뒤에 오게 정렬한다.
+  function partSortKey(name){
+    const m = String(name || '').match(/^(\d+)/);
+    return m ? [0, Number(m[1]), name] : [1, 0, name];
+  }
+  function sortPartsForPicker(list){
+    return list.slice().sort((a, b) => {
+      const ka = partSortKey(a.name), kb = partSortKey(b.name);
+      if (ka[0] !== kb[0]) return ka[0] - kb[0];
+      if (ka[0] === 0) return ka[1] - kb[1];
+      return String(a.name || '').localeCompare(String(b.name || ''), 'ko');
+    });
+  }
 
   function fillTextbookCategoryOptions(){
     const sel = document.getElementById('textbookCategory');
@@ -1895,10 +1912,12 @@
   // "부품 -> 회차 -> 추가추가추가 이렇게 하면 더 편하고 깔끔할꺼 같아") 고른 값이 유지돼야 하므로, 목록이
   // 바뀌어도(차시 추가/삭제 등) 옵션만 새로 채우고 이미 고른 값이 여전히 있으면 그대로 둔다.
   function fillQuickAddDropdowns(tb){
-    const partSel = document.getElementById('quickAddPartSelect');
-    const curPart = partSel.value;
-    partSel.innerHTML = allParts.filter((p) => p.subject === tb.subject).map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)}</option>`).join('');
-    if ([...partSel.options].some((o) => o.value === curPart)) partSel.value = curPart;
+    // 검색 가능한 <input list> + <datalist> 조합 — 이름을 입력하면 브라우저가 알아서 후보를 걸러준다
+    // (사용자 지시: "부품검색도 가능하게"). 고른 이름은 datalist의 옵션 텍스트일 뿐이라, 실제 저장에
+    // 쓰는 partId는 이름→id 맵(quickAddPartsByName)으로 따로 찾는다.
+    const sortedParts = sortPartsForPicker(allParts.filter((p) => p.subject === tb.subject));
+    quickAddPartsByName = new Map(sortedParts.map((p) => [p.name, p.id]));
+    document.getElementById('quickAddPartList').innerHTML = sortedParts.map((p) => `<option value="${escapeHtml(p.name)}">`).join('');
     const chapterOptionsHtml = tb.chapters.map((c, i) => `<option value="${escapeHtml(c.id)}">${i}차시${c.title ? ' · ' + escapeHtml(c.title) : ''}</option>`).join('');
     const partChapterSel = document.getElementById('quickAddPartChapter');
     const curPartChapter = partChapterSel.value;
@@ -2001,11 +2020,13 @@
   document.getElementById('quickAddPartBtn').addEventListener('click', async () => {
     const tb = currentTextbook();
     if (!tb) return;
-    const partId = document.getElementById('quickAddPartSelect').value;
+    const partName = document.getElementById('quickAddPartSelect').value.trim();
+    const partId = quickAddPartsByName.get(partName);
     const qty = Math.max(1, Number(document.getElementById('quickAddPartQty').value) || 1);
     const chapterId = document.getElementById('quickAddPartChapter').value;
     const msgEl = document.getElementById('quickAddPartMsg');
-    if (!partId || !chapterId) { msgEl.textContent = '부품과 차시를 먼저 골라주세요.'; return; }
+    if (!partId) { msgEl.textContent = '목록에 있는 정확한 부품 이름을 골라주세요.'; return; }
+    if (!chapterId) { msgEl.textContent = '차시를 먼저 골라주세요.'; return; }
     const part = allParts.find((p) => p.id === partId);
     const chapterIdx = tb.chapters.findIndex((c) => c.id === chapterId);
     const arr = tb.chapters.map((c) => {
