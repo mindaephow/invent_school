@@ -13,7 +13,7 @@ const SITE_ORIGIN = () => (process.env.SITE_ORIGIN || 'https://invent-school-sig
 
 // 배포된 화면용 자바스크립트(window.* 에 값을 넣는 파일)를 가짜 window 로 실행해서 값을 꺼낸다 — 1분 캐시.
 let _site = null, _siteAt = 0
-async function loadSite() {
+export async function loadSite() {
   if (_site && Date.now() - _siteAt < 60_000) return _site
   const win = {}
   for (const file of ['design-assemblies.js', 'design-collision.js', 'design-mates.js']) {
@@ -27,7 +27,7 @@ async function loadSite() {
 }
 
 // 오일러(도, ZYX: R = Rz·Ry·Rx) → 쿼터니언
-function quatFromEulerZYX(r) {
+export function quatFromEulerZYX(r) {
   const h = (d) => (d * Math.PI) / 360
   const ax = (a, d) => { const s = Math.sin(h(d)), c = Math.cos(h(d)); return a === 'x' ? [s, 0, 0, c] : a === 'y' ? [0, s, 0, c] : [0, 0, s, c] }
   const mul = (a, b) => [a[3]*b[0]+a[0]*b[3]+a[1]*b[2]-a[2]*b[1], a[3]*b[1]-a[0]*b[2]+a[1]*b[3]+a[2]*b[0], a[3]*b[2]+a[0]*b[1]-a[1]*b[0]+a[2]*b[3], a[3]*b[3]-a[0]*b[0]-a[1]*b[1]-a[2]*b[2]]
@@ -36,7 +36,7 @@ function quatFromEulerZYX(r) {
 }
 
 // 조립 데이터의 모든 부품을 "제자리" 배치로 모아 몸통 겹침을 검사한다
-function checkOverlaps(steps, COL, tol) {
+export function checkOverlaps(steps, COL, tol) {
   const items = []
   const skipped = new Set()
   steps.forEach((s, si) => (s.parts || []).forEach((pt) => {

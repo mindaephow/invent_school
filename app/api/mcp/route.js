@@ -50,6 +50,7 @@ import { createMcpHandler } from 'mcp-handler'
 import { createClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 import { registerCuboAssemblyTools } from '../../lib/cubo-assembly-tools.js'
+import { registerCuboDesignTools } from '../../lib/cubo-design-tools.js'
 
 // Lazily created on first use (not at module load) so `next build` doesn't
 // crash when env vars aren't present at build time — only at request time.
@@ -285,6 +286,8 @@ const baseHandler = createMcpHandler(
 
     // 큐보 조립 도구(조립 안내서·조립 단계·겹침 검사·부품 돌기/구멍 연결점)
     registerCuboAssemblyTools(server, getSupabase)
+    // 큐보 3D 디자인 도구(부품 배치 만들기·끼우기 계산·검사·저장)
+    registerCuboDesignTools(server, getSupabase)
 
   },
   {
@@ -295,6 +298,7 @@ const baseHandler = createMcpHandler(
       'ivs_part_catalog의 spec만 바꿀 땐 upsert_row(전체 교체) 대신 update_part_spec(부분 수정, 이미지 유지)을 쓸 것. ' +
       'GitHub 저장소(' + GITHUB_REPO + ') 파일 확인 도구(list_github_files/get_github_file)를 제공한다. ' +
       '설계 화면의 교재 단계별 3D 조립도("조립 보기") 작업을 할 때는 먼저 get_assembly_guide 를 읽을 것 — 조립 규칙·좌표계·부품 측정 사실·작업 절차가 들어 있고, get_assembly/validate_assembly/get_part_connectors/set_part_connectors 로 단계 데이터 조회·겹침 검사·부품 돌기/구멍 연결점을 다룬다. ' +
+      '큐보 부품을 설계 화면에 자유롭게 배치(3D 디자인)하려면 먼저 get_design_guide 를 읽을 것 — compute_attach(돌기↔구멍 끼우기 위치·회전 계산)·validate_design(검사)·save_design(저장)·list_designs/get_design/list_teachers 가 있다. ' +
       '선생님/수업/학생/출석기록/커리큘럼 데이터를 조회·수정하거나 index.html·design.html 코드를 확인할 때 이 서버의 도구를 사용한다.',
   },
   { basePath: '/api', maxDuration: 30, verboseLogs: true }
