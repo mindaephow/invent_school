@@ -331,9 +331,9 @@ export function registerCuboDesignTools(server, getSupabase) {
     'save_design',
     {
       title: '디자인 저장',
-      description: '배치 목록 [{ n, p, r }]을 선생님 계정의 디자인으로 저장한다(설계 화면 "불러오기"에서 열림). designId 를 주면 그 디자인을 덮어쓰고, 없으면 새로 만든다. 저장 전에 validate_design 과 같은 검사를 하고 문제가 있으면 저장하지 않는다(force=true 는 사용자가 허락했을 때만).',
+      description: '배치 목록 [{ n, p, r }]을 선생님 계정의 디자인으로 저장한다(설계 화면 "불러오기"에서 열림; 계정은 teacherId, 생략 시 기본 계정 환경변수 DESIGN_DEFAULT_TEACHER_ID). designId 를 주면 그 디자인을 덮어쓰고, 없으면 새로 만든다. 저장 전에 validate_design 과 같은 검사를 하고 문제가 있으면 저장하지 않는다(force=true 는 사용자가 허락했을 때만).',
       inputSchema: {
-        teacherId: z.string().describe('저장할 선생님 id(list_teachers)'),
+        teacherId: z.string().optional().describe('저장할 선생님 id(list_teachers). 생략하면 환경변수 DESIGN_DEFAULT_TEACHER_ID 의 계정'),
         name: z.string().describe('디자인 이름'),
         parts: z.array(z.object({ n: z.string(), p: z.array(z.number()).length(3), r: z.array(z.number()).length(3).optional() })),
         designId: z.string().optional().describe('덮어쓸 디자인 id'),
@@ -343,6 +343,8 @@ export function registerCuboDesignTools(server, getSupabase) {
     async ({ teacherId, name, parts, designId, force }) => {
       try {
         const sb = getSupabase()
+        const owner = teacherId || process.env.DESIGN_DEFAULT_TEACHER_ID
+        if (!owner && !designId) return fail('저장할 선생님 계정을 정해야 해요. list_teachers 로 id 를 골라 teacherId 로 주거나, 서버 환경변수 DESIGN_DEFAULT_TEACHER_ID 에 기본 계정 id 를 등록하세요.')
         const r = await runValidate(parts, sb)
         if (r.issues.length && !force) return fail(`검사에서 문제 ${r.issues.length}건이라 저장하지 않았어요:\n${r.issues.map((x) => `⚠ ${x}`).join('\n')}\n고친 뒤 다시 저장하세요.`)
         const cat = await loadCatalog(sb)
@@ -360,7 +362,7 @@ export function registerCuboDesignTools(server, getSupabase) {
           if (error) return fail(error.message)
           return text(`✅ 덮어썼어요: "${name}" 부품 ${saved.length}개 (id=${designId}). 설계 화면 → 불러오기에서 열어 확인하세요.${r.issues.length ? `\n(검사 문제 ${r.issues.length}건을 force 로 저장함)` : ''}`)
         }
-        const { data, error } = await sb.from('ivs_teacher_projects').insert({ teacher_id: teacherId, data: { name, parts: saved, createdAt: now, updatedAt: now } }).select('id').single()
+        const { data, error } = await sb.from('ivs_teacher_projects').insert({ teacher_id: owner, data: { name, parts: saved, createdAt: now, updatedAt: now } }).select('id').single()
         if (error) return fail(error.message)
         return text(`✅ 저장했어요: "${name}" 부품 ${saved.length}개 (id=${data.id}). 설계 화면 → 불러오기에서 열어 확인하세요.${r.issues.length ? `\n(검사 문제 ${r.issues.length}건을 force 로 저장함)` : ''}`)
       } catch (e) { return fail(e.message) }
