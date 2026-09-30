@@ -6,7 +6,7 @@
 (function () {
   const $ = (id) => document.getElementById(id);
   const PLAY_MS = 1100;
-  const HOVER_RECV = 16; // 프레임 같은 '구멍 받는 부품'이 움직일 때는 더 가까이 띄운다(너무 멀면 공중에 떠 보인다)
+  const HOVER_RECV = 20; // 프레임 같은 '구멍 받는 부품'이 움직일 때는 더 가까이 띄운다(너무 멀면 공중에 떠 보인다)
   const HOVER = 22;      // 끼우기 직전 부품을 띄우는 거리(mm)
   const PEG_DEPTH = 5;   // 돌기가 구멍 안으로 들어가는 깊이(mm) — 프레임 두께와 같다
   let def = null;        // 지금 고른 차시에 맞는 조립 데이터
@@ -50,7 +50,7 @@
           // 화살표는 띄워 놓은 부품의 돌기 끝(구멍에 들어갈 깊이만큼 아래)에서 시작해 구멍 위 원으로 들어간다
           if (pt.recv && !settling) {
             // 구멍을 받는 부품(프레임 등)이 움직일 때: 원은 떠 있는 부품의 바깥쪽 면(사용자가 보는 쪽)의 구멍에, 화살표는 고정된 돌기 끝에서 그 구멍 쪽으로
-            targets.forEach((m) => guides.push({ from: m, to: add(m, pt.dir, hv), dir: pt.dir, idx: list.length }));
+            targets.forEach((m) => guides.push({ from: m, to: add(m, pt.dir, hv), dir: pt.dir, idx: list.length, both: 5 }));
           } else {
             targets.forEach((m) => guides.push({ from: add(m, pt.dir, HOVER - PEG_DEPTH), to: m, dir: pt.dir, idx: list.length }));
           }

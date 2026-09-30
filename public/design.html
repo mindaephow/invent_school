@@ -4175,32 +4175,37 @@
       if (!list || !list.length) return;
       const g = new THREE.Group();
       const mat = () => new THREE.MeshBasicMaterial({ color: 0x22c55e, depthTest: false, transparent: true });
-      list.forEach(({ from, to, idx }) => {
+      list.forEach(({ from, to, idx, both }) => {
         const a = new THREE.Vector3(from[0], from[1], from[2]), b = new THREE.Vector3(to[0], to[1], to[2]);
         const v = b.clone().sub(a), len = v.length();
         if (len < 1) return;
         const dir = v.clone().normalize();
         const HEAD = 6;
         // 화살표는 돌기 칠한 점·구멍 칠한 점에서 조금씩 떨어뜨려 그린다(점과 화살표가 겹쳐 보이지 않게)
-        const gap = Math.min(4, Math.max(0, (len - 10) / 2));
-        const a2 = a.clone().addScaledVector(dir, gap), b2 = b.clone().addScaledVector(dir, -gap), len2 = len - 2 * gap;
+        const tail = both || 0; // 판(프레임)이 움직일 때는 안쪽 면의 칠한 점 앞에서 화살표가 멈춘다
+        const gap = Math.min(4, Math.max(0, (len - tail - 10) / 2));
+        const a2 = a.clone().addScaledVector(dir, gap), b2 = b.clone().addScaledVector(dir, -gap - tail), len2 = len - 2 * gap - tail;
         const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, Math.max(len2 - HEAD, 0.1), 8), mat());
         shaft.position.copy(a2).addScaledVector(dir, (len2 - HEAD) / 2);
         shaft.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
         const head = new THREE.Mesh(new THREE.ConeGeometry(2.6, HEAD, 12), mat());
         head.position.copy(b2).addScaledVector(dir, -HEAD / 2);
         head.quaternion.copy(shaft.quaternion);
-        // 구멍 자리를 고리 대신 초록으로 칠한 원판으로 표시한다(프레임 구멍에 색칠한 것처럼 보이게)
-        const ring = new THREE.Mesh(new THREE.CircleGeometry(3.6, 28), new THREE.MeshBasicMaterial({ color: 0x22c55e, depthTest: false, transparent: true, opacity: 0.9, side: THREE.DoubleSide }));
-        ring.position.copy(b);
+        // 구멍 자리·돌기 끝은 면에 딱 붙여 칠한다 — 깊이 검사를 켜서 부품 뒤에 가려지면 가려지고, 면과 겹쳐 깜빡이지 않게 살짝 앞으로 뺀다
+        const paint = (r) => new THREE.MeshBasicMaterial({ color: 0x22c55e, transparent: true, opacity: 0.95, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+        const ring = new THREE.Mesh(new THREE.CircleGeometry(3.3, 32), paint());
+        ring.position.copy(b).addScaledVector(dir, 0.15);
         ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
-        // 돌기 끝(화살표가 시작하는 곳)도 초록으로 칠한다 — 돌기 색칠 · 화살표 · 구멍 색칠이 한 세트
-        const cap = new THREE.Mesh(new THREE.CircleGeometry(2.7, 24), new THREE.MeshBasicMaterial({ color: 0x22c55e, depthTest: false, transparent: true, opacity: 0.95, side: THREE.DoubleSide }));
-        cap.position.copy(a);
+        // 프레임처럼 얇은 판이 움직이는 단계: 판의 양쪽 면(둘 다 구멍이 보인다)에 칠해서 어느 쪽에서 봐도 구멍에 표시가 보이게 한다
+        const ring2 = both ? new THREE.Mesh(new THREE.CircleGeometry(3.3, 32), paint()) : null;
+        if (ring2) { ring2.position.copy(b).addScaledVector(dir, -both - 0.15); ring2.quaternion.copy(ring.quaternion); }
+        const cap = new THREE.Mesh(new THREE.CircleGeometry(2.6, 28), paint());
+        cap.position.copy(a).addScaledVector(dir, 0.15);
         cap.quaternion.copy(ring.quaternion);
         const arrowGroup = new THREE.Group();
         arrowGroup.userData.idx = idx; // 어느 부품의 안내인지(결합하면 그 안내만 지운다)
-        [shaft, head, ring, cap].forEach(m => { m.renderOrder = 999; arrowGroup.add(m); });
+        [shaft, head].forEach(m => { m.renderOrder = 999; arrowGroup.add(m); });
+        [ring, ring2, cap].forEach(m => { if (m) { m.renderOrder = 10; arrowGroup.add(m); } });
         g.add(arrowGroup);
       });
       scene.add(g);
