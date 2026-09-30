@@ -8,7 +8,7 @@
 // POST { action: 'set_approved', teacherId, approved }              선생님 승인 / 승인 취소 — 관리자만
 // POST { action: 'create_teacher', name, email, phone?, password? } 본사에서 선생님 등록 (바로 승인됨) — 관리자만
 // POST { action: 'delete_teacher', teacherId }                      선생님 삭제 (수업·학생·학생 로그인 계정·과제까지 함께 삭제) — 관리자만
-// POST { action: 'list_parts' }                                      부품 카탈로그 목록 (이름·아이콘·과목만, 3D 모양은 코드로 별도 구현)
+// POST { action: 'list_parts', light? }                                      부품 카탈로그 목록 (이름·아이콘·과목만, 3D 모양은 코드로 별도 구현)
 // POST { action: 'add_part', name, icon, subject, category?, volumes?: [{volume, qty?}], color?, size? } 부품 카탈로그에 등록
 //   — volumes는 이 부품이 필요한 권과 그 권에서 필요한 수량 목록(비우면 전체 공통). 이름·이미지 등은 한 번만
 //     등록하고 권마다 volumes 항목만 늘려서 쓴다 — 권마다 부품 전체를 새로 등록하지 않는다.
@@ -233,9 +233,11 @@ function parseSnapshots(body) {
   return Object.keys(result).length ? result : null
 }
 
-async function listParts(sb) {
+async function listParts(sb, light = false) {
   const { data, error } = await sb.from('ivs_part_catalog').select('id, data, created_at').order('created_at', { ascending: true })
   if (error) throw new Error(error.message)
+  // 교재관리처럼 이름·과목만 필요한 화면용 — 부품마다 수십 KB인 SVG/스냅샷/spec은 빼서 응답을 가볍게 한다.
+  if (light) return (data || []).map((r) => ({ id: r.id, name: r.data?.name || '', icon: r.data?.icon || '', subject: r.data?.subject || '', category: r.data?.category || '', volumes: Array.isArray(r.data?.volumes) ? r.data.volumes : [], color: r.data?.color || '', size: r.data?.size || '', createdAt: r.created_at }))
   return (data || []).map((r) => ({ id: r.id, name: r.data?.name || '', icon: r.data?.icon || '', subject: r.data?.subject || '', category: r.data?.category || '', volumes: Array.isArray(r.data?.volumes) ? r.data.volumes : [], color: r.data?.color || '', size: r.data?.size || '', imageSvg: r.data?.image_svg || '', imageSvgDiagonal: r.data?.image_svg_diagonal || '', primaryImage: r.data?.primary_image === 'diagonal' ? 'diagonal' : 'front', spec: r.data?.spec || null, snapshot: r.data?.snapshot || null, snapshots: r.data?.snapshots || null, thumbnail3d: r.data?.thumbnail3d || null, createdAt: r.created_at }))
 }
 
@@ -390,7 +392,7 @@ export async function POST(request) {
       return json({ ok: true, teachers: await listTeachers(sb) })
     }
 
-    if (body?.action === 'list_parts') return json({ parts: await listParts(sb) })
+    if (body?.action === 'list_parts') return json({ parts: await listParts(sb, body.light === true) })
 
     if (body?.action === 'add_part') {
       const name = String(body.name || '').trim()
