@@ -3,6 +3,7 @@
 <script src="/vendor/xlsx.full.min.js"></script>
 <script src="/vendor/supabase.min.js"></script>
 <script src="db-shim.js"></script>
+<script src="local-cache.js"></script>
 <style>
   :root{
     --bg:#F3F5F9;
@@ -1760,14 +1761,17 @@
   // 브라우저에 저장해 두었다가 탭을 열자마자 먼저 보여주고 뒤에서 최신 목록을 받아온다(사용자 지시:
   // "빠르게 할수있는 방법이 있으면 그렇게"). 최신 목록이 저장본과 같으면 화면을 다시 그리지 않아 펼침 상태도 그대로다.
   const PARTS_CACHE_KEY = 'ivs-parts-tab-cache-v1';
-  let partsShownJson = '', catsShownJson = '', partsTabOpenedOnce = false;
+  let partsShownJson = '', catsShownJson = '', partsTabOpenedOnce = false, partsSavedOnce = false;
   async function openPartsTab(){
     partFullCache.clear();
     const listEl = document.getElementById('partListArea');
     if (!partsTabOpenedOnce) {
       partsTabOpenedOnce = true;
       try {
-        const c = JSON.parse(localStorage.getItem(PARTS_CACHE_KEY) || 'null');
+        // 저장본은 IndexedDB(local-cache.js)에 둔다 — 부품 썸네일 때문에 localStorage 5MB를 넘으면 저장이 조용히 실패해서
+        // 매번 새로 받는 것처럼 느렸다. 예전 localStorage 저장본이 있으면 그것도 읽는다.
+        let c = window.IVS_CACHE ? await window.IVS_CACHE.get(PARTS_CACHE_KEY) : null;
+        if (!c) { try { c = JSON.parse(localStorage.getItem(PARTS_CACHE_KEY) || 'null'); } catch (e) { c = null; } }
         if (c && Array.isArray(c.parts) && c.parts.length && Array.isArray(c.categories)) {
           robotCategories = c.categories; allParts = c.parts;
           renderCategories(); renderParts(allParts);
@@ -1786,7 +1790,11 @@
       robotCategories = catList; allParts = partList;
       if (changed) { renderCategories(); renderParts(allParts); }
       catsShownJson = cj; partsShownJson = pj;
-      try { localStorage.setItem(PARTS_CACHE_KEY, JSON.stringify({ categories: catList, parts: partList })); } catch (e) { /* 용량 초과 등은 무시 */ }
+      if (changed || !partsSavedOnce) {
+        partsSavedOnce = true;
+        if (window.IVS_CACHE) { window.IVS_CACHE.set(PARTS_CACHE_KEY, { categories: catList, parts: partList, savedAt: Date.now() }); try { localStorage.removeItem(PARTS_CACHE_KEY); } catch (e) { /* 예전 저장본 정리 */ } }
+        else { try { localStorage.setItem(PARTS_CACHE_KEY, JSON.stringify({ categories: catList, parts: partList })); } catch (e) { /* 용량 초과 등은 무시 */ } }
+      }
     } catch (err) {
       if (!listEl.innerHTML) { document.getElementById('partListEmpty').hidden = false; document.getElementById('partListEmpty').textContent = err.message; }
     }

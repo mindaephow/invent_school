@@ -220,7 +220,9 @@
     b.status('3D 부품을 불러오는 중이에요...', null);
     // 등록된 3D 모델을 먼저 받아 두면 부품이 처음부터 제 모양으로 나온다(받는 동안 단순 모양이 잠깐 보이는 것을 막음)
     const names = [...new Set(def.steps.flatMap((s) => (s.parts || []).map((pt) => pt.n)))];
+    const pf = window.__ivsPerf = window.__ivsPerf || {}; pf.asmOpenStart = Math.round(performance.now());
     try { await b.preload(names, catId); } catch (e) { /* 못 받아도 단순 모양으로 계속 보여준다 */ }
+    pf.asmPreloaded = Math.round(performance.now());
     if (!def || viewing) return;
     snapshot = b.serialize();
     viewing = true;
@@ -234,6 +236,7 @@
     $('asmSlider').max = String(last());
     buildStepButtons();
     go(last()); // 처음엔 완성된 모습부터 보여준다
+    pf.asmOpened = Math.round(performance.now());
     b.status('조립 보기 중이에요. 닫으면 하던 작업으로 돌아가요.', 'success');
   }
   function close() {

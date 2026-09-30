@@ -264,6 +264,8 @@
   .scene-title{position:absolute; top:12px; left:50%; transform:translateX(-50%); z-index:2; padding:5px 16px; border-radius:999px; background:var(--panel); border:1px solid var(--panel-border); font-size:13px; font-weight:800; color:var(--blueprint); pointer-events:none;}
   #sceneCanvas{position:absolute; inset:0; width:100%; height:100%; display:block;}
   /* 조립 보기 단계 줄: 3D 화면 위에 항상 떠 있어서 스크롤해도 순서가 보인다 */
+  /* hidden 속성이 display:flex 에 눌려 조립 보기를 닫아도 바가 남던 문제 */
+  #asmBar[hidden], .asm-stage-bar[hidden]{display:none !important;}
   .asm-stage-bar{position:absolute; left:10px; right:10px; bottom:46px; z-index:4; background:var(--panel); border:1px solid var(--panel-border); border-radius:12px; padding:6px 8px; box-shadow:var(--shadow); display:flex; flex-direction:column; gap:5px;}
   .asm-stage-note{font-size:12.5px; line-height:1.35; color:var(--ink); margin:0;}
   .asm-stage-row{display:flex; align-items:center; gap:6px;}
@@ -719,6 +721,7 @@
 <script src="/vendor/cannon.min.js"></script>
 <script src="/vendor/supabase.min.js"></script>
 <script src="db-shim.js"></script>
+<script src="local-cache.js"></script>
 <script src="design-parts.js"></script>
 <script src="design-sets.js"></script>
 <script src="design-lessons.js"></script>
@@ -1443,6 +1446,9 @@
     const job = (async () => {
       try {
         if (!accessToken || !cached || !cached.thumbnail3d) return null; // 3D 모델이 있는 부품만(저장 시 썸네일도 같이 만들어진다)
+        // 이 컴퓨터에 저장해 둔 3D 모델(만들어 둔 점·면 데이터)이 있고 썸네일 지문이 같으면 받지도 만들지도 않고 바로 쓴다
+        const C = window.IVS_CACHE, ver = C ? C.hash(cached.thumbnail3d) : null;
+        if (C) { const hit = await C.get('robot-model:' + partId); if (hit && hit.ver === ver && hit.data && hit.data.position) { perfMark('modelFromCache'); return hit.data; } }
         for (let i = 0; i < 40 && !viewerReady(); i++) await new Promise(r => setTimeout(r, 250)); // 3D 모듈이 아직 로딩 중이면 잠깐 기다린다
         if (!viewerReady()) return null;
         const res = await fetch(`${SUPABASE_URL}/rest/v1/ivs_part_catalog?select=spec:data->spec&id=eq.${encodeURIComponent(partId)}`, {
@@ -1452,7 +1458,10 @@
         const rows = await res.json();
         const spec = rows[0] && rows[0].spec;
         if (!spec || !Array.isArray(spec.shapes) || !spec.shapes.length) return null;
-        return await window.__partsLabViewer.buildPartGeometryData(spec.shapes);
+        const built = await window.__partsLabViewer.buildPartGeometryData(spec.shapes);
+        if (C && built) C.set('robot-model:' + partId, { ver, data: built, savedAt: Date.now() }); // 다음부터는 바로 쓴다
+        perfMark('modelFromNetwork');
+        return built;
       } catch (err) { console.error('3D 모델 불러오기 실패', err); return null; }
     })().then((data) => {
       robotModelCache.set(partId, data);
@@ -1466,13 +1475,18 @@
     robotModelLoading.set(partId, job);
     return job;
   }
+  const robotGeomCache = new WeakMap(); // 모델 데이터 → 가운데 맞춘 지오메트리 — 같은 종류 부품 여러 개(리벳 12개 등)가 하나를 같이 쓴다(매번 복사·변환하지 않음)
   function makeRobotModelMesh(data){
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(data.position.slice(), 3));
-    g.setAttribute('normal', new THREE.BufferAttribute(data.normal.slice(), 3));
-    if (data.index) g.setIndex(new THREE.BufferAttribute(data.index.slice(), 1));
-    const c = [0, 1, 2].map(i => (data.bbox.min[i] + data.bbox.max[i]) / 2);
-    g.translate(-c[0], -c[1], -c[2]); // 모델 한가운데가 부품 위치(다른 부품과 같은 기준)에 오게 한다
+    let g = robotGeomCache.get(data);
+    if (!g) {
+      g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(data.position.slice(), 3));
+      g.setAttribute('normal', new THREE.BufferAttribute(data.normal.slice(), 3));
+      if (data.index) g.setIndex(new THREE.BufferAttribute(data.index.slice(), 1));
+      const c = [0, 1, 2].map(i => (data.bbox.min[i] + data.bbox.max[i]) / 2);
+      g.translate(-c[0], -c[1], -c[2]); // 모델 한가운데가 부품 위치(다른 부품과 같은 기준)에 오게 한다
+      robotGeomCache.set(data, g);
+    }
     // 등록된 색 그대로 보이게: 장면 조명(주변광 0.7 + 방향광 0.7)이 색을 실제보다 밝게 만들어서(연한 회색이 거의 흰색이 됨)
     // 그만큼 낮춰서 칠한다 — 팔레트 썸네일(조명 없이 등록된 색 그대로)과 같은 색으로 보인다.
     return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: new THREE.Color(data.color).multiplyScalar(0.72) }));
@@ -1587,53 +1601,98 @@
     if (robotModelCache.has(part.type.slice(6))) return; // 모델이 없는 부품
     ensureRobotModel(part.type.slice(6)).then((data) => { if (data) swapRobotMesh(part, data); });
   }
+  // 부품 목록·교재는 "캐시로 바로 보여주고 뒤에서 최신을 받아 달라졌으면 갱신"한다(local-cache.js, IndexedDB).
+  // 처음 한 번만 받는 시간이 들고, 그다음부터는 화면이 바로 뜬다. 부품을 고치면(썸네일이 바뀜) 뒤에서 받은 최신으로 갈아 끼운다.
+  window.__ivsPerf = window.__ivsPerf || {};
+  const perfMark = (k) => { window.__ivsPerf[k] = Math.round(performance.now()); };
+  function applyCatalogRows(rows){
+    robotPartsCache = (rows || []).map(r => ({ id: r.id, name: r.data && r.data.name, icon: r.data && r.data.icon, category: r.data && r.data.category, volumes: (r.data && Array.isArray(r.data.volumes)) ? r.data.volumes : [], color: r.data && r.data.color, size: r.data && r.data.size, imageSvg: r.data && r.data.image_svg, imageSvgDiagonal: r.data && r.data.image_svg_diagonal, primaryImage: r.data && r.data.primary_image, spec: r.data && r.data.spec, thumbnail3d: r.data && r.data.thumbnail3d, connectors: r.data && r.data.connectors }));
+    // 저장된 프로젝트를 불러올 때 restoreParts가 즉시 PART_DEFS를 찾을 수 있도록, 화면에 아직 안 띄운 권까지 전부 미리 등록해 둔다.
+    robotPartsCache.forEach(registerRobotPartDef);
+  }
+  async function fetchCatalogRows(){
+    const headers = { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + accessToken };
+    // spec(3D 모델 원본)은 부품 50개 합쳐 17MB라 로딩이 오래 걸리던 주범 — 설계 화면은 미리 저장된
+    // thumbnail3d만 쓰므로 spec을 빼고 필요한 필드만 골라서 받는다. 이 형식이 안 통하면 예전 방식으로 대신 받는다.
+    const lightSel = 'id,name:data->>name,icon:data->>icon,category:data->>category,volumes:data->volumes,color:data->>color,size:data->>size,image_svg:data->>image_svg,image_svg_diagonal:data->>image_svg_diagonal,primary_image:data->>primary_image,thumbnail3d:data->>thumbnail3d,connectors:data->connectors';
+    let res = await fetch(`${SUPABASE_URL}/rest/v1/ivs_part_catalog?select=${encodeURIComponent(lightSel)}&data->>subject=eq.robot`, { headers });
+    if (res.ok) {
+      const rows = (await res.json() || []).map(r => ({ id: r.id, data: { name: r.name, icon: r.icon, category: r.category, volumes: r.volumes, color: r.color, size: r.size, image_svg: r.image_svg, image_svg_diagonal: r.image_svg_diagonal, primary_image: r.primary_image, thumbnail3d: r.thumbnail3d, connectors: r.connectors } }));
+      return { rows, light: true };
+    }
+    res = await fetch(`${SUPABASE_URL}/rest/v1/ivs_part_catalog?select=id,data&data->>subject=eq.robot`, { headers });
+    if (!res.ok) return null;
+    return { rows: await res.json(), light: false };
+  }
   async function loadRobotPartsFromDb(){
     if (SUBJECT !== 'robot' || !accessToken) return;
+    const C = window.IVS_CACHE;
+    perfMark('catalogStart');
     try {
       // 교재는 부품과 상관없이 받을 수 있으니 부품을 기다리지 않고 동시에 요청한다.
       const textbooksPromise = loadTextbooksFromDb();
-      const headers = { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + accessToken };
-      // spec(3D 모델 원본)은 부품 50개 합쳐 17MB라 로딩이 오래 걸리던 주범 — 설계 화면은 미리 저장된
-      // thumbnail3d만 쓰므로 spec을 빼고 필요한 필드만 골라서 받는다. 이 형식이 안 통하면 예전 방식으로 대신 받는다.
-      const lightSel = 'id,name:data->>name,icon:data->>icon,category:data->>category,volumes:data->volumes,color:data->>color,size:data->>size,image_svg:data->>image_svg,image_svg_diagonal:data->>image_svg_diagonal,primary_image:data->>primary_image,thumbnail3d:data->>thumbnail3d,connectors:data->connectors';
-      let rows;
-      let res = await fetch(`${SUPABASE_URL}/rest/v1/ivs_part_catalog?select=${encodeURIComponent(lightSel)}&data->>subject=eq.robot`, { headers });
-      if (res.ok) {
-        rows = (await res.json() || []).map(r => ({ id: r.id, data: { name: r.name, icon: r.icon, category: r.category, volumes: r.volumes, color: r.color, size: r.size, image_svg: r.image_svg, image_svg_diagonal: r.image_svg_diagonal, primary_image: r.primary_image, thumbnail3d: r.thumbnail3d, connectors: r.connectors } }));
-      } else {
-        res = await fetch(`${SUPABASE_URL}/rest/v1/ivs_part_catalog?select=id,data&data->>subject=eq.robot`, { headers });
-        if (!res.ok) return;
-        rows = await res.json();
-      }
-      robotPartsCache = (rows || []).map(r => ({ id: r.id, name: r.data && r.data.name, icon: r.data && r.data.icon, category: r.data && r.data.category, volumes: (r.data && Array.isArray(r.data.volumes)) ? r.data.volumes : [], color: r.data && r.data.color, size: r.data && r.data.size, imageSvg: r.data && r.data.image_svg, imageSvgDiagonal: r.data && r.data.image_svg_diagonal, primaryImage: r.data && r.data.primary_image, spec: r.data && r.data.spec, thumbnail3d: r.data && r.data.thumbnail3d, connectors: r.data && r.data.connectors }));
-      // 저장된 프로젝트를 불러올 때 restoreParts가 즉시 PART_DEFS를 찾을 수 있도록, 화면에 아직 안 띄운 권까지 전부 미리 등록해 둔다.
-      robotPartsCache.forEach(registerRobotPartDef);
+      const hit = C ? await C.get('robot-catalog:v1') : null;
+      const usable = !!(hit && Array.isArray(hit.rows) && hit.rows.length);
+      if (usable) { applyCatalogRows(hit.rows); perfMark('catalogFromCache'); }
+      const refresh = (async () => {
+        const got = await fetchCatalogRows();
+        if (!got) return;
+        const th = (r) => (C ? C.hash(r.data && r.data.thumbnail3d) : '');
+        const ver = C ? C.hash(JSON.stringify(got.rows.map(r => [r.id, r.data && r.data.name, r.data && r.data.category, r.data && r.data.volumes, r.data && r.data.color, r.data && r.data.size, r.data && r.data.icon, r.data && r.data.connectors, th(r)]))) : null;
+        perfMark('catalogFromNetwork');
+        if (usable && hit.ver === ver) return; // 달라진 게 없으면 그대로
+        // 썸네일이 바뀐 부품은 저장해 둔 3D 모델도 낡은 것 — 지운다(다음에 놓을 때 새로 받는다)
+        if (usable && C) {
+          const old = new Map(hit.rows.map(r => [r.id, th(r)]));
+          got.rows.forEach(r => { if (old.has(r.id) && old.get(r.id) !== th(r)) { C.del('robot-model:' + r.id); robotModelCache.delete(r.id); } });
+        }
+        applyCatalogRows(got.rows);
+        if (C && got.light) C.set('robot-catalog:v1', { rows: got.rows, ver, savedAt: Date.now() });
+        if (usable) refreshRobotPalette(); // 캐시로 먼저 그렸다면 최신으로 다시 그린다
+      })();
+      if (usable) refresh.catch(() => {}); else await refresh;
       await textbooksPromise;
       refreshRobotPalette();
+      perfMark('paletteReady');
     } catch (err) { /* 못 불러오면 빈 상태 그대로 둔다 */ }
   }
   // 교재관리(index.html)에서 등록한 교재·차시(제목·필요 부품)를 불러온다 — 부품처럼 회사 공통 자료라
   // 로그인한 사용자면 누구나 직접 REST로 읽을 수 있다(ivs_textbooks RLS: authenticated select).
+  function applyTextbookRows(rows){
+    textbooksCache = (rows || []).map(r => ({
+      id: r.id,
+      subject: r.data && r.data.subject,
+      category: r.data && r.data.category,
+      volume: r.data && r.data.volume != null ? Number(r.data.volume) : null,
+      name: r.data && r.data.name,
+      chapters: (r.data && Array.isArray(r.data.chapters)) ? r.data.chapters : [],
+    }));
+    // 카테고리·권 드롭다운은 이미 그려져 있고(위 renderRobotPicker), 사용자가 그 사이 값을 안 바꿨으면
+    // change 이벤트가 없어서 지금 막 불러온 데이터가 화면에 절대 반영되지 않는다 — 강제로 한 번 갱신.
+    if (window.__refreshLessonFromTextbooks) window.__refreshLessonFromTextbooks();
+  }
   async function loadTextbooksFromDb(){
     if (!accessToken) return;
-    try {
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/ivs_textbooks?select=id,data`, {
-        headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + accessToken }
-      });
-      if (!res.ok) return;
-      const rows = await res.json();
-      textbooksCache = (rows || []).map(r => ({
-        id: r.id,
-        subject: r.data && r.data.subject,
-        category: r.data && r.data.category,
-        volume: r.data && r.data.volume != null ? Number(r.data.volume) : null,
-        name: r.data && r.data.name,
-        chapters: (r.data && Array.isArray(r.data.chapters)) ? r.data.chapters : [],
-      }));
-      // 카테고리·권 드롭다운은 이미 그려져 있고(위 renderRobotPicker), 사용자가 그 사이 값을 안 바꿨으면
-      // change 이벤트가 없어서 지금 막 불러온 데이터가 화면에 절대 반영되지 않는다 — 강제로 한 번 갱신.
-      if (window.__refreshLessonFromTextbooks) window.__refreshLessonFromTextbooks();
-    } catch (err) { /* 못 불러오면 빈 상태 그대로 둔다 — 교재 없이도 화면은 그대로 동작 */ }
+    const C = window.IVS_CACHE;
+    const hit = C ? await C.get('robot-textbooks:v1') : null;
+    const usable = !!(hit && Array.isArray(hit.rows));
+    if (usable) { applyTextbookRows(hit.rows); perfMark('textbooksFromCache'); }
+    const refresh = (async () => {
+      try {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/ivs_textbooks?select=id,data`, {
+          headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + accessToken }
+        });
+        if (!res.ok) return;
+        const rows = await res.json();
+        const ver = C ? C.hash(JSON.stringify(rows)) : null;
+        perfMark('textbooksFromNetwork');
+        if (usable && hit.ver === ver) return;
+        applyTextbookRows(rows);
+        if (C) C.set('robot-textbooks:v1', { rows, ver, savedAt: Date.now() });
+      } catch (err) { /* 못 불러오면 빈 상태 그대로 둔다 — 교재 없이도 화면은 그대로 동작 */ }
+    })();
+    if (usable) { refresh.catch(() => {}); return; } // 캐시가 있으면 기다리지 않는다
+    await refresh;
   }
   // (categoryId, 권, 차시)에 해당하는 차시 데이터(제목·필요 부품)를 찾는다 — 교재가 아직 없거나 그
   // 차시까지 등록 안 됐으면 null(호출한 쪽에서 예전처럼 대체 문구/누적 부품 목록을 씀).
@@ -2631,6 +2690,7 @@
     cardDrag = null;
   });
 
+  let bulkRestoring = false;
   function addPart(type, forcedPos){
     if (playing) return;
     partCounter++;
@@ -2708,8 +2768,13 @@
       // 로봇 부품(프레임 포함)은 위치·결합 형태만 알아보면 되니 구멍 텍스처 없이 등록된 색 그대로 납작하게 칠한다
       mat = new THREE.MeshStandardMaterial({ color: partColor(type) });
     }
+    // 3D 모델이 이미 메모리에 있으면 단순 모양(SVG 텍스처 등)을 만드느라 시간 쓰지 않고 바로 진짜 모델로 만든다
+    const knownModel = type.indexOf('robot:') === 0 ? robotModelKnown(type) : null;
     let mesh;
-    if (type.indexOf('robot:') === 0 && def.svg && (rk === 'frame' || rk === 'frameBent' || rk === 'frameRing')) {
+    if (knownModel) {
+      mesh = makeRobotModelMesh(knownModel);
+      mesh.userData.robotModel = true;
+    } else if (type.indexOf('robot:') === 0 && def.svg && (rk === 'frame' || rk === 'frameBent' || rk === 'frameRing')) {
       // 프레임류만: 등록된 정면 이미지가 실측 축척 그대로인 "위에서 본 설계도"라서(구멍이 mm 좌표 그대로 찍힘),
       // 그 이미지를 윗면에 텍스처로 씌운 "두께 있는 상자"로 만들면 모양이 아이콘과 똑같이 나온다.
       // (판 하나로 만들면 두께가 사라져 2D처럼 보이고, 눕히려고 mesh.rotation을 주면 매 프레임 animate()의
@@ -3044,9 +3109,11 @@
     mesh.userData.partRef = part;
     if (!forcedPos) part.userSpawn = true; // 팔레트에서 새로 놓은 부품(불러온 설계는 해당 없음)
     parts.push(part);
-    upgradeRobotMesh(part); // 등록된 3D 모델이 있으면 단순 모양을 그 모델로 바꿔 끼운다
-    select(part);
-    refreshRobotPalette();
+    if (knownModel) {
+      decorateConnectors(part);
+      if (part.userSpawn) { liftOutOfOverlap(part); part.userSpawn = false; }
+    } else upgradeRobotMesh(part); // 등록된 3D 모델이 있으면 단순 모양을 그 모델로 바꿔 끼운다
+    if (!bulkRestoring) { select(part); refreshRobotPalette(); } // 여러 개를 한꺼번에 불러오는 중이면 마지막에 한 번만
   }
 
   // 클립에 끼운 직선길은 클립을 옮기거나 돌리면 같이 움직인다. 직선길을 직접 옮기면 클립에서 빠진다.
@@ -4100,6 +4167,7 @@
     setCounter = 0;
     stopPlay();
     clearBalls();
+    bulkRestoring = true; // 부품 하나 놓을 때마다 목록·선택을 다시 그리지 않고 끝나고 한 번만 그린다
     parts.slice().forEach(removePart);
     goalTargetPart = null;
     const made = [];
@@ -4117,7 +4185,9 @@
     (list || []).forEach((d, i) => {
       if (made[i] && Number.isInteger(d.join) && made[d.join] && made[d.join].type === 'clip') made[i].joined = made[d.join];
     });
+    bulkRestoring = false;
     select(null);
+    refreshRobotPalette();
     buildGuide.hidden = true;
     guideGroup.visible = false;
     if (!keepHistory) resetHistory();
