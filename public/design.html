@@ -4221,14 +4221,21 @@
     restore(list){ restoreParts(list, {}, true); },
     camera(c){ target.set(c.target[0], c.target[1], c.target[2]); orbit.radius = c.radius; orbit.theta = c.theta; orbit.phi = c.phi; },
     // 지금 보이는 부품들이 화면에 알맞게 차도록 카메라 거리·중심만 맞춘다(보는 각도는 그대로).
-    frame(points){
+    frame(points, context){
       if (!points || !points.length) return;
       const min = [1e9, 1e9, 1e9], max = [-1e9, -1e9, -1e9], M = 22; // 부품 크기만큼 여유
       points.forEach(p => p.forEach((v, i) => { min[i] = Math.min(min[i], v - M); max[i] = Math.max(max[i], v + M); }));
       const size = max.map((v, i) => v - min[i]);
       const diag = Math.hypot(size[0], size[1], size[2]);
       target.set((min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2);
-      orbit.radius = Math.min(Math.max(diag * 1.4, 130), MAX_RADIUS);
+      // 중심은 끼우는 자리, 거리는 전체 모양이 함께 보이게(부품이 너무 가까워 어디인지 모르겠다는 지적)
+      let ctxDiag = 0;
+      if (context && context.length) {
+        const cmin = [1e9, 1e9, 1e9], cmax = [-1e9, -1e9, -1e9];
+        context.forEach(p => p.forEach((v, i) => { cmin[i] = Math.min(cmin[i], v); cmax[i] = Math.max(cmax[i], v); }));
+        ctxDiag = Math.hypot(cmax[0] - cmin[0], cmax[1] - cmin[1], cmax[2] - cmin[2]);
+      }
+      orbit.radius = Math.min(Math.max(diag * 1.4, ctxDiag * 1.6, 190), MAX_RADIUS);
     },
     // 보는 방향(가로 회전)만 바꾼다 — 벽이 반대편에 있는 단계를 앞에서 볼 때 쓴다
     turn(theta){ orbit.theta = theta; },

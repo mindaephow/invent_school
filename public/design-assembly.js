@@ -6,7 +6,7 @@
 (function () {
   const $ = (id) => document.getElementById(id);
   const PLAY_MS = 1100;
-  const HOVER_RECV = 12; // 프레임 같은 '구멍 받는 부품'이 움직일 때는 더 가까이 띄운다(너무 멀면 공중에 떠 보인다)
+  const HOVER_RECV = 16; // 프레임 같은 '구멍 받는 부품'이 움직일 때는 더 가까이 띄운다(너무 멀면 공중에 떠 보인다)
   const HOVER = 22;      // 끼우기 직전 부품을 띄우는 거리(mm)
   const PEG_DEPTH = 5;   // 돌기가 구멍 안으로 들어가는 깊이(mm) — 프레임 두께와 같다
   let def = null;        // 지금 고른 차시에 맞는 조립 데이터
@@ -120,7 +120,7 @@
     // 지금 단계에 보이는 부품(끼우기 직전 위치 포함)에 카메라를 맞춘다 — 처음부터 너무 멀리서 보이지 않게
     // 이번 단계에 끼우는 부품과 그 끼워지는 자리를 화면 가운데에 크게 보여준다(나머지 부품은 배경)
     const focus = list.filter((d) => d.isNew).map((d) => d.pos).concat(guides.map((g) => g.to));
-    b.frame(focus.length ? focus : list.map((d) => d.pos));
+    b.frame(focus.length ? focus : list.map((d) => d.pos), list.map((d) => d.pos));
     b.guides(guides);
     // 앞 벽이 뒤쪽 끝에 있는 단계(flip)는 반대편에서 보여준다
     const view = (step > 0 && step < last() && def.steps[step - 1].view) || 0; // 0: 기본 각도, 1·2: 90도씩 돌려서(부품이 들어오는 쪽에서) 보여준다
