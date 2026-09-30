@@ -66,10 +66,10 @@
             targets.forEach((m) => guides.push({ from: add(m, dirH, hv - depth), to: m, dir: dirH, idx: list.length }));
           }
         }
-        list.push({ name: pt.n, type, mount: 'floor', pos: pos.slice(), quat: b.quat(rot), rot: rot.slice(), isNew, final: (isNew && dirH) || ex ? base.slice() : null }); // ex: 14단계처럼 "결합 전"으로 띄운 부품도 제자리(결합 후)가 있다
+        list.push({ name: pt.n, type, mount: 'floor', pos: pos.slice(), quat: b.quat(rot), rot: rot.slice(), isNew, final: (isNew && dirH) || ex ? base.slice() : null, order: pt.joinOrder || (ex && ex.order) || 1 }); // ex: 14단계처럼 "결합 전"으로 띄운 부품도 제자리(결합 후)가 있다
       });
     });
-    return { list, guides, missing, targets: list.map((d) => d.final || null) };
+    return { list, guides, missing, targets: list.map((d) => d.final || null), orders: list.map((d) => d.order || 1) };
   }
 
   // 1, 2, 3 … 단계 번호 버튼(+ 마지막 "완성") — 눌러서 그 단계로 바로 가고, 지금 단계는 진하게 보인다.
@@ -126,8 +126,8 @@
 
   function render() {
     const b = bridge();
-    const { list, guides, missing, targets } = buildList(step);
-    b.show(list.map(({ isNew, name, final, ...d }) => d), targets);
+    const { list, guides, missing, targets, orders } = buildList(step);
+    b.show(list.map(({ isNew, name, final, order, ...d }) => d), targets, orders);
     // 지금 단계에 보이는 부품(끼우기 직전 위치 포함)에 카메라를 맞춘다 — 처음부터 너무 멀리서 보이지 않게
     // 이번 단계에 끼우는 부품과 그 끼워지는 자리를 화면 가운데에 크게 보여준다(나머지 부품은 배경)
     const focus = list.filter((d) => d.isNew).map((d) => d.pos).concat(guides.map((g) => g.to));
@@ -180,15 +180,24 @@
       $('asmPlay').textContent = '⏸ 멈춤';
       const tick = () => {
         if (timerDir !== 1) return;
-        const jm = joinMs(); if (b.combineNew) b.combineNew(Math.max(150, jm - 150)); // 결합
-        timer = setTimeout(() => {
+        // 결합: 부품마다 순서 번호(joinOrder)가 있으면 작은 번호부터 하나씩(14단계: 15프레임이 올라가 결합 → 그다음 부시)
+        const orders = b.pendingOrders ? b.pendingOrders() : [1];
+        const jm = joinMs();
+        const joinOne = (k) => {
+          if (timerDir !== 1) return;
+          if (k >= orders.length) { afterJoin(); return; }
+          b.combineNew(Math.max(150, jm - 150), orders[k]);
+          timer = setTimeout(() => joinOne(k + 1), jm);
+        };
+        const afterJoin = () => {
           if (timerDir !== 1) return;
           const next = step + 1;
           if (next > last()) { stop(); return; }
           go(next); // 다음 단계 화살표 표시
           if (next === last()) { stop(); return; }
           timer = setTimeout(tick, arrowMs());
-        }, jm);
+        };
+        joinOne(0);
       };
       timer = setTimeout(tick, arrowMs());
     } else {

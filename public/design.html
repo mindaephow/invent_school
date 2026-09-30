@@ -4118,6 +4118,7 @@
   // 저장 요청이 겹쳐도 한 번에 하나씩 (새 설계가 두 번 만들어지는 것을 막는다)
   // 조립 보기(design-assembly.js)가 쓰는 연결부 — 부품을 놓고·강조하고·카메라를 옮기는 것만 열어준다.
   // 조립 보기의 초록 안내를 지운다(부품에 붙여 둔 칠한 점까지)
+  let assemblyOrders = []; // 결합 순서 번호(부품별)
   let assemblyDotsVisible = true;
   function setGuideDots(v){
     if (!assemblyGuideGroup) return;
@@ -4138,7 +4139,9 @@
     },
     quat(rot){ const q = quatFromRot({ x: rot[0], y: rot[1], z: rot[2] }); return [q.x, q.y, q.z, q.w].map(round5); },
     preload(names, categoryId){ return Promise.all(names.map(n => { const t = this.resolve(n, categoryId); return t ? ensureRobotModel(t.slice(6)) : null; })); },
-    show(list, targets){ assemblyTargets = targets || []; restoreParts(list, {}, true); },
+    show(list, targets, orders){ assemblyTargets = targets || []; assemblyOrders = orders || []; restoreParts(list, {}, true); },
+    // 아직 제자리로 안 들어간 부품들의 결합 순서 번호(작은 것부터) — 재생이 순서대로 하나씩 결합시킨다
+    pendingOrders(){ return [...new Set(assemblyTargets.map((t, i) => (t ? (assemblyOrders[i] || 1) : null)).filter(Boolean))].sort((a, b) => a - b); },
     // 고른 부품을 제자리(구멍 자리)로 부드럽게 옮겨 붙인다. 반환: 'ok' | 'none'(고른 부품 없음) | 'notTarget'(이번 단계에 끼우는 부품이 아님)
     combineSelected(){
       if (!selected || selected.isGroup) return 'none';
@@ -4161,16 +4164,20 @@
       return 'ok';
     },
     // 이번 단계에 떠 있는 부품 전부를 제자리로 부드럽게 끼운다(재생용) — 안내(화살표·점)는 지운다.
-    combineNew(ms){
-      const DUR = ms || 500, t0 = performance.now(), moves = [];
+    combineNew(ms, order){
+      const DUR = ms || 500, t0 = performance.now(), moves = [], idxs = [];
       parts.forEach((part, idx) => {
         const t = assemblyTargets[idx];
-        if (!t) return;
+        if (!t || (order != null && (assemblyOrders[idx] || 1) !== order)) return;
         assemblyTargets[idx] = null;
         const p = part.body.position;
         moves.push({ part, from: { x: p.x, y: p.y, z: p.z }, t });
+        idxs.push(idx);
       });
-      clearAssemblyGuides();
+      // 결합하는 부품의 안내(화살표·점)만 지운다 — 아직 남은 부품의 안내는 그대로 둔다
+      if (assemblyGuideGroup) {
+        assemblyGuideGroup.children.filter(c => idxs.includes(c.userData.idx)).forEach(c => { (c.userData.attached || []).forEach(m => { if (m.parent) m.parent.remove(m); }); assemblyGuideGroup.remove(c); c.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); });
+      }
       (function step(now){
         const k = Math.min(1, (now - t0) / DUR), e = 1 - Math.pow(1 - k, 3);
         moves.forEach(({ part, from, t }) => { if (parts.includes(part)) part.body.position.set(from.x + (t[0] - from.x) * e, from.y + (t[1] - from.y) * e, from.z + (t[2] - from.z) * e); });
