@@ -475,6 +475,25 @@
         <h3 style="font-size:15px; margin:0;" id="textbookChaptersTitle">차시 목록</h3>
         <button type="button" class="ghost" id="deleteTextbookBtn">이 교재 삭제</button>
       </div>
+      <p class="note" id="textbookChaptersOk" hidden style="color:var(--present,#2e7d32); font-weight:600;"></p>
+      <div style="background:var(--panel); border-radius:8px; padding:10px; margin:8px 0; display:flex; flex-direction:column; gap:10px;">
+        <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+          <b style="font-size:12px; flex:none;">⚡ 부품 빠르게 배정</b>
+          <select id="quickAddPartSelect" style="max-width:160px;"></select>
+          <input type="number" id="quickAddPartQty" min="1" step="1" value="1" style="width:52px;">
+          <span class="item-sub" style="flex:none;">→</span>
+          <select id="quickAddPartChapter" style="max-width:160px;"></select>
+          <button type="button" class="primary" id="quickAddPartBtn">추가</button>
+          <span class="item-sub" id="quickAddPartMsg"></span>
+        </div>
+        <p class="note" style="margin:0;">부품·수량을 고른 채로 차시만 바꿔가며 "추가"를 누르면 여러 차시에 빠르게 배정할 수 있어요. 같은 부품을 또 추가하면 수량이 더해져요.</p>
+        <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+          <b style="font-size:12px; flex:none;">⚡ 파일 빠르게 등록</b>
+          <select id="quickUploadChapterSelect" style="max-width:200px;"></select>
+          <button type="button" class="primary" id="quickUploadBtn">파일 선택해서 올리기</button>
+          <span class="item-sub" id="quickUploadMsg"></span>
+        </div>
+      </div>
       <div id="textbookChaptersList" style="margin-top:8px;"></div>
       <div style="display:flex; align-items:center; gap:6px; margin-top:8px;">
         <button type="button" class="ghost" id="addChapterBtn">+ 차시 1개 추가</button>
@@ -1791,7 +1810,7 @@
     const el = document.getElementById('textbookListArea');
     document.getElementById('textbookListEmpty').hidden = items.length > 0;
     el.innerHTML = items.map((t) => `<div class="design-row" data-textbook-id="${escapeHtml(t.id)}" style="cursor:pointer;${t.id === selectedTextbookId ? ' background:var(--panel);' : ''}">
-      <div class="item-main"><div class="item-title">${escapeHtml(t.name)}</div><div class="item-sub">${t.volume ? t.volume + '권 · ' : ''}차시 ${t.chapters.length}개${t.fileUrl ? ' · 📎 첨부' : ''}</div></div>
+      <div class="item-main"><div class="item-title">${escapeHtml(t.name)}</div><div class="item-sub">${t.volume ? t.volume + '권 · ' : ''}차시 ${t.chapters.length}개${(t.files && t.files.length) ? ' · 📎 첨부 ' + t.files.length + '개' : ''}</div></div>
     </div>`).join('');
     el.querySelectorAll('[data-textbook-id]').forEach((row) => row.addEventListener('click', () => {
       selectedTextbookId = row.dataset.textbookId;
@@ -1810,7 +1829,15 @@
     const { error } = await db.client.storage.from('textbook-files').upload(path, file);
     if (error) throw new Error(error.message);
     const { data } = db.client.storage.from('textbook-files').getPublicUrl(path);
-    return { fileUrl: data.publicUrl, fileName: file.name };
+    return { url: data.publicUrl, name: file.name };
+  }
+  function fileIcon(name){
+    const ext = ((name || '').split('.').pop() || '').toLowerCase();
+    if (ext === 'pdf') return '📕';
+    if (['xlsx', 'xls', 'csv'].includes(ext)) return '📗';
+    if (['doc', 'docx'].includes(ext)) return '📘';
+    if (['ppt', 'pptx'].includes(ext)) return '📙';
+    return '📄';
   }
   // 엑셀·워드·파워포인트는 브라우저 자체에 뷰어가 없어서 그냥 링크를 열면 다운로드만 되고 "열어볼" 수는
   // 없다(사용자 지적: "엑셀이나 다른 파일은 못보나?? 기능이 없어?") — 이건 우리 코드 문제가 아니라
@@ -1823,39 +1850,64 @@
     if (OFFICE_VIEWABLE_EXT.includes(ext)) return 'https://view.officeapps.live.com/op/view.aspx?src=' + encodeURIComponent(fileUrl);
     return fileUrl;
   }
-  function fileAttachHtml(fileUrl, fileName, uploadAttr, removeAttr){
-    // download 속성을 넣으면 PDF도 미리보기 없이 무조건 다운로드부터 되어서 "열어볼 수 있냐"는 질문이
-    // 나왔다 — target="_blank"만 두면 PDF는 새 탭에서 바로 열려 보이고(브라우저 자체 뷰어), 그 화면
-    // 안에서도 다운로드할 수 있어 "열기"·"다운로드" 둘 다 된다.
-    if (fileUrl) return `<a href="${escapeHtml(fileViewUrl(fileUrl, fileName))}" target="_blank" rel="noopener" style="font-size:12px;">📎 ${escapeHtml(fileName || '열기')}</a><button type="button" class="ghost" ${removeAttr}="1" style="font-size:11px;">삭제</button>`;
-    return `<button type="button" class="ghost" ${uploadAttr}="1" style="font-size:11px;">📎 파일 업로드(PDF·엑셀)</button>`;
+  // 사용자 지시: "파일업로드는 pdf,워드,엑셀,ppt가 되게끔, 여러개 가능, 업로드 된거 썸네일로 보여주고,
+  // 다운로드, 미리보기 가능" — 파일 하나(fileUrl/fileName)가 아니라 여러 개(files 배열)를 칩 목록으로
+  // 보여준다. 칩 하나 삭제는 "필요 부품" 칩처럼 즉시 제거(개별 파일 하나라 되돌릴 수 없는 정도가 낮고,
+  // 다시 올리면 되므로 확인 단계 없이 바로 지운다) — 차시/교재 자체를 통째로 지우는 것과는 무게가 다름.
+  function filesListHtml(files, removeAttr){
+    if (!files || !files.length) return '<span class="item-sub">없음</span>';
+    return files.map((f, idx) => `<span class="pill" style="display:inline-flex; align-items:center; gap:4px;">
+      <a href="${escapeHtml(fileViewUrl(f.url, f.name))}" target="_blank" rel="noopener" style="font-size:12px; text-decoration:none;">${fileIcon(f.name)} ${escapeHtml(f.name)}</a>
+      <button type="button" class="ghost" ${removeAttr}="1" data-file-idx="${idx}" style="font-size:11px; padding:0 4px; line-height:1;" title="이 파일만 삭제">✕</button>
+    </span>`).join(' ');
   }
+  // 삭제/파일제거 확인 상태를 버튼의 DOM(dataset)이 아니라 여기 변수에 둔다 — 다른 차시를 만지면
+  // renderChapters()가 목록 전체를 새로 그려서 버튼 DOM이 통째로 교체되는데, 확인 상태를 DOM에만
+  // 두면(예전의 armAction 방식) 그 사이에 상태가 사라져 "두 번 눌러도 확인 문구도 안 뜨고 삭제도 안
+  // 되는" 것처럼 보였다(사용자 지적: "회차 삭제를 클릭해도 확인 과정이 없고 삭제도 안됨"). 이 변수는
+  // 다시 그려도 그대로 남아있어서 확실히 동작한다.
+  let confirmingDeleteChapterId = null;
   function chapterRowHtml(tb, c, i){
     const partsChips = (c.parts || []).map((p) => {
       const part = allParts.find((x) => x.id === p.partId);
       return `<span class="pill" data-remove-part="${escapeHtml(c.id)}" data-remove-part-id="${escapeHtml(p.partId)}" style="cursor:pointer;" title="눌러서 제거">${escapeHtml(part ? part.name : '(삭제된 부품)')} ×${p.qty} ✕</span>`;
     }).join(' ');
-    const partOptions = allParts.filter((p) => p.subject === tb.subject).map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)}</option>`).join('');
+    const deleteLabel = confirmingDeleteChapterId === c.id ? '정말 삭제?(다시 클릭)' : '삭제';
     return `<div class="design-row" style="flex-direction:column; align-items:stretch; gap:6px; margin-bottom:10px; padding:10px; border:1px solid var(--line); border-radius:8px;" data-chapter-id="${escapeHtml(c.id)}">
       <div style="display:flex; align-items:center; gap:6px;">
         <span class="item-sub" style="flex:none; font-weight:700;">${i}차시</span>
         <input type="text" value="${escapeHtml(c.title)}" data-chapter-title="1" style="flex:1;" placeholder="차시 제목">
         <button type="button" class="ghost" data-chapter-up="1" ${i === 0 ? 'disabled' : ''}>▲</button>
         <button type="button" class="ghost" data-chapter-down="1" ${i === tb.chapters.length - 1 ? 'disabled' : ''}>▼</button>
-        <button type="button" class="ghost" data-chapter-delete="1">삭제</button>
+        <button type="button" class="ghost${confirmingDeleteChapterId === c.id ? ' danger-armed' : ''}" data-chapter-delete="1">${deleteLabel}</button>
+      </div>
+      <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-size:12px;">
+        <span class="item-sub" style="flex:none;">📎 첨부:</span>${filesListHtml(c.files, 'data-chapter-remove-file')}
       </div>
       <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-        ${fileAttachHtml(c.fileUrl, c.fileName, 'data-chapter-upload', 'data-chapter-remove-file')}
-      </div>
-      <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-        <span class="item-sub" style="flex:none;">필요 부품</span>
+        <span class="item-sub" style="flex:none;">필요 부품:</span>
         ${partsChips || '<span class="item-sub">없음</span>'}
-        <select data-add-part-select="1" style="max-width:160px;"><option value="">+ 부품 선택</option>${partOptions}</select>
-        <input type="number" min="1" step="1" value="1" data-add-part-qty="1" style="width:52px;">
-        <button type="button" class="ghost" data-add-part-btn="1">추가</button>
       </div>
       <button type="button" class="ghost" data-insert-after="1" style="align-self:flex-start; font-size:11px;">+ 이 아래에 차시 추가</button>
     </div>`;
+  }
+  // 부품·차시 드롭다운은 재사용(전체를 다시 그리지 않음) — "부품→차시→추가"를 반복할 때(사용자 지시:
+  // "부품 -> 회차 -> 추가추가추가 이렇게 하면 더 편하고 깔끔할꺼 같아") 고른 값이 유지돼야 하므로, 목록이
+  // 바뀌어도(차시 추가/삭제 등) 옵션만 새로 채우고 이미 고른 값이 여전히 있으면 그대로 둔다.
+  function fillQuickAddDropdowns(tb){
+    const partSel = document.getElementById('quickAddPartSelect');
+    const curPart = partSel.value;
+    partSel.innerHTML = allParts.filter((p) => p.subject === tb.subject).map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)}</option>`).join('');
+    if ([...partSel.options].some((o) => o.value === curPart)) partSel.value = curPart;
+    const chapterOptionsHtml = tb.chapters.map((c, i) => `<option value="${escapeHtml(c.id)}">${i}차시${c.title ? ' · ' + escapeHtml(c.title) : ''}</option>`).join('');
+    const partChapterSel = document.getElementById('quickAddPartChapter');
+    const curPartChapter = partChapterSel.value;
+    partChapterSel.innerHTML = chapterOptionsHtml;
+    if ([...partChapterSel.options].some((o) => o.value === curPartChapter)) partChapterSel.value = curPartChapter;
+    const uploadChapterSel = document.getElementById('quickUploadChapterSelect');
+    const curUploadChapter = uploadChapterSel.value;
+    uploadChapterSel.innerHTML = '<option value="__whole__">📘 교재 전체(권 단위)</option>' + chapterOptionsHtml;
+    if ([...uploadChapterSel.options].some((o) => o.value === curUploadChapter)) uploadChapterSel.value = curUploadChapter;
   }
   function renderChapters(){
     const card = document.getElementById('textbookChaptersCard');
@@ -1863,37 +1915,62 @@
     if (!tb) { card.hidden = true; return; }
     card.hidden = false;
     document.getElementById('textbookChaptersTitle').textContent = tb.name + ' — 차시 목록';
+    fillQuickAddDropdowns(tb);
     const list = document.getElementById('textbookChaptersList');
-    list.innerHTML = `<div class="design-row" style="align-items:center; margin-bottom:10px;">
+    list.innerHTML = `<div class="design-row" style="align-items:center; margin-bottom:10px; flex-wrap:wrap;">
       <div class="item-main"><div class="item-title">📎 교재 첨부파일(권 전체)</div></div>
-      <div style="display:flex; gap:6px; flex:none; align-items:center;">${fileAttachHtml(tb.fileUrl, tb.fileName, 'data-tb-upload', 'data-tb-remove-file')}</div>
+      <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">${filesListHtml(tb.files, 'data-tb-remove-file')}</div>
     </div>` + (tb.chapters.length ? tb.chapters.map((c, i) => chapterRowHtml(tb, c, i)).join('') : '<p class="note">아직 차시가 없어요. 아래 "+ 차시 추가"를 눌러주세요.</p>');
   }
-  async function saveChapters(tb, chapters){
+  function showChaptersOk(text){
+    const el = document.getElementById('textbookChaptersOk');
+    el.textContent = text;
+    el.hidden = false;
+    clearTimeout(el._t);
+    el._t = setTimeout(() => { el.hidden = true; }, 4000);
+  }
+  // 제목 칸에서 다른 칸으로 옮기면(blur) 저장 → 저장 끝나고 다시 그리기(renderChapters, 모든 입력칸을
+  // 새로 만듦) 순서라, 그 사이에 사용자가 이미 다음 칸을 클릭해 포커스를 옮겨놔도 다시 그리기가 그 포커스를
+  // 날려버려서 "두 번 클릭해야" 써지는 것처럼 보였다(사용자 지적: "클릭을 왜 두번을 해야 작성이
+  // 가능해???"). 저장 직전에 지금 포커스가 어느 차시의 어느 칸인지 기억해뒀다가, 다시 그린 뒤 그 자리에
+  // 포커스를 되돌려준다.
+  async function saveChapters(tb, chapters, okMsg){
     const errEl = document.getElementById('textbookChaptersMsg');
     errEl.hidden = true;
+    const active = document.activeElement;
+    const activeRow = active && active.closest && active.closest('[data-chapter-id]');
+    const focusInfo = activeRow ? { chapterId: activeRow.dataset.chapterId, field: active.dataset.chapterTitle ? 'title' : null, selStart: active.selectionStart, selEnd: active.selectionEnd } : null;
     try {
       const res = await adminApi({ action: 'update_textbook', textbookId: tb.id, chapters });
       allTextbooks = res.textbooks || [];
       renderTextbookList();
       renderChapters();
+      if (focusInfo && focusInfo.field === 'title') {
+        const row = document.querySelector('[data-chapter-id="' + CSS.escape(focusInfo.chapterId) + '"]');
+        const input = row && row.querySelector('[data-chapter-title]');
+        if (input) { input.focus(); try { input.setSelectionRange(focusInfo.selStart, focusInfo.selEnd); } catch (e) {} }
+      }
+      // 사용자 지적: "완료도 없어서 창을 닫을 수도 없고 저장이 되었는지 알수도 없고" — 눈에 잘 띄는
+      // 완료 문구를 몇 초간 보여준다(제목 저장처럼 조용히 넘어가야 하는 경우는 okMsg를 안 준다).
+      if (okMsg) showChaptersOk(okMsg);
     } catch (err) { errEl.textContent = err.message; errEl.hidden = false; }
   }
-  async function saveTextbookFile(tb, fileUrl, fileName){
+  async function saveTextbookFiles(tb, files, okMsg){
     const errEl = document.getElementById('textbookChaptersMsg');
     errEl.hidden = true;
     try {
-      const res = await adminApi({ action: 'update_textbook', textbookId: tb.id, fileUrl, fileName });
+      const res = await adminApi({ action: 'update_textbook', textbookId: tb.id, files });
       allTextbooks = res.textbooks || [];
       renderTextbookList();
       renderChapters();
+      if (okMsg) showChaptersOk(okMsg);
     } catch (err) { errEl.textContent = err.message; errEl.hidden = false; }
   }
   document.getElementById('addChapterBtn').addEventListener('click', () => {
     const tb = currentTextbook();
     if (!tb) return;
     const arr = tb.chapters.concat([{ id: 'ch_' + Math.random().toString(36).slice(2, 10), title: '', parts: [] }]);
-    saveChapters(tb, arr);
+    saveChapters(tb, arr, '차시를 추가했어요.');
   });
   // 사용자 지시: "그냥 차시를 여러개를 추가해두고 입력만 하게 해줘 불편하게 하지말고" — 한 개씩 추가
   // 버튼을 여러 번 누르지 않고, 빈 차시를 한 번에 여러 개 만들어두면 제목만 채워 넣으면 되게 한다.
@@ -1902,7 +1979,7 @@
     if (!tb) return;
     const count = Math.max(1, Math.min(100, Math.round(Number(document.getElementById('addChapterBulkCount').value) || 12)));
     const extra = Array.from({ length: count }, () => ({ id: 'ch_' + Math.random().toString(36).slice(2, 10), title: '', parts: [] }));
-    saveChapters(tb, tb.chapters.concat(extra));
+    saveChapters(tb, tb.chapters.concat(extra), count + '개 차시를 추가했어요.');
   });
   document.getElementById('deleteTextbookBtn').addEventListener('click', function(){
     const tb = currentTextbook();
@@ -1916,6 +1993,65 @@
         renderChapters();
       } catch (err) { const errEl = document.getElementById('textbookChaptersMsg'); errEl.textContent = err.message; errEl.hidden = false; }
     });
+  });
+  // ⚡ 부품 빠르게 배정: 부품·수량을 고른 채로 차시만 바꿔가며 "추가"를 누르는 흐름(사용자 지시:
+  // "부품 -> 회차 -> 추가추가추가"). 같은 부품을 그 차시에 또 추가하면 수량을 더한다(사용자 지적:
+  // "부품을 추가하면 누적되서 계산이 되어야 하는데 해당제품의 수량만 새로 덮어써짐" / "리벳 1 + 리벳5는
+  // 리벳6이 되어야 한다는 말이야 각 차시에서").
+  document.getElementById('quickAddPartBtn').addEventListener('click', () => {
+    const tb = currentTextbook();
+    if (!tb) return;
+    const partId = document.getElementById('quickAddPartSelect').value;
+    const qty = Math.max(1, Number(document.getElementById('quickAddPartQty').value) || 1);
+    const chapterId = document.getElementById('quickAddPartChapter').value;
+    const msgEl = document.getElementById('quickAddPartMsg');
+    if (!partId || !chapterId) { msgEl.textContent = '부품과 차시를 먼저 골라주세요.'; return; }
+    const part = allParts.find((p) => p.id === partId);
+    const chapterIdx = tb.chapters.findIndex((c) => c.id === chapterId);
+    const arr = tb.chapters.map((c) => {
+      if (c.id !== chapterId) return c;
+      const parts = (c.parts || []).slice();
+      const idx = parts.findIndex((p) => p.partId === partId);
+      if (idx >= 0) parts[idx] = { partId, qty: parts[idx].qty + qty };
+      else parts.push({ partId, qty });
+      return Object.assign({}, c, { parts });
+    });
+    msgEl.textContent = '추가하는 중...';
+    saveChapters(tb, arr, (part ? part.name : '부품') + ' — ' + chapterIdx + '차시에 배정했어요.');
+    msgEl.textContent = '';
+  });
+  // ⚡ 파일 빠르게 등록: 차시(또는 "교재 전체")를 고르고 파일을 선택하면 바로 그 자리에 업로드.
+  // 사용자 지시: "그냥 파일업로드 => 1회차,1권 이렇게 해서 연동하면 안되나?" + "여러개 가능" — 한 번에
+  // 여러 파일을 골라 순서대로 올리고, 전부 그 차시(또는 교재 전체)의 files 배열에 추가한다.
+  document.getElementById('quickUploadBtn').addEventListener('click', () => {
+    const tb = currentTextbook();
+    if (!tb) return;
+    const target = document.getElementById('quickUploadChapterSelect').value;
+    const msgEl = document.getElementById('quickUploadMsg');
+    if (!target) return;
+    const input = document.createElement('input');
+    input.type = 'file'; input.multiple = true; input.accept = '.pdf,.xlsx,.xls,.csv,.docx,.doc,.pptx,.ppt';
+    input.addEventListener('change', async () => {
+      const files = Array.from(input.files || []);
+      if (!files.length) return;
+      try {
+        const uploaded = [];
+        for (let i = 0; i < files.length; i++) {
+          msgEl.textContent = '올리는 중...(' + (i + 1) + '/' + files.length + ')';
+          uploaded.push(await uploadTextbookFile(files[i]));
+        }
+        const label = files.length > 1 ? files.length + '개 파일' : '"' + uploaded[0].name + '"';
+        if (target === '__whole__') {
+          await saveTextbookFiles(tb, (tb.files || []).concat(uploaded), label + ' 교재 전체에 등록했어요.');
+        } else {
+          const chapterIdx = tb.chapters.findIndex((c) => c.id === target);
+          const arr = tb.chapters.map((c) => c.id === target ? Object.assign({}, c, { files: (c.files || []).concat(uploaded) }) : c);
+          await saveChapters(tb, arr, label + ' — ' + chapterIdx + '차시에 등록했어요.');
+        }
+        msgEl.textContent = '';
+      } catch (err) { msgEl.textContent = err.message; }
+    });
+    input.click();
   });
   // 제목 입력은 포커스를 잃을 때(blur) 저장 — 글자 하나 칠 때마다 서버에 저장하지 않는다.
   document.getElementById('textbookChaptersList').addEventListener('change', (e) => {
@@ -1946,11 +2082,15 @@
     }
     const delBtn = e.target.closest('[data-chapter-delete]');
     if (delBtn) {
-      armAction(delBtn, '정말 삭제?', () => {
-        const row = delBtn.closest('[data-chapter-id]');
-        const arr = tb.chapters.filter((c) => c.id !== row.dataset.chapterId);
-        saveChapters(tb, arr);
-      });
+      const row = delBtn.closest('[data-chapter-id]');
+      const id = row.dataset.chapterId;
+      if (confirmingDeleteChapterId === id) {
+        confirmingDeleteChapterId = null;
+        saveChapters(tb, tb.chapters.filter((c) => c.id !== id), '차시를 삭제했어요.');
+      } else {
+        confirmingDeleteChapterId = id;
+        renderChapters();
+      }
       return;
     }
     const insertBtn = e.target.closest('[data-insert-after]');
@@ -1959,23 +2099,7 @@
       const idx = tb.chapters.findIndex((c) => c.id === row.dataset.chapterId);
       const arr = tb.chapters.slice();
       arr.splice(idx + 1, 0, { id: 'ch_' + Math.random().toString(36).slice(2, 10), title: '', parts: [] });
-      saveChapters(tb, arr);
-      return;
-    }
-    const addPartBtn = e.target.closest('[data-add-part-btn]');
-    if (addPartBtn) {
-      const row = addPartBtn.closest('[data-chapter-id]');
-      const sel = row.querySelector('[data-add-part-select]');
-      const qtyInput = row.querySelector('[data-add-part-qty]');
-      const partId = sel.value;
-      const qty = Math.max(1, Number(qtyInput.value) || 1);
-      if (!partId) return;
-      const arr = tb.chapters.map((c) => {
-        if (c.id !== row.dataset.chapterId) return c;
-        const parts = (c.parts || []).filter((p) => p.partId !== partId).concat([{ partId, qty }]);
-        return Object.assign({}, c, { parts });
-      });
-      saveChapters(tb, arr);
+      saveChapters(tb, arr, '차시를 삽입했어요.');
       return;
     }
     const removeChip = e.target.closest('[data-remove-part]');
@@ -1986,50 +2110,19 @@
       saveChapters(tb, arr);
       return;
     }
-    const chUploadBtn = e.target.closest('[data-chapter-upload]');
-    if (chUploadBtn) {
-      const row = chUploadBtn.closest('[data-chapter-id]');
-      const input = document.createElement('input');
-      input.type = 'file'; input.accept = '.pdf,.xlsx,.xls,.csv';
-      input.addEventListener('change', async () => {
-        if (!input.files[0]) return;
-        chUploadBtn.textContent = '올리는 중...'; chUploadBtn.disabled = true;
-        try {
-          const { fileUrl, fileName } = await uploadTextbookFile(input.files[0]);
-          const arr = tb.chapters.map((c) => c.id === row.dataset.chapterId ? Object.assign({}, c, { fileUrl, fileName }) : c);
-          await saveChapters(tb, arr);
-        } catch (err) { const errEl = document.getElementById('textbookChaptersMsg'); errEl.textContent = err.message; errEl.hidden = false; }
-      });
-      input.click();
-      return;
-    }
     const chRemoveFileBtn = e.target.closest('[data-chapter-remove-file]');
     if (chRemoveFileBtn) {
-      armAction(chRemoveFileBtn, '정말 삭제?', () => {
-        const row = chRemoveFileBtn.closest('[data-chapter-id]');
-        const arr = tb.chapters.map((c) => c.id === row.dataset.chapterId ? Object.assign({}, c, { fileUrl: null, fileName: null }) : c);
-        saveChapters(tb, arr);
-      });
-      return;
-    }
-    const tbUploadBtn = e.target.closest('[data-tb-upload]');
-    if (tbUploadBtn) {
-      const input = document.createElement('input');
-      input.type = 'file'; input.accept = '.pdf,.xlsx,.xls,.csv';
-      input.addEventListener('change', async () => {
-        if (!input.files[0]) return;
-        tbUploadBtn.textContent = '올리는 중...'; tbUploadBtn.disabled = true;
-        try {
-          const { fileUrl, fileName } = await uploadTextbookFile(input.files[0]);
-          await saveTextbookFile(tb, fileUrl, fileName);
-        } catch (err) { const errEl = document.getElementById('textbookChaptersMsg'); errEl.textContent = err.message; errEl.hidden = false; }
-      });
-      input.click();
+      const row = chRemoveFileBtn.closest('[data-chapter-id]');
+      const id = row.dataset.chapterId;
+      const idx = Number(chRemoveFileBtn.dataset.fileIdx);
+      const arr = tb.chapters.map((c) => c.id !== id ? c : Object.assign({}, c, { files: (c.files || []).filter((f, i) => i !== idx) }));
+      saveChapters(tb, arr, '첨부파일을 삭제했어요.');
       return;
     }
     const tbRemoveFileBtn = e.target.closest('[data-tb-remove-file]');
     if (tbRemoveFileBtn) {
-      armAction(tbRemoveFileBtn, '정말 삭제?', () => { saveTextbookFile(tb, null, null); });
+      const idx = Number(tbRemoveFileBtn.dataset.fileIdx);
+      saveTextbookFiles(tb, (tb.files || []).filter((f, i) => i !== idx), '첨부파일을 삭제했어요.');
       return;
     }
   });

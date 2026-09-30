@@ -283,8 +283,7 @@ async function listTextbooks(sb) {
     category: r.data?.category || null,
     volume: r.data?.volume != null ? Number(r.data.volume) : null,
     name: r.data?.name || '',
-    fileUrl: r.data?.fileUrl || null,
-    fileName: r.data?.fileName || null,
+    files: Array.isArray(r.data?.files) ? r.data.files : [],
     chapters: Array.isArray(r.data?.chapters) ? r.data.chapters : [],
     createdAt: r.created_at,
   }))
@@ -304,10 +303,20 @@ function parseChapters(raw) {
       if (!partId) return null
       return { partId, qty: Number.isFinite(qty) && qty > 0 ? Math.round(qty) : 1 }
     }).filter(Boolean) : []
-    const fileUrl = typeof c.fileUrl === 'string' && c.fileUrl ? c.fileUrl : null
-    const fileName = fileUrl && typeof c.fileName === 'string' ? c.fileName.slice(0, 200) : null
-    return { id, title, parts, fileUrl, fileName }
+    // 사용자 지시: "파일업로드는 pdf,워드,엑셀,ppt가 되게끔, 여러개 가능" — 차시 하나에 파일 하나만
+    // (fileUrl/fileName)이 아니라 여러 개(files 배열)를 붙일 수 있어야 한다.
+    const files = parseFileList(c.files)
+    return { id, title, parts, files }
   }).filter(Boolean)
+}
+function parseFileList(raw) {
+  if (!Array.isArray(raw)) return []
+  return raw.map((f) => {
+    const url = typeof f?.url === 'string' && f.url ? f.url : null
+    if (!url) return null
+    const name = typeof f?.name === 'string' && f.name ? f.name.slice(0, 200) : '파일'
+    return { url, name }
+  }).filter(Boolean).slice(0, 30)
 }
 
 export async function POST(request) {
@@ -510,9 +519,8 @@ export async function POST(request) {
       const volume = Number.isFinite(volumeNum) && volumeNum > 0 ? Math.round(volumeNum) : null
       if (!name) return json({ error: '교재 이름을 입력해주세요.' }, 400)
       if (!PART_SUBJECTS.includes(subject)) return json({ error: '과목을 선택해주세요.' }, 400)
-      const fileUrl = typeof body.fileUrl === 'string' && body.fileUrl ? body.fileUrl : null
-      const fileName = fileUrl && typeof body.fileName === 'string' ? body.fileName.slice(0, 200) : null
-      const { error } = await sb.from('ivs_textbooks').insert({ data: { subject, category: category || null, volume, name, fileUrl, fileName, chapters: [], createdAt: Date.now() } })
+      const files = parseFileList(body.files)
+      const { error } = await sb.from('ivs_textbooks').insert({ data: { subject, category: category || null, volume, name, files, chapters: [], createdAt: Date.now() } })
       if (error) throw new Error(error.message)
       return json({ ok: true, textbooks: await listTextbooks(sb) })
     }
@@ -527,9 +535,8 @@ export async function POST(request) {
       if (!name) return json({ error: '교재 이름을 입력해주세요.' }, 400)
       const subject = existing.data?.subject
       const nextChapters = Array.isArray(body.chapters) ? parseChapters(body.chapters) : (Array.isArray(existing.data?.chapters) ? existing.data.chapters : [])
-      const nextFileUrl = body.fileUrl !== undefined ? (typeof body.fileUrl === 'string' && body.fileUrl ? body.fileUrl : null) : (existing.data?.fileUrl || null)
-      const nextFileName = nextFileUrl ? (body.fileName !== undefined ? (typeof body.fileName === 'string' ? body.fileName.slice(0, 200) : null) : (existing.data?.fileName || null)) : null
-      const { error } = await sb.from('ivs_textbooks').update({ data: { subject, category: existing.data?.category || null, volume: existing.data?.volume ?? null, name, fileUrl: nextFileUrl, fileName: nextFileName, chapters: nextChapters, createdAt: existing.data?.createdAt ?? Date.now() } }).eq('id', textbookId)
+      const nextFiles = Array.isArray(body.files) ? parseFileList(body.files) : (Array.isArray(existing.data?.files) ? existing.data.files : [])
+      const { error } = await sb.from('ivs_textbooks').update({ data: { subject, category: existing.data?.category || null, volume: existing.data?.volume ?? null, name, files: nextFiles, chapters: nextChapters, createdAt: existing.data?.createdAt ?? Date.now() } }).eq('id', textbookId)
       if (error) throw new Error(error.message)
       return json({ ok: true, textbooks: await listTextbooks(sb) })
     }
