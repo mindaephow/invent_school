@@ -452,6 +452,10 @@
                 <input id="asmSpeed" type="range" min="0.5" max="3" step="0.25" value="1" style="flex:1;" aria-label="재생 속도">
                 <b id="asmSpeedLabel" style="min-width:34px; text-align:right;">1×</b>
               </label>
+              <label style="display:flex; align-items:center; gap:8px; font-size:12.5px; margin:2px 0 4px;">볼륨
+                <input id="asmVolume" type="range" min="0" max="100" step="5" value="50" style="flex:1;" aria-label="결합 소리 볼륨">
+                <b id="asmVolumeLabel" style="min-width:34px; text-align:right;">50%</b>
+              </label>
               <p id="asmNote" hidden></p>
               <button id="asmClose" class="ghost" type="button" style="width:100%;">조립도 닫기</button>
             </div>
@@ -4142,7 +4146,9 @@
       snapAudio = snapAudio || new AC();
       const ctx = snapAudio, t = ctx.currentTime;
       if (ctx.state === 'suspended') ctx.resume();
-      const out = ctx.createGain(); out.gain.value = 0.5; out.connect(ctx.destination);
+      const vol = typeof window.__ivsSnapVolume === 'number' ? window.__ivsSnapVolume : 0.5; // 0~1 (볼륨 슬라이더)
+      if (vol <= 0) return;
+      const out = ctx.createGain(); out.gain.value = vol; out.connect(ctx.destination);
       // 낮은 "툭" — 빠르게 떨어지는 음
       const o = ctx.createOscillator(), g = ctx.createGain();
       o.type = 'triangle'; o.frequency.setValueAtTime(260, t); o.frequency.exponentialRampToValueAtTime(70, t + 0.09);
@@ -4156,6 +4162,7 @@
       n.buffer = buf; n.connect(hp); hp.connect(ng); ng.connect(out); n.start(t);
     } catch (e) { /* 소리를 못 내도 조립은 계속 */ }
   }
+  window.__ivsPlaySnap = playSnap; // 볼륨 슬라이더에서 들어 보기용
   let assemblyOrders = []; // 결합 순서 번호(부품별)
   let assemblyDotsVisible = true;
   function setGuideDots(v){

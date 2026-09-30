@@ -259,6 +259,16 @@
     $('asmLast').addEventListener('click', stopPlayClick(() => go(last())));
     const sp = $('asmSpeed'), spl = $('asmSpeedLabel');
     if (sp) { sp.value = String(speed); spl.textContent = speed + '×'; sp.addEventListener('input', () => { speed = Number(sp.value) || 1; spl.textContent = speed + '×'; try { localStorage.setItem('ivs-asm-speed', String(speed)); } catch (e) { /* 저장 못 해도 계속 */ } }); }
+    // 결합 소리 볼륨(0~100%): 저장해 두고, 손을 뗄 때 한 번 들려준다
+    const vol = $('asmVolume'), vl = $('asmVolumeLabel');
+    if (vol) {
+      let v = 50;
+      try { const s = localStorage.getItem('ivs-asm-volume'); if (s !== null && Number(s) >= 0 && Number(s) <= 100) v = Number(s); } catch (e) { /* 저장 못 해도 기본 볼륨 */ }
+      const apply = () => { window.__ivsSnapVolume = v / 100; vol.value = String(v); vl.textContent = v + '%'; };
+      apply();
+      vol.addEventListener('input', () => { v = Number(vol.value); apply(); try { localStorage.setItem('ivs-asm-volume', String(v)); } catch (e) { /* 계속 */ } });
+      vol.addEventListener('change', () => { if (window.__ivsPlaySnap) window.__ivsPlaySnap(); });
+    }
     $('asmPlay').addEventListener('click', () => play(1));
     $('asmReverse').addEventListener('click', () => play(-1));
     $('asmSlider').addEventListener('input', (e) => { stop(); go(Number(e.target.value)); });
