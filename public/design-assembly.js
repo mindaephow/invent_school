@@ -7,6 +7,7 @@
   const $ = (id) => document.getElementById(id);
   const PLAY_MS = 1100;
   const HOVER = 22;      // 끼우기 직전 부품을 띄우는 거리(mm)
+  const PEG_DEPTH = 5;   // 돌기가 구멍 안으로 들어가는 깊이(mm) — 프레임 두께와 같다
   let def = null;        // 지금 고른 차시에 맞는 조립 데이터
   let catId = null;      // 지금 고른 카테고리 id (부품 이름으로 부품을 찾을 때 씀)
   let viewing = false;   // 조립 보기 중인지
@@ -41,7 +42,8 @@
         if (isNew && pt.dir) {
           pos = add(base, pt.dir, HOVER); // 끼우기 직전: 제자리에서 끼우는 방향으로 띄운다
           const targets = !useSide && pt.marks && pt.marks.length ? pt.marks : [base];
-          targets.forEach((m) => guides.push({ from: add(m, pt.dir, HOVER), to: m, dir: pt.dir }));
+          // 화살표는 띄워 놓은 부품의 돌기 끝(구멍에 들어갈 깊이만큼 아래)에서 시작해 구멍 위 원으로 들어간다
+          targets.forEach((m) => guides.push({ from: add(m, pt.dir, HOVER - PEG_DEPTH), to: m, dir: pt.dir }));
         }
         list.push({ name: pt.n, type, mount: 'floor', pos: pos.slice(), quat: b.quat(rot), rot: rot.slice(), isNew });
       });
