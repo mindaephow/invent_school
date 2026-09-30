@@ -116,7 +116,9 @@
     const { list, guides, missing, targets } = buildList(step);
     b.show(list.map(({ isNew, name, final, ...d }) => d), targets);
     // 지금 단계에 보이는 부품(끼우기 직전 위치 포함)에 카메라를 맞춘다 — 처음부터 너무 멀리서 보이지 않게
-    b.frame(list.map((d) => d.pos).concat(guides.map((g) => g.to)));
+    // 이번 단계에 끼우는 부품과 그 끼워지는 자리를 화면 가운데에 크게 보여준다(나머지 부품은 배경)
+    const focus = list.filter((d) => d.isNew).map((d) => d.pos).concat(guides.map((g) => g.to));
+    b.frame(focus.length ? focus : list.map((d) => d.pos));
     b.guides(guides);
     // 앞 벽이 뒤쪽 끝에 있는 단계(flip)는 반대편에서 보여준다
     const flip = !!(step > 0 && step < last() && def.steps[step - 1].flip);
