@@ -18,7 +18,7 @@ export function dimsOf(name) {
 
 export function buildGuide(rules) {
   const rulesText = (rules && rules.length ? rules : ['(규칙을 못 읽었어요 — 배포된 design-assemblies.js 확인)']).map((r, i) => `${i + 1}. ${r}`).join('\n')
-  return `# 큐보 조립 안내서 (큐보 조립 MCP)
+  return `# 큐보 조립 안내서 (발명학교 MCP의 큐보 조립 도구)
 
 이 안내서만 읽어도 기억 없이 조립도(교재 단계별 3D 조립 보기)를 이어서 만들 수 있게 적어 둔 것이다.
 

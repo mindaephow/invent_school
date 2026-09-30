@@ -1,34 +1,12 @@
-// app/api/cubo-assembly/mcp/route.js
-//
-// 큐보 조립 MCP 서버 — 설계 화면의 "조립 보기"(교재 단계별 3D 조립도)를 기억 없는 클로드도 이어서 만들 수 있게,
-// 조립 규칙·좌표계·부품 측정 사실·작업 절차(조립 안내서)와 조립 단계 데이터, 겹침 검사, 부품 돌기·구멍 연결점 기록을 제공한다.
-// 메인 사이트와 같은 Next.js 프로젝트·같은 Vercel 배포 안에 들어 있다(다른 MCP와 같은 방식, 공유 비밀키 ?key= 보호).
-//
-// 노출 툴 6개:
-//   - get_assembly_guide   : 조립 안내서(규칙·좌표계·부품 사실·교재 구조·작업 절차) — 가장 먼저 읽을 것
-//   - list_assemblies      : 조립 데이터가 있는 교재 차시 목록
-//   - get_assembly         : 한 차시의 조립 단계 데이터(부품 위치·회전·끼우는 방향·구멍 자리)
-//   - validate_assembly    : 조립 데이터의 부품 몸통 겹침 검사(돌기·리벳·축이 구멍에 들어가는 것만 예외)
-//   - get_part_connectors  : 부품의 돌기·구멍 연결점(ivs_part_catalog.data.connectors) 조회
-//   - set_part_connectors  : 부품의 돌기·구멍 연결점 기록
-//
-// 조립 규칙과 단계 데이터, 겹침 검사 코드는 배포된 public/design-assemblies.js·design-collision.js 를 읽어 온다 —
-// 화면과 같은 파일이 원본이라 둘이 어긋나지 않는다.
-//
-// 환경변수: SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / MCP_SHARED_SECRET, (선택) SITE_ORIGIN(기본 https://invent-school-sigma.vercel.app)
-// claude.ai 커넥터 등록 주소:
-//   https://<사이트 주소>/api/cubo-assembly/mcp?key=MCP_SHARED_SECRET_값
-
-import { createMcpHandler } from 'mcp-handler'
-import { createClient } from '@supabase/supabase-js'
+// 큐보 조립 도구 6개 — 기존 발명학교 MCP(app/api/mcp/route.js)에 함께 등록된다.
+// 설계 화면의 "조립 보기"(교재 단계별 3D 조립도)를 기억 없는 클로드도 이어서 만들 수 있게,
+// 조립 안내서(규칙·좌표계·부품 측정 사실·작업 절차)와 조립 단계 데이터, 겹침 검사, 부품 돌기·구멍 연결점 기록을 제공한다.
+//   - get_assembly_guide / list_assemblies / get_assembly / validate_assembly / get_part_connectors / set_part_connectors
+// 조립 규칙·단계 데이터·겹침 검사 코드는 배포된 public/design-assemblies.js·design-collision.js 를 읽어 온다 —
+// 화면과 같은 파일이 원본이라 둘이 어긋나지 않는다. (선택 환경변수 SITE_ORIGIN, 기본 https://invent-school-sigma.vercel.app)
 import { z } from 'zod'
-import { buildGuide, dimsOf } from '../../../lib/cubo-assembly-guide.js'
+import { buildGuide, dimsOf } from './cubo-assembly-guide.js'
 
-let _supabase = null
-function getSupabase() {
-  if (!_supabase) _supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
-  return _supabase
-}
 const text = (t) => ({ content: [{ type: 'text', text: t }] })
 const fail = (t) => ({ content: [{ type: 'text', text: `❌ ${t}` }], isError: true })
 const SITE_ORIGIN = () => (process.env.SITE_ORIGIN || 'https://invent-school-sigma.vercel.app').replace(/\/$/, '')
@@ -76,8 +54,7 @@ function checkOverlaps(steps, COL, tol) {
   return { checked: items.length, overlaps, skipped: [...skipped] }
 }
 
-const baseHandler = createMcpHandler(
-  (server) => {
+export function registerCuboAssemblyTools(server, getSupabase) {
     server.registerTool(
       'get_assembly_guide',
       {
@@ -206,23 +183,4 @@ const baseHandler = createMcpHandler(
         return text(`✅ ${existing.data?.name || partId} 연결점 기록 (돌기 ${(connectors.pegs || []).length}개, 구멍 ${(connectors.holes || []).length}개)`)
       }
     )
-  },
-  {
-    instructions:
-      '큐보 조립 MCP — 설계 화면의 교재 단계별 3D 조립도("조립 보기")를 만드는 데 필요한 조립 규칙·좌표계·부품 측정 사실·작업 절차·조립 단계 데이터·겹침 검사·부품 돌기/구멍 연결점을 제공한다. ' +
-      '조립도 작업을 시작하면 먼저 get_assembly_guide 를 읽을 것. 단계 데이터는 get_assembly, 검증은 validate_assembly, 부품 연결점은 get_part_connectors/set_part_connectors. ' +
-      '조립 단계 수정은 저장소(mindaephow/invent_school)의 public/design-assemblies.js 를 고쳐서 올리는 방식이며, 사용자는 한 단계씩 고치고 확인받는 방식을 원한다.',
-  },
-  { basePath: '/api/cubo-assembly', maxDuration: 30, verboseLogs: true }
-)
-
-async function authedHandler(request) {
-  const url = new URL(request.url)
-  const key = url.searchParams.get('key')
-  if (!process.env.MCP_SHARED_SECRET || key !== process.env.MCP_SHARED_SECRET) {
-    return new Response(JSON.stringify({ error: '인증 필요 (key 파라미터 확인)' }), { status: 401, headers: { 'Content-Type': 'application/json' } })
-  }
-  return baseHandler(request)
 }
-
-export { authedHandler as GET, authedHandler as POST }
