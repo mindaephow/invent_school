@@ -4207,6 +4207,8 @@
       } });
       return out;
     },
+    // 부품 이름별 연결점(돌기·구멍) — 조립 데이터가 돌기↔구멍으로 실제 결합되는지 검증할 때 쓴다
+    connectorsByName(){ const o = {}; robotPartsCache.forEach(x => { if (x.connectors && x.name) o[x.name] = x.connectors; }); return o; },
     serialize(){ return serializeParts(); },
     restore(list){ restoreParts(list, {}, true); },
     camera(c){ target.set(c.target[0], c.target[1], c.target[2]); orbit.radius = c.radius; orbit.theta = c.theta; orbit.phi = c.phi; },
