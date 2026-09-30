@@ -1386,7 +1386,8 @@
       const summary = mismatchCount === 0
         ? '<div class="required-summary ok">✅ 필요한 부품을 다 썼어요!</div>'
         : '<div class="required-summary warn">⚠️ 아직 ' + mismatchCount + '종류가 안 맞아요</div>';
-      document.getElementById('requiredListCount').textContent = String(chapterParts.length);
+      // 사용 부품 숫자와 같은 단위(개수)로 센다 — 종류 수(12)가 아니라 필요한 부품 개수의 합
+      document.getElementById('requiredListCount').textContent = String(chapterParts.reduce((n, cp) => n + (Number(cp.qty) || 0), 0));
       document.getElementById('requiredListBody').innerHTML = summary + rows;
       return;
     }
@@ -1405,7 +1406,7 @@
     const summary = mismatchCount === 0
       ? '<div class="required-summary ok">✅ 필요한 부품을 다 썼어요!</div>'
       : '<div class="required-summary warn">⚠️ 아직 ' + mismatchCount + '종류가 안 맞아요</div>';
-    document.getElementById('requiredListCount').textContent = String(trackable.length);
+    document.getElementById('requiredListCount').textContent = String(trackable.reduce((n, p) => n + (Number(p.qty) || 0), 0)); // 개수의 합(사용 부품과 같은 단위)
     document.getElementById('requiredListBody').innerHTML = summary + rows;
   }
   function setRequiredListFolded(folded){
