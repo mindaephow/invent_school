@@ -120,7 +120,7 @@
     b.guides(guides);
     // 앞 벽이 뒤쪽 끝에 있는 단계(flip)는 반대편에서 보여준다
     const flip = !!(step > 0 && step < last() && def.steps[step - 1].flip);
-    if (b.turn && def.camera && flip !== lastFlip) { b.turn(def.camera.theta + (flip ? Math.PI : 0)); lastFlip = flip; } // 방향이 바뀌는 단계에서만 돌린다(직접 돌린 화면은 그대로)
+    if (b.turn && def.camera && flip !== lastFlip) { b.turn(def.camera.theta + (flip ? Math.PI / 2 : 0)); lastFlip = flip; } // 방향이 바뀌는 단계에서만 돌린다(직접 돌린 화면은 그대로)
     const n = total();
     $('asmLabel').textContent = step === 0 ? '시작 전' : (step === last() ? '완성!' : step + ' / ' + n + ' 단계');
     $('asmNote').textContent = step === 0 ? '빈 판에서 시작해요. ▶ 를 눌러 한 단계씩 만들어 봐요.'
