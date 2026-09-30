@@ -271,7 +271,44 @@ async function listRobotCategories(sb) {
 const TEACHER_ACTIONS = new Set([
   'list_parts', 'add_part', 'update_part', 'delete_part',
   'list_robot_categories', 'add_robot_category', 'update_robot_category', 'delete_robot_category',
+  'list_textbooks', 'add_textbook', 'update_textbook', 'delete_textbook',
 ])
+
+async function listTextbooks(sb) {
+  const { data, error } = await sb.from('ivs_textbooks').select('id, data, created_at').order('created_at', { ascending: true })
+  if (error) throw new Error(error.message)
+  return (data || []).map((r) => ({
+    id: r.id,
+    subject: r.data?.subject || '',
+    category: r.data?.category || null,
+    volume: r.data?.volume != null ? Number(r.data.volume) : null,
+    name: r.data?.name || '',
+    fileUrl: r.data?.fileUrl || null,
+    fileName: r.data?.fileName || null,
+    chapters: Array.isArray(r.data?.chapters) ? r.data.chapters : [],
+    createdAt: r.created_at,
+  }))
+}
+// 교재 안 차시 배열을 검증한다 — 제목·필요 부품(partId+수량)·첨부파일(fileUrl/fileName) 정도만 저장.
+// 차시 목록은 항상 "전체를 통째로" 다시 보내는 방식(위/아래 이동·중간 삽입·삭제 전부 클라이언트에서
+// 배열을 다시 만든 뒤 한 번에 저장 — 서버는 순서만 그대로 믿고 저장).
+function parseChapters(raw) {
+  if (!Array.isArray(raw)) return []
+  return raw.map((c) => {
+    if (!c || typeof c !== 'object') return null
+    const title = String(c.title || '').trim()
+    const id = typeof c.id === 'string' && c.id ? c.id : ('ch_' + Math.random().toString(36).slice(2, 10))
+    const parts = Array.isArray(c.parts) ? c.parts.map((p) => {
+      const partId = typeof p?.partId === 'string' ? p.partId : null
+      const qty = Number(p?.qty)
+      if (!partId) return null
+      return { partId, qty: Number.isFinite(qty) && qty > 0 ? Math.round(qty) : 1 }
+    }).filter(Boolean) : []
+    const fileUrl = typeof c.fileUrl === 'string' && c.fileUrl ? c.fileUrl : null
+    const fileName = fileUrl && typeof c.fileName === 'string' ? c.fileName.slice(0, 200) : null
+    return { id, title, parts, fileUrl, fileName }
+  }).filter(Boolean)
+}
 
 export async function POST(request) {
   const sb = admin()
@@ -461,6 +498,48 @@ export async function POST(request) {
       const { error } = await sb.from('ivs_robot_categories').delete().eq('id', categoryId)
       if (error) throw new Error(error.message)
       return json({ ok: true, categories: await listRobotCategories(sb) })
+    }
+
+    if (body?.action === 'list_textbooks') return json({ textbooks: await listTextbooks(sb) })
+
+    if (body?.action === 'add_textbook') {
+      const subject = String(body.subject || '')
+      const name = String(body.name || '').trim()
+      const category = String(body.category || '').trim()
+      const volumeNum = Number(body.volume)
+      const volume = subject === 'robot' && Number.isFinite(volumeNum) && volumeNum > 0 ? Math.round(volumeNum) : null
+      if (!name) return json({ error: '교재 이름을 입력해주세요.' }, 400)
+      if (!PART_SUBJECTS.includes(subject)) return json({ error: '과목을 선택해주세요.' }, 400)
+      const fileUrl = typeof body.fileUrl === 'string' && body.fileUrl ? body.fileUrl : null
+      const fileName = fileUrl && typeof body.fileName === 'string' ? body.fileName.slice(0, 200) : null
+      const { error } = await sb.from('ivs_textbooks').insert({ data: { subject, category: category || null, volume, name, fileUrl, fileName, chapters: [], createdAt: Date.now() } })
+      if (error) throw new Error(error.message)
+      return json({ ok: true, textbooks: await listTextbooks(sb) })
+    }
+
+    if (body?.action === 'update_textbook') {
+      const textbookId = body.textbookId
+      if (typeof textbookId !== 'string') return json({ error: '잘못된 요청입니다.' }, 400)
+      const { data: existing, error: fetchErr } = await sb.from('ivs_textbooks').select('data').eq('id', textbookId).maybeSingle()
+      if (fetchErr) throw new Error(fetchErr.message)
+      if (!existing) return json({ error: '교재를 찾을 수 없어요.' }, 404)
+      const name = body.name != null ? String(body.name).trim() : existing.data?.name || ''
+      if (!name) return json({ error: '교재 이름을 입력해주세요.' }, 400)
+      const subject = existing.data?.subject
+      const nextChapters = Array.isArray(body.chapters) ? parseChapters(body.chapters) : (Array.isArray(existing.data?.chapters) ? existing.data.chapters : [])
+      const nextFileUrl = body.fileUrl !== undefined ? (typeof body.fileUrl === 'string' && body.fileUrl ? body.fileUrl : null) : (existing.data?.fileUrl || null)
+      const nextFileName = nextFileUrl ? (body.fileName !== undefined ? (typeof body.fileName === 'string' ? body.fileName.slice(0, 200) : null) : (existing.data?.fileName || null)) : null
+      const { error } = await sb.from('ivs_textbooks').update({ data: { subject, category: existing.data?.category || null, volume: existing.data?.volume ?? null, name, fileUrl: nextFileUrl, fileName: nextFileName, chapters: nextChapters, createdAt: existing.data?.createdAt ?? Date.now() } }).eq('id', textbookId)
+      if (error) throw new Error(error.message)
+      return json({ ok: true, textbooks: await listTextbooks(sb) })
+    }
+
+    if (body?.action === 'delete_textbook') {
+      const textbookId = body.textbookId
+      if (typeof textbookId !== 'string') return json({ error: '잘못된 요청입니다.' }, 400)
+      const { error } = await sb.from('ivs_textbooks').delete().eq('id', textbookId)
+      if (error) throw new Error(error.message)
+      return json({ ok: true, textbooks: await listTextbooks(sb) })
     }
 
     return json({ error: '알 수 없는 요청입니다.' }, 400)

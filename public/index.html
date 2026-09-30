@@ -224,6 +224,7 @@
     <button class="tab-btn" data-tab="curriculum">커리큘럼</button>
     <a class="tab-btn" href="design-select.html" style="text-decoration:none; cursor:pointer;">설계하기</a>
     <button class="tab-btn" id="partsTabBtn" data-tab="parts" hidden>부품 관리</button>
+    <button class="tab-btn" id="textbooksTabBtn" data-tab="textbooks" hidden>교재관리</button>
     <a class="tab-btn" id="adminLink" href="admin.html" hidden style="text-decoration:none; cursor:pointer; margin-left:auto;">본사 관리자</a>
   </nav>
 
@@ -440,6 +441,45 @@
       <p class="list-empty" id="categoryListEmpty" hidden>등록된 카테고리가 없어요.</p>
     </div>
   </section>
+
+  <section id="tab-textbooks" hidden>
+    <div class="card">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+        <h3 style="font-size:15px; margin:0;">교재 등록</h3>
+        <button type="button" class="ghost" id="toggleTextbookForm">+ 교재 등록</button>
+      </div>
+      <p class="note" style="margin-top:8px;">과목(로봇은 카테고리·권까지)을 고르고 교재를 등록하면, 설계 화면의 그 과목·권·차시에 실제 제목·필요 부품이 나타나요.</p>
+      <form id="textbookForm" class="add-form" hidden>
+        <div class="row2">
+          <div><label>과목</label><select id="textbookSubject" required><option value="robot">로봇</option><option value="goldberg">골드버그</option><option value="aviation">항공</option></select></div>
+          <div id="textbookCategoryWrap"><label>카테고리 (로봇만)</label><select id="textbookCategory"></select></div>
+        </div>
+        <div id="textbookVolumeWrap"><label>권 (로봇만)</label><input id="textbookVolume" type="number" min="1" step="1" placeholder="예: 1"></div>
+        <div><label>교재 이름</label><input id="textbookName" required autocomplete="off" placeholder="예: 큐보 1권"></div>
+        <p class="note err" id="textbookMsg" hidden></p>
+        <button type="submit" class="primary" id="textbookSubmitBtn">등록</button>
+      </form>
+    </div>
+    <div class="card">
+      <div class="crumbs" id="textbookSubjectTabs">
+        <button type="button" class="current" data-subject-tab="robot">로봇</button>
+        <button type="button" data-subject-tab="goldberg">골드버그</button>
+        <button type="button" data-subject-tab="aviation">항공</button>
+      </div>
+      <div class="crumbs" id="textbookCategoryTabs" hidden style="margin-top:6px;"></div>
+      <div class="list" id="textbookListArea" style="margin-top:8px;"></div>
+      <p class="list-empty" id="textbookListEmpty" hidden>등록된 교재가 없어요.</p>
+    </div>
+    <div class="card" id="textbookChaptersCard" hidden>
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+        <h3 style="font-size:15px; margin:0;" id="textbookChaptersTitle">차시 목록</h3>
+        <button type="button" class="ghost" id="deleteTextbookBtn">이 교재 삭제</button>
+      </div>
+      <div id="textbookChaptersList" style="margin-top:8px;"></div>
+      <button type="button" class="ghost" id="addChapterBtn" style="margin-top:8px;">+ 차시 추가</button>
+      <p class="note err" id="textbookChaptersMsg" hidden></p>
+    </div>
+  </section>
   </div>
 </div>
 
@@ -574,6 +614,7 @@
     const isAdmin = !!(session.user.app_metadata && session.user.app_metadata.role === 'admin');
     document.getElementById('adminLink').hidden = !isAdmin;
     document.getElementById('partsTabBtn').hidden = !isAdmin;
+    document.getElementById('textbooksTabBtn').hidden = !isAdmin;
     renderTeacherChip();
     renderHome();
     renderManage();
@@ -1660,6 +1701,314 @@
     catch (err) { document.getElementById('partListArea').innerHTML = ''; document.getElementById('partListEmpty').hidden = false; document.getElementById('partListEmpty').textContent = err.message; }
   }
 
+  // ===== 교재관리 (사용자 지시: "교재관리 추가해줘~ 과목중 선택해서 교재를 등록하고 각 교재 차시 제목
+  // 등록,수정,삭제 가능하게~ 중간에 몾입력한 차시도 추가 가능하게~ (차시별 위아래 이동 가능하게)" +
+  // "설계도 위 스샷부분과 연동이 되어야하고~ 부품하고도 연계가 되어야해" +
+  // "각 차시,권단위로 pdf파일이나 엑셀등의 서류 등록이 가능하게 해줘" + "다운로드도 가능하게") =====
+  // 부품 카탈로그와 같은 방식(모든 선생님 공유)의 회사 공통 자료. 과목(로봇은 카테고리+권)마다 교재를
+  // 여러 개 등록하고, 그 안에 차시(제목·필요 부품·첨부파일)를 순서대로 관리한다. 설계 화면(design.html)의
+  // 차시 카드·필요 부품 목록이 이 데이터를 읽어서 보여준다.
+  let allTextbooks = [];
+  let textbookSubjectTab = 'robot';
+  let textbookCategoryTab = null;
+  let selectedTextbookId = null;
+
+  function fillTextbookCategoryOptions(){
+    const sel = document.getElementById('textbookCategory');
+    const cur = sel.value;
+    const subject = document.getElementById('textbookSubject').value;
+    sel.innerHTML = robotCategories.filter((c) => c.subject === subject).map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`).join('');
+    sel.value = cur;
+  }
+  function syncTextbookFormVisibility(){
+    const isRobot = document.getElementById('textbookSubject').value === 'robot';
+    document.getElementById('textbookCategoryWrap').hidden = !isRobot;
+    document.getElementById('textbookVolumeWrap').hidden = !isRobot;
+    fillTextbookCategoryOptions();
+  }
+  document.getElementById('textbookSubject').addEventListener('change', syncTextbookFormVisibility);
+  document.getElementById('toggleTextbookForm').addEventListener('click', () => {
+    const f = document.getElementById('textbookForm');
+    f.hidden = !f.hidden;
+    document.getElementById('toggleTextbookForm').textContent = f.hidden ? '+ 교재 등록' : '숨기기';
+    if (!f.hidden) syncTextbookFormVisibility();
+  });
+  document.getElementById('textbookForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const msg = document.getElementById('textbookMsg');
+    msg.hidden = true;
+    const subject = document.getElementById('textbookSubject').value;
+    const category = subject === 'robot' ? document.getElementById('textbookCategory').value : '';
+    const volume = subject === 'robot' ? document.getElementById('textbookVolume').value : '';
+    const name = document.getElementById('textbookName').value.trim();
+    try {
+      const res = await adminApi({ action: 'add_textbook', subject, category, volume, name });
+      allTextbooks = res.textbooks || [];
+      document.getElementById('textbookForm').reset();
+      document.getElementById('textbookForm').hidden = true;
+      document.getElementById('toggleTextbookForm').textContent = '+ 교재 등록';
+      renderTextbookList();
+    } catch (err) { msg.textContent = err.message; msg.hidden = false; }
+  });
+  document.getElementById('textbookSubjectTabs').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-subject-tab]');
+    if (!btn) return;
+    textbookSubjectTab = btn.dataset.subjectTab;
+    textbookCategoryTab = null;
+    selectedTextbookId = null;
+    document.getElementById('textbookSubjectTabs').querySelectorAll('[data-subject-tab]').forEach((b) => b.classList.toggle('current', b === btn));
+    renderTextbookList();
+    renderChapters();
+  });
+  document.getElementById('textbookCategoryTabs').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-category-tab]');
+    if (!btn) return;
+    textbookCategoryTab = btn.dataset.categoryTab;
+    selectedTextbookId = null;
+    renderTextbookList();
+    renderChapters();
+  });
+  function renderTextbookList(){
+    const catTabsEl = document.getElementById('textbookCategoryTabs');
+    let items = allTextbooks.filter((t) => t.subject === textbookSubjectTab);
+    if (textbookSubjectTab === 'robot') {
+      const catKeys = robotCategories.filter((c) => c.subject === 'robot').map((c) => c.id);
+      items.forEach((t) => { if (t.category && !catKeys.includes(t.category)) catKeys.push(t.category); });
+      if (!textbookCategoryTab || !catKeys.includes(textbookCategoryTab)) textbookCategoryTab = catKeys[0] || null;
+      catTabsEl.hidden = catKeys.length === 0;
+      catTabsEl.innerHTML = catKeys.map((k) => `<button type="button" class="${k === textbookCategoryTab ? 'current' : ''}" data-category-tab="${escapeHtml(k)}">${escapeHtml(categoryLabel(k) || '기타')}</button>`).join('');
+      items = items.filter((t) => t.category === textbookCategoryTab);
+    } else {
+      catTabsEl.hidden = true; catTabsEl.innerHTML = ''; textbookCategoryTab = null;
+    }
+    items = items.slice().sort((a, b) => (a.volume || 0) - (b.volume || 0));
+    const el = document.getElementById('textbookListArea');
+    document.getElementById('textbookListEmpty').hidden = items.length > 0;
+    el.innerHTML = items.map((t) => `<div class="design-row" data-textbook-id="${escapeHtml(t.id)}" style="cursor:pointer;${t.id === selectedTextbookId ? ' background:var(--panel);' : ''}">
+      <div class="item-main"><div class="item-title">${escapeHtml(t.name)}</div><div class="item-sub">${t.volume ? t.volume + '권 · ' : ''}차시 ${t.chapters.length}개${t.fileUrl ? ' · 📎 첨부' : ''}</div></div>
+    </div>`).join('');
+    el.querySelectorAll('[data-textbook-id]').forEach((row) => row.addEventListener('click', () => {
+      selectedTextbookId = row.dataset.textbookId;
+      renderTextbookList();
+      renderChapters();
+    }));
+  }
+  function currentTextbook(){ return allTextbooks.find((t) => t.id === selectedTextbookId) || null; }
+  // Supabase Storage에 직접 업로드(관리자 API를 거치지 않음 — PDF/엑셀은 base64로 JSON에 실으면 너무
+  // 커지므로, STL 파일 때 겪은 것과 같은 종류의 용량 문제를 피하려고 파일 자체는 Storage에, DB엔 URL만
+  // 저장한다). textbook-files 버킷은 공개 읽기라 URL 그대로 다운로드 링크로 쓸 수 있다.
+  async function uploadTextbookFile(file){
+    if (file.size > 20 * 1024 * 1024) throw new Error('파일이 너무 커요(20MB 이하로 올려주세요).');
+    const ext = (file.name.split('.').pop() || 'bin').toLowerCase();
+    const path = Date.now() + '_' + Math.random().toString(36).slice(2, 8) + '.' + ext;
+    const { error } = await db.client.storage.from('textbook-files').upload(path, file);
+    if (error) throw new Error(error.message);
+    const { data } = db.client.storage.from('textbook-files').getPublicUrl(path);
+    return { fileUrl: data.publicUrl, fileName: file.name };
+  }
+  function fileAttachHtml(fileUrl, fileName, uploadAttr, removeAttr){
+    if (fileUrl) return `<a href="${escapeHtml(fileUrl)}" target="_blank" rel="noopener" download style="font-size:12px;">📎 ${escapeHtml(fileName || '다운로드')}</a><button type="button" class="ghost" ${removeAttr}="1" style="font-size:11px;">삭제</button>`;
+    return `<button type="button" class="ghost" ${uploadAttr}="1" style="font-size:11px;">📎 파일 업로드(PDF·엑셀)</button>`;
+  }
+  function chapterRowHtml(tb, c, i){
+    const partsChips = (c.parts || []).map((p) => {
+      const part = allParts.find((x) => x.id === p.partId);
+      return `<span class="pill" data-remove-part="${escapeHtml(c.id)}" data-remove-part-id="${escapeHtml(p.partId)}" style="cursor:pointer;" title="눌러서 제거">${escapeHtml(part ? part.name : '(삭제된 부품)')} ×${p.qty} ✕</span>`;
+    }).join(' ');
+    const partOptions = allParts.filter((p) => p.subject === tb.subject).map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)}</option>`).join('');
+    return `<div class="design-row" style="flex-direction:column; align-items:stretch; gap:6px; margin-bottom:10px; padding:10px; border:1px solid var(--line); border-radius:8px;" data-chapter-id="${escapeHtml(c.id)}">
+      <div style="display:flex; align-items:center; gap:6px;">
+        <span class="item-sub" style="flex:none; font-weight:700;">${i + 1}차시</span>
+        <input type="text" value="${escapeHtml(c.title)}" data-chapter-title="1" style="flex:1;" placeholder="차시 제목">
+        <button type="button" class="ghost" data-chapter-up="1" ${i === 0 ? 'disabled' : ''}>▲</button>
+        <button type="button" class="ghost" data-chapter-down="1" ${i === tb.chapters.length - 1 ? 'disabled' : ''}>▼</button>
+        <button type="button" class="ghost" data-chapter-delete="1">삭제</button>
+      </div>
+      <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+        ${fileAttachHtml(c.fileUrl, c.fileName, 'data-chapter-upload', 'data-chapter-remove-file')}
+      </div>
+      <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+        <span class="item-sub" style="flex:none;">필요 부품</span>
+        ${partsChips || '<span class="item-sub">없음</span>'}
+        <select data-add-part-select="1" style="max-width:160px;"><option value="">+ 부품 선택</option>${partOptions}</select>
+        <input type="number" min="1" step="1" value="1" data-add-part-qty="1" style="width:52px;">
+        <button type="button" class="ghost" data-add-part-btn="1">추가</button>
+      </div>
+      <button type="button" class="ghost" data-insert-after="1" style="align-self:flex-start; font-size:11px;">+ 이 아래에 차시 추가</button>
+    </div>`;
+  }
+  function renderChapters(){
+    const card = document.getElementById('textbookChaptersCard');
+    const tb = currentTextbook();
+    if (!tb) { card.hidden = true; return; }
+    card.hidden = false;
+    document.getElementById('textbookChaptersTitle').textContent = tb.name + ' — 차시 목록';
+    const list = document.getElementById('textbookChaptersList');
+    list.innerHTML = `<div class="design-row" style="align-items:center; margin-bottom:10px;">
+      <div class="item-main"><div class="item-title">📎 교재 첨부파일(권 전체)</div></div>
+      <div style="display:flex; gap:6px; flex:none; align-items:center;">${fileAttachHtml(tb.fileUrl, tb.fileName, 'data-tb-upload', 'data-tb-remove-file')}</div>
+    </div>` + (tb.chapters.length ? tb.chapters.map((c, i) => chapterRowHtml(tb, c, i)).join('') : '<p class="note">아직 차시가 없어요. 아래 "+ 차시 추가"를 눌러주세요.</p>');
+  }
+  async function saveChapters(tb, chapters){
+    const errEl = document.getElementById('textbookChaptersMsg');
+    errEl.hidden = true;
+    try {
+      const res = await adminApi({ action: 'update_textbook', textbookId: tb.id, chapters });
+      allTextbooks = res.textbooks || [];
+      renderTextbookList();
+      renderChapters();
+    } catch (err) { errEl.textContent = err.message; errEl.hidden = false; }
+  }
+  async function saveTextbookFile(tb, fileUrl, fileName){
+    const errEl = document.getElementById('textbookChaptersMsg');
+    errEl.hidden = true;
+    try {
+      const res = await adminApi({ action: 'update_textbook', textbookId: tb.id, fileUrl, fileName });
+      allTextbooks = res.textbooks || [];
+      renderTextbookList();
+      renderChapters();
+    } catch (err) { errEl.textContent = err.message; errEl.hidden = false; }
+  }
+  document.getElementById('addChapterBtn').addEventListener('click', () => {
+    const tb = currentTextbook();
+    if (!tb) return;
+    const arr = tb.chapters.concat([{ id: 'ch_' + Math.random().toString(36).slice(2, 10), title: '', parts: [] }]);
+    saveChapters(tb, arr);
+  });
+  document.getElementById('deleteTextbookBtn').addEventListener('click', function(){
+    const tb = currentTextbook();
+    if (!tb) return;
+    armAction(this, '정말 삭제?', async () => {
+      try {
+        const res = await adminApi({ action: 'delete_textbook', textbookId: tb.id });
+        allTextbooks = res.textbooks || [];
+        selectedTextbookId = null;
+        renderTextbookList();
+        renderChapters();
+      } catch (err) { const errEl = document.getElementById('textbookChaptersMsg'); errEl.textContent = err.message; errEl.hidden = false; }
+    });
+  });
+  // 제목 입력은 포커스를 잃을 때(blur) 저장 — 글자 하나 칠 때마다 서버에 저장하지 않는다.
+  document.getElementById('textbookChaptersList').addEventListener('change', (e) => {
+    const titleInput = e.target.closest('[data-chapter-title]');
+    if (titleInput) {
+      const tb = currentTextbook();
+      if (!tb) return;
+      const row = titleInput.closest('[data-chapter-id]');
+      const arr = tb.chapters.map((c) => c.id === row.dataset.chapterId ? Object.assign({}, c, { title: titleInput.value.trim() }) : c);
+      saveChapters(tb, arr);
+      return;
+    }
+  });
+  document.getElementById('textbookChaptersList').addEventListener('click', async (e) => {
+    const tb = currentTextbook();
+    if (!tb) return;
+    const upBtn = e.target.closest('[data-chapter-up]');
+    const downBtn = e.target.closest('[data-chapter-down]');
+    if (upBtn || downBtn) {
+      const row = (upBtn || downBtn).closest('[data-chapter-id]');
+      const idx = tb.chapters.findIndex((c) => c.id === row.dataset.chapterId);
+      const swapWith = upBtn ? idx - 1 : idx + 1;
+      if (swapWith < 0 || swapWith >= tb.chapters.length) return;
+      const arr = tb.chapters.slice();
+      const tmp = arr[idx]; arr[idx] = arr[swapWith]; arr[swapWith] = tmp;
+      saveChapters(tb, arr);
+      return;
+    }
+    const delBtn = e.target.closest('[data-chapter-delete]');
+    if (delBtn) {
+      armAction(delBtn, '정말 삭제?', () => {
+        const row = delBtn.closest('[data-chapter-id]');
+        const arr = tb.chapters.filter((c) => c.id !== row.dataset.chapterId);
+        saveChapters(tb, arr);
+      });
+      return;
+    }
+    const insertBtn = e.target.closest('[data-insert-after]');
+    if (insertBtn) {
+      const row = insertBtn.closest('[data-chapter-id]');
+      const idx = tb.chapters.findIndex((c) => c.id === row.dataset.chapterId);
+      const arr = tb.chapters.slice();
+      arr.splice(idx + 1, 0, { id: 'ch_' + Math.random().toString(36).slice(2, 10), title: '', parts: [] });
+      saveChapters(tb, arr);
+      return;
+    }
+    const addPartBtn = e.target.closest('[data-add-part-btn]');
+    if (addPartBtn) {
+      const row = addPartBtn.closest('[data-chapter-id]');
+      const sel = row.querySelector('[data-add-part-select]');
+      const qtyInput = row.querySelector('[data-add-part-qty]');
+      const partId = sel.value;
+      const qty = Math.max(1, Number(qtyInput.value) || 1);
+      if (!partId) return;
+      const arr = tb.chapters.map((c) => {
+        if (c.id !== row.dataset.chapterId) return c;
+        const parts = (c.parts || []).filter((p) => p.partId !== partId).concat([{ partId, qty }]);
+        return Object.assign({}, c, { parts });
+      });
+      saveChapters(tb, arr);
+      return;
+    }
+    const removeChip = e.target.closest('[data-remove-part]');
+    if (removeChip) {
+      const chapterId = removeChip.dataset.removePart;
+      const partId = removeChip.dataset.removePartId;
+      const arr = tb.chapters.map((c) => c.id !== chapterId ? c : Object.assign({}, c, { parts: (c.parts || []).filter((p) => p.partId !== partId) }));
+      saveChapters(tb, arr);
+      return;
+    }
+    const chUploadBtn = e.target.closest('[data-chapter-upload]');
+    if (chUploadBtn) {
+      const row = chUploadBtn.closest('[data-chapter-id]');
+      const input = document.createElement('input');
+      input.type = 'file'; input.accept = '.pdf,.xlsx,.xls,.csv';
+      input.addEventListener('change', async () => {
+        if (!input.files[0]) return;
+        chUploadBtn.textContent = '올리는 중...'; chUploadBtn.disabled = true;
+        try {
+          const { fileUrl, fileName } = await uploadTextbookFile(input.files[0]);
+          const arr = tb.chapters.map((c) => c.id === row.dataset.chapterId ? Object.assign({}, c, { fileUrl, fileName }) : c);
+          await saveChapters(tb, arr);
+        } catch (err) { const errEl = document.getElementById('textbookChaptersMsg'); errEl.textContent = err.message; errEl.hidden = false; }
+      });
+      input.click();
+      return;
+    }
+    const chRemoveFileBtn = e.target.closest('[data-chapter-remove-file]');
+    if (chRemoveFileBtn) {
+      armAction(chRemoveFileBtn, '정말 삭제?', () => {
+        const row = chRemoveFileBtn.closest('[data-chapter-id]');
+        const arr = tb.chapters.map((c) => c.id === row.dataset.chapterId ? Object.assign({}, c, { fileUrl: null, fileName: null }) : c);
+        saveChapters(tb, arr);
+      });
+      return;
+    }
+    const tbUploadBtn = e.target.closest('[data-tb-upload]');
+    if (tbUploadBtn) {
+      const input = document.createElement('input');
+      input.type = 'file'; input.accept = '.pdf,.xlsx,.xls,.csv';
+      input.addEventListener('change', async () => {
+        if (!input.files[0]) return;
+        tbUploadBtn.textContent = '올리는 중...'; tbUploadBtn.disabled = true;
+        try {
+          const { fileUrl, fileName } = await uploadTextbookFile(input.files[0]);
+          await saveTextbookFile(tb, fileUrl, fileName);
+        } catch (err) { const errEl = document.getElementById('textbookChaptersMsg'); errEl.textContent = err.message; errEl.hidden = false; }
+      });
+      input.click();
+      return;
+    }
+    const tbRemoveFileBtn = e.target.closest('[data-tb-remove-file]');
+    if (tbRemoveFileBtn) {
+      armAction(tbRemoveFileBtn, '정말 삭제?', () => { saveTextbookFile(tb, null, null); });
+      return;
+    }
+  });
+  async function loadTextbooks(){
+    try { allTextbooks = (await adminApi({ action: 'list_textbooks' })).textbooks || []; renderTextbookList(); renderChapters(); }
+    catch (err) { document.getElementById('textbookListArea').innerHTML = ''; document.getElementById('textbookListEmpty').hidden = false; document.getElementById('textbookListEmpty').textContent = err.message; }
+  }
+
   function fillPartCategoryOptions(){
     const sel = document.getElementById('partCategory');
     const cur = sel.value;
@@ -1965,9 +2314,11 @@
       document.getElementById('tab-attend').hidden = btn.dataset.tab !== 'attend';
       document.getElementById('tab-curriculum').hidden = btn.dataset.tab !== 'curriculum';
       document.getElementById('tab-parts').hidden = btn.dataset.tab !== 'parts';
+      document.getElementById('tab-textbooks').hidden = btn.dataset.tab !== 'textbooks';
       if (btn.dataset.tab === 'home') renderHome();
       if (btn.dataset.tab === 'curriculum') { loadCategories().then(() => { fillCurriculumCategoryOptions(curriculumSubjectSel.value, curriculumCategorySel); syncCurriculumSubjectUI(); renderCurriculumList(); }); }
       if (btn.dataset.tab === 'parts') { loadCategories().then(loadParts); }
+      if (btn.dataset.tab === 'textbooks') { loadCategories().then(() => Promise.all([loadParts(), loadTextbooks()])); }
     });
   });
 
