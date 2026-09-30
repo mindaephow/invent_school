@@ -422,6 +422,10 @@
           <p class="lesson-mission"></p>
           <div id="assemblyBox" hidden style="margin:8px 0;">
             <button id="asmOpen" class="primary" type="button">🧩 조립 보기</button>
+            <details id="asmRulesBox" style="margin-top:6px;">
+              <summary style="cursor:pointer; font-size:13px; font-weight:700;">📖 큐보 조립 방식</summary>
+              <ul id="asmRules" style="margin:6px 0 0; padding-left:18px; font-size:13px; line-height:1.5;"></ul>
+            </details>
             <div id="asmBar" hidden style="display:flex; flex-direction:column; gap:6px;">
               <div style="display:flex; align-items:center; justify-content:space-between;"><b id="asmLabel">완성!</b><button id="asmClose" class="ghost" type="button" style="padding:3px 10px;">닫기</button></div>
               <input id="asmSlider" type="range" min="0" max="1" step="1" value="0" style="width:100%;" aria-label="조립 단계">

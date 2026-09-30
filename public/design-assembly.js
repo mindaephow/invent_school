@@ -176,6 +176,7 @@
       def = found;
       catId = found ? cat.id : null;
       box.hidden = !found;
+      $('asmRules').innerHTML = (window.IVS_ASSEMBLY_RULES || []).map((r) => '<li>' + r + '</li>').join('');
       if (!viewing) $('asmOpen').hidden = !found;
     },
     isViewing() { return viewing; },
