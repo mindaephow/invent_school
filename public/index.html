@@ -409,6 +409,10 @@
         <button type="button" data-subject-tab="aviation">항공</button>
       </div>
       <div class="crumbs" id="partCategoryTabs" hidden style="margin-top:6px;"></div>
+      <div style="display:flex; align-items:center; gap:8px; margin:8px 0;">
+        <button type="button" class="ghost" id="regenThumbsBtn">🔄 3D 썸네일 다시 그리기</button>
+        <span class="note" id="regenThumbsMsg" style="margin:0;"></span>
+      </div>
       <div class="list" id="partListArea"></div>
       <p class="list-empty" id="partListEmpty" hidden>등록된 부품이 없어요.</p>
     </div>
@@ -1619,6 +1623,38 @@
       } catch (e) { console.error('3D 썸네일 렌더 실패: ' + p.name, e); }
     }
   }
+  // 오늘 렌더링 로직(배경 투명화·중심 정렬)을 고친 뒤에도, 이미 저장돼 있는 옛 thumbnail3d 캐시는 그
+  // 전 버전 그대로 남아있어 화면에 계속 예전 모습으로 보였다(사용자 지적: "3D 부품들이 배경색상과
+  // 안맞는데?" / "중심으로 옮겼단느것들도 안되었고" — 코드는 고쳤지만 캐시된 이미지 자체를 다시 만들지
+  // 않으면 반영이 안 됨). 부품마다 다시 로그인해서 하나씩 저장하는 대신, 이 버튼 한 번으로 spec.shapes가
+  // 있는 부품 전부를 최신 렌더링 로직으로 다시 그려서 thumbnail3d만 갱신한다. update_part는 body에
+  // 안 담아 보낸 필드(spec 등)는 기존 값을 그대로 유지하지만, image_svg 등 몇몇 필드는 안 보내면 빈 값으로
+  // 덮어써지므로 allParts에 이미 있는 값을 전부 그대로 다시 실어 보낸다(사용자 데이터 유실 방지).
+  document.getElementById('regenThumbsBtn').addEventListener('click', async () => {
+    const msg = document.getElementById('regenThumbsMsg');
+    const btn = document.getElementById('regenThumbsBtn');
+    const targets = allParts.filter((p) => p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.length);
+    if (!targets.length) { msg.textContent = '3D 모델이 있는 부품이 없어요.'; return; }
+    if (!window.__partsLabViewer) { msg.textContent = '3D 모듈이 아직 로딩 중이에요 — 잠시 후 다시 시도해주세요.'; return; }
+    btn.disabled = true;
+    let done = 0, failed = 0;
+    for (const p of targets) {
+      msg.textContent = `다시 그리는 중... (${done + failed + 1}/${targets.length})`;
+      try {
+        const dataUrl = await window.__partsLabViewer.renderShapesThumbnail(p.spec.shapes, 88);
+        await adminApi({
+          action: 'update_part', partId: p.id, name: p.name, icon: p.icon, subject: p.subject,
+          category: p.category || '', color: p.color || '', size: p.size || '',
+          imageSvg: p.imageSvg || '', imageSvgDiagonal: p.imageSvgDiagonal || '',
+          primaryImage: p.primaryImage || 'front', volumes: p.volumes || [], thumbnail3d: dataUrl,
+        });
+        done++;
+      } catch (e) { failed++; console.error('썸네일 재생성 실패: ' + p.name, e); }
+    }
+    msg.textContent = `완료 — ${done}개 갱신${failed ? `, ${failed}개 실패` : ''}.`;
+    btn.disabled = false;
+    loadParts();
+  });
   async function loadParts(){
     try { renderParts((await adminApi({ action: 'list_parts' })).parts || []); }
     catch (err) { document.getElementById('partListArea').innerHTML = ''; document.getElementById('partListEmpty').hidden = false; document.getElementById('partListEmpty').textContent = err.message; }
