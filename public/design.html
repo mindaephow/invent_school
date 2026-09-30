@@ -439,6 +439,12 @@
                 <button id="asmReverse" class="ghost" type="button" style="flex:1;">◀ 역재생</button>
                 <button id="asmPlay" class="ghost" type="button" style="flex:1;">▶ 재생</button>
               </div>
+              <button id="asmCombine" class="primary" type="button" title="끼울 부품을 눌러 고른 뒤 누르면 그 부품이 제자리 구멍으로 가서 딱 붙어요">🔗 결합</button>
+              <div style="display:flex; gap:4px;">
+                <button id="asmMoveMode" class="ghost" type="button" style="flex:1;" aria-pressed="false" title="부품을 끌 때 옆으로 움직일지 위아래로 움직일지">↔ 옆으로 움직이기</button>
+                <button id="asmReset" class="ghost" type="button" style="flex:1;" title="움직인 부품을 이 단계의 처음 자리로">↺ 원위치</button>
+              </div>
+              <p class="note" style="margin:0;">부품을 눌러 끌면 움직여요(저장되지 않아요). 제자리에 가까워지면 딱 붙어요.</p>
               <div id="asmSteps" style="display:flex; flex-wrap:wrap; gap:4px;" aria-label="단계 바로가기"></div>
               <p id="asmNote" class="note" style="margin:0;"></p>
             </div>
@@ -1473,9 +1479,15 @@
     const target = { x: p.x, y: p.y, z: p.z };
     p.set(prev.x, prev.y, prev.z);
     ['x', 'z', 'y'].forEach(ax => {
-      const before = p[ax];
-      p[ax] = target[ax];
-      if (overlappingPart(part)) p[ax] = before;
+      let lo = p[ax], hi = target[ax]; // lo: 안 겹치는 자리, hi: 가려는 자리
+      p[ax] = hi;
+      if (!overlappingPart(part)) return;
+      for (let i = 0; i < 10; i++) { // 마우스가 크게 움직여도 닿기 직전 자리까지는 간다
+        const mid = (lo + hi) / 2;
+        p[ax] = mid;
+        if (overlappingPart(part)) hi = mid; else lo = mid;
+      }
+      p[ax] = lo;
     });
     noteBlocked();
   }
@@ -1970,7 +1982,9 @@
     }
     if (!selected || selected.isMarker) return;
     const def = defOf(selected);
-    const len = Math.max(def.w, def.h, def.d) / 2 + 50;
+    // 화살표 굵기·길이는 골드버그의 큰 부품(250mm) 기준이라 작은 로봇 부품에는 너무 굵었다 — 부품 크기에 비례해 줄인다(큰 부품은 그대로).
+    const k = Math.min(1, Math.max(0.3, Math.max(def.w, def.h, def.d) / 120));
+    const len = Math.max(def.w, def.h, def.d) / 2 + 50 * k;
     const g = new THREE.Group();
     [['X', '#E5484D', 0xE5484D, new THREE.Vector3(1, 0, 0), { z: -Math.PI / 2 }],
      ['Y', '#30A46C', 0x30A46C, new THREE.Vector3(0, 1, 0), {}],
@@ -1978,16 +1992,17 @@
       const mat = new THREE.MeshBasicMaterial({ color: hex, transparent: true, depthTest: false });
       if (activeAxis && activeAxis !== name.toLowerCase()) mat.opacity = 0.25; // 고른 축만 또렷하게
       const arrow = new THREE.Group();
-      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, len, 8), mat);
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(2.2 * k, 2.2 * k, len, 8), mat);
       shaft.position.y = len / 2;
-      const head = new THREE.Mesh(new THREE.ConeGeometry(7, 22, 14), mat);
-      head.position.y = len + 8;
+      const head = new THREE.Mesh(new THREE.ConeGeometry(7 * k, 22 * k, 14), mat);
+      head.position.y = len + 8 * k;
       shaft.renderOrder = 20; head.renderOrder = 20;
       arrow.add(shaft); arrow.add(head);
       arrow.rotation.set(rot.x || 0, 0, rot.z || 0);
       g.add(arrow);
       const label = makeAxisLabel(name, css);
-      label.position.copy(dir).multiplyScalar(len + 38);
+      label.position.copy(dir).multiplyScalar(len + 38 * k);
+      label.scale.multiplyScalar(Math.max(k, 0.45));
       g.add(label);
     });
     g.position.copy(selected.body.position);
@@ -2338,8 +2353,9 @@
     if (p !== selected) activeAxis = null;
     syncAxisButtons();
     selected = p;
-    selectedControls.hidden = !p;
-    modalBackdrop.hidden = !p;
+    const demoMode = !!(window.__ivsAssembly && window.__ivsAssembly.isViewing()); // 조립 보기 시연 중엔 부품 창 없이 끌어서 움직인다
+    selectedControls.hidden = !p || demoMode;
+    modalBackdrop.hidden = !p || demoMode;
     if (p) {
       selectedLabel.textContent = p.isGroup ? `${p.set.label} 전체 · 부품 ${p.members.length}개` : `${PART_DEFS[p.type].label} · ${MOUNT_LABEL[p.mount]}`;
       const baseMount = p.mount.startsWith('wall') ? 'wall' : p.mount;
@@ -2351,11 +2367,12 @@
       const mk = !!p.isMarker;
       document.querySelectorAll('#selectedControls .rotate-row, #selectedMountSelect, #axisBlock').forEach(el => { el.style.display = mk ? 'none' : ''; });
       if (p.isGroup) document.getElementById('selectedMountSelect').style.display = 'none';
-      document.getElementById('deletePart').hidden = mk;
+      if (SUBJECT !== 'goldberg') document.getElementById('selectedMountSelect').style.display = 'none'; // 바닥·벽·천장 고르기는 골드버그 전용
+      document.getElementById('deletePart').hidden = mk || demoMode; // 조립 보기 중엔 삭제 버튼을 보이지 않는다
       document.getElementById('deletePart').textContent = p.isGroup ? '이 세트 삭제' : '이 부품 삭제';
       document.getElementById('selectWholeSet').hidden = !p.set || !!p.isGroup;
       const goalBtn = document.getElementById('setGoalPart');
-      goalBtn.hidden = !!p.isGroup || mk;
+      goalBtn.hidden = !!p.isGroup || mk || SUBJECT !== 'goldberg'; // 도착 지점은 골드버그에만 있다(로봇·항공엔 없음)
       goalBtn.textContent = p.isGoal ? '✅ 도착 지점 해제하기' : '🏁 도착 지점으로 정하기';
     }
     updateSelectionOutline();
@@ -3474,8 +3491,43 @@
     guardRobotMove(selected, prev);
   }
 
+  // ----- 조립 보기 시연: 선생님이 부품을 눌러서 끌어 보여 준다(저장 안 됨) -----
+  let assemblyTargets = []; // 부품 순서별 제자리 좌표(이번 단계에 끼우는 부품만) — 가까이 가면 딱 붙는다
+  function demoSnapToTarget(part){
+    const t = assemblyTargets[parts.indexOf(part)];
+    if (!t) return;
+    const p = part.body.position;
+    if (Math.hypot(p.x - t[0], p.y - t[1], p.z - t[2]) > 4) return;
+    if (Math.hypot(p.x - t[0], p.y - t[1], p.z - t[2]) < 0.05) return;
+    const prev = { x: p.x, y: p.y, z: p.z };
+    p.set(t[0], t[1], t[2]);
+    if (overlappingPart(part)) { p.set(prev.x, prev.y, prev.z); return; }
+    setStatus('딱! 제자리에 끼워졌어요.', 'success');
+  }
   function dragSelectedTo(e){
     if (!selected || playing) return;
+    if (window.__ivsAssembly && window.__ivsAssembly.isViewing()) {
+      raycaster.setFromCamera(ndcFromEvent(e), camera);
+      const p0 = selected.body.position;
+      const prev = { x: p0.x, y: p0.y, z: p0.z };
+      const hit = new THREE.Vector3();
+      const g = 2.5;
+      if (window.__ivsAssembly.moveVertical()) {
+        // 위아래: 카메라가 보는 방향(수평)에 수직인 세로 평면과 만나는 높이로 옮긴다
+        const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); fwd.y = 0;
+        if (fwd.lengthSq() < 1e-6) return;
+        const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(fwd.normalize(), new THREE.Vector3(p0.x, p0.y, p0.z));
+        if (!raycaster.ray.intersectPlane(plane, hit)) return;
+        p0.set(p0.x, Math.max(6, Math.round(hit.y)), p0.z);
+      } else {
+        const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -p0.y);
+        if (!raycaster.ray.intersectPlane(plane, hit)) return;
+        p0.set(Math.round(hit.x / g) * g, p0.y, Math.round(hit.z / g) * g);
+      }
+      guardRobotMove(selected, prev);
+      demoSnapToTarget(selected);
+      return;
+    }
     if (dragRotateState) {
       const dy = e.clientY - dragRotateState.y0;
       setRotAxis(activeAxis, dragRotateState.r0 - dy * ROTATE_DRAG_SENS);
@@ -3599,6 +3651,13 @@
     panning = e.button === 1 || e.button === 2 || e.shiftKey || panToggleOn;
     dragAxis = null;
     dragRotateState = null;
+    if (!playing && !panning && e.button === 0 && window.__ivsAssembly && window.__ivsAssembly.isViewing()) {
+      raycaster.setFromCamera(ndcFromEvent(e), camera);
+      const hits = raycaster.intersectObjects(parts.map(p => p.mesh), true);
+      let o = hits.length ? hits[0].object : null;
+      while (o && !o.userData.partRef) o = o.parent;
+      if (o) { select(o.userData.partRef); draggingPart = true; return; } // 눌러서 바로 끌 수 있게
+    }
     if (selected && !playing) {
       raycaster.setFromCamera(ndcFromEvent(e), camera);
       draggingPart = selected.isGroup ? selected.members.some(m => raycaster.intersectObject(m.mesh, true).length > 0) : raycaster.intersectObject(selected.mesh, true).length > 0;
@@ -3995,14 +4054,35 @@
     },
     quat(rot){ const q = quatFromRot({ x: rot[0], y: rot[1], z: rot[2] }); return [q.x, q.y, q.z, q.w].map(round5); },
     preload(names, categoryId){ return Promise.all(names.map(n => { const t = this.resolve(n, categoryId); return t ? ensureRobotModel(t.slice(6)) : null; })); },
-    show(list){ restoreParts(list, {}, true); },
+    show(list, targets){ assemblyTargets = targets || []; restoreParts(list, {}, true); },
+    // 고른 부품을 제자리(구멍 자리)로 부드럽게 옮겨 붙인다. 반환: 'ok' | 'none'(고른 부품 없음) | 'notTarget'(이번 단계에 끼우는 부품이 아님)
+    combineSelected(){
+      if (!selected || selected.isGroup) return 'none';
+      const idx = parts.indexOf(selected);
+      const t = assemblyTargets[idx];
+      if (!t) return 'notTarget';
+      assemblyTargets[idx] = null;
+      const part = selected, p = part.body.position;
+      const from = { x: p.x, y: p.y, z: p.z }, t0 = performance.now(), DUR = 450;
+      (function step(now){
+        if (!parts.includes(part)) return;
+        const k = Math.min(1, (now - t0) / DUR), e = 1 - Math.pow(1 - k, 3); // 끝에서 부드럽게 멈춘다
+        part.body.position.set(from.x + (t[0] - from.x) * e, from.y + (t[1] - from.y) * e, from.z + (t[2] - from.z) * e);
+        if (k < 1) requestAnimationFrame(step);
+        else { part.body.position.set(t[0], t[1], t[2]); setStatus('딱! 결합했어요.', 'success'); }
+      })(t0);
+      if (assemblyGuideGroup) {
+        assemblyGuideGroup.children.filter(c => c.userData.idx === idx).forEach(c => { assemblyGuideGroup.remove(c); c.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); });
+      }
+      return 'ok';
+    },
     // 교재 그림의 초록 화살표+구멍 원: { from, to, dir }마다 from→to 화살표와 to에 원(꽂는 구멍 자리)을 그린다.
     guides(list){
       if (assemblyGuideGroup) { scene.remove(assemblyGuideGroup); assemblyGuideGroup.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); assemblyGuideGroup = null; }
       if (!list || !list.length) return;
       const g = new THREE.Group();
       const mat = () => new THREE.MeshBasicMaterial({ color: 0x22c55e, depthTest: false, transparent: true });
-      list.forEach(({ from, to }) => {
+      list.forEach(({ from, to, idx }) => {
         const a = new THREE.Vector3(from[0], from[1], from[2]), b = new THREE.Vector3(to[0], to[1], to[2]);
         const v = b.clone().sub(a), len = v.length();
         if (len < 1) return;
@@ -4017,7 +4097,10 @@
         const ring = new THREE.Mesh(new THREE.TorusGeometry(4.8, 0.8, 8, 28), mat());
         ring.position.copy(b);
         ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
-        [shaft, head, ring].forEach(m => { m.renderOrder = 999; g.add(m); });
+        const arrowGroup = new THREE.Group();
+        arrowGroup.userData.idx = idx; // 어느 부품의 안내인지(결합하면 그 안내만 지운다)
+        [shaft, head, ring].forEach(m => { m.renderOrder = 999; arrowGroup.add(m); });
+        g.add(arrowGroup);
       });
       scene.add(g);
       assemblyGuideGroup = g;

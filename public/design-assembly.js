@@ -15,6 +15,7 @@
   let snapshot = null;   // 조립 보기 들어가기 전 작업(닫으면 그대로 되돌린다)
   let timer = null;      // setInterval 번호
   let timerDir = 0;      // 자동재생 방향(1 앞으로, -1 뒤로, 0 멈춤)
+  let vertical = false;  // 부품을 끌 때 위아래로 움직이는 모드인지(아니면 옆으로)
 
   function bridge() { return window.__ivsAssemblyBridge; }
   function total() { return def ? def.steps.length : 0; }
@@ -45,12 +46,12 @@
           const settling = pt.side && !useSide;
           const targets = settling ? (pt.settleMarks || []) : (pt.marks && pt.marks.length ? pt.marks : [base]);
           // 화살표는 띄워 놓은 부품의 돌기 끝(구멍에 들어갈 깊이만큼 아래)에서 시작해 구멍 위 원으로 들어간다
-          targets.forEach((m) => guides.push({ from: add(m, pt.dir, HOVER - PEG_DEPTH), to: m, dir: pt.dir }));
+          targets.forEach((m) => guides.push({ from: add(m, pt.dir, HOVER - PEG_DEPTH), to: m, dir: pt.dir, idx: list.length }));
         }
-        list.push({ name: pt.n, type, mount: 'floor', pos: pos.slice(), quat: b.quat(rot), rot: rot.slice(), isNew });
+        list.push({ name: pt.n, type, mount: 'floor', pos: pos.slice(), quat: b.quat(rot), rot: rot.slice(), isNew, final: isNew && pt.dir ? base.slice() : null });
       });
     });
-    return { list, guides, missing };
+    return { list, guides, missing, targets: list.map((d) => d.final || null) };
   }
 
   // 1, 2, 3 … 단계 번호 버튼(+ 마지막 "완성") — 눌러서 그 단계로 바로 가고, 지금 단계는 진하게 보인다.
@@ -79,8 +80,8 @@
 
   function render() {
     const b = bridge();
-    const { list, guides, missing } = buildList(step);
-    b.show(list.map(({ isNew, name, ...d }) => d));
+    const { list, guides, missing, targets } = buildList(step);
+    b.show(list.map(({ isNew, name, final, ...d }) => d), targets);
     b.guides(guides);
     const n = total();
     $('asmLabel').textContent = step === 0 ? '시작 전' : (step === last() ? '완성!' : step + ' / ' + n + ' 단계');
@@ -163,6 +164,18 @@
     $('asmPlay').addEventListener('click', () => play(1));
     $('asmReverse').addEventListener('click', () => play(-1));
     $('asmSlider').addEventListener('input', (e) => { stop(); go(Number(e.target.value)); });
+    $('asmCombine').addEventListener('click', () => {
+      const r = bridge().combineSelected();
+      if (r === 'none') bridge().status('먼저 끼울 부품을 눌러서 고르세요.', 'warn');
+      else if (r === 'notTarget') bridge().status('이 부품은 이번 단계에서 끼우는 부품이 아니에요. 떠 있는 부품을 눌러 보세요.', 'warn');
+    });
+    $('asmMoveMode').addEventListener('click', () => {
+      vertical = !vertical;
+      $('asmMoveMode').textContent = vertical ? '↕ 위아래로 움직이기' : '↔ 옆으로 움직이기';
+      $('asmMoveMode').setAttribute('aria-pressed', String(vertical));
+      $('asmMoveMode').className = vertical ? 'primary' : 'ghost';
+    });
+    $('asmReset').addEventListener('click', () => { stop(); go(step); });
     $('asmSteps').addEventListener('click', (e) => {
       const b = e.target.closest('button[data-step]');
       if (b) { stop(); go(Number(b.dataset.step)); }
@@ -184,5 +197,6 @@
       if (!viewing) $('asmOpen').hidden = !found;
     },
     isViewing() { return viewing; },
+    moveVertical() { return vertical; },
   };
 })();
