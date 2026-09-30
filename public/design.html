@@ -2508,6 +2508,11 @@
     selectedControls.hidden = !p;
     selectedControls.classList.toggle('docked', demoMode); // 조립 보기에선 스케치북 밖(왼쪽 부품 목록 위)에 붙인다
     dockSelectedControls(demoMode);
+    if (demoMode && p) {
+      // 창이 왼쪽 부품 목록 위에 있으므로, 목록을 접어 둔 상태면 펼치고 창이 보이는 곳으로 스크롤한다(부품을 눌렀는데 창이 안 보이던 문제)
+      if (layoutEl.classList.contains('no-side')) setSidebarHidden(false);
+      requestAnimationFrame(() => selectedControls.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
+    }
     modalBackdrop.hidden = !p || demoMode; // 조립 보기에선 뒷배경을 깔지 않아 부품을 계속 끌 수 있다
     document.getElementById('asmDemoBlock').hidden = !demoMode; // 🔗 결합·움직임 방식·원위치는 이 창 안에
     if (p) {
