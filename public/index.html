@@ -1884,28 +1884,36 @@
   // 되는" 것처럼 보였다(사용자 지적: "회차 삭제를 클릭해도 확인 과정이 없고 삭제도 안됨"). 이 변수는
   // 다시 그려도 그대로 남아있어서 확실히 동작한다.
   let confirmingDeleteChapterId = null;
+  let expandedChapterIds = new Set();
   function chapterRowHtml(tb, c, i){
     const partsChips = (c.parts || []).map((p) => {
       const part = allParts.find((x) => x.id === p.partId);
       return `<span class="pill" data-remove-part="${escapeHtml(c.id)}" data-remove-part-id="${escapeHtml(p.partId)}" style="cursor:pointer;" title="눌러서 제거">${escapeHtml(part ? part.name : '(삭제된 부품)')} ×${p.qty} ✕</span>`;
     }).join(' ');
     const deleteLabel = confirmingDeleteChapterId === c.id ? '정말 삭제?(다시 클릭)' : '삭제';
+    // 사용자 지시: "접었다 펼수있게 평소에는 0차시 제목라인만 보이면 됨" — 차시가 많아지고 부품이 쌓일수록
+    // 목록이 너무 길어져서, 제목 줄(제목·이동·삭제)만 항상 보이고 첨부·필요 부품·삽입 버튼은 펼쳤을 때만
+    // 보이게 한다. 펼침 상태는 화면에서만 기억(저장 안 함) — 기본은 접힘.
+    const expanded = expandedChapterIds.has(c.id);
     return `<div class="design-row" style="flex-direction:column; align-items:stretch; gap:6px; margin-bottom:10px; padding:10px; border:1px solid var(--line); border-radius:8px;" data-chapter-id="${escapeHtml(c.id)}">
       <div style="display:flex; align-items:center; gap:6px;">
+        <button type="button" class="ghost" data-chapter-fold="1" style="font-size:11px; padding:2px 6px; flex:none;" title="${expanded ? '접기' : '펼치기'}">${expanded ? '▾' : '▸'}</button>
         <span class="item-sub" style="flex:none; font-weight:700;">${i}차시</span>
         <input type="text" value="${escapeHtml(c.title)}" data-chapter-title="1" style="flex:1;" placeholder="차시 제목">
         <button type="button" class="ghost" data-chapter-up="1" ${i === 0 ? 'disabled' : ''}>▲</button>
         <button type="button" class="ghost" data-chapter-down="1" ${i === tb.chapters.length - 1 ? 'disabled' : ''}>▼</button>
         <button type="button" class="ghost${confirmingDeleteChapterId === c.id ? ' danger-armed' : ''}" data-chapter-delete="1">${deleteLabel}</button>
       </div>
-      <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-size:12px;">
-        <span class="item-sub" style="flex:none;">📎 첨부:</span>${filesListHtml(c.files, 'data-chapter-remove-file')}
+      <div ${expanded ? '' : 'hidden'}>
+        <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-size:12px; margin-bottom:6px;">
+          <span class="item-sub" style="flex:none;">📎 첨부:</span>${filesListHtml(c.files, 'data-chapter-remove-file')}
+        </div>
+        <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:6px;">
+          <span class="item-sub" style="flex:none;">필요 부품:</span>
+          ${partsChips || '<span class="item-sub">없음</span>'}
+        </div>
+        <button type="button" class="ghost" data-insert-after="1" style="font-size:11px;">+ 이 아래에 차시 추가</button>
       </div>
-      <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-        <span class="item-sub" style="flex:none;">필요 부품:</span>
-        ${partsChips || '<span class="item-sub">없음</span>'}
-      </div>
-      <button type="button" class="ghost" data-insert-after="1" style="align-self:flex-start; font-size:11px;">+ 이 아래에 차시 추가</button>
     </div>`;
   }
   // 부품·차시 드롭다운은 재사용(전체를 다시 그리지 않음) — "부품→차시→추가"를 반복할 때(사용자 지시:
@@ -2101,6 +2109,14 @@
   document.getElementById('textbookChaptersList').addEventListener('click', async (e) => {
     const tb = currentTextbook();
     if (!tb) return;
+    const foldBtn = e.target.closest('[data-chapter-fold]');
+    if (foldBtn) {
+      const row = foldBtn.closest('[data-chapter-id]');
+      const id = row.dataset.chapterId;
+      if (expandedChapterIds.has(id)) expandedChapterIds.delete(id); else expandedChapterIds.add(id);
+      renderChapters();
+      return;
+    }
     const upBtn = e.target.closest('[data-chapter-up]');
     const downBtn = e.target.closest('[data-chapter-down]');
     if (upBtn || downBtn) {
