@@ -1465,7 +1465,8 @@
     part.mesh.add(g);
   }
   const connBtn = document.getElementById('connToggle');
-  connBtn.hidden = SUBJECT !== 'robot';
+  // 연결점은 계산에 쓰는 내부 정보라 평소엔 화면에 보이지 않는다(사용자 지시). 확인이 필요할 때만 주소에 &connectors=1 을 붙이면 버튼이 나온다.
+  connBtn.hidden = SUBJECT !== 'robot' || new URLSearchParams(location.search).get('connectors') !== '1';
   connBtn.addEventListener('click', () => {
     showConnectors = !showConnectors;
     connBtn.setAttribute('aria-pressed', String(showConnectors));
