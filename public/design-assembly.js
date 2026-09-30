@@ -27,7 +27,7 @@
         const pos = useSide ? pt.side.p : pt.p;
         const rot = useSide ? pt.side.r : pt.r;
         const isNew = si + 1 === target || (pt.side && pt.side.until === target);
-        list.push({ type, mount: 'floor', pos: pos.slice(), quat: b.quat(rot), rot: rot.slice(), isNew });
+        list.push({ name: pt.n, type, mount: 'floor', pos: pos.slice(), quat: b.quat(rot), rot: rot.slice(), isNew });
       });
     });
     return { list, missing };
@@ -36,7 +36,8 @@
   function render() {
     const b = bridge();
     const { list, missing } = buildList(step);
-    b.show(list.map(({ isNew, ...d }) => d));
+    b.show(list.map(({ isNew, name, ...d }) => d));
+    b.tint(list.map((d) => (def.colors && def.colors[d.name]) || null));
     b.highlight(list.map((d, i) => (d.isNew ? i : -1)).filter((i) => i >= 0));
     const n = total();
     $('asmLabel').textContent = step === 0 ? '시작 전' : (step === n ? '완성!' : step + ' / ' + n + ' 단계');
@@ -74,9 +75,16 @@
     if (dir > 0) $('asmPlay').textContent = '⏸ 멈춤'; else $('asmReverse').textContent = '⏸ 멈춤';
   }
 
-  function open() {
+  async function open() {
     const b = bridge();
     if (!def || !b) return;
+    $('asmOpen').disabled = true;
+    b.status('3D 부품을 불러오는 중이에요...', null);
+    // 등록된 3D 모델을 먼저 받아 두면 부품이 처음부터 제 모양으로 나온다(받는 동안 단순 모양이 잠깐 보이는 것을 막음)
+    const names = [...new Set(def.steps.flatMap((s) => (s.parts || []).map((pt) => pt.n)))];
+    try { await b.preload(names, catId); } catch (e) { /* 못 받아도 단순 모양으로 계속 보여준다 */ }
+    $('asmOpen').disabled = false;
+    if (!def || viewing) return;
     snapshot = b.serialize();
     viewing = true;
     b.setViewing(true);

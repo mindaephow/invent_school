@@ -1376,6 +1376,65 @@
   try { if (localStorage.getItem('ivs-requiredlist-folded') === '1') setRequiredListFolded(true); } catch (e) {}
   window.__renderVolumeParts = renderVolumeParts;
   window.__refreshRequiredList = refreshRequiredList;
+  // ----- 로봇 부품을 부품 수리실에 등록된 3D 모델(spec.shapes)로 그리기 -----
+  // 예전엔 캔버스의 로봇 부품이 종류별로 코드에서 단순하게 그린 모양(상자·원판 등)이라, 팔레트 아이콘의 3D 모델과
+  // 달랐다(사용자 지적: "3D부품이 아닌데???"). 부품 하나의 모델은 필요할 때만(놓을 때) 받아서 메모리에 보관하고,
+  // 받는 동안엔 예전 모양으로 두었다가 도착하면 바꿔 끼운다. 모델 크기는 수십 KB~1MB 정도라 부품별로 따로 받는다.
+  const robotModelCache = new Map();   // partId → { position, normal, index, color, bbox } | null(모델 없음/실패)
+  const robotModelLoading = new Map(); // partId → Promise
+  function robotModelKnown(type){ return type && type.indexOf('robot:') === 0 ? robotModelCache.get(type.slice(6)) : null; }
+  function ensureRobotModel(partId){
+    if (robotModelCache.has(partId)) return Promise.resolve(robotModelCache.get(partId));
+    if (robotModelLoading.has(partId)) return robotModelLoading.get(partId);
+    const cached = robotPartsCache.find(x => x.id === partId);
+    const viewerReady = () => window.__partsLabViewer && window.__partsLabViewer.buildPartGeometryData;
+    const job = (async () => {
+      try {
+        if (!accessToken || !cached || !cached.thumbnail3d) return null; // 3D 모델이 있는 부품만(저장 시 썸네일도 같이 만들어진다)
+        for (let i = 0; i < 40 && !viewerReady(); i++) await new Promise(r => setTimeout(r, 250)); // 3D 모듈이 아직 로딩 중이면 잠깐 기다린다
+        if (!viewerReady()) return null;
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/ivs_part_catalog?select=spec:data->spec&id=eq.${encodeURIComponent(partId)}`, {
+          headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + accessToken }
+        });
+        if (!res.ok) return null;
+        const rows = await res.json();
+        const spec = rows[0] && rows[0].spec;
+        if (!spec || !Array.isArray(spec.shapes) || !spec.shapes.length) return null;
+        return await window.__partsLabViewer.buildPartGeometryData(spec.shapes);
+      } catch (err) { console.error('3D 모델 불러오기 실패', err); return null; }
+    })().then((data) => { robotModelCache.set(partId, data); robotModelLoading.delete(partId); return data; });
+    robotModelLoading.set(partId, job);
+    return job;
+  }
+  function makeRobotModelMesh(data){
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(data.position.slice(), 3));
+    g.setAttribute('normal', new THREE.BufferAttribute(data.normal.slice(), 3));
+    if (data.index) g.setIndex(new THREE.BufferAttribute(data.index.slice(), 1));
+    const c = [0, 1, 2].map(i => (data.bbox.min[i] + data.bbox.max[i]) / 2);
+    g.translate(-c[0], -c[1], -c[2]); // 모델 한가운데가 부품 위치(다른 부품과 같은 기준)에 오게 한다
+    return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: data.color }));
+  }
+  function swapRobotMesh(part, data){
+    if (!parts.includes(part) || part.mesh.userData.robotModel) return;
+    const oldMesh = part.mesh;
+    const m = makeRobotModelMesh(data);
+    m.userData.partRef = part;
+    m.userData.robotModel = true;
+    m.position.copy(oldMesh.position);
+    m.quaternion.copy(oldMesh.quaternion);
+    scene.remove(oldMesh);
+    scene.add(m);
+    part.mesh = m;
+    if (selected === part) updateSelectionOutline();
+  }
+  function upgradeRobotMesh(part){
+    if (!part.type || part.type.indexOf('robot:') !== 0) return;
+    const known = robotModelKnown(part.type);
+    if (known) { swapRobotMesh(part, known); return; }
+    if (robotModelCache.has(part.type.slice(6))) return; // 모델이 없는 부품
+    ensureRobotModel(part.type.slice(6)).then((data) => { if (data) swapRobotMesh(part, data); });
+  }
   async function loadRobotPartsFromDb(){
     if (SUBJECT !== 'robot' || !accessToken) return;
     try {
@@ -2343,6 +2402,8 @@
   // 바닥에 그냥 놓았을 때 중심 높이: 몸통 밑면이 바닥에 닿고, 아래로 나온 핀(클립)은 바닥을 넘지 않는다
   function restY(type){
     const def = PART_DEFS[type];
+    const mdl = robotModelKnown(type);
+    if (mdl) return (mdl.bbox.max[1] - mdl.bbox.min[1]) / 2; // 3D 모델 실제 높이 기준으로 바닥에 얹는다
     return def.h / 2 + (type === 'clip' ? CLIP_PEG_OUT : 0);
   }
 
@@ -2815,6 +2876,7 @@
     if (type === 'pin') part.len = pinLen;
     mesh.userData.partRef = part;
     parts.push(part);
+    upgradeRobotMesh(part); // 등록된 3D 모델이 있으면 단순 모양을 그 모델로 바꿔 끼운다
     select(part);
     refreshRobotPalette();
   }
@@ -3863,7 +3925,15 @@
       return p && PART_DEFS['robot:' + p.id] ? 'robot:' + p.id : null;
     },
     quat(rot){ const q = quatFromRot({ x: rot[0], y: rot[1], z: rot[2] }); return [q.x, q.y, q.z, q.w].map(round5); },
+    preload(names, categoryId){ return Promise.all(names.map(n => { const t = this.resolve(n, categoryId); return t ? ensureRobotModel(t.slice(6)) : null; })); },
     show(list){ restoreParts(list, {}, true); },
+    tint(colors){
+      colors.forEach((hex, i) => {
+        const part = parts[i];
+        if (!hex || !part || !part.mesh) return;
+        part.mesh.traverse(o => { if (o.material && o.material.color && o.isMesh) o.material.color.set(hex); });
+      });
+    },
     highlight(indices){
       indices.forEach(i => {
         const part = parts[i];

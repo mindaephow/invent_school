@@ -411,4 +411,24 @@ async function renderShapesThumbnail(shapesData, size) {
 // index.html은 이 파일을 <script type="module">로 그대로 로드해서 쓴다 — export 대신 window에 직접
 // 붙여서, index.html의 일반(classic) 스크립트에서 바로 호출할 수 있게 한다(부품 만들기 쪽이
 // window.__partsLab로 반대 방향 정보를 주고받는 것과 같은 다리 역할).
-window.__partsLabViewer = { renderShapesPreview, renderShapesThumbnail };
+// 설계 화면(design.html)이 캔버스에 놓는 부품을 등록된 3D 모델로 그릴 수 있게, spec.shapes를 합성한 모양의 원시 배열
+// (위치·법선·인덱스·색)만 꺼내 준다 — 설계 화면은 이 모듈과 다른 three 인스턴스를 쓰므로 객체 대신 숫자 배열로 넘긴다.
+async function buildPartGeometryData(shapesData) {
+  const list = await resolveImportGeometries(shapesData);
+  const mesh = meshFromShapes(list);
+  if (!mesh) return null;
+  mesh.updateMatrixWorld(true);
+  const geo = mesh.geometry.clone();
+  geo.applyMatrix4(mesh.matrixWorld); // 합성 결과가 첫 도형의 위치·회전을 물려받으므로 실제 좌표로 굽는다
+  if (!geo.attributes.normal) geo.computeVertexNormals();
+  geo.computeBoundingBox();
+  const b = geo.boundingBox;
+  return {
+    position: new Float32Array(geo.attributes.position.array),
+    normal: new Float32Array(geo.attributes.normal.array),
+    index: geo.index ? new Uint32Array(geo.index.array) : null,
+    color: materialColorForShape(list[0], 0),
+    bbox: { min: [b.min.x, b.min.y, b.min.z], max: [b.max.x, b.max.y, b.max.z] },
+  };
+}
+window.__partsLabViewer = { renderShapesPreview, renderShapesThumbnail, buildPartGeometryData };
