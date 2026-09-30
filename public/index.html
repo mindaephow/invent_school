@@ -1590,6 +1590,7 @@
   // 카테고리(예: 큐보) 단위로 묶고, 그 안에서 권별 섹션 + 맨 끝에 전체 권 합친 누적 섹션을 보여준다
   // (큐보 2권을 만들려면 1권 부품도 있어야 하는 것처럼, 뒤 권은 앞 권 부품 위에 쌓이는 구조라서)
   let allParts = [];
+  const partFullCache = new Map(); // partId → get_part 전체 응답(3D 원본 파일 포함). 부품 탭을 열 때 비운다.
   let partSubjectTab = 'robot';
   let partCategoryTab = null;
   document.getElementById('partSubjectTabs').addEventListener('click', (e) => {
@@ -2419,7 +2420,13 @@
       const needsFull = p.spec.shapes.some((s) => s.type === 'import' && !s.fileDataUrl);
       if (needsFull) {
         try {
-          const full = (await adminApi({ action: 'get_part', partId: p.id })).part;
+          // 한 번 받은 3D 원본은 partFullCache에 따로 보관한다 — 목록이 다시 로드돼도(수정·탭 전환 때마다)
+          // allParts가 새로 채워지면서 원본이 사라져, 같은 부품을 열 때마다 매번 서버에서 다시 받고 있었다.
+          let full = partFullCache.get(p.id);
+          if (!full) {
+            full = (await adminApi({ action: 'get_part', partId: p.id })).part;
+            if (full) partFullCache.set(p.id, full);
+          }
           if (full) {
             p = Object.assign({}, p, full);
             const idx = allParts.findIndex((x) => x.id === p.id);
@@ -2624,7 +2631,7 @@
       document.getElementById('tab-textbooks').hidden = btn.dataset.tab !== 'textbooks';
       if (btn.dataset.tab === 'home') renderHome();
       if (btn.dataset.tab === 'curriculum') { loadCategories().then(() => { fillCurriculumCategoryOptions(curriculumSubjectSel.value, curriculumCategorySel); syncCurriculumSubjectUI(); renderCurriculumList(); }); }
-      if (btn.dataset.tab === 'parts') { loadCategories().then(loadParts); }
+      if (btn.dataset.tab === 'parts') { partFullCache.clear(); loadCategories().then(loadParts); }
       if (btn.dataset.tab === 'textbooks') {
         // 카테고리·부품·교재를 동시에 요청(예전엔 카테고리를 기다린 뒤에야 나머지를 요청해서 왕복이 두 번이었음)
         // 부품은 화면에 필요한 이름만 받고, 부품 탭 화면을 다시 그리지도 않는다.
