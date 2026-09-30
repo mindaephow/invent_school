@@ -171,6 +171,7 @@
     b.camera(def.camera);
     $('asmBar').hidden = false;
     $('asmStageBar').hidden = false;
+    $('historyPanel').hidden = true;
     $('asmOpen').hidden = true;
     $('asmSlider').max = String(last());
     buildStepButtons();
@@ -184,6 +185,7 @@
     viewing = false;
     $('asmBar').hidden = true;
     $('asmStageBar').hidden = true;
+    $('historyPanel').hidden = false;
     $('asmOpen').hidden = !def;
     if (b) { b.guides([]); b.restore(snapshot || []); b.setViewing(false); }
     snapshot = null;
