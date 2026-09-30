@@ -321,13 +321,19 @@ async function renderShapesPreview(canvas, shapesData, camPos) {
   renderer.setSize(canvas.width, canvas.height, false);
   const scene = baseScene(true);
   const camera = new THREE.OrthographicCamera(-120, 120, 120, -120, 0.1, 6000);
-  camera.position.set(camPos[0], camPos[1], camPos[2]);
-  camera.lookAt(0, 0, 0);
+  const mesh = meshFromShapes(list);
+  // 부품의 실제 중심이 원점(0,0,0)이 아닐 수 있다(듀프로/휴벨리노 블록처럼 스터드가 한쪽에 몰린 모양 등) —
+  // 원점만 보고 원점 기준으로 회전하면 부품이 화면 한쪽으로 치우쳐 보이고 돌릴 때도 부품 밖의 점을
+  // 중심으로 빙빙 도는 것처럼 보인다(사용자 지적: "이런거 중심을 좀 맞춰줘"). 카메라·궤도컨트롤 모두
+  // 부품의 실제 바운딩박스 중심을 보게 한다.
+  const center = new THREE.Vector3();
+  if (mesh) { mesh.updateMatrixWorld(true); new THREE.Box3().setFromObject(mesh).getCenter(center); }
+  camera.position.set(camPos[0] + center.x, camPos[1] + center.y, camPos[2] + center.z);
+  camera.lookAt(center);
   const controls = new OrbitControls(camera, renderer.domElement);
-  controls.target.set(0, 0, 0);
+  controls.target.copy(center);
   controls.enableDamping = true; controls.dampingFactor = 0.08;
   controls.update();
-  const mesh = meshFromShapes(list);
   if (mesh) scene.add(mesh);
   let dirty = true;
   controls.addEventListener('change', () => { dirty = true; });
@@ -355,9 +361,11 @@ async function renderShapesThumbnail(shapesData, size) {
   sharedThumbRenderer.setSize(size, size, false);
   const list = await resolveImportGeometries(shapesData);
   const scene = baseScene(false);
+  // 목록 카드의 배경색은 화면마다 다르다(index.html은 흰색, design.html 부품 팔레트는 연한 파랑, 다크
+  // 모드는 또 다름) — baseScene()의 고정 배경색(연회색 #f3f5f8)을 그대로 구우면 카드 배경과 어긋나 보인다
+  // (사용자 지적: "배경색을 맞춰줄수 있을까?"). 투명 배경으로 찍어서 카드 배경이 자연스럽게 비치게 한다.
+  scene.background = null;
   const camera = new THREE.OrthographicCamera(-70, 70, 70, -70, 0.1, 6000);
-  camera.position.set(90, 90, 90);
-  camera.lookAt(0, 0, 0);
   const mesh = meshFromShapes(list);
   if (mesh) {
     scene.add(mesh);
@@ -365,12 +373,17 @@ async function renderShapesThumbnail(shapesData, size) {
     // 투영되는 가로/세로 폭만큼만 프레임을 잡는다 — 큰 부품은 안 잘리고, 작은 부품은 칸을 꽉 채운다
     // (사용자 지적: "너무 작아~~ 사각형에 최대한 맞춰줘봐").
     mesh.updateMatrixWorld(true);
-    camera.updateMatrixWorld();
-    const right = new THREE.Vector3(), up = new THREE.Vector3(), forward = new THREE.Vector3();
-    camera.matrixWorld.extractBasis(right, up, forward);
     const box = new THREE.Box3().setFromObject(mesh);
     const center = new THREE.Vector3();
     box.getCenter(center);
+    // 부품의 실제 중심이 원점이 아닐 수 있다(듀프로/휴벨리노 블록처럼 스터드가 한쪽에 몰린 모양 등) —
+    // 원점만 보고 프레임을 잡으면 부품이 썸네일 한쪽으로 치우쳐 보인다(사용자 지적: "2단블록/3단블록
+    // 이런거 중심을 좀 맞춰줘"). 카메라를 그 중심 기준으로 옮기고 그 중심을 바라보게 한다.
+    camera.position.set(90 + center.x, 90 + center.y, 90 + center.z);
+    camera.lookAt(center);
+    camera.updateMatrixWorld();
+    const right = new THREE.Vector3(), up = new THREE.Vector3(), forward = new THREE.Vector3();
+    camera.matrixWorld.extractBasis(right, up, forward);
     let maxRight = 0, maxUp = 0;
     for (let i = 0; i < 8; i++) {
       const corner = new THREE.Vector3(
@@ -385,6 +398,9 @@ async function renderShapesThumbnail(shapesData, size) {
     if (!Number.isFinite(half) || half <= 0) half = 60;
     camera.left = -half; camera.right = half; camera.top = half; camera.bottom = -half;
     camera.updateProjectionMatrix();
+  } else {
+    camera.position.set(90, 90, 90);
+    camera.lookAt(0, 0, 0);
   }
   sharedThumbRenderer.render(scene, camera);
   const dataUrl = sharedThumbRenderer.domElement.toDataURL('image/png');
