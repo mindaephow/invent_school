@@ -1293,11 +1293,23 @@
   function refreshRequiredList(categoryId, volume, session){
     const card = document.getElementById('requiredList');
     if (!card) return;
-    const chapter = session != null ? findTextbookChapter(categoryId, volume, session) : null;
-    if (chapter && Array.isArray(chapter.parts) && chapter.parts.length) {
+    // 이 카테고리·권에 교재(차시별 필요 부품)가 등록돼 있으면, 그 차시 하나에 등록된 부품만이 기준이다
+    // (사용자 지적: "1차시엔 0차시의 부품이 필요한게 아니야" / "0차시엔 0차시 등록 부품만, 1차시엔 1차시
+    // 등록 부품만" — 차시에 아직 아무것도 안 등록됐다고 해서 조용히 권 전체 누적 목록으로 바뀌면 안 됨,
+    // 그 상황엔 그냥 "없어요"라고 정확히 보여줘야 함). 교재 자체가 아직 없는 카테고리·권만 예전처럼 권
+    // 전체 누적 목록을 보여준다.
+    const tb = session != null ? textbooksCache.find(t => t.subject === 'robot' && t.category === categoryId && Number(t.volume) === Number(volume)) : null;
+    if (tb) {
+      const chapter = findTextbookChapter(categoryId, volume, session);
+      const chapterParts = (chapter && Array.isArray(chapter.parts)) ? chapter.parts : [];
       card.hidden = false;
+      if (!chapterParts.length) {
+        document.getElementById('requiredListCount').textContent = '0';
+        document.getElementById('requiredListBody').innerHTML = '<div class="required-summary">이 차시엔 아직 등록된 필요 부품이 없어요.</div>';
+        return;
+      }
       let mismatchCount = 0;
-      const rows = chapter.parts.map(cp => {
+      const rows = chapterParts.map(cp => {
         const p = robotPartsCache.find(x => x.id === cp.partId);
         if (!p) return '';
         const type = registerRobotPartDef(p);
@@ -1309,7 +1321,7 @@
       const summary = mismatchCount === 0
         ? '<div class="required-summary ok">✅ 필요한 부품을 다 썼어요!</div>'
         : '<div class="required-summary warn">⚠️ 아직 ' + mismatchCount + '종류가 안 맞아요</div>';
-      document.getElementById('requiredListCount').textContent = String(chapter.parts.length);
+      document.getElementById('requiredListCount').textContent = String(chapterParts.length);
       document.getElementById('requiredListBody').innerHTML = summary + rows;
       return;
     }
