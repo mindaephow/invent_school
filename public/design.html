@@ -420,6 +420,24 @@
           <p class="lesson-concept"></p>
           <h3>미션</h3>
           <p class="lesson-mission"></p>
+          <div id="assemblyBox" hidden style="margin:8px 0;">
+            <button id="asmOpen" class="primary" type="button">🧩 조립 보기</button>
+            <div id="asmBar" hidden style="display:flex; flex-direction:column; gap:6px;">
+              <div style="display:flex; align-items:center; justify-content:space-between;"><b id="asmLabel">완성!</b><button id="asmClose" class="ghost" type="button" style="padding:3px 10px;">닫기</button></div>
+              <input id="asmSlider" type="range" min="0" max="1" step="1" value="0" style="width:100%;" aria-label="조립 단계">
+              <div style="display:flex; gap:4px;">
+                <button id="asmFirst" class="ghost" type="button" title="처음" style="flex:1;">⏮</button>
+                <button id="asmPrev" class="ghost" type="button" title="이전 단계" style="flex:1;">◀</button>
+                <button id="asmNext" class="ghost" type="button" title="다음 단계" style="flex:1;">▶</button>
+                <button id="asmLast" class="ghost" type="button" title="완성" style="flex:1;">⏭</button>
+              </div>
+              <div style="display:flex; gap:4px;">
+                <button id="asmReverse" class="ghost" type="button" style="flex:1;">◀ 역재생</button>
+                <button id="asmPlay" class="ghost" type="button" style="flex:1;">▶ 재생</button>
+              </div>
+              <p id="asmNote" class="note" style="margin:0;"></p>
+            </div>
+          </div>
           <div class="lesson-steps-head"><h3>따라하기</h3><button id="openSampleBtn" class="ghost" type="button" hidden>샘플 열기</button></div>
           <ol class="lesson-steps"></ol>
           <button id="startFollowBtn" class="primary" type="button" hidden>🖍 따라하기 시작</button>
@@ -662,6 +680,8 @@
 <script src="design-parts.js"></script>
 <script src="design-sets.js"></script>
 <script src="design-lessons.js"></script>
+<script src="design-assemblies.js"></script>
+<script src="design-assembly.js"></script>
 <script src="design-robot-categories.js"></script>
 <script>
 (function(){
@@ -727,6 +747,7 @@
       const chapter = findTextbookChapter(cat.id, volume, session);
       card.querySelector('.lesson-tag').textContent = cat.name + ' ' + volSel.value + '권';
       card.querySelector('.lesson-title').textContent = session + '차시' + (chapter && chapter.title ? (' · ' + chapter.title) : ' · 아직 등록된 실습이 없어요');
+      if (window.__ivsAssembly) window.__ivsAssembly.onLessonChange(cat, volume, chapter && chapter.title);
       if (window.__renderVolumeParts) window.__renderVolumeParts(cat.id, volume);
       if (window.__refreshRequiredList) window.__refreshRequiredList(cat.id, volume, session);
     }
@@ -2061,6 +2082,7 @@
   }
   function recordHistory(){
     if (Date.now() < histSuppressUntil || !history.length) return;
+    if (window.__ivsAssembly && window.__ivsAssembly.isViewing()) return; // 조립 보기 중 단계 넘기는 건 작업 기록에 남기지 않는다
     const snap = takeSnapshot(), key = snapKey(snap);
     const last = history[histIndex];
     if (last.key === key) return;
@@ -2656,7 +2678,7 @@
       shape.closePath();
       const geoShaft = new THREE.ExtrudeGeometry(shape, { depth: def.w, bevelEnabled: false });
       geoShaft.rotateY(Math.PI / 2);
-      geoShaft.translate(def.w / 2, 0, 0);
+      geoShaft.translate(-def.w / 2, 0, 0); // extrude는 0~길이로 뻗으므로 가운데 기준(-길이/2)으로 옮겨야 다른 부품처럼 위치가 부품 한가운데가 된다(예전엔 +길이/2라 길이만큼 옆으로 밀려 그려졌다)
       mesh = new THREE.Mesh(geoShaft, new THREE.MeshStandardMaterial({ color: c }));
     } else if (rk === 'bolt') {
       // 볼트: 머리(짧고 굵은 원기둥) + 나사축(가늘고 긴 원기둥)
@@ -3834,6 +3856,29 @@
 
   // 화면을 닫는 중에도 보낼 수 있도록 fetch keepalive PATCH 한 가지 경로만 쓴다
   // 저장 요청이 겹쳐도 한 번에 하나씩 (새 설계가 두 번 만들어지는 것을 막는다)
+  // 조립 보기(design-assembly.js)가 쓰는 연결부 — 부품을 놓고·강조하고·카메라를 옮기는 것만 열어준다.
+  window.__ivsAssemblyBridge = {
+    resolve(name, categoryId){
+      const p = robotPartsCache.find(x => x.name === name && (!categoryId || x.category === categoryId));
+      return p && PART_DEFS['robot:' + p.id] ? 'robot:' + p.id : null;
+    },
+    quat(rot){ const q = quatFromRot({ x: rot[0], y: rot[1], z: rot[2] }); return [q.x, q.y, q.z, q.w].map(round5); },
+    show(list){ restoreParts(list, {}, true); },
+    highlight(indices){
+      indices.forEach(i => {
+        const part = parts[i];
+        if (!part || !part.mesh) return;
+        part.mesh.traverse(o => {
+          (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { if (m && m.emissive) m.emissive.setHex(0x6a4300); });
+        });
+      });
+    },
+    serialize(){ return serializeParts(); },
+    restore(list){ restoreParts(list, {}, true); },
+    camera(c){ target.set(c.target[0], c.target[1], c.target[2]); orbit.radius = c.radius; orbit.theta = c.theta; orbit.phi = c.phi; },
+    setViewing(){},
+    status(text, kind){ setStatus(text, kind); },
+  };
   let saveChain = Promise.resolve();
   let discarding = false; // 저장 없이 나가는 중이면 자동 저장(탭 닫기·이름 변경 등)도 모두 멈춘다
   function persist(keepalive, force){
@@ -3843,6 +3888,7 @@
   }
   async function persistNow(keepalive, force){
     if (!project) return;
+    if (window.__ivsAssembly && window.__ivsAssembly.isViewing()) return; // 조립 보기 중엔 보여주기용 부품이 내 작업으로 저장되지 않게 한다
     syncFromScene();
     const key = projectKey();
     if (!force && key === lastSavedKey) return;
