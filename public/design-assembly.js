@@ -77,8 +77,6 @@
     const b = bridge();
     const { list, guides, missing } = buildList(step);
     b.show(list.map(({ isNew, name, ...d }) => d));
-    b.tint(list.map((d) => (def.colors && def.colors[d.name]) || null));
-    b.highlight(list.map((d, i) => (d.isNew ? i : -1)).filter((i) => i >= 0));
     b.guides(guides);
     const n = total();
     $('asmLabel').textContent = step === 0 ? '시작 전' : (step === last() ? '완성!' : step + ' / ' + n + ' 단계');

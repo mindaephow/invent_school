@@ -1414,7 +1414,9 @@
     if (data.index) g.setIndex(new THREE.BufferAttribute(data.index.slice(), 1));
     const c = [0, 1, 2].map(i => (data.bbox.min[i] + data.bbox.max[i]) / 2);
     g.translate(-c[0], -c[1], -c[2]); // 모델 한가운데가 부품 위치(다른 부품과 같은 기준)에 오게 한다
-    return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: data.color }));
+    // 등록된 색 그대로 보이게: 장면 조명(주변광 0.7 + 방향광 0.7)이 색을 실제보다 밝게 만들어서(연한 회색이 거의 흰색이 됨)
+    // 그만큼 낮춰서 칠한다 — 팔레트 썸네일(조명 없이 등록된 색 그대로)과 같은 색으로 보인다.
+    return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: new THREE.Color(data.color).multiplyScalar(0.72) }));
   }
   function swapRobotMesh(part, data){
     if (!parts.includes(part) || part.mesh.userData.robotModel) return;
@@ -3929,13 +3931,6 @@
     quat(rot){ const q = quatFromRot({ x: rot[0], y: rot[1], z: rot[2] }); return [q.x, q.y, q.z, q.w].map(round5); },
     preload(names, categoryId){ return Promise.all(names.map(n => { const t = this.resolve(n, categoryId); return t ? ensureRobotModel(t.slice(6)) : null; })); },
     show(list){ restoreParts(list, {}, true); },
-    tint(colors){
-      colors.forEach((hex, i) => {
-        const part = parts[i];
-        if (!hex || !part || !part.mesh) return;
-        part.mesh.traverse(o => { if (o.material && o.material.color && o.isMesh) o.material.color.set(hex); });
-      });
-    },
     // 교재 그림의 초록 화살표+구멍 원: { from, to, dir }마다 from→to 화살표와 to에 원(꽂는 구멍 자리)을 그린다.
     guides(list){
       if (assemblyGuideGroup) { scene.remove(assemblyGuideGroup); assemblyGuideGroup.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); assemblyGuideGroup = null; }
@@ -3961,15 +3956,6 @@
       });
       scene.add(g);
       assemblyGuideGroup = g;
-    },
-    highlight(indices){
-      indices.forEach(i => {
-        const part = parts[i];
-        if (!part || !part.mesh) return;
-        part.mesh.traverse(o => {
-          (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { if (m && m.emissive) m.emissive.setHex(0x0b2447); });
-        });
-      });
     },
     serialize(){ return serializeParts(); },
     restore(list){ restoreParts(list, {}, true); },
