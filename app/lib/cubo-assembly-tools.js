@@ -16,7 +16,7 @@ let _site = null, _siteAt = 0
 async function loadSite() {
   if (_site && Date.now() - _siteAt < 60_000) return _site
   const win = {}
-  for (const file of ['design-assemblies.js', 'design-collision.js']) {
+  for (const file of ['design-assemblies.js', 'design-collision.js', 'design-mates.js']) {
     const res = await fetch(`${SITE_ORIGIN()}/${file}?t=${Date.now()}`)
     if (!res.ok) throw new Error(`${file} 를 못 읽었어요 (${res.status})`)
     new Function('window', await res.text())(win) // 같은 저장소의 파일만 읽는다
@@ -122,10 +122,26 @@ export function registerCuboAssemblyTools(server, getSupabase) {
             list = a.steps
           }
           const r = checkOverlaps(list, site.IVS_COLLISION, tolerance)
+          // 돌기↔구멍 결합 검사: 부품 DB의 연결점(data.connectors)으로 각 돌기가 다른 부품 구멍에 들어가 있는지 본다
+          const partsFinal = []
+          list.forEach((s, si) => (s.parts || []).forEach((pt, k) => partsFinal.push({ key: `${si + 1}단계 ${pt.n}#${k}`, n: pt.n, p: pt.p, r: pt.r || [0, 0, 0] })))
+          const names = [...new Set(partsFinal.map((p) => p.n))]
+          const { data: rows, error: cErr } = await getSupabase().from('ivs_part_catalog').select('name:data->>name, connectors:data->connectors').eq('data->>subject', 'robot').in('data->>name', names)
+          const conn = {}
+          ;(rows || []).forEach((row) => { if (row.connectors) conn[row.name] = row.connectors })
+          const mates = cErr ? null : site.IVS_MATES.check(partsFinal, conn)
           const lines = [`검사한 부품 ${r.checked}개 / 겹침 ${r.overlaps.length}건`]
           if (r.overlaps.length) lines.push(...r.overlaps.map((o) => `⚠ ${o}`))
           else lines.push('✅ 겹침 없음(몸통 상자 기준)')
           if (r.skipped.length) lines.push(`검사 안 한 부품(크기·몸통 규칙 없음 또는 체결 부품): ${r.skipped.join(', ')}`)
+          if (mates) {
+            const linked = new Set(); mates.mated.forEach((m) => { linked.add(m.part); linked.add(m.into) })
+            const loose = partsFinal.filter((p) => conn[p.n] && !linked.has(p.key)).map((p) => p.key)
+            lines.push(`돌기↔구멍 결합 ${mates.mated.length}건 / 안 들어간 돌기 ${mates.free.length}개 / 연결 안 된 부품 ${loose.length}개`)
+            if (loose.length) lines.push(...loose.map((k) => `⚠ 어디에도 연결 안 됨: ${k}`))
+            if (mates.free.length) lines.push('비어 있는 돌기(블록 양 끝처럼 원래 비는 곳이면 정상): ' + mates.free.map((f) => `${f.part} ${f.peg}`).join(', '))
+            if (mates.noData.length) lines.push(`연결점 기록 없는 부품(결합 검사 못 함): ${[...new Set(mates.noData.map((k) => k.replace(/^\d+단계 /, '').replace(/#\d+$/, '')))].join(', ')}`)
+          } else lines.push('(연결점을 못 읽어 결합 검사는 생략)')
           lines.push('※ 몸통 상자 근사이므로 돌기가 홀이 아닌 솔리드를 지나가는 것은 잡지 못한다. 화면(조립 보기)에서도 눈으로 확인할 것.')
           return text(lines.join('\n'))
         } catch (e) { return fail(e.message) }

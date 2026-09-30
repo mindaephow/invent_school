@@ -39,7 +39,7 @@
     W.forEach((a, ai) => {
       if (!a.world) { noData.push(a.pt.key || a.pt.n); return; }
       a.world.pegs.forEach((peg) => {
-        let hit = null;
+        const hits = []; // 축처럼 구멍 여러 개를 지나가는 돌기는 전부 센다
         W.forEach((b, bi) => {
           if (bi === ai || !b.world) return;
           b.world.holes.forEach((hole) => {
@@ -58,10 +58,10 @@
             const tip = along + (peg.len || 0) / 2, base = along - (peg.len || 0) / 2;
             // 돌기 끝이 구멍 안으로 최소 minIn(mm)은 들어가 있어야 결합이다(입구에 닿기만 한 것·떠 있는 것은 제외)
             if (tip < -half + minIn || base > half - 0.5 + tolDepth) return;
-            hit = { part: a.pt.key || a.pt.n, peg: peg.id, into: b.pt.key || b.pt.n, hole: hole.id, lateral: Math.round(lateral * 10) / 10 };
+            hits.push({ part: a.pt.key || a.pt.n, peg: peg.id, into: b.pt.key || b.pt.n, hole: hole.id, lateral: Math.round(lateral * 10) / 10 });
           });
         });
-        if (hit) mated.push(hit); else free.push({ part: a.pt.key || a.pt.n, peg: peg.id, dir: peg.dir.map((v) => Math.round(v * 100) / 100), pos: peg.pos.map((v) => Math.round(v * 10) / 10) });
+        if (hits.length) mated.push(...hits); else free.push({ part: a.pt.key || a.pt.n, peg: peg.id, dir: peg.dir.map((v) => Math.round(v * 100) / 100), pos: peg.pos.map((v) => Math.round(v * 10) / 10) });
       });
     });
     return { mated, free, noData };
