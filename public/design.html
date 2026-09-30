@@ -259,6 +259,13 @@
   .view-tools button.on{background:var(--blueprint); border-color:var(--blueprint); color:#fff;}
   .scene-title{position:absolute; top:12px; left:50%; transform:translateX(-50%); z-index:2; padding:5px 16px; border-radius:999px; background:var(--panel); border:1px solid var(--panel-border); font-size:13px; font-weight:800; color:var(--blueprint); pointer-events:none;}
   #sceneCanvas{position:absolute; inset:0; width:100%; height:100%; display:block;}
+  /* 조립 보기 단계 줄: 3D 화면 위에 항상 떠 있어서 스크롤해도 순서가 보인다 */
+  .asm-stage-bar{position:absolute; left:10px; right:10px; bottom:46px; z-index:4; background:var(--panel); border:1px solid var(--panel-border); border-radius:12px; padding:6px 8px; box-shadow:var(--shadow); display:flex; flex-direction:column; gap:5px;}
+  .asm-stage-note{font-size:12.5px; line-height:1.35; color:var(--ink); margin:0;}
+  .asm-stage-row{display:flex; align-items:center; gap:6px;}
+  .asm-stage-steps{display:flex; gap:4px; overflow-x:auto; flex:1; padding:1px 0; scrollbar-width:thin;}
+  .asm-stage-steps button{flex:none; min-width:30px; padding:4px 0; font-size:12.5px;}
+  .asm-stage-bar > .asm-stage-row > button.asm-nav{flex:none; padding:4px 10px;}
   .scene-hint{
     position:absolute; left:10px; bottom:10px; font-size:11px; color:var(--ink-soft);
     background:var(--panel); padding:5px 10px; border-radius:999px; border:1px solid var(--panel-border);
@@ -418,9 +425,11 @@
           <summary><span class="lesson-tag"></span><span class="lesson-title"></span></summary>
           <p class="lesson-sub"></p>
           <p class="lesson-concept"></p>
-          <h3>미션</h3>
+          <h3 id="lessonMissionHead">미션</h3>
           <p class="lesson-mission"></p>
           <div id="assemblyBox" hidden style="margin:8px 0;">
+            <h3 style="margin:0 0 4px;">조립 순서</h3>
+            <ol id="asmOrderList" style="list-style:none; margin:0 0 8px; padding:0; display:flex; flex-direction:column; gap:2px; font-size:12.5px; line-height:1.35;"></ol>
             <button id="asmOpen" class="primary" type="button">🧩 조립 보기</button>
             <details id="asmRulesBox" style="margin-top:6px;">
               <summary style="cursor:pointer; font-size:13px; font-weight:700;">📖 큐보 조립 방식</summary>
@@ -544,6 +553,14 @@
           <div class="part-list" id="requiredList" hidden>
             <button type="button" class="part-list-head" id="requiredListHead" aria-expanded="true"><span>필요 부품 <b id="requiredListCount">0</b></span><span id="requiredListArrow">▾</span></button>
             <div class="part-list-body" id="requiredListBody"></div>
+          </div>
+        </div>
+        <div class="asm-stage-bar" id="asmStageBar" hidden>
+          <p class="asm-stage-note" id="asmStageNote"></p>
+          <div class="asm-stage-row">
+            <button type="button" class="ghost asm-nav" id="asmStagePrev" title="이전 단계" aria-label="이전 단계">◀</button>
+            <div class="asm-stage-steps" id="asmStageSteps" aria-label="조립 단계 순서"></div>
+            <button type="button" class="ghost asm-nav" id="asmStageNext" title="다음 단계" aria-label="다음 단계">▶</button>
           </div>
         </div>
         <div class="scene-hint">빈 곳 드래그: 회전 · ✋이동/오른쪽 버튼/두 손가락: 화면 밀기 · 선택한 부품 드래그: 부품 이동 · 휠/핀치: 확대축소 · Ctrl+드래그: 여러 부품 한번에 고르기</div>
@@ -782,6 +799,9 @@
     card.querySelector('.lesson-sub').textContent = '';
     card.querySelector('.lesson-concept').textContent = '';
     card.querySelector('.lesson-mission').textContent = '곧 준비할게요.';
+    // 로봇은 미션 대신 "조립 순서"를 보여준다(사용자 지시: 미션 삭제, 조립순서 보이게)
+    card.querySelector('.lesson-mission').hidden = true;
+    document.getElementById('lessonMissionHead').hidden = true;
     card.querySelector('.lesson-steps').innerHTML = '';
     update();
   }

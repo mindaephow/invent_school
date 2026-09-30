@@ -55,26 +55,54 @@
 
   // 1, 2, 3 … 단계 번호 버튼(+ 마지막 "완성") — 눌러서 그 단계로 바로 가고, 지금 단계는 진하게 보인다.
   function buildStepButtons() {
-    const box = $('asmSteps');
-    box.innerHTML = '';
-    for (let i = 1; i <= last(); i++) {
+    [$('asmSteps'), $('asmStageSteps')].forEach((box) => {
+      box.innerHTML = '';
+      for (let i = 1; i <= last(); i++) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.dataset.step = String(i);
+        b.textContent = i === last() ? '완성' : String(i);
+        b.title = i === last() ? '완성된 모습' : i + '단계: ' + (def.steps[i - 1].note || '');
+        b.style.cssText = i === last() ? 'padding:5px 10px; font-size:13px;' : 'min-width:32px; padding:5px 0; font-size:13px;';
+        box.appendChild(b);
+      }
+    });
+  }
+  // 왼쪽 카드의 "조립 순서" 목록 — 조립 보기를 열기 전에도 항상 보이고, 누르면 그 단계로 간다.
+  function buildOrderList() {
+    const ol = $('asmOrderList');
+    ol.innerHTML = '';
+    if (!def) return;
+    def.steps.forEach((s, i) => {
+      const li = document.createElement('li');
       const b = document.createElement('button');
       b.type = 'button';
-      b.dataset.step = String(i);
-      b.textContent = i === last() ? '완성' : String(i);
-      b.title = i === last() ? '완성된 모습' : i + '단계: ' + (def.steps[i - 1].note || '');
-      b.style.cssText = i === last() ? 'padding:5px 10px; font-size:13px;' : 'min-width:32px; padding:5px 0; font-size:13px;';
-      box.appendChild(b);
-    }
+      b.dataset.step = String(i + 1);
+      b.className = 'ghost';
+      b.style.cssText = 'width:100%; text-align:left; padding:3px 8px; border-radius:8px; font-size:12.5px; font-weight:400;';
+      b.textContent = (i + 1) + '. ' + (s.note || '');
+      li.appendChild(b);
+      ol.appendChild(li);
+    });
   }
   function markStepButtons() {
-    document.querySelectorAll('#asmSteps button').forEach((b) => {
+    document.querySelectorAll('#asmOrderList button').forEach((b) => {
+      const cur = Number(b.dataset.step) === step;
+      b.style.fontWeight = cur ? '800' : '400';
+      b.style.background = cur ? 'var(--blueprint, #2b6be0)' : '';
+      b.style.color = cur ? '#fff' : '';
+      b.setAttribute('aria-current', cur ? 'step' : 'false');
+    });
+    document.querySelectorAll('#asmSteps button, #asmStageSteps button').forEach((b) => {
       const n = Number(b.dataset.step);
       const cur = n === step;
       b.className = cur ? 'primary' : 'ghost';
       b.style.opacity = n < step ? '0.75' : '1'; // 이미 지나온 단계는 살짝 연하게
       b.setAttribute('aria-current', cur ? 'step' : 'false');
     });
+    // 화면 위 단계 줄: 지금 단계가 가운데 오게 옆으로 밀어 준다
+    const box = $('asmStageSteps'), curBtn = box.querySelector('button[aria-current="step"]');
+    if (curBtn) box.scrollLeft = curBtn.offsetLeft - box.clientWidth / 2 + curBtn.offsetWidth / 2;
   }
 
   function render() {
@@ -87,6 +115,7 @@
     $('asmNote').textContent = step === 0 ? '빈 판에서 시작해요. ▶ 를 눌러 한 단계씩 만들어 봐요.'
       : (step === last() ? '완성! 부품이 모두 제자리에 끼워졌어요.' : (def.steps[step - 1].note || ''));
     $('asmSlider').value = String(step);
+    $('asmStageNote').textContent = $('asmLabel').textContent + ' · ' + $('asmNote').textContent;
     markStepButtons();
     $('asmFirst').disabled = $('asmPrev').disabled = step === 0;
     $('asmNext').disabled = $('asmLast').disabled = step === last();
@@ -134,6 +163,7 @@
     b.setViewing(true);
     b.camera(def.camera);
     $('asmBar').hidden = false;
+    $('asmStageBar').hidden = false;
     $('asmOpen').hidden = true;
     $('asmSlider').max = String(last());
     buildStepButtons();
@@ -146,6 +176,7 @@
     if (!viewing) return;
     viewing = false;
     $('asmBar').hidden = true;
+    $('asmStageBar').hidden = true;
     $('asmOpen').hidden = !def;
     if (b) { b.guides([]); b.restore(snapshot || []); b.setViewing(false); }
     snapshot = null;
@@ -169,6 +200,20 @@
       else if (r === 'notTarget') bridge().status('이 부품은 이번 단계에서 끼우는 부품이 아니에요. 떠 있는 부품을 눌러 보세요.', 'warn');
     });
     $('asmReset').addEventListener('click', () => { stop(); go(step); });
+    $('asmOrderList').addEventListener('click', async (e) => {
+      const b = e.target.closest('button[data-step]');
+      if (!b) return;
+      stop();
+      const n = Number(b.dataset.step);
+      if (!viewing) await open();
+      if (viewing) go(n);
+    });
+    $('asmStagePrev').addEventListener('click', stopPlayClick(() => go(step - 1)));
+    $('asmStageNext').addEventListener('click', stopPlayClick(() => go(step + 1)));
+    $('asmStageSteps').addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-step]');
+      if (b) { stop(); go(Number(b.dataset.step)); }
+    });
     $('asmSteps').addEventListener('click', (e) => {
       const b = e.target.closest('button[data-step]');
       if (b) { stop(); go(Number(b.dataset.step)); }
@@ -186,6 +231,7 @@
       def = found;
       catId = found ? cat.id : null;
       box.hidden = !found;
+      buildOrderList();
       $('asmRules').innerHTML = (window.IVS_ASSEMBLY_RULES || []).map((r) => '<li>' + r + '</li>').join('');
       if (!viewing) $('asmOpen').hidden = !found;
     },
