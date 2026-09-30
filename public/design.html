@@ -4187,12 +4187,17 @@
         const head = new THREE.Mesh(new THREE.ConeGeometry(2.6, HEAD, 12), mat());
         head.position.copy(b).addScaledVector(dir, -HEAD / 2);
         head.quaternion.copy(shaft.quaternion);
-        const ring = new THREE.Mesh(new THREE.TorusGeometry(4.8, 0.8, 8, 28), mat());
+        // 구멍 자리를 고리 대신 초록으로 칠한 원판으로 표시한다(프레임 구멍에 색칠한 것처럼 보이게)
+        const ring = new THREE.Mesh(new THREE.CircleGeometry(3.6, 28), new THREE.MeshBasicMaterial({ color: 0x22c55e, depthTest: false, transparent: true, opacity: 0.9, side: THREE.DoubleSide }));
         ring.position.copy(b);
         ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
+        // 돌기 끝(화살표가 시작하는 곳)도 초록으로 칠한다 — 돌기 색칠 · 화살표 · 구멍 색칠이 한 세트
+        const cap = new THREE.Mesh(new THREE.CircleGeometry(2.7, 24), new THREE.MeshBasicMaterial({ color: 0x22c55e, depthTest: false, transparent: true, opacity: 0.95, side: THREE.DoubleSide }));
+        cap.position.copy(a);
+        cap.quaternion.copy(ring.quaternion);
         const arrowGroup = new THREE.Group();
         arrowGroup.userData.idx = idx; // 어느 부품의 안내인지(결합하면 그 안내만 지운다)
-        [shaft, head, ring].forEach(m => { m.renderOrder = 999; arrowGroup.add(m); });
+        [shaft, head, ring, cap].forEach(m => { m.renderOrder = 999; arrowGroup.add(m); });
         g.add(arrowGroup);
       });
       scene.add(g);
