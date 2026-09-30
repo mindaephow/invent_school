@@ -45,7 +45,12 @@
           const settling = pt.side && !useSide;
           const targets = settling ? (pt.settleMarks || []) : (pt.marks && pt.marks.length ? pt.marks : [base]);
           // 화살표는 띄워 놓은 부품의 돌기 끝(구멍에 들어갈 깊이만큼 아래)에서 시작해 구멍 위 원으로 들어간다
-          targets.forEach((m) => guides.push({ from: add(m, pt.dir, HOVER - PEG_DEPTH), to: m, dir: pt.dir, idx: list.length }));
+          if (pt.recv && !settling) {
+            // 구멍을 받는 부품(프레임 등)이 움직일 때: 원은 떠 있는 부품의 구멍 입구에, 화살표는 고정된 돌기 끝에서 그 구멍 쪽으로
+            targets.forEach((m) => guides.push({ from: m, to: add(m, pt.dir, HOVER - PEG_DEPTH), dir: pt.dir, idx: list.length }));
+          } else {
+            targets.forEach((m) => guides.push({ from: add(m, pt.dir, HOVER - PEG_DEPTH), to: m, dir: pt.dir, idx: list.length }));
+          }
         }
         list.push({ name: pt.n, type, mount: 'floor', pos: pos.slice(), quat: b.quat(rot), rot: rot.slice(), isNew, final: isNew && pt.dir ? base.slice() : null });
       });
