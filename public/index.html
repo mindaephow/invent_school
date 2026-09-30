@@ -454,8 +454,8 @@
           <div><label>과목</label><select id="textbookSubject" required><option value="robot">로봇</option><option value="goldberg">골드버그</option><option value="aviation">항공</option></select></div>
           <div id="textbookCategoryWrap"><label>카테고리 (로봇만)</label><select id="textbookCategory"></select></div>
         </div>
-        <div id="textbookVolumeWrap"><label>권 (로봇만)</label><input id="textbookVolume" type="number" min="1" step="1" placeholder="예: 1"></div>
-        <div><label>교재 이름</label><input id="textbookName" required autocomplete="off" placeholder="예: 큐보 1권"></div>
+        <div id="textbookVolumeWrap"><label>구분 번호 (선택 — 권·회차·단계 등 뭐든 숫자로, 비우면 구분 없음)</label><input id="textbookVolume" type="number" min="1" step="1" placeholder="예: 권이면 1, 3회차면 3"></div>
+        <div><label>교재 이름</label><input id="textbookName" required autocomplete="off" placeholder="예: 큐보 1권, 3회차 교재 등"></div>
         <p class="note err" id="textbookMsg" hidden></p>
         <button type="submit" class="primary" id="textbookSubmitBtn">등록</button>
       </form>
@@ -476,7 +476,12 @@
         <button type="button" class="ghost" id="deleteTextbookBtn">이 교재 삭제</button>
       </div>
       <div id="textbookChaptersList" style="margin-top:8px;"></div>
-      <button type="button" class="ghost" id="addChapterBtn" style="margin-top:8px;">+ 차시 추가</button>
+      <div style="display:flex; align-items:center; gap:6px; margin-top:8px;">
+        <button type="button" class="ghost" id="addChapterBtn">+ 차시 1개 추가</button>
+        <span class="item-sub">한번에</span>
+        <input type="number" id="addChapterBulkCount" min="1" step="1" value="12" style="width:56px;">
+        <button type="button" class="ghost" id="addChapterBulkBtn">개 비워두고 추가(제목은 나중에 입력)</button>
+      </div>
       <p class="note err" id="textbookChaptersMsg" hidden></p>
     </div>
   </section>
@@ -1722,8 +1727,9 @@
   }
   function syncTextbookFormVisibility(){
     const isRobot = document.getElementById('textbookSubject').value === 'robot';
+    // 카테고리(로봇 브랜드 개념)는 로봇만 의미가 있지만, 구분 번호(권/회차 등)는 어느 과목이든 쓸 수
+    // 있게 한다(사용자 지적: "왜 로봇만이야???" / "어떤것도 다 되어야지 권일지 회차일지 모르자나").
     document.getElementById('textbookCategoryWrap').hidden = !isRobot;
-    document.getElementById('textbookVolumeWrap').hidden = !isRobot;
     fillTextbookCategoryOptions();
   }
   document.getElementById('textbookSubject').addEventListener('change', syncTextbookFormVisibility);
@@ -1807,7 +1813,11 @@
     return { fileUrl: data.publicUrl, fileName: file.name };
   }
   function fileAttachHtml(fileUrl, fileName, uploadAttr, removeAttr){
-    if (fileUrl) return `<a href="${escapeHtml(fileUrl)}" target="_blank" rel="noopener" download style="font-size:12px;">📎 ${escapeHtml(fileName || '다운로드')}</a><button type="button" class="ghost" ${removeAttr}="1" style="font-size:11px;">삭제</button>`;
+    // download 속성을 넣으면 PDF도 미리보기 없이 무조건 다운로드부터 되어서 "열어볼 수 있냐"는 질문이
+    // 나왔다 — target="_blank"만 두면 PDF는 새 탭에서 바로 열려 보이고(브라우저 자체 뷰어), 그 화면
+    // 안에서도 다운로드할 수 있어 "열기"·"다운로드" 둘 다 된다. 엑셀처럼 브라우저가 못 여는 파일은
+    // 어차피 그대로 다운로드된다.
+    if (fileUrl) return `<a href="${escapeHtml(fileUrl)}" target="_blank" rel="noopener" style="font-size:12px;">📎 ${escapeHtml(fileName || '열기')}</a><button type="button" class="ghost" ${removeAttr}="1" style="font-size:11px;">삭제</button>`;
     return `<button type="button" class="ghost" ${uploadAttr}="1" style="font-size:11px;">📎 파일 업로드(PDF·엑셀)</button>`;
   }
   function chapterRowHtml(tb, c, i){
@@ -1818,7 +1828,7 @@
     const partOptions = allParts.filter((p) => p.subject === tb.subject).map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)}</option>`).join('');
     return `<div class="design-row" style="flex-direction:column; align-items:stretch; gap:6px; margin-bottom:10px; padding:10px; border:1px solid var(--line); border-radius:8px;" data-chapter-id="${escapeHtml(c.id)}">
       <div style="display:flex; align-items:center; gap:6px;">
-        <span class="item-sub" style="flex:none; font-weight:700;">${i + 1}차시</span>
+        <span class="item-sub" style="flex:none; font-weight:700;">${i}차시</span>
         <input type="text" value="${escapeHtml(c.title)}" data-chapter-title="1" style="flex:1;" placeholder="차시 제목">
         <button type="button" class="ghost" data-chapter-up="1" ${i === 0 ? 'disabled' : ''}>▲</button>
         <button type="button" class="ghost" data-chapter-down="1" ${i === tb.chapters.length - 1 ? 'disabled' : ''}>▼</button>
@@ -1874,6 +1884,15 @@
     if (!tb) return;
     const arr = tb.chapters.concat([{ id: 'ch_' + Math.random().toString(36).slice(2, 10), title: '', parts: [] }]);
     saveChapters(tb, arr);
+  });
+  // 사용자 지시: "그냥 차시를 여러개를 추가해두고 입력만 하게 해줘 불편하게 하지말고" — 한 개씩 추가
+  // 버튼을 여러 번 누르지 않고, 빈 차시를 한 번에 여러 개 만들어두면 제목만 채워 넣으면 되게 한다.
+  document.getElementById('addChapterBulkBtn').addEventListener('click', () => {
+    const tb = currentTextbook();
+    if (!tb) return;
+    const count = Math.max(1, Math.min(100, Math.round(Number(document.getElementById('addChapterBulkCount').value) || 12)));
+    const extra = Array.from({ length: count }, () => ({ id: 'ch_' + Math.random().toString(36).slice(2, 10), title: '', parts: [] }));
+    saveChapters(tb, tb.chapters.concat(extra));
   });
   document.getElementById('deleteTextbookBtn').addEventListener('click', function(){
     const tb = currentTextbook();

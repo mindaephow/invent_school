@@ -703,9 +703,10 @@
       const cat = currentCategory();
       for (let i = 1; i <= cat.volumes; i++) { const o = document.createElement('option'); o.value = i; o.textContent = i + '권'; volSel.appendChild(o); }
     }
+    // 사용자 지시: "0차시부터" — 준비 단계(오리엔테이션 등)를 1차시 앞에 둘 수 있게 0차시부터 시작한다.
     function fillSessions(){
       sessionSel.innerHTML = '';
-      for (let i = 1; i <= sessionsPerVolume; i++) { const o = document.createElement('option'); o.value = i; o.textContent = i + '차시'; sessionSel.appendChild(o); }
+      for (let i = 0; i < sessionsPerVolume; i++) { const o = document.createElement('option'); o.value = i; o.textContent = i + '차시'; sessionSel.appendChild(o); }
     }
     function update(){
       const cat = currentCategory();
@@ -1368,7 +1369,8 @@
   function findTextbookChapter(categoryId, volume, session){
     const tb = textbooksCache.find(t => t.subject === 'robot' && t.category === categoryId && Number(t.volume) === Number(volume));
     if (!tb) return null;
-    return tb.chapters[Number(session) - 1] || null;
+    // 차시 선택은 0차시부터 시작하므로(사용자 지시: "0차시부터"), 배열의 0번째 항목이 바로 0차시다.
+    return tb.chapters[Number(session)] || null;
   }
 
   const MARBLE_R = 8; // 지름 1.6cm(=16 units)

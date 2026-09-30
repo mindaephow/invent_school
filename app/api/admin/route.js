@@ -507,7 +507,7 @@ export async function POST(request) {
       const name = String(body.name || '').trim()
       const category = String(body.category || '').trim()
       const volumeNum = Number(body.volume)
-      const volume = subject === 'robot' && Number.isFinite(volumeNum) && volumeNum > 0 ? Math.round(volumeNum) : null
+      const volume = Number.isFinite(volumeNum) && volumeNum > 0 ? Math.round(volumeNum) : null
       if (!name) return json({ error: '교재 이름을 입력해주세요.' }, 400)
       if (!PART_SUBJECTS.includes(subject)) return json({ error: '과목을 선택해주세요.' }, 400)
       const fileUrl = typeof body.fileUrl === 'string' && body.fileUrl ? body.fileUrl : null
