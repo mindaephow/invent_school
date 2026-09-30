@@ -67,5 +67,57 @@
     return { mated, free, noData };
   }
 
-  window.IVS_MATES = { matFromEuler, worldConnectors, check };
+
+// ── 단계별 정밀 검사(사람이 놓치기 쉬운 실수를 잡는다) ──
+// 1) 새 부품은 그 단계에서 실제 구멍에 끼워져야 한다  2) 안내(marks)가 실제 구멍/돌기 끝 위치와 맞아야 한다
+// 3) 리벳은 마지막에 양 끝이 모두 구멍에 들어가야 한다  4) 방향이 정해진 부품(T축 머리 위 등)  5) 단계 설명의 개수가 데이터와 맞는지
+  function checkSteps(list, conn) {
+    const M = { worldConnectors, check, matFromEuler }
+    const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+    const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+  const issues = []
+  const worldOf = (pt) => (conn[pt.n] ? M.worldConnectors({ p: pt.p, r: pt.r || [0, 0, 0] }, conn[pt.n]) : null)
+  list.forEach((st, si) => {
+    const upto = []
+    list.slice(0, si + 1).forEach((s, k) => (s.parts || []).forEach((pt, i) => upto.push({ key: `${k + 1}.${i} ${pt.n}`, n: pt.n, p: pt.p, r: pt.r || [0, 0, 0], ref: pt, step: k + 1 })))
+    const res = M.check(upto, conn)
+    const worlds = upto.map((u) => ({ u, w: worldOf(u) }))
+    ;(st.parts || []).forEach((pt, i) => {
+      const me = upto.find((u) => u.ref === pt)
+      if (conn[pt.n] && me && !res.mated.some((m) => m.part === me.key || m.into === me.key)) issues.push(`${si + 1}단계 ${pt.n}: 어떤 구멍·돌기에도 끼워지지 않음(허공에 떠 있음)`)
+      // 안내 위치: 고정된 쪽의 실제 구멍 축/돌기 끝과 맞는지(옆자리 조립품·분리 표시는 제외)
+      if (pt.dir && pt.marks && !pt.side && !pt.explode) {
+        pt.marks.forEach((m) => {
+          const ok = worlds.some(({ u, w }) => w && u.ref !== pt && (pt.recv
+            ? w.pegs.some((pg) => { const tip = [pg.pos[0] + pg.dir[0] * pg.len / 2, pg.pos[1] + pg.dir[1] * pg.len / 2, pg.pos[2] + pg.dir[2] * pg.len / 2]; return Math.hypot(...sub(tip, m)) <= 3 })
+            : w.holes.some((h) => { const rel = sub(m, h.pos); const along = dot(rel, h.dir); return Math.hypot(...sub(rel, h.dir.map((x) => x * along))) <= 1.8 && Math.abs(along) <= h.len / 2 + 3 })))
+          if (!ok) issues.push(`${si + 1}단계 ${pt.n}: 안내 위치 [${m}]에 ${pt.recv ? '고정된 돌기 끝' : '받는 구멍'}이 없음(위치 어긋남)`)
+        })
+      }
+      // 방향이 정해진 부품: T축 접시 머리(모델 −y)는 위로
+      if (pt.n === 'T축') {
+        const m = M.matFromEuler(pt.r || [0, 0, 0])
+        if (!(m[1][1] < -0.9)) issues.push(`${si + 1}단계 T축: 접시 머리가 위로 오지 않음(r=[180,0,0] 이어야 함)`)
+      }
+    })
+    // 설명 글의 "○○ N개"가 이 단계 부품 수와 맞는지
+    const counts = {}; (st.parts || []).forEach((pt) => { counts[pt.n] = (counts[pt.n] || 0) + 1 })
+    for (const m of String(st.note || '').matchAll(/([가-힣A-Za-z0-9]+?)\s*(\d+)개/g)) {
+      const name = Object.keys(counts).find((n) => n === m[1] || m[1].endsWith(n))
+      if (name && counts[name] !== Number(m[2])) issues.push(`${si + 1}단계 설명 "${m[0]}" ↔ 데이터 ${name} ${counts[name]}개`)
+    }
+    if (!(st.parts || []).length && !list.some((s) => (s.parts || []).some((pt) => pt.side && pt.side.until === si + 1))) issues.push(`${si + 1}단계: 부품이 하나도 없음`)
+  })
+  // 마지막 모양: 리벳은 양 끝 돌기가 모두 구멍에 들어가야 한다
+  const all = []; list.forEach((s, k) => (s.parts || []).forEach((pt, i) => all.push({ key: `${k + 1}.${i} ${pt.n}`, n: pt.n, p: pt.p, r: pt.r || [0, 0, 0] })))
+  const fin = M.check(all, conn)
+  all.filter((a) => a.n === '리벳').forEach((a) => {
+    const pegs = new Set(fin.mated.filter((m) => m.part === a.key).map((m) => m.peg))
+    if (pegs.size < 2) issues.push(`${a.key}: 리벳 한쪽 끝만 구멍에 들어감(${pegs.size}/2)`)
+  })
+  return issues
+}
+
+
+  window.IVS_MATES = { matFromEuler, worldConnectors, check, checkSteps };
 })();

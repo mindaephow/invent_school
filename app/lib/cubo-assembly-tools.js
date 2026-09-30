@@ -54,6 +54,7 @@ function checkOverlaps(steps, COL, tol) {
   return { checked: items.length, overlaps, skipped: [...skipped] }
 }
 
+
 export function registerCuboAssemblyTools(server, getSupabase) {
     server.registerTool(
       'get_assembly_guide',
@@ -104,8 +105,8 @@ export function registerCuboAssemblyTools(server, getSupabase) {
     server.registerTool(
       'validate_assembly',
       {
-        title: '조립 데이터 겹침 검사',
-        description: '조립 데이터의 모든 부품(제자리 배치)을 몸통 상자로 근사해 서로 겹치는지 검사한다. 돌기·리벳·축이 구멍에 들어가는 것은 겹침으로 세지 않는다. 크기/몸통 규칙이 없는 부품은 검사하지 않고 목록으로 알려 준다. assemblyId(저장된 데이터) 또는 steps(직접 작성한 단계 배열) 중 하나를 준다.',
+        title: '조립 데이터 검사(겹침·결합·안내 위치·설명)',
+        description: '조립 데이터를 고친 뒤 반드시 돌려서 "문제 0건"을 확인할 것(겹침 없음만으로는 제대로 조립된 게 아니다). 몸통 겹침 + 돌기↔구멍 결합 + 단계별 정밀 검사(새 부품이 실제 구멍에 끼는지, 초록 안내 위치가 실제 구멍/돌기와 맞는지, 리벳 양 끝, T축 머리 방향, 단계 설명의 "N개"가 데이터와 맞는지). 겹침은 조립 데이터의 모든 부품(제자리 배치)을 몸통 상자로 근사해 서로 겹치는지 본다. 돌기·리벳·축이 구멍에 들어가는 것은 겹침으로 세지 않는다. 크기/몸통 규칙이 없는 부품은 검사하지 않고 목록으로 알려 준다. assemblyId(저장된 데이터) 또는 steps(직접 작성한 단계 배열) 중 하나를 준다.',
         inputSchema: {
           assemblyId: z.string().optional().describe('저장된 조립 데이터 id'),
           steps: z.array(z.any()).optional().describe('직접 만든 단계 배열. 각 단계 { parts: [{ n, p:[x,y,z], r:[rx,ry,rz] }] }'),
@@ -142,6 +143,11 @@ export function registerCuboAssemblyTools(server, getSupabase) {
             if (mates.free.length) lines.push('비어 있는 돌기(블록 양 끝처럼 원래 비는 곳이면 정상): ' + mates.free.map((f) => `${f.part} ${f.peg}`).join(', '))
             if (mates.noData.length) lines.push(`연결점 기록 없는 부품(결합 검사 못 함): ${[...new Set(mates.noData.map((k) => k.replace(/^\d+단계 /, '').replace(/#\d+$/, '')))].join(', ')}`)
           } else lines.push('(연결점을 못 읽어 결합 검사는 생략)')
+          if (mates) {
+            const stepIssues = site.IVS_MATES.checkSteps(list, conn)
+            lines.push(stepIssues.length ? `단계별 정밀 검사 ${stepIssues.length}건 문제:` : '✅ 단계별 정밀 검사 통과(새 부품 결합·안내 위치·리벳 양 끝·T축 방향·설명 개수)')
+            lines.push(...stepIssues.map((x) => `⚠ ${x}`))
+          }
           lines.push('※ 몸통 상자 근사이므로 돌기가 홀이 아닌 솔리드를 지나가는 것은 잡지 못한다. 화면(조립 보기)에서도 눈으로 확인할 것.')
           return text(lines.join('\n'))
         } catch (e) { return fail(e.message) }
