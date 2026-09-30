@@ -41,7 +41,9 @@
         let pos = base;
         if (isNew && pt.dir) {
           pos = add(base, pt.dir, HOVER); // 끼우기 직전: 제자리에서 끼우는 방향으로 띄운다
-          const targets = !useSide && pt.marks && pt.marks.length ? pt.marks : [base];
+          // 옆자리 조립품이 제자리로 합쳐지는 단계(settle)에는 settleMarks(있는 부품만), 그 밖엔 marks, 없으면 부품 가운데
+          const settling = pt.side && !useSide;
+          const targets = settling ? (pt.settleMarks || []) : (pt.marks && pt.marks.length ? pt.marks : [base]);
           // 화살표는 띄워 놓은 부품의 돌기 끝(구멍에 들어갈 깊이만큼 아래)에서 시작해 구멍 위 원으로 들어간다
           targets.forEach((m) => guides.push({ from: add(m, pt.dir, HOVER - PEG_DEPTH), to: m, dir: pt.dir }));
         }
