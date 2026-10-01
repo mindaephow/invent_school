@@ -6,6 +6,7 @@
 // 화면과 같은 파일이 원본이라 둘이 어긋나지 않는다. (선택 환경변수 SITE_ORIGIN, 기본 https://invent-school-sigma.vercel.app)
 import { z } from 'zod'
 import { buildGuide, dimsOf } from './cubo-assembly-guide.js'
+import { autoAssemble, autoCamera } from './cubo-auto-assemble.js'
 
 const text = (t) => ({ content: [{ type: 'text', text: t }] })
 const fail = (t) => ({ content: [{ type: 'text', text: `❌ ${t}` }], isError: true })
@@ -16,7 +17,7 @@ let _site = null, _siteAt = 0
 export async function loadSite() {
   if (_site && Date.now() - _siteAt < 60_000) return _site
   const win = {}
-  for (const file of ['design-assemblies.js', 'design-collision.js', 'design-mates.js']) {
+  for (const file of ['design-assemblies.js', 'design-collision.js', 'design-mates.js', 'design-verify.js']) {
     const res = await fetch(`${SITE_ORIGIN()}/${file}?t=${Date.now()}`)
     if (!res.ok) throw new Error(`${file} 를 못 읽었어요 (${res.status})`)
     new Function('window', await res.text())(win) // 같은 저장소의 파일만 읽는다
@@ -54,6 +55,23 @@ export function checkOverlaps(steps, COL, tol) {
   return { checked: items.length, overlaps, skipped: [...skipped] }
 }
 
+
+
+// 교재(ivs_textbooks)의 해당 차시 부품 LIST → { 부품이름: 개수 }
+async function textbookList(sb, def) {
+  if (!def || !def.chapter) return null
+  const { data: tbs } = await sb.from('ivs_textbooks').select('data')
+  const tb = (tbs || []).map((r) => r.data).find((d) => d && d.subject === 'robot' && Number(d.volume) === Number(def.volume) && (d.chapters || []).some((c) => c.title === def.chapter))
+  if (!tb) return null
+  const ch = tb.chapters.find((c) => c.title === def.chapter)
+  const ids = (ch.parts || []).map((p) => p.partId)
+  if (!ids.length) return null
+  const { data: rows } = await sb.from('ivs_part_catalog').select('id, name:data->>name').in('id', ids)
+  const nm = Object.fromEntries((rows || []).map((r) => [r.id, r.name]))
+  const out = {}
+  ch.parts.forEach((p) => { const n = nm[p.partId]; if (n) out[n] = (out[n] || 0) + Number(p.qty || 0) })
+  return out
+}
 
 export function registerCuboAssemblyTools(server, getSupabase) {
     server.registerTool(
@@ -148,8 +166,73 @@ export function registerCuboAssemblyTools(server, getSupabase) {
             lines.push(stepIssues.length ? `단계별 정밀 검사 ${stepIssues.length}건 문제:` : '✅ 단계별 정밀 검사 통과(새 부품 결합·안내 위치·리벳 양 끝·T축 방향·설명 개수)')
             lines.push(...stepIssues.map((x) => `⚠ ${x}`))
           }
+          if (mates && site.IVS_VERIFY) {
+            // 단계별 검증 절차(방향 확인 → 구멍 위치 → 앞뒤 단계 비교 → 바닥·개수·카메라)
+            const def = assemblyId ? (site.IVS_ASSEMBLIES || []).find((x) => x.id === assemblyId) : { steps: list }
+            const dims = {}; names.forEach((n) => { const d = dimsOf(n); if (d) dims[n] = d })
+            let listCounts = null
+            try { listCounts = await textbookList(getSupabase(), def) } catch (e) { /* 교재 LIST 를 못 읽어도 나머지는 진행 */ }
+            const v = site.IVS_VERIFY.verify(def, conn, dims, { list: listCounts })
+            lines.push(v.issues.length ? `단계별 검증 절차 ${v.issues.length}건 문제:` : '✅ 단계별 검증 절차 통과(띄우는 방향·바닥 기준·같은 자리 중복·교재 LIST·카메라 지정)')
+            lines.push(...v.issues.map((x) => `⚠ ${x}`))
+            lines.push('── 단계별 보고서(교재 그림과 하나씩 대조: 구멍 번호는 양쪽 끝에서 센 값) ──', ...v.report)
+          }
           lines.push('※ 몸통 상자 근사이므로 돌기가 홀이 아닌 솔리드를 지나가는 것은 잡지 못한다. 화면(조립 보기)에서도 눈으로 확인할 것.')
           return text(lines.join('\n'))
+        } catch (e) { return fail(e.message) }
+      }
+    )
+
+
+    server.registerTool(
+      'auto_assemble',
+      {
+        title: '자동 조립(공간→판단→검사→수정 반복으로 부품 자세·카메라 확정)',
+        description: '부품마다 받는 구멍(또는 돌기)을 지정하면 자세 후보(끼우는 면 앞/뒤 × 롤 0/90/180/270°)를 만들고, 연결·겹침·띄우는 방향 검사를 돌려 통과한 자세를 확정한다(전부 실패하면 어느 검사에서 막혔는지 로그로 돌려줌 → joins 를 고쳐 다시 호출). 카메라도 받는 구멍이 가려지지 않고 끼우는 방향이 잘 보이는 각도로 자동 선택한다(camSrc:"auto" — 교재 그림에서 맞춘 값이 있으면 그것을 우선). placed 는 앞에서 확정된 부품 {key,n,p,r}, plan 은 이번에 놓을 부품 목록 [{ n, key?, joins:[{ mine:내 연결점 id, host:placed 의 key, theirs:받는 연결점 id 또는 theirsGrid:[길이방향 i, 폭방향 j](프레임)}], dirHint:[x,y,z](=조립 데이터의 dir) }]. 연결점 id 는 get_part_connectors 로 본다.',
+        inputSchema: {
+          assemblyId: z.string().optional().describe('이 차시의 앞 단계 부품을 placed 로 쓴다(afterStep 까지)'),
+          afterStep: z.number().optional().describe('assemblyId 와 함께: 이 단계까지의 부품을 놓인 것으로 본다'),
+          placed: z.array(z.any()).optional().describe('직접 준 놓인 부품 [{ key, n, p, r }]'),
+          plan: z.array(z.any()).describe('이번에 놓을 부품들(위 설명 형식)'),
+          camera: z.boolean().optional().describe('카메라 자동 선택도 할지(기본 true)'),
+          prevCam: z.object({ az: z.number(), el: z.number() }).optional().describe('앞 단계 카메라(방위·고도, 도) — 연속성 점수에 쓴다'),
+        },
+      },
+      async ({ assemblyId, afterStep, placed, plan, camera = true, prevCam }) => {
+        try {
+          const site = await loadSite()
+          let base = placed || []
+          if (!placed && assemblyId) {
+            const a = (site.IVS_ASSEMBLIES || []).find((x) => x.id === assemblyId)
+            if (!a) return fail('assemblyId 를 찾을 수 없어요.')
+            base = []
+            a.steps.slice(0, afterStep == null ? a.steps.length : afterStep).forEach((st, k) => (st.parts || []).forEach((pt, i) => base.push({ key: `${k + 1}.${i}`, n: pt.n, p: pt.p, r: pt.r || [0, 0, 0] })))
+          }
+          const names = [...new Set([...base.map((b) => b.n), ...plan.map((q) => q.n)])]
+          const { data: rows, error } = await getSupabase().from('ivs_part_catalog').select('name:data->>name, connectors:data->connectors').eq('data->>subject', 'robot').in('data->>name', names)
+          if (error) return fail(error.message)
+          const conn = {}; (rows || []).forEach((r) => { if (r.connectors) conn[r.name] = r.connectors })
+          const dims = {}; names.forEach((n) => { const d = dimsOf(n); if (d) dims[n] = d })
+          const ctx = { M: site.IVS_MATES, COL: site.IVS_COLLISION, conn, dims, placed: base }
+          const res = autoAssemble(ctx, plan)
+          const out = [res.ok ? `✅ 자동 조립 완료: ${res.placed.length}개 부품 확정` : `❌ ${res.stoppedAt + 1}번째 부품(${plan[res.stoppedAt] && plan[res.stoppedAt].n})에서 막힘 — 아래 로그의 [오류]를 보고 joins 를 고쳐 다시 호출하세요`, ...res.log]
+          if (res.ok) {
+            const step = res.placed.map((q) => ({ n: q.n, p: q.p, r: q.r }))
+            out.push('', '── 조립 데이터에 넣을 부품(복사용) ──', JSON.stringify(step))
+            const alts = res.placed.filter((q) => q.alternatives && q.alternatives.length).map((q) => `${q.n}(${q.key}): ${q.alternatives.map((a) => a.label).join(', ')}`)
+            if (alts.length) out.push('다른 통과 후보(교재 그림과 비교해서 고를 것): ' + alts.join(' / '))
+            if (camera) {
+              const marks = []
+              plan.forEach((q, i) => (q.joins || []).forEach((j) => {
+                const h = base.concat(res.placed).find((b) => b.key === j.host); const th = h && conn[h.n] && [...(conn[h.n].holes || []), ...(conn[h.n].pegs || [])].find((c) => c.id === (j.theirs || ''))
+                if (h && th) { const Rm = site.IVS_MATES.matFromEuler(h.r || [0, 0, 0]); const w = [0, 1, 2].map((r) => h.p[r] + Rm[r][0] * th.pos[0] + Rm[r][1] * th.pos[1] + Rm[r][2] * th.pos[2]); marks.push(w) }
+              }))
+              const dir = plan[0] && plan[0].dirHint
+              const cam = autoCamera({ M: site.IVS_MATES, COL: site.IVS_COLLISION, dims, placed: base }, { marks, dir, focus: marks }, prevCam)
+              out.push('', `── 카메라 ── ${cam.note}`, `step.cam = { theta: ${cam.theta}, phi: ${cam.phi} }, camSrc: 'auto'  // 교재 그림과 대조해서 다르면 교재 방향으로 고칠 것`)
+            }
+          }
+          return text(out.join('\n'))
         } catch (e) { return fail(e.message) }
       }
     )
