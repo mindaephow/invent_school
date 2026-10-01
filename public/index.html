@@ -502,6 +502,7 @@
           <select id="quickXlsxChapter" style="max-width:200px;"></select>
           <button type="button" class="primary" id="quickXlsxBtn">엑셀 선택해서 올리기</button>
           <button type="button" class="ghost" id="quickXlsxSample">샘플 다운로드</button>
+          <button type="button" class="ghost" id="quickXlsxExport">등록된 부품 다운로드</button>
           <span class="item-sub" id="quickXlsxMsg"></span>
         </div>
         <p class="note" style="margin:0;">"샘플 다운로드"로 받은 엑셀에는 부품 이름이 모두 적혀 있어요. <b>필요한 부품의 수량만</b> 채우고, 차시를 골라 올리면 수량이 적힌 부품만 그 차시의 필요 부품으로 배정돼요(수량이 빈 줄은 무시). 그 차시에 이미 있는 부품은 엑셀 수량으로 바뀌어요.</p>
@@ -2249,6 +2250,29 @@
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, '부품');
     XLSX.writeFile(wb, '부품목록_샘플.xlsx');
+  });
+  // 이 교재의 차시별 필요 부품(교재 관리에 등록한 것)을 엑셀로 내려받는다: 차시, 차시 제목, 부품명, 수량. 수량이 있는 것만 나온다.
+  document.getElementById('quickXlsxExport').addEventListener('click', () => {
+    const msgEl = document.getElementById('quickXlsxMsg');
+    const tb = currentTextbook();
+    if (!tb) return;
+    if (typeof XLSX === 'undefined') { msgEl.textContent = '엑셀 기능을 불러오지 못했어요. 새로고침해 주세요.'; return; }
+    const rows = [['차시', '차시 제목', '부품명', '수량']];
+    tb.chapters.forEach((c, i) => {
+      (c.parts || []).forEach((cp) => {
+        const part = allParts.find((p) => p.id === cp.partId);
+        rows.push([i + '차시', c.title || '', part ? part.name : '(삭제된 부품)', cp.qty]);
+      });
+    });
+    if (rows.length === 1) { msgEl.textContent = '아직 등록된 부품이 없어요.'; clearTimeout(msgEl._t); msgEl._t = setTimeout(() => { msgEl.textContent = ''; }, 4000); return; }
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{ wch: 8 }, { wch: 24 }, { wch: 22 }, { wch: 8 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '필요 부품');
+    XLSX.writeFile(wb, tb.name + '_필요부품.xlsx');
+    msgEl.textContent = '✅ ' + (rows.length - 1) + '줄을 내려받았어요.';
+    clearTimeout(msgEl._t);
+    msgEl._t = setTimeout(() => { msgEl.textContent = ''; }, 4000);
   });
   document.getElementById('quickXlsxBtn').addEventListener('click', () => {
     const tb = currentTextbook();
