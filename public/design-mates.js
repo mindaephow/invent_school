@@ -89,7 +89,7 @@
       if (pt.dir && pt.marks && !pt.side && !pt.explode) {
         pt.marks.forEach((m) => {
           const ok = worlds.some(({ u, w }) => w && u.ref !== pt && (pt.recv
-            ? w.pegs.some((pg) => { const tip = [pg.pos[0] + pg.dir[0] * pg.len / 2, pg.pos[1] + pg.dir[1] * pg.len / 2, pg.pos[2] + pg.dir[2] * pg.len / 2]; return Math.hypot(...sub(tip, m)) <= 3 })
+            ? w.pegs.some((pg) => { const tip = [pg.pos[0] + pg.dir[0] * pg.len / 2, pg.pos[1] + pg.dir[1] * pg.len / 2, pg.pos[2] + pg.dir[2] * pg.len / 2]; if (Math.hypot(...sub(tip, m)) <= 3) return true; const base = [pg.pos[0] - pg.dir[0] * pg.len / 2, pg.pos[1] - pg.dir[1] * pg.len / 2, pg.pos[2] - pg.dir[2] * pg.len / 2]; return pg.len >= 30 && Math.hypot(...sub(base, m)) <= 3 }) // 축처럼 길게 꽂히는 돌기는 양 끝 어느 쪽에서도 끼울 수 있다(부시는 아래 끝에서)
             : w.holes.some((h) => { const rel = sub(m, h.pos); const along = dot(rel, h.dir); return Math.hypot(...sub(rel, h.dir.map((x) => x * along))) <= 1.8 && Math.abs(along) <= h.len / 2 + 3 })))
           if (!ok) issues.push(`${si + 1}단계 ${pt.n}: 안내 위치 [${m}]에 ${pt.recv ? '고정된 돌기 끝' : '받는 구멍'}이 없음(위치 어긋남)`)
         })
