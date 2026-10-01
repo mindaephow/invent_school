@@ -7,6 +7,8 @@
 import { z } from 'zod'
 import { dimsOf, PART_DIMS } from './cubo-assembly-guide.js'
 import { loadSite, quatFromEulerZYX, checkOverlaps } from './cubo-assembly-tools.js'
+import { CUBO_FRAME_STD, PART_STANDARD_TEXT } from './cubo-part-maker.js'
+import { frameTriangles, trianglesToStl } from './cubo-frame-mesh.js'
 
 const text = (t) => ({ content: [{ type: 'text', text: t }] })
 const fail = (t) => ({ content: [{ type: 'text', text: `❌ ${t}` }], isError: true })
@@ -110,6 +112,66 @@ export function registerCuboDesignTools(server, getSupabase) {
       inputSchema: {},
     },
     async () => text(DESIGN_GUIDE)
+  )
+
+  server.registerTool(
+    'get_part_standard',
+    {
+      title: '큐보 부품 만들기 기본 규격',
+      description: '큐보 부품(프레임 등)을 새로 만들 때 쓰는 기본 규격(판 두께, 홀 테두리, 제일 작은 홀, 폭, 여백, 간격). 등록된 15프레임을 실측해 정한 값이다. 부품 만들기 도형을 설계하기 전에 읽는다.',
+      inputSchema: {},
+    },
+    async () => text(PART_STANDARD_TEXT)
+  )
+
+  server.registerTool(
+    'make_frame_stl',
+    {
+      title: '프레임 STL 미리 계산',
+      description: '기본 규격(get_part_standard)대로 n칸 직선 프레임을 삼각형으로 직접 짜서(자르기 계산 없음) 크기를 알려 준다: 삼각형 수, STL 용량, 가로·두께·폭. 저장하지 않는다. 구멍 수 n 은 1~30.',
+      inputSchema: { holes: z.number().int().min(1).max(30).describe('구멍 수(칸 수). 예: 15프레임=5') },
+    },
+    async ({ holes }) => {
+      const tris = frameTriangles(holes)
+      const stl = trianglesToStl(tris)
+      const S = CUBO_FRAME_STD
+      return text(`프레임 ${holes}칸: ${holes * S.pitch} × ${S.width} × ${S.total}mm, 삼각형 ${tris.length / 9}개, STL ${(stl.length / 1024).toFixed(0)}KB. (등록된 15프레임은 삼각형 2,102개·105KB)`)
+    }
+  )
+
+  server.registerTool(
+    'apply_frame_to_part',
+    {
+      title: '프레임 STL 을 부품 DB 에 넣기',
+      description: '기본 규격으로 만든 n칸 프레임 STL 을 부품 DB(ivs_part_catalog) 행의 data.spec 에 넣는다: shapes(STL 가져오기 1개)와 pitch·margin·thickness·boreRadius·maxHolesPerArm·holeCoords·holeLabels. 그 부품의 다른 필드(이름, 색, 연결점 등)는 그대로 둔다. **부품 DB 를 바꾸므로 사용자가 허락한 뒤에만 쓴다.** 넣은 뒤 썸네일은 부품 관리에서 열어 저장하면 다시 만들어진다(3D 모델 캐시가 썸네일 지문을 쓰므로 그때까지 화면의 모델은 옛것일 수 있다).',
+      inputSchema: {
+        partId: z.string().describe('ivs_part_catalog 행 id'),
+        holes: z.number().int().min(1).max(30).describe('구멍 수(칸 수)'),
+        color: z.string().optional().describe('색. 생략하면 부품에 등록된 색이나 빨강'),
+        confirm: z.literal(true).describe('사용자가 부품 DB 수정을 허락했을 때만 true'),
+      },
+    },
+    async ({ partId, holes, color }) => {
+      try {
+        const sb = getSupabase()
+        const { data: existing, error: getErr } = await sb.from('ivs_part_catalog').select('data').eq('id', partId).maybeSingle()
+        if (getErr) return fail(getErr.message)
+        if (!existing) return fail('그 id 의 부품을 찾을 수 없어요.')
+        const S = CUBO_FRAME_STD
+        const stl = trianglesToStl(frameTriangles(holes))
+        const name = existing.data.name || '프레임'
+        const spec = {
+          ...(typeof existing.data.spec === 'object' && existing.data.spec ? existing.data.spec : {}),
+          pitch: S.pitch, margin: S.margin, thickness: S.total, boreRadius: S.boreR, maxHolesPerArm: holes,
+          holeCoords: Array.from({ length: holes }, (_, i) => ({ x: S.margin, z: S.margin + i * S.pitch, face: null, label: `X1Z${i + 1}` })),
+          holeLabels: Array.from({ length: holes }, (_, i) => `X1Z${i + 1}`),
+          shapes: [{ x: 0, y: 0, z: 0, op: 'add', rx: 0, ry: 0, rz: 0, type: 'import', color: color || '#e03b2b', fileName: `${name}.stl`, brightness: 100, fileDataUrl: 'data:application/octet-stream;base64,' + Buffer.from(stl).toString('base64') }],
+        }
+        const { error } = await sb.from('ivs_part_catalog').update({ data: { ...existing.data, spec } }).eq('id', partId)
+        if (error) return fail(error.message)
+        return text(`✅ "${name}"(id=${partId}) 의 3D 모델을 규격 ${holes}칸 프레임으로 바꿨어요(STL ${(stl.length / 1024).toFixed(0)}KB). 부품 관리에서 열어 저장하면 썸네일이 다시 만들어져요.`)
+      } catch (e) { return fail(e.message) }
+    }
   )
 
   server.registerTool(
