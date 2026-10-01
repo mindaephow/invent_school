@@ -1383,10 +1383,12 @@
         return;
       }
       let mismatchCount = 0;
+      window.__requiredQty = {};
       const rows = chapterParts.map(cp => {
         const p = robotPartsCache.find(x => x.id === cp.partId);
         if (!p) return '';
         const type = registerRobotPartDef(p);
+        window.__requiredQty[type] = cp.qty;
         const used = parts.filter(pt => pt.type === type).length;
         const ok = used === cp.qty;
         if (!ok) mismatchCount++;
@@ -1405,8 +1407,10 @@
     if (!trackable.length) { card.hidden = true; return; }
     card.hidden = false;
     let mismatchCount = 0;
+    window.__requiredQty = {};
     const rows = trackable.map(p => {
       const type = registerRobotPartDef(p);
+      window.__requiredQty[type] = p.qty;
       const used = parts.filter(pt => pt.type === type).length;
       const ok = used === p.qty;
       if (!ok) mismatchCount++;
@@ -2319,7 +2323,9 @@
         name.appendChild(document.createTextNode(' ' + (PART_SHORT[type] || PART_DEFS[type].label)));
         const cnt = document.createElement('span');
         cnt.className = 'req-count';
-        cnt.textContent = String(n);
+        const need = (window.__requiredQty || {})[type];
+        cnt.textContent = need != null ? n + '/' + need : String(n); // 필요 개수 중 몇 개를 썼는지(필요 부품 목록과 같은 "쓴 개수/필요 개수")
+        if (need != null && n !== need) row.className = 'required-row short';
         row.appendChild(name);
         row.appendChild(cnt);
         partListBody.appendChild(row);
