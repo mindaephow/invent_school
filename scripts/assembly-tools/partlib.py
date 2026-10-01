@@ -1,0 +1,68 @@
+# 부품 연결점 라이브러리 — 조립 프로그램(asmlib.py)과 로컬 검사(check_local.js)가 같이 쓴다.
+# 프레임(N프레임)은 규칙대로 만들어 내고(구멍 10mm 격자, 두께 5, 긴 쪽 x), 나머지는 부품 DB(get_part_connectors)에서 읽은 값을 적어 둔 것이다.
+# 새 부품이 필요하면 아래 OTHER 에 get_part_connectors 결과(pegs/holes/size)를 그대로 옮긴다.
+import json, re
+
+def frame(name):
+    m = re.fullmatch(r"(\d)(\d+)프레임", name)
+    if not m: return None
+    W, L = int(m.group(1)), int(m.group(2))
+    holes = []
+    for i in range(L):
+        for j in range(W):
+            holes.append({"id": f"h{i+1}_{j+1}", "pos": [(i - (L - 1) / 2) * 10, 0, (j - (W - 1) / 2) * 10], "dir": [0, -1, 0], "len": 5, "r": 3.5, "through": True})
+    return {"pegs": [], "holes": holes, "size": [L * 10, 5, W * 10]}
+
+def peg(id, pos, d, ln, r): return {"id": id, "pos": pos, "dir": d, "len": ln, "r": r}
+def hole(id, pos, d, ln, r, through=True): return {"id": id, "pos": pos, "dir": d, "len": ln, "r": r, "through": through}
+
+def block(n, ends, zs, r):  # N단블록: 앞뒤(±z) 면에 zs 위치 돌기, 양 끝(±x) 십자 돌기, 위·아래 구멍
+    pegs = [peg("p1", [ends, 0, 0], [1, 0, 0], 5, r), peg("p2", [-ends, 0, 0], [-1, 0, 0], 5, r)]
+    return pegs
+
+OTHER = {
+    "3단블록": {"size": [40, 10, 20], "pegs": [
+        peg("p1", [17.5, 0, 0], [1, 0, 0], 5, 3.8), peg("p2", [-17.5, 0, 0], [-1, 0, 0], 5, 3.8),
+        peg("p3", [10, 0, 7.5], [0, 0, 1], 5, 3.8), peg("p4", [0, 0, 7.5], [0, 0, 1], 5, 3.8), peg("p5", [-10, 0, 7.5], [0, 0, 1], 5, 3.8),
+        peg("p6", [0, 0, -7.5], [0, 0, -1], 5, 3.8), peg("p7", [10, 0, -7.5], [0, 0, -1], 5, 3.8), peg("p8", [-10, 0, -7.5], [0, 0, -1], 5, 3.8)],
+        "holes": [hole("h1", [-10, 0, 0], [0, -1, 0], 10, 4), hole("h2", [0, 0, 0], [0, -1, 0], 10, 4), hole("h3", [10, 0, 0], [0, -1, 0], 10, 4)]},
+    "2단블록": {"size": [30, 9, 20], "pegs": [
+        peg("p1", [12.5, 0, 0], [1, 0, 0], 5, 3.5), peg("p2", [-12.5, 0, 0], [-1, 0, 0], 5, 3.5),
+        peg("p3", [-4.4, 0, 7.5], [0, 0, 1], 5, 3.5), peg("p4", [5.7, 0, 7.5], [0, 0, 1], 5, 3.5),
+        peg("p5", [5.6, 0, -7.5], [0, 0, -1], 5, 3.6), peg("p6", [-4.4, 0, -7.5], [0, 0, -1], 5, 3.5)],
+        "holes": [hole("h1", [-5, 0, 0], [0, -1, 0], 9, 3.5), hole("h2", [5, 0, 0], [0, -1, 0], 9, 3.5)]},
+    "리벳": {"size": [7.6, 9, 7.6], "pegs": [peg("p1", [0, -3, 0], [0, -1, 0], 3, 3.2), peg("p2", [0, 3, 0], [0, 1, 0], 3, 3.2)], "holes": []},
+    "DC모터": {"size": [40, 38, 53], "pegs": [
+        peg("p1", [0, 16.5, 18.5], [0, 1, 0], 5, 2.5), peg("p2", [0, 16.5, -21.5], [0, 1, 0], 5, 2.5),
+        peg("p3", [17.5, -1, 8.5], [1, 0, 0], 5, 2.5), peg("p4", [17.5, -1, -11.5], [1, 0, 0], 5, 2.5),
+        peg("p5", [-17.5, -1, 8.5], [-1, 0, 0], 5, 2.5), peg("p6", [-17.5, -1, -11.5], [-1, 0, 0], 5, 2.5)], "holes": []},
+    "눈블록": {"size": [17, 7, 17], "pegs": [peg("p1", [0, 1.3, 0], [0, 1, 0], 4.5, 3.1)], "holes": []},
+    "1열브라켓": {"size": [10, 30, 30], "pegs": [], "holes": [
+        hole("h1", [0, -12.5, 0], [0, 1, 0], 5, 4), hole("h2", [0, -12.5, 10], [0, 1, 0], 5, 4),
+        hole("h3", [0, 0, -12.5], [0, 0, 1], 5, 4), hole("h4", [0, 10, -12.5], [0, 0, 1], 5, 4)]},
+    "메인보드": {"size": [90, 42.5, 67], "pegs": [peg("p1", [0, -18.75, -10], [0, -1, 0], 5, 2.5), peg("p2", [0, -18.75, 10], [0, -1, 0], 5, 2.5)], "holes": []},
+    "T축": {"size": [7, 30, 7], "pegs": [peg("p1", [0, 0, 0], [0, 1, 0], 30, 3.5)], "holes": []},
+    "축": {"size": [5, 65, 5], "pegs": [peg("p1", [0, 0, 0], [0, 1, 0], 65, 3.5)], "holes": []},
+    "작은기어": {"size": [17.6, 8, 17.6], "pegs": [], "holes": [hole("h1", [0, 0.2, 0], [0, -1, 0], 7.6, 3.5)]},
+    "큰기어": {"size": [46, 9, 46], "pegs": [], "holes": [hole(f"h{k+1}", pos, [0, -1, 0], 9, 4) for k, pos in enumerate([[-10, 0, 0], [0, 0, -10], [0, 0, 0], [0, 0, 10], [10, 0, 0]])]},
+    "작은바퀴": {"size": [50, 16, 50], "pegs": [], "holes": [hole(f"h{k+1}", pos, [0, 1, 0], 9, 4, False) for k, pos in enumerate([[-10, -3.5, 0], [0, -3.5, -10], [0, -3.5, 0], [0, -3.5, 10], [10, -3.5, 0]])]},
+    "부시": {"size": [12, 5.5, 12], "pegs": [], "holes": [hole("h1", [0, 0.2, 0], [0, -1, 0], 5.1, 3.5)]},
+}
+FRAMES = ["15프레임", "17프레임", "19프레임", "115프레임", "25프레임", "27프레임", "29프레임", "35프레임", "37프레임", "39프레임", "315프레임", "59프레임"]
+
+def get(name):
+    return frame(name) or OTHER[name]
+
+def build_all():
+    conn, dims = {}, {}
+    for n in FRAMES + list(OTHER):
+        c = get(n)
+        conn[n] = {"pegs": c.get("pegs", []), "holes": c.get("holes", [])}
+        dims[n] = c["size"]
+    return conn, dims
+
+if __name__ == "__main__":
+    conn, dims = build_all()
+    json.dump(conn, open("conn.json", "w", encoding="utf-8"), ensure_ascii=False)
+    json.dump(dims, open("dims.json", "w", encoding="utf-8"), ensure_ascii=False)
+    print(len(conn), "parts")

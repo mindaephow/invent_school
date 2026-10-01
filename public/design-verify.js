@@ -82,7 +82,7 @@
             if (!okAny) issues.push(`${si}단계 ${a.n}: 띄우는 방향 dir=${axisName(d)} 이면 돌기가 반대(${axisName(mul3(d, -1))})로 향해야 하는데 연결된 돌기(${myPegs.map((m) => m.peg).join(', ')})가 모두 다른 쪽을 향함(방향 어긋남)`)
           }
           if (pt.recv && myHoles.length) {
-            const okAny = myHoles.some((m) => { const host = byKey.get(m.part); const hw = host && worldOf(host); const peg = hw && hw.pegs.find((q) => q.id === m.peg); return peg && dot(norm(peg.dir), d) >= 0.9 })
+            const okAny = myHoles.some((m) => { const host = byKey.get(m.part); const hw = host && worldOf(host); const peg = hw && hw.pegs.find((q) => q.id === m.peg); return peg && (dot(norm(peg.dir), d) >= 0.9 || (peg.len >= 30 && dot(norm(peg.dir), d) <= -0.9)) }) // 축처럼 긴 돌기는 양 끝 어느 쪽에서도 끼운다(안쪽 부시)
             if (!okAny) issues.push(`${si}단계 ${a.n}: 띄우는 방향 dir=${axisName(d)} 이면 고정된 돌기가 ${axisName(d)} 쪽을 향해야 하는데 연결된 돌기가 모두 다른 쪽을 향함(방향 어긋남)`)
           }
         }
