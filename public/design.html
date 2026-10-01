@@ -1589,6 +1589,7 @@
     try { const p = JSON.parse(atob(tok.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))); return !!(p.app_metadata && p.app_metadata.role === 'admin'); }
     catch (e) { return false; }
   }
+  window.__ivsIsAdmin = () => { try { return !!accessToken && isAdminToken(accessToken); } catch (e) { return false; } }; // 위치 표시 옮기기·수정스샷도 관리자에게만 보인다
   function refreshConnBtn(){
     let admin = false;
     try { admin = !!accessToken && isAdminToken(accessToken); } catch (e) { /* 아직 로그인 전 */ }
