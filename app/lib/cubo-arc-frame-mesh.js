@@ -23,34 +23,53 @@ const RO = S.rimOuterR - 0.01
 const E = S.edgeWall
 const rad = (d) => (d * Math.PI) / 180
 
-// 중심 (cx,cz)에서 각도 a 방향 선이 다각형(평면 점 배열)과 처음 만나는 점
-function hit(cx, cz, poly, a) {
-  const dx = Math.cos(a), dz = Math.sin(a)
-  let best = Infinity
-  for (let i = 0; i < poly.length; i++) {
-    const [x1, z1] = poly[i], [x2, z2] = poly[(i + 1) % poly.length]
-    const ex = x2 - x1, ez = z2 - z1
-    const den = dx * ez - dz * ex
-    if (Math.abs(den) < 1e-12) continue
-    const t = ((x1 - cx) * ez - (z1 - cz) * ex) / den
-    const u = ((x1 - cx) * dz - (z1 - cz) * dx) / den
-    if (t > 1e-9 && u > -1e-9 && u < 1 + 1e-9 && t < best) best = t
-  }
-  return [cx + best * dx, cz + best * dz]
-}
-
-// 다각형(칸의 안쪽 윤곽)에서 중심 원(반지름 R)을 뺀 면 — kit.cell 의 다각형 버전
+// 다각형(칸의 안쪽 윤곽)에서 중심 원(반지름 R)을 뺀 면. 새 점을 만들지 않고 다각형의 점과 원의 점만으로 삼각형을 나눈다(귀 자르기):
+// 원 구멍을 다각형에 한 줄로 이어(브리지) 구멍 없는 하나의 다각형으로 만든 뒤 귀를 하나씩 잘라 낸다. 다각형 모서리가 이웃 면(벽·옆 칸)의 모서리와
+// 정확히 같으므로 이음매가 어긋나지 않는다. 면 방향은 kit.tri 가 법선(ny)에 맞춰 정한다.
 function polyCell(kit, cx, cz, R, poly, y, ny) {
   const { tri, P, seg } = kit
-  const ang = (x, z) => (Math.atan2(z - cz, x - cx) + 2 * Math.PI) % (2 * Math.PI)
-  const verts = poly.map(([x, z]) => ({ x, z, a: ang(x, z) }))
-  for (let k = 0; k < seg; k++) {
-    const a0 = (2 * Math.PI * k) / seg, a1 = (2 * Math.PI * (k + 1)) / seg
-    const c0 = P(cx + R * Math.cos(a0), y, cz + R * Math.sin(a0)), c1 = P(cx + R * Math.cos(a1), y, cz + R * Math.sin(a1))
-    const path = [hit(cx, cz, poly, a0), ...verts.filter((q) => q.a > a0 + 1e-9 && q.a < a1 - 1e-9).sort((p, q) => p.a - q.a).map((q) => [q.x, q.z]), hit(cx, cz, poly, a1)].map(([x, z]) => P(x, y, z))
-    tri(c0, c1, path[path.length - 1], 0, ny, 0)
-    for (let j = 0; j < path.length - 1; j++) tri(c0, path[j + 1], path[j], 0, ny, 0)
+  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+  const area = (pp) => pp.reduce((s, q, i) => { const r = pp[(i + 1) % pp.length]; return s + q[0] * r[1] - r[0] * q[1] }, 0) / 2
+  const outer = area(poly) > 0 ? poly.slice() : poly.slice().reverse() // 반시계
+  const circle = Array.from({ length: seg }, (_, k) => [cx + R * Math.cos((2 * Math.PI * k) / seg), cz + R * Math.sin((2 * Math.PI * k) / seg)]).reverse() // 시계
+  // 브리지: 원의 x 가 가장 큰 점 → 바깥 다각형에서 구멍·다각형 모서리와 겹치지 않고 안쪽으로 이어지는 가장 가까운 점
+  let hi = 0
+  for (let k = 1; k < circle.length; k++) if (circle[k][0] > circle[hi][0]) hi = k
+  const H = circle[hi]
+  const segHit = (a, b, c, d) => { // 두 선분이 끝점 말고 서로 가로지르는가
+    const d1 = cross(a, b, c), d2 = cross(a, b, d), d3 = cross(c, d, a), d4 = cross(c, d, b)
+    return d1 * d2 < -1e-12 && d3 * d4 < -1e-12
   }
+  const order = outer.map((q, i) => i).sort((i, j) => Math.hypot(outer[i][0] - H[0], outer[i][1] - H[1]) - Math.hypot(outer[j][0] - H[0], outer[j][1] - H[1]))
+  let oi = -1
+  for (const i of order) {
+    const O = outer[i]
+    let ok = true
+    for (let k = 0; k < outer.length && ok; k++) if (segHit(H, O, outer[k], outer[(k + 1) % outer.length])) ok = false
+    for (let k = 0; k < circle.length && ok; k++) if (segHit(H, O, circle[k], circle[(k + 1) % circle.length])) ok = false
+    if (ok) { // 중간 점이 원 바깥이어야 한다
+      const mx = (H[0] + O[0]) / 2, mz = (H[1] + O[1]) / 2
+      if (Math.hypot(mx - cx, mz - cz) > R) { oi = i; break }
+    }
+  }
+  const ring = [...outer.slice(0, oi + 1), ...circle.slice(hi), ...circle.slice(0, hi), H, ...outer.slice(oi)]
+  // 귀 자르기
+  const idx = ring.map((_, i) => i)
+  const same = (a, b) => Math.abs(a[0] - b[0]) < 1e-9 && Math.abs(a[1] - b[1]) < 1e-9
+  const inTri = (a, b, c, q) => !(same(q, a) || same(q, b) || same(q, c)) && cross(a, b, q) >= -1e-12 && cross(b, c, q) >= -1e-12 && cross(c, a, q) >= -1e-12
+  let guard = 0
+  while (idx.length > 3 && guard++ < 10000) {
+    let cut = false
+    for (let k = 0; k < idx.length; k++) {
+      const a = ring[idx[(k + idx.length - 1) % idx.length]], b = ring[idx[k]], c = ring[idx[(k + 1) % idx.length]]
+      if (cross(a, b, c) <= 1e-12) continue // 볼록한 꼭짓점만
+      if (idx.some((m) => inTri(a, b, c, ring[m]))) continue
+      tri(P(a[0], y, a[1]), P(b[0], y, b[1]), P(c[0], y, c[1]), 0, ny, 0)
+      idx.splice(k, 1); cut = true; break
+    }
+    if (!cut) break
+  }
+  if (idx.length === 3) { const [a, b, c] = idx.map((m) => ring[m]); tri(P(a[0], y, a[1]), P(b[0], y, b[1]), P(c[0], y, c[1]), 0, ny, 0) }
 }
 
 export function arcFrameTriangles(seg = 20, sub = 4) {
@@ -65,9 +84,10 @@ export function arcFrameTriangles(seg = 20, sub = 4) {
   const holeX = R * Math.sin(phiEnd) // 끝 구멍 중심 x (= 30)
   const xo = holeX + W, xi = holeX - W // 발의 곧은 옆면 x: 구멍 중심에서 5mm(직선 프레임의 여백·폭과 같다)
   const zb = R * Math.cos(phiEnd) - F // 발 바닥 z
-  // 호 위 각도 표본: 칸 경계(±3.5δ 안쪽)를 잘게 나눈 것 + 양 끝(e)
-  const mid = Array.from({ length: (n - 1) * sub + 1 - sub }, (_, j) => (-(half - 0.5) + (j / sub)) * delta)
-  const angles = (e) => [-e, ...mid, e]
+  // 호 위 각도 표본: 구멍 각도(±4δ)까지 잘게 나눈 것 + 양 끝(e). 구멍 둘레 테두리가 호 윤곽에 닿는 곳(구멍 중심 각도)에 점이 있어야 현이 구멍 테두리를 자르지 않는다.
+  // 안쪽 호는 끝 각도(약 72.4°)가 ±4δ(73.6°)보다 작아서 ±(4δ−δ/sub)(69°)까지만 쓴다. 바깥·안쪽 윤곽(d=0, d=E)이 같은 개수가 되게 e 와 무관하게 정한다.
+  const span = (outer) => Array.from({ length: 2 * (half * sub - (outer ? 0 : 1)) + 1 }, (_, j) => (-(half * sub - (outer ? 0 : 1)) + j) * (delta / sub))
+  const angles = (e, outer) => [-e, ...span(outer), e]
   // 윤곽(반시계): 오른발 → 바깥 호(오른쪽→왼쪽) → 왼발 → 안쪽 호(왼쪽→오른쪽). d = 안쪽으로 줄이는 양(0 이면 바깥 윤곽, E 면 테두리 안쪽 윤곽)
   const geo = (d) => {
     const ro = R + W - d, ri = R - W + d, xod = xo - d, xid = xi + d, zbd = zb + d
@@ -75,7 +95,7 @@ export function arcFrameTriangles(seg = 20, sub = 4) {
   }
   const loop = (d) => {
     const g = geo(d)
-    return [[g.xod, g.zbd], ...angles(g.eo).reverse().map((a) => pt(g.ro, a)), [-g.xod, g.zbd], [-g.xid, g.zbd], ...angles(g.ei).map((a) => pt(g.ri, a)), [g.xid, g.zbd]]
+    return [[g.xod, g.zbd], ...angles(g.eo, true).reverse().map((a) => pt(g.ro, a)), [-g.xod, g.zbd], [-g.xid, g.zbd], ...angles(g.ei, false).map((a) => pt(g.ri, a)), [g.xid, g.zbd]]
   }
   const O = loop(0), I = loop(E)
   const m = O.length
@@ -88,7 +108,7 @@ export function arcFrameTriangles(seg = 20, sub = 4) {
     for (const [y0, y1] of [[Y0, Y1], [Y4, Y5]]) quad(P(I[i][0], y0, I[i][1]), P(I[j][0], y0, I[j][1]), P(I[j][0], y1, I[j][1]), P(I[i][0], y1, I[i][1]), -px, 0, -pz)
   }
   // 칸마다(구멍 하나씩): 안쪽 윤곽 조각 + 구멍 고리·벽
-  const g = geo(E), aO = angles(g.eo), aI = angles(g.ei)
+  const g = geo(E), aO = angles(g.eo, true), aI = angles(g.ei, false)
   for (let k = 0; k < n; k++) {
     const phi = (k - half) * delta
     const lo = k === 0 ? -Infinity : phi - delta / 2, hi = k === n - 1 ? Infinity : phi + delta / 2
