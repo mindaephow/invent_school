@@ -79,7 +79,7 @@
     const flipOn = flipActive(target);
     def.steps.slice(0, upTo).forEach((s, si) => {
       (s.parts || []).forEach((pt0) => {
-        const pt = flipOn ? flipPt(pt0) : pt0; // 뒤집기 전 방향으로 보여 주는 단계
+        const pt = flipOn && !pt0.noflip ? flipPt(pt0) : pt0; // 뒤집기 전 방향으로 보여 주는 단계(noflip: 로봇과 따로 만드는 손잡이는 그대로)
         const type = b.resolve(pt.n, catId);
         if (!type) { if (!missing.includes(pt.n)) missing.push(pt.n); return; }
         const useSide = pt.side && upTo < pt.side.until;
