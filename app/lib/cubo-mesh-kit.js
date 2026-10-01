@@ -54,7 +54,9 @@ export function makeKit(seg = 20) {
     tris.forEach((v, i) => { out[i * 3] = v[0]; out[i * 3 + 1] = v[1]; out[i * 3 + 2] = v[2] })
     return out
   }
-  return { seg, tri, quad, raw, P, cyl, annulus, cell, result }
+  // 다른 키트의 결과(Float32Array)를 점 변환 map([x,y,z])→[x,y,z] 으로 옮겨서 합친다. map 은 회전·이동이어야 한다(거울 반전이면 면이 뒤집힌다).
+  const append = (arr, map) => { for (let i = 0; i < arr.length; i += 3) tris.push(map([arr[i], arr[i + 1], arr[i + 2]])) }
+  return { seg, tri, quad, raw, P, cyl, annulus, cell, append, result }
 }
 
 // 삼각형 → 바이너리 STL 바이트(80바이트 머리 + 개수 + 삼각형당 50바이트). 부품 만들기의 가져오기(import)가 읽는 형식.

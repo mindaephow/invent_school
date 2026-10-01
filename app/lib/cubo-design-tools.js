@@ -1,7 +1,7 @@
 // 큐보 3D 디자인 도구 — 클로드가 "설계 화면"에 놓을 큐보 부품 배치(디자인)를 직접 만들고 검사하고 저장할 수 있게 한다.
 // 기존 발명학교 MCP(app/api/mcp/route.js)에 함께 등록된다.
 //   get_design_guide / list_design_parts / compute_attach / validate_design / save_design / list_designs / get_design / list_teachers
-//   (부품 만들기) get_part_standard / make_part_stl / apply_part_to_db — 규격은 cubo-part-maker.js, 생성기는 cubo-frame-mesh.js·cubo-block-mesh.js
+//   (부품 만들기) get_part_standard / make_part_stl / apply_part_to_db — 규격은 cubo-part-maker.js, 생성기는 cubo-plate-mesh.js·cubo-frame-mesh.js·cubo-block-mesh.js·cubo-bracket-mesh.js
 // 핵심은 compute_attach: "이 부품의 이 돌기를 저 부품의 이 구멍에 꽂으면 위치·회전이 어떻게 되나"를 부품 DB의 연결점으로 계산해 준다
 // (방향·위치·구멍을 손으로 짐작해서 틀리던 문제를 없앤다). 배치 형식은 조립 데이터와 같다: { n: 부품 이름, p: [x,y,z], r: [rx,ry,rz](도) }.
 // 검사·좌표 코드는 배포된 public/design-mates.js·design-collision.js 를 읽어 쓴다(화면과 같은 코드).
@@ -11,6 +11,7 @@ import { loadSite, quatFromEulerZYX, checkOverlaps } from './cubo-assembly-tools
 import { CUBO_FRAME_STD, CUBO_BLOCK_STD, PART_STANDARD_TEXT } from './cubo-part-maker.js'
 import { frameTriangles } from './cubo-frame-mesh.js'
 import { blockTriangles } from './cubo-block-mesh.js'
+import { bracketTriangles } from './cubo-bracket-mesh.js'
 import { trianglesToStl } from './cubo-mesh-kit.js'
 
 const text = (t) => ({ content: [{ type: 'text', text: t }] })
@@ -130,25 +131,29 @@ export function registerCuboDesignTools(server, getSupabase) {
     async () => text(PART_STANDARD_TEXT)
   )
 
-  const partTris = (kind, n) => (kind === 'block' ? blockTriangles(n) : frameTriangles(n))
+  const partTris = (kind, n) => (kind === 'block' ? blockTriangles(n) : kind === 'bracket' ? bracketTriangles(n) : frameTriangles(n))
+  const KIND_LABEL = { frame: '프레임', block: '블록', bracket: '브라켓' }
 
   server.registerTool(
     'make_part_stl',
     {
-      title: '부품 STL 크기 확인(프레임·블록)',
+      title: '부품 STL 크기 확인(프레임·블록·브라켓)',
       description: '기본 규격(get_part_standard)대로 프레임 또는 블록을 삼각형으로 직접 짜서(자르기 계산 없음) 크기를 알려 준다: 삼각형 수, STL 용량, 가로·높이·폭. 저장하지 않는다. 실제 STL 파일은 저장소의 scripts/make-part-stl.mjs 로 만든다(get_part_standard 참고).',
       inputSchema: {
-        kind: z.enum(['frame', 'block']).describe('frame=직선 프레임, block=스냅핏 돌기 블록'),
-        count: z.number().int().min(1).max(30).describe('프레임은 구멍 수(15프레임=5), 블록은 칸 수(3단블록=3)'),
+        kind: z.enum(['frame', 'block', 'bracket']).describe('frame=직선 프레임, block=스냅핏 돌기 블록, bracket=ㄴ자 브라켓'),
+        count: z.number().int().min(1).max(30).describe('프레임은 구멍 수(15프레임=5), 블록은 칸 수(3단블록=3), 브라켓은 열 수(1 또는 2)'),
       },
     },
     async ({ kind, count }) => {
+      if (kind === 'bracket' && count > 2) return fail('브라켓은 1열 또는 2열만 있어요.')
       const tris = partTris(kind, count)
       const stl = trianglesToStl(tris)
-      const dims = kind === 'block'
+      const dims = kind === 'bracket'
+        ? `${CUBO_FRAME_STD.width * count} × ${count === 1 ? 30 : 25}(세운 팔 높이) × 30`
+        : kind === 'block'
         ? `${count * 10 + 10}(양 끝 돌기 포함) × ${CUBO_BLOCK_STD.height} × ${CUBO_BLOCK_STD.width + 10}(앞뒤 돌기 포함)`
         : `${count * CUBO_FRAME_STD.pitch} × ${CUBO_FRAME_STD.total} × ${CUBO_FRAME_STD.width}`
-      return text(`${kind === 'block' ? '블록' : '프레임'} ${count}칸: 길이×높이×폭 ${dims}mm, 삼각형 ${tris.length / 9}개, STL ${(stl.length / 1024).toFixed(0)}KB.`)
+      return text(`${KIND_LABEL[kind]} ${count}${kind === 'bracket' ? '열' : '칸'}: ${kind === 'bracket' ? '폭×높이×길이' : '길이×높이×폭'} ${dims}mm, 삼각형 ${tris.length / 9}개, STL ${(stl.length / 1024).toFixed(0)}KB.`)
     }
   )
 
@@ -159,9 +164,9 @@ export function registerCuboDesignTools(server, getSupabase) {
       description: '기본 규격으로 만든 프레임/블록 STL 을 부품 DB(ivs_part_catalog) 행의 data.spec.shapes 에 넣는다(프레임이면 pitch·margin·thickness·boreRadius·maxHolesPerArm·holeCoords·holeLabels 도). 그 부품의 다른 필드(이름, 색, 연결점 등)는 그대로 둔다. **부품 DB 를 바꾸므로 사용자가 허락한 뒤에만 쓴다** — 보통은 STL 파일을 만들어 주고 사용자가 직접 등록한다. 넣은 뒤 썸네일은 부품 관리에서 열어 저장하면 다시 만들어진다.',
       inputSchema: {
         partId: z.string().describe('ivs_part_catalog 행 id'),
-        kind: z.enum(['frame', 'block']),
-        count: z.number().int().min(1).max(30).describe('프레임은 구멍 수, 블록은 칸 수'),
-        color: z.string().optional().describe('색. 생략하면 프레임 빨강, 블록 회색'),
+        kind: z.enum(['frame', 'block', 'bracket']),
+        count: z.number().int().min(1).max(30).describe('프레임은 구멍 수, 블록은 칸 수, 브라켓은 열 수(1 또는 2)'),
+        color: z.string().optional().describe('색. 생략하면 프레임 빨강, 그 밖은 회색'),
         confirm: z.literal(true).describe('사용자가 부품 DB 수정을 허락했을 때만 true'),
       },
     },
@@ -171,9 +176,10 @@ export function registerCuboDesignTools(server, getSupabase) {
         const { data: existing, error: getErr } = await sb.from('ivs_part_catalog').select('data').eq('id', partId).maybeSingle()
         if (getErr) return fail(getErr.message)
         if (!existing) return fail('그 id 의 부품을 찾을 수 없어요.')
+        if (kind === 'bracket' && count > 2) return fail('브라켓은 1열 또는 2열만 있어요.')
         const S = CUBO_FRAME_STD
         const stl = trianglesToStl(partTris(kind, count))
-        const name = existing.data.name || (kind === 'block' ? '블록' : '프레임')
+        const name = existing.data.name || KIND_LABEL[kind]
         const base = typeof existing.data.spec === 'object' && existing.data.spec ? existing.data.spec : {}
         const frameFields = kind === 'frame' ? {
           pitch: S.pitch, margin: S.margin, thickness: S.total, boreRadius: S.boreR, maxHolesPerArm: count,
@@ -182,11 +188,11 @@ export function registerCuboDesignTools(server, getSupabase) {
         } : {}
         const spec = {
           ...base, ...frameFields,
-          shapes: [{ x: 0, y: 0, z: 0, op: 'add', rx: 0, ry: 0, rz: 0, type: 'import', color: color || (kind === 'block' ? '#555555' : '#e03b2b'), fileName: `${name}.stl`, brightness: 100, fileDataUrl: 'data:application/octet-stream;base64,' + Buffer.from(stl).toString('base64') }],
+          shapes: [{ x: 0, y: 0, z: 0, op: 'add', rx: 0, ry: 0, rz: 0, type: 'import', color: color || (kind === 'frame' ? '#e03b2b' : '#555555'), fileName: `${name}.stl`, brightness: 100, fileDataUrl: 'data:application/octet-stream;base64,' + Buffer.from(stl).toString('base64') }],
         }
         const { error } = await sb.from('ivs_part_catalog').update({ data: { ...existing.data, spec } }).eq('id', partId)
         if (error) return fail(error.message)
-        return text(`✅ "${name}"(id=${partId}) 의 3D 모델을 규격 ${kind === 'block' ? '블록' : '프레임'} ${count}칸으로 바꿨어요(STL ${(stl.length / 1024).toFixed(0)}KB). 부품 관리에서 열어 저장하면 썸네일이 다시 만들어져요.`)
+        return text(`✅ "${name}"(id=${partId}) 의 3D 모델을 규격 ${KIND_LABEL[kind]} ${count}${kind === 'bracket' ? '열' : '칸'}으로 바꿨어요(STL ${(stl.length / 1024).toFixed(0)}KB). 부품 관리에서 열어 저장하면 썸네일이 다시 만들어져요.`)
       } catch (e) { return fail(e.message) }
     }
   )
