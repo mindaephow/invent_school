@@ -113,7 +113,8 @@ ${rulesText}
 6. 교재가 "반대로 뒤집기"를 그리면 데이터는 뒤집은 뒤 방향으로 적고 def.flip(ranges, y, z)으로 뒤집기 전 단계를 화면에서 뒤집어 보여 준다. 뒤집은 방향의 T축은 headDown: true, 로봇과 따로 만드는 하위 조립(손잡이)은 noflip: true. 하위 조립(팽이)은 side{p,r,until}로 옆자리에서 만들고 합체 단계에 settle 시킨다.
 7. 카메라: 교재 그림의 보는 방향을 단계마다 맞춘다. 위 3~2 의 카메라 맞춤 결과로 방위각 az(도) 를 얻고 step.view = (az − camera.theta(도)) / 90 으로 적는다(위·아래 높이는 조립 보기가 단계별로 못 바꾸므로 phi 하나로 둔다).
 8. 검증 순서: (a) public/design-mates.js·design-collision.js 를 node 로 불러 로컬에서 checkSteps 를 돌려 문제 0건(안내 위치·결합·리벳 양끝·단계 설명 개수) (b) 부품 STL 은 ivs_part_catalog.data.spec.shapes[0].fileDataUrl 에서 꺼내 rotateX(−90°) 후 가운데 맞춰 3D 로 직접 그려 본다(parts-lab-viewer.js 로더와 같은 방식) (c) 올린 뒤 validate_assembly 로 문제 0건 확인.
-9. 사용자와의 약속: 한 단계씩 확인받는 방식은 원하면 그대로, 만들면 바로 저장소에 올리고 "올렸다"고 말한다. 조립 보기에 없는 부품·기능은 만들어 넣지 않는다.
+9. validate_assembly 의 겹침 경고 중 기어는 정사각 몸통 상자로 근사하므로 맞물린 기어끼리, 기어 옆 프레임 모서리가 겹침으로 잡힌다(오탐). 실제 원형으로 가까이 있는지만 보고, 단계별 정밀 검사가 통과하면 정상이다(로봇팽이 3건 중 2건이 이 경우, 나머지 1건은 부시 모서리 1mm).
+10. 사용자와의 약속: 한 단계씩 확인받는 방식은 원하면 그대로, 만들면 바로 저장소에 올리고 "올렸다"고 말한다. 조립 보기에 없는 부품·기능은 만들어 넣지 않는다.
 
 ## 7. 연결점(돌기·구멍) 기록 — 부품 DB
 부품마다 돌기·구멍 위치를 ivs_part_catalog.data.connectors 에 기록하면 다음 클로드가 "돌기가 어느 쪽인지" 짐작하지 않아도 된다. get_part_connectors / set_part_connectors 로 읽고 쓴다.
