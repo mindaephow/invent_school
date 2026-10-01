@@ -504,7 +504,7 @@
           <button type="button" class="ghost" id="quickXlsxSample">샘플 다운로드</button>
           <span class="item-sub" id="quickXlsxMsg"></span>
         </div>
-        <p class="note" style="margin:0;">차시를 고르고 엑셀(.xlsx) 또는 CSV를 올리면 그 차시의 필요 부품으로 배정돼요. 첫 줄은 <b>부품명, 수량</b>, 다음 줄부터 부품 이름과 숫자예요. 그 차시에 이미 있는 부품은 엑셀 수량으로 바뀌어요.</p>
+        <p class="note" style="margin:0;">"샘플 다운로드"로 받은 엑셀에는 부품 이름이 모두 적혀 있어요. <b>필요한 부품의 수량만</b> 채우고, 차시를 골라 올리면 수량이 적힌 부품만 그 차시의 필요 부품으로 배정돼요(수량이 빈 줄은 무시). 그 차시에 이미 있는 부품은 엑셀 수량으로 바뀌어요.</p>
         <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
           <b style="font-size:12px; flex:none;">⚡ 파일 빠르게 등록</b>
           <select id="quickUploadChapterSelect" style="max-width:200px;"></select>
@@ -2239,9 +2239,10 @@
   document.getElementById('quickXlsxSample').addEventListener('click', () => {
     if (typeof XLSX === 'undefined') { document.getElementById('quickXlsxMsg').textContent = '엑셀 기능을 불러오지 못했어요. 새로고침해 주세요.'; return; }
     const tb = currentTextbook();
-    const known = tb ? allParts.filter((p) => p.subject === tb.subject).map((p) => p.name) : [];
-    const pick = ['15프레임', '3단블록', '리벳'].map((n) => known.includes(n) ? n : null);
-    const rows = [['부품명', '수량'], [pick[0] || '부품 이름', 8], [pick[1] || '부품 이름', 11], [pick[2] || '부품 이름', 50]];
+    if (!tb) return;
+    // 이 교재 과목에 등록된 부품 이름을 모두 적고 수량 칸은 비워 둔다 — 필요한 부품의 수량만 채워서 올린다.
+    const names = sortPartsForPicker(allParts.filter((p) => p.subject === tb.subject)).map((p) => p.name);
+    const rows = [['부품명', '수량'], ...names.map((n) => [n, ''])];
     const ws = XLSX.utils.aoa_to_sheet(rows);
     ws['!cols'] = [{ wch: 22 }, { wch: 8 }];
     const wb = XLSX.utils.book_new();
@@ -2278,7 +2279,7 @@
           for (let i = start; i < aoa.length; i++) {
             const row = aoa[i] || [];
             const rawName = String(row[nameCol] == null ? '' : row[nameCol]).trim();
-            if (!rawName && (row[qtyCol] === '' || row[qtyCol] == null)) continue; // 빈 줄
+            if (row[qtyCol] === '' || row[qtyCol] == null || String(row[qtyCol]).trim() === '') continue; // 수량이 비어 있으면 필요 없는 부품 — 등록하지 않는다
             const part = byName.get(normPartName(rawName));
             if (!part) { unknown.push((i + 1) + '줄 "' + rawName + '"'); continue; }
             const q = Number(row[qtyCol]);
