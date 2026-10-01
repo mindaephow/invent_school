@@ -14,6 +14,7 @@ import numpy as np
 import partlib
 
 D = math.pi / 180
+TOL = 0.8   # 돌기·구멍 어긋남 허용(mm) — 2단블록 돌기 간격이 10.1 이라 0.7 정도는 모델 오차
 AX = {"x": 0, "y": 1, "z": 2}
 
 def vec(s):
@@ -117,7 +118,7 @@ class Step:
             pg = part.peg(pid); h = target(host, tgt, pg)
             if h is None: continue
             diff = pg["pos"] - h["pos"]; err = float(np.linalg.norm(diff - np.dot(diff, pg["dir"]) * pg["dir"]))
-            if err > 0.6: s.A.log(f"{s.index}단계 {n}.{pid}: {host.n} 구멍과 {err:.1f}mm 어긋남")
+            if err > TOL: s.A.log(f"{s.index}단계 {n}.{pid}: {host.n} 구멍과 {err:.1f}mm 어긋남")
         part.extra.update({"dir": rnd(-d0 if dir is None else vec(dir)), "marks": marks})
         if hover: part.extra["hover"] = hover
         return s._add(part)
@@ -139,12 +140,12 @@ class Step:
         if calc:
             for pid, (host, gid) in pairs[1:]:
                 g = host.peg(gid); h = part.hole(pid); diff = h["pos"] - g["pos"]; err = float(np.linalg.norm(diff - np.dot(diff, g["dir"]) * g["dir"]))
-                if err > 0.6: s.A.log(f"{s.index}단계 {n}.{pid}: 돌기 {host.n}.{gid} 와 {err:.1f}mm 어긋남")
+                if err > TOL: s.A.log(f"{s.index}단계 {n}.{pid}: 돌기 {host.n}.{gid} 와 {err:.1f}mm 어긋남")
         else:  # 위치를 직접 준 경우: 돌기마다 받는 구멍이 실제로 있는지 본다
             for pid, (host, gid) in pairs:
                 g = host.peg(gid); h, dist = part.hole_near(g["pos"], axis=g["dir"])
                 diff = (h["pos"] - g["pos"]) if h else np.array([9, 9, 9.]); err = float(np.linalg.norm(diff - np.dot(diff, g["dir"]) * g["dir"])) if h else 99
-                if err > 0.6: s.A.log(f"{s.index}단계 {n}: 돌기 {host.n}.{gid} 를 받는 구멍이 없음({err:.1f}mm)")
+                if err > TOL: s.A.log(f"{s.index}단계 {n}: 돌기 {host.n}.{gid} 를 받는 구멍이 없음({err:.1f}mm)")
         part.extra.update({"recv": True, "dir": rnd(d0 if dir is None else vec(dir)), "marks": marks})
         if hover: part.extra["hover"] = hover
         return s._add(part)

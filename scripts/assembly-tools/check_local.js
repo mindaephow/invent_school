@@ -67,3 +67,43 @@ if (process.argv[3]) {
   });
   console.log('안내 화살표 없는 부품:', miss.length); miss.slice(0, 40).forEach(m => console.log('  ', m));
 }
+// ── 띄우는 길 검사: 새 부품이 끼우기 전 띄워진 자리(제자리 + 띄우는 방향 × 거리)에서 제자리로 내려오는 길에 이미 놓인 부품이 있으면 부품이 다른 부품을 뚫고 들어오는 것처럼 보인다
+// (오토건 8단계: 합치는 방향(settleDir)을 모터 쪽으로 잘못 줘서 기어판이 모터를 뚫고 내려왔다 — 사용자 지적).
+{
+  const norm = (v) => { const l = Math.hypot(...v) || 1; return v.map((x) => x / l); };
+  const issuesPath = [];
+  steps.forEach((st, si) => {
+    const step = si + 1;
+    const placedAt = (pt, stp) => { // stp 단계가 끝난 뒤 pt 의 자세
+      if (pt.side && stp < pt.side.until) return { p: pt.side.p, r: pt.side.r };
+      if (pt.move && stp >= pt.move.at) return { p: pt.move.p || pt.p.map((v, k) => v + pt.move.by[k]), r: pt.move.r || pt.r || [0, 0, 0] };
+      return { p: pt.p, r: pt.r || [0, 0, 0] };
+    };
+    const arriving = [];
+    steps.forEach((s2, k) => (s2.parts || []).forEach((pt, i) => {
+      const own = k + 1 === step && !pt.side;
+      const settle = pt.side && pt.side.until === step, moved = pt.move && pt.move.at === step;
+      if (own || settle || moved) arriving.push({ pt, k: k + 1, i, mode: moved ? 'move' : (settle ? 'settle' : 'own') });
+    }));
+    const prior = [];
+    steps.forEach((s2, k) => (s2.parts || []).forEach((pt, i) => {
+      if (k + 1 > step) return;
+      if (arriving.some((a) => a.pt === pt)) return;
+      prior.push({ pt, ...placedAt(pt, step - 1), k: k + 1, i });
+    }));
+    arriving.forEach(({ pt, mode, k, i }) => {
+      const boxes = C.coreBoxes(pt.n, dims[pt.n] || [0, 0, 0]); if (!boxes) return;
+      const fin = mode === 'move' ? { p: pt.move.p || pt.p.map((v, j) => v + pt.move.by[j]), r: pt.move.r || pt.r || [0, 0, 0] } : { p: pt.p, r: pt.r || [0, 0, 0] };
+      const dir = mode === 'move' ? pt.move.dir : (mode === 'settle' ? (pt.settleDir || pt.dir) : pt.dir);
+      if (!dir) return;
+      const hov = mode === 'move' ? (pt.move.hover || 22) : (pt.hover || (pt.recv ? 20 : 22));
+      const d = norm(dir), q = quat(fin.r);
+      for (const t of [1, 0.66, 0.33]) {
+        const pos = { x: fin.p[0] + d[0] * hov * t, y: fin.p[1] + d[1] * hov * t, z: fin.p[2] + d[2] * hov * t };
+        const hit = prior.find((o) => { const ob = C.coreBoxes(o.pt.n, dims[o.pt.n] || [0, 0, 0]); return ob && C.boxesOverlap(boxes, pos, q, ob, { x: o.p[0], y: o.p[1], z: o.p[2] }, quat(o.r), 2.5); });
+        if (hit) { issuesPath.push(`${step}단계 ${pt.n}(${k}.${i}): 띄우는 방향 ${JSON.stringify(dir)}(거리 ${hov}) 쪽에 이미 놓인 ${hit.pt.n}(${hit.k}.${hit.i})가 있어 내려오는 길에 뚫고 들어옴`); break; }
+      }
+    });
+  });
+  console.log('띄우는 길에 다른 부품이 있는 부품:', issuesPath.length); issuesPath.slice(0, 40).forEach((m) => console.log('  ', m));
+}
