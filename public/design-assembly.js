@@ -22,6 +22,20 @@
   function total() { return def ? def.steps.length : 0; }
   function last() { return total() + 1; } // "완성" 단계 번호
   const add = (p, d, k) => [p[0] + d[0] * k, p[1] + d[1] * k, p[2] + d[2] * k];
+  // 회전 행렬 ↔ 오일러각(도, ZYX) — def.xform(몸체를 세우는 것처럼 어느 단계부터 전체를 통째로 돌리고 옮기는 변환)에 쓴다
+  const DEG = Math.PI / 180;
+  const mmul = (a, b) => [0, 1, 2].map((i) => [0, 1, 2].map((j) => a[i][0] * b[0][j] + a[i][1] * b[1][j] + a[i][2] * b[2][j]));
+  const mvec = (m, v) => [0, 1, 2].map((i) => m[i][0] * v[0] + m[i][1] * v[1] + m[i][2] * v[2]);
+  function eulerToMat(r) {
+    const [a, b, c] = r.map((v) => v * DEG), ca = Math.cos(a), sa = Math.sin(a), cb = Math.cos(b), sb = Math.sin(b), cc = Math.cos(c), sc = Math.sin(c);
+    return mmul([[cc, -sc, 0], [sc, cc, 0], [0, 0, 1]], mmul([[cb, 0, sb], [0, 1, 0], [-sb, 0, cb]], [[1, 0, 0], [0, ca, -sa], [0, sa, ca]]));
+  }
+  function matToEuler(m) {
+    const sy = Math.max(-1, Math.min(1, -m[2][0])), ry = Math.asin(sy); let rx, rz;
+    if (Math.abs(sy) > 0.99999) { rz = 0; rx = Math.atan2(m[0][1] / sy, m[0][2] / sy); } else { rx = Math.atan2(m[2][1], m[2][2]); rz = Math.atan2(m[1][0], m[0][0]); }
+    const f = (v) => { v = Math.round(v / DEG * 10) / 10; return Object.is(v, -0) ? 0 : v; };
+    return [f(rx), f(ry), f(rz)];
+  }
 
   // target 단계까지의 부품 목록과, 이번 단계의 초록 안내(화살표·구멍 원)를 만든다.
   function buildList(target) {
@@ -71,6 +85,17 @@
         list.push({ name: pt.n, type, mount: 'floor', pos: pos.slice(), quat: b.quat(rot), rot: rot.slice(), isNew, final: (isNew && dirH) || ex ? base.slice() : null, order: settling ? 1 : (pt.joinOrder || (ex && ex.order) || 1) }); // 합쳐지는 묶음(settle)은 모두 한꺼번에 내려온다 // ex: 14단계처럼 "결합 전"으로 띄운 부품도 제자리(결합 후)가 있다
       });
     });
+    // xform: 이 단계부터는 지금까지 만든 것 전체를 통째로 돌려서 놓는다(예: 풍차 몸체를 세워서 받침에 올리기). 부품 자리는 원래 좌표 그대로 두고 여기서 한꺼번에 변환한다.
+    const xf = def.xform && target >= def.xform.at ? def.xform : null;
+    if (xf) {
+      const T = (v) => { const w = mvec(xf.m, v); return [w[0] + xf.t[0], w[1] + xf.t[1], w[2] + xf.t[2]]; };
+      list.forEach((d) => {
+        if (d.noXform) return;
+        d.pos = T(d.pos); if (d.final) d.final = T(d.final);
+        d.rot = matToEuler(mmul(xf.m, eulerToMat(d.rot))); d.quat = b.quat(d.rot);
+      });
+      guides.forEach((g) => { g.from = T(g.from); g.to = T(g.to); g.dir = mvec(xf.m, g.dir); });
+    }
     return { list, guides, missing, targets: list.map((d) => d.final || null), orders: list.map((d) => d.order || 1) };
   }
 
@@ -133,7 +158,8 @@
     // 지금 단계에 보이는 부품(끼우기 직전 위치 포함)에 카메라를 맞춘다 — 처음부터 너무 멀리서 보이지 않게
     // 이번 단계에 끼우는 부품과 그 끼워지는 자리를 화면 가운데에 크게 보여준다(나머지 부품은 배경)
     const focus = list.filter((d) => d.isNew).map((d) => d.pos).concat(guides.map((g) => g.to));
-    b.frame(focus.length ? focus : list.map((d) => d.pos), list.map((d) => d.pos));
+    const stc = (step > 0 && step < last()) ? def.steps[step - 1].cam : null; // cam.tight: 이번에 끼우는 부분만 크게(교재가 그 부분만 크게 그린 단계)
+    b.frame(focus.length ? focus : list.map((d) => d.pos), stc && stc.tight ? (focus.length ? focus : list.map((d) => d.pos)) : list.map((d) => d.pos));
     b.guides(guides);
     // 앞 벽이 뒤쪽 끝에 있는 단계(flip)는 반대편에서 보여준다
     // view: 기본 각도에서 90도×view 만큼 돌려서 보기 / cam: {theta, phi}로 교재 그림과 같은 각도를 직접 지정

@@ -76,10 +76,12 @@
     const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
     const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
   const issues = []
+  // move: 옆자리에서 다 만든 뒤 한 번 더 옮겨 붙는 부품(풍차 상자) — 그 단계 이후엔 옮긴 자리 기준으로 검사한다
+  const posAfterMove = (pt, stepNo) => (pt.move && stepNo >= pt.move.at ? pt.p.map((v, k) => v + pt.move.by[k]) : pt.p)
   const worldOf = (pt) => (conn[pt.n] ? M.worldConnectors({ p: pt.p, r: pt.r || [0, 0, 0] }, conn[pt.n]) : null)
   list.forEach((st, si) => {
     const upto = []
-    list.slice(0, si + 1).forEach((s, k) => (s.parts || []).forEach((pt, i) => upto.push({ key: `${k + 1}.${i} ${pt.n}`, n: pt.n, p: pt.p, r: pt.r || [0, 0, 0], ref: pt, step: k + 1 })))
+    list.slice(0, si + 1).forEach((s, k) => (s.parts || []).forEach((pt, i) => upto.push({ key: `${k + 1}.${i} ${pt.n}`, n: pt.n, p: posAfterMove(pt, si + 1), r: pt.r || [0, 0, 0], ref: pt, step: k + 1 })))
     const res = M.check(upto, conn)
     const worlds = upto.map((u) => ({ u, w: worldOf(u) }))
     ;(st.parts || []).forEach((pt, i) => {
@@ -109,7 +111,7 @@
     if (!(st.parts || []).length && !list.some((s) => (s.parts || []).some((pt) => pt.side && pt.side.until === si + 1))) issues.push(`${si + 1}단계: 부품이 하나도 없음`)
   })
   // 마지막 모양: 리벳은 양 끝 돌기가 모두 구멍에 들어가야 한다
-  const all = []; list.forEach((s, k) => (s.parts || []).forEach((pt, i) => all.push({ key: `${k + 1}.${i} ${pt.n}`, n: pt.n, p: pt.p, r: pt.r || [0, 0, 0] })))
+  const all = []; list.forEach((s, k) => (s.parts || []).forEach((pt, i) => all.push({ key: `${k + 1}.${i} ${pt.n}`, n: pt.n, p: posAfterMove(pt, 1e9), r: pt.r || [0, 0, 0] })))
   const fin = M.check(all, conn)
   all.filter((a) => a.n === '리벳').forEach((a) => {
     const pegs = new Set(fin.mated.filter((m) => m.part === a.key).map((m) => m.peg))
