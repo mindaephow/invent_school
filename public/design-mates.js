@@ -97,7 +97,7 @@
         })
       }
       // 방향이 정해진 부품: T축 접시 머리(모델 −y)는 위로
-      if (pt.n === 'T축') {
+      if (pt.n === 'T축' && !pt.headDown) { // headDown: true — 로봇을 뒤집은 방향이라 머리가 아래가 맞는 T축
         const m = M.matFromEuler(pt.r || [0, 0, 0])
         if (!(m[1][1] < -0.9)) issues.push(`${si + 1}단계 T축: 접시 머리가 위로 오지 않음(r=[180,0,0] 이어야 함)`)
       }

@@ -37,6 +37,37 @@
     return [f(rx), f(ry), f(rz)];
   }
 
+  // ── 로봇 뒤집기(def.flip): 교재가 "반대로 뒤집기"로 로봇을 뒤집어 그리는 차시용 ──
+  // 조립 데이터(p·r·marks·dir …)는 모두 "뒤집은 뒤(최종 방향)"로 적어 두고, def.flip.ranges 에 든 단계에서는 화면에 뒤집기 전 모양
+  // (교재가 그린 방향)으로 바꿔 보여 준다. 변환: (x,y,z) → (x, flip.y − y, flip.z − z), 회전은 x축 180° 뒤집기 — 두 번 하면 제자리라 양쪽 어느 방향이든 같은 식이다.
+  const D2R = Math.PI / 180;
+  function matFromEuler(r) {
+    const a = r[0] * D2R, b = r[1] * D2R, c = r[2] * D2R;
+    const cx = Math.cos(a), sx = Math.sin(a), cy = Math.cos(b), sy = Math.sin(b), cz = Math.cos(c), sz = Math.sin(c);
+    return [[cz * cy, cz * sy * sx - sz * cx, cz * sy * cx + sz * sx], [sz * cy, sz * sy * sx + cz * cx, sz * sy * cx - cz * sx], [-sy, cy * sx, cy * cx]];
+  }
+  function eulerFromMat(R) {
+    const sy = Math.max(-1, Math.min(1, -R[2][0]));
+    const ry = Math.asin(sy);
+    let rx, rz;
+    if (Math.abs(sy) < 0.99999) { rx = Math.atan2(R[2][1], R[2][2]); rz = Math.atan2(R[1][0], R[0][0]); } else { rx = Math.atan2(-R[1][2], R[1][1]); rz = 0; }
+    return [rx / D2R, ry / D2R, rz / D2R].map((v) => Math.round(v * 1e4) / 1e4 + 0);
+  }
+  function flipActive(target) { return !!(def && def.flip && (def.flip.ranges || []).some((rg) => target >= rg[0] && target <= rg[1])); }
+  function flipPt(pt) {
+    const f = def.flip;
+    const P = (p) => [p[0], f.y - p[1], f.z - p[2]];
+    const V = (v) => [v[0], -v[1], -v[2]];
+    const R = (r) => { const A = matFromEuler(r || [0, 0, 0]); return eulerFromMat([A[0], [-A[1][0], -A[1][1], -A[1][2]], [-A[2][0], -A[2][1], -A[2][2]]]); };
+    const o = Object.assign({}, pt);
+    o.p = P(pt.p); o.r = R(pt.r);
+    ['marks', 'faceMarks', 'settleMarks'].forEach((k) => { if (pt[k]) o[k] = pt[k].map(P); });
+    ['dir', 'settleDir'].forEach((k) => { if (pt[k]) o[k] = V(pt[k]); });
+    if (pt.side) o.side = Object.assign({}, pt.side, { p: P(pt.side.p), r: R(pt.side.r) });
+    if (pt.explode) { const e = pt.explode; o.explode = Object.assign({}, e, { offset: e.offset ? V(e.offset) : e.offset, from: e.from ? P(e.from) : e.from, marks: e.marks ? e.marks.map(P) : e.marks }); }
+    return o;
+  }
+
   // target 단계까지의 부품 목록과, 이번 단계의 초록 안내(화살표·구멍 원)를 만든다.
   function buildList(target) {
     const b = bridge();
@@ -45,8 +76,10 @@
     const missing = [];
     const n = total();
     const upTo = Math.min(target, n);
+    const flipOn = flipActive(target);
     def.steps.slice(0, upTo).forEach((s, si) => {
-      (s.parts || []).forEach((pt) => {
+      (s.parts || []).forEach((pt0) => {
+        const pt = flipOn ? flipPt(pt0) : pt0; // 뒤집기 전 방향으로 보여 주는 단계
         const type = b.resolve(pt.n, catId);
         if (!type) { if (!missing.includes(pt.n)) missing.push(pt.n); return; }
         const useSide = pt.side && upTo < pt.side.until;
