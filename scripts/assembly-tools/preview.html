@@ -82,10 +82,13 @@ function build(){scene.remove(group);group=new THREE.Group();scene.add(group);co
     const pm=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:new THREE.Color(pt.color),flatShading:true,roughness:0.6,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2,side:THREE.DoubleSide}));pm.position.copy(m.position);pm.quaternion.copy(m.quaternion);group.add(pm);});
   const e=new THREE.LineSegments(new THREE.EdgesGeometry(geo(d.n),35),new THREE.LineBasicMaterial({color:isNew?0xe0007a:0x333344}));e.position.copy(m.position);e.quaternion.copy(m.quaternion);group.add(e);box.expandByObject(m);});
 
- guides.forEach(g=>{const a=new THREE.Vector3(...g.from),b=new THREE.Vector3(...g.to);const dir=b.clone().sub(a);const L=dir.length();if(L<1e-3)return;
-   const lm=new THREE.MeshBasicMaterial({color:0x22c04a,depthTest:false});const cyl=new THREE.Mesh(new THREE.CylinderGeometry(0.9,0.9,L,8),lm);cyl.position.copy(a).add(b).multiplyScalar(0.5);cyl.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),dir.clone().normalize());cyl.renderOrder=20;group.add(cyl);
-   const head=new THREE.Mesh(new THREE.ConeGeometry(3.2,8,10),lm);head.position.copy(b).addScaledVector(dir.clone().normalize(),-4);head.quaternion.copy(cyl.quaternion);head.renderOrder=20;group.add(head);
-   const ring=new THREE.Mesh(new THREE.TorusGeometry(5.2,0.9,8,24),lm);ring.position.copy(b);ring.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),dir.clone().normalize());ring.renderOrder=20;group.add(ring);});
+ guides.forEach(g=>{const a=new THREE.Vector3(...g.from),b=new THREE.Vector3(...g.to);const dir=b.clone().sub(a);const L=dir.length();if(L<1e-3)return;const nd=dir.clone().normalize();
+   const lm=new THREE.MeshBasicMaterial({color:0x22c04a,depthTest:false});
+   const cyl=new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.35,L,6),lm);cyl.position.copy(a).add(b).multiplyScalar(0.5);cyl.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),nd);cyl.renderOrder=20;group.add(cyl);
+   const head=new THREE.Mesh(new THREE.ConeGeometry(1.8,5,10),lm);head.position.copy(b).addScaledVector(nd,-2.5);head.quaternion.copy(cyl.quaternion);head.renderOrder=20;group.add(head);
+   const dot=new THREE.Mesh(new THREE.SphereGeometry(1.6,10,8),lm);dot.position.copy(a);dot.renderOrder=20;group.add(dot);
+   const pm=new THREE.MeshBasicMaterial({color:0x22c04a,transparent:true,opacity:0.9,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4,side:THREE.DoubleSide});
+   const disc=new THREE.Mesh(new THREE.CircleGeometry(3.6,24),pm);disc.position.copy(b);disc.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),nd);disc.renderOrder=19;group.add(disc);});
  if(!box.isEmpty()){box.getCenter(tgt);}
  document.getElementById('lab').textContent=step+' / '+N+' 단계';document.getElementById('note').textContent=step>=N?'완성!':((steps[step-1]||{}).note||'');sl.value=step;}
 function draw(){const a=az*D,e=el*D;cam.position.set(tgt.x+dist*Math.sin(a)*Math.cos(e),tgt.y+dist*Math.sin(e),tgt.z+dist*Math.cos(a)*Math.cos(e));cam.lookAt(tgt);renderer.render(scene,cam);}
