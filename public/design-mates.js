@@ -108,7 +108,7 @@
       const name = Object.keys(counts).find((n) => n === m[1] || m[1].endsWith(n))
       if (name && counts[name] !== Number(m[2])) issues.push(`${si + 1}단계 설명 "${m[0]}" ↔ 데이터 ${name} ${counts[name]}개`)
     }
-    if (!(st.parts || []).length && !list.some((s) => (s.parts || []).some((pt) => pt.side && pt.side.until === si + 1))) issues.push(`${si + 1}단계: 부품이 하나도 없음`)
+    if (!(st.parts || []).length && !st.noPart && !list.some((s) => (s.parts || []).some((pt) => (pt.side && pt.side.until === si + 1) || (pt.move && pt.move.at === si + 1)))) issues.push(`${si + 1}단계: 부품이 하나도 없음`)
   })
   // 마지막 모양: 리벳은 양 끝 돌기가 모두 구멍에 들어가야 한다
   const all = []; list.forEach((s, k) => (s.parts || []).forEach((pt, i) => all.push({ key: `${k + 1}.${i} ${pt.n}`, n: pt.n, p: posAfterMove(pt, 1e9), r: pt.r || [0, 0, 0] })))
