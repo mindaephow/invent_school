@@ -316,7 +316,7 @@
     if (!viewing) return;
     viewing = false;
     $('asmBar').hidden = true;
-    const mm = $('asmMarkMove2'); if (mm && mm.dataset.on === '1') { mm.dataset.on = '0'; mm.textContent = '📍 표시 옮기기'; mm.style.background = mm.style.color = ''; if (b) b.markMove(false); } // 닫을 땐 사진 없이 끈다
+    const mm = $('asmMarkMove2'); if (mm && mm.dataset.on === '1') { mm.dataset.on = '0'; mm.textContent = '📍 표시하기'; mm.style.background = mm.style.color = ''; if (b) b.markMove(false); } // 닫을 땐 사진 없이 끈다
     if ($('asmMarkMove2')) $('asmMarkMove2').hidden = $('asmMarkShot').hidden = true;
     $('asmStageBar').hidden = true;
     $('historyPanel').hidden = false;
@@ -330,7 +330,7 @@
     if (!$('asmClose')) return;
     $('asmClose').addEventListener('click', close);
     const mm2 = $('asmMarkMove2');
-    const toggleMark = () => { const on = mm2.dataset.on !== '1'; mm2.dataset.on = on ? '1' : '0'; mm2.style.background = on ? '#f97316' : ''; mm2.style.color = on ? '#fff' : ''; mm2.textContent = on ? '📍 끝내기' : '📍 표시 옮기기'; bridge().markMove(on); };
+    const toggleMark = () => { const on = mm2.dataset.on !== '1'; mm2.dataset.on = on ? '1' : '0'; mm2.style.background = on ? '#f97316' : ''; mm2.style.color = on ? '#fff' : ''; mm2.textContent = on ? '📍 끝내기' : '📍 표시하기'; bridge().markMove(on); };
     // 📸 수정스샷: 화면+번호+이동 목록을 한 장의 그림으로 만들어 클립보드에 복사하고 PNG로 내려받는다(번호 = 옮긴 순서)
     // 안내는 화면 아래쪽 글줄이라 눈에 안 띄므로, 스케치북 한가운데 위에 잠깐 큼직하게도 띄운다
     const toast = (msg, bad) => {
@@ -341,10 +341,10 @@
     };
     const shot = async () => {
       const b = bridge();
-      const header = (def ? def.chapter : '') + ' 조립도 · ' + (step === last() ? '완성' : step + '단계') + ' · 표시 옮기기';
+      const header = (def ? def.chapter : '') + ' 조립도 · ' + (step === last() ? '완성' : step + '단계') + ' · 표시하기';
       let blob = null;
       try { blob = await b.markCapture(header); } catch (e) { toast('사진 만들기 실패: ' + (e && e.message || e), true); return; }
-      if (!blob) { toast('옮긴 표시가 없어요. 먼저 "📍 표시 옮기기"를 누르고 초록 점을 끌어 옮긴 뒤 눌러 주세요.', true); return; }
+      if (!blob) { toast('표시가 없어요. 먼저 "📍 표시하기"를 누르고 화면의 부품을 눌러 주황 표시를 만든 뒤 눌러 주세요.', true); return; }
       let copied = false;
       try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); copied = true; } catch (e) { /* 복사 권한이 없으면 다운로드만 */ }
       const a = document.createElement('a');

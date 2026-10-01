@@ -37,7 +37,7 @@
     b.style.cssText = 'padding:6px 12px;font-size:12px;font-weight:600;border-radius:999px;background:var(--panel);border:1px solid var(--panel-border);color:var(--ink);';
     dock.appendChild(b); return b;
   }
-  const markBtn = mkBtn('📍 표시 옮기기', '초록 구멍 표시를 잡아 끌면 옮긴 자리에 주황 표시가 생겨요(저장 안 됨, 캡처용)'); markBtn.id = 'asmMarkMove2'; markBtn.hidden = true; // 조립 보기 중에만 보인다(design-assembly.js)
+  const markBtn = mkBtn('📍 표시하기', '켜고 부품을 누르면 누른 자리에 주황 표시가 생겨요. 주황 표시를 다시 누르면 지워져요(저장 안 됨, 캡처용)'); markBtn.id = 'asmMarkMove2'; markBtn.hidden = true; // 조립 보기 중에만 보인다(design-assembly.js)
   const shotBtn = mkBtn('📸 수정스샷', '옮긴 표시를 번호와 이동 목록을 붙여 사진으로 복사·저장해요'); shotBtn.id = 'asmMarkShot'; shotBtn.hidden = true; // 조립 보기 중에만 보인다(design-assembly.js)
   const drawBtn = mkBtn('✏️ 그리기', '켜고 스케치북 위에 손으로 그려요');
   const memoBtn = mkBtn('📝 메모', '켜고 스케치북을 누르면 메모지가 붙어요');

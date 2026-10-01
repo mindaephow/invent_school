@@ -1592,7 +1592,7 @@
     try { const p = JSON.parse(atob(tok.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))); return !!(p.app_metadata && p.app_metadata.role === 'admin'); }
     catch (e) { return false; }
   }
-  window.__ivsIsAdmin = () => { try { return !!accessToken && isAdminToken(accessToken); } catch (e) { return false; } }; // 위치 표시 옮기기·수정스샷도 관리자에게만 보인다
+  window.__ivsIsAdmin = () => { try { return !!accessToken && isAdminToken(accessToken); } catch (e) { return false; } }; // 위치 표시하기·수정스샷도 관리자에게만 보인다
   function refreshConnBtn(){
     let admin = false;
     try { admin = !!accessToken && isAdminToken(accessToken); } catch (e) { /* 아직 로그인 전 */ }
@@ -4387,57 +4387,65 @@
   const markMoves = []; // 옮긴 표시(주황) 목록
   function clearMarkMoves(){ markMoves.splice(0).forEach(m => { if (m.parent) m.parent.remove(m); if (m.userData.label && m.userData.label.parentNode) m.userData.label.remove(); m.geometry.dispose(); m.material.dispose(); }); }
   function ringDots(){ const out = []; if (!assemblyGuideGroup) return out; const add = m => { if (m.userData.ring && m.visible && !out.includes(m)) out.push(m); }; assemblyGuideGroup.children.forEach(c => { add(c); (c.userData.attached || []).forEach(add); }); return out; } // 판에 직접 칠한 구멍 표시(g 안)와 움직이는 부품에 붙은 표시(attached) 둘 다
+  // 표시하기: 켜 두고 화면의 부품(구멍·돌기·면)을 누르면 그 자리에 주황 표시(번호)가 생긴다. 이미 있는 주황 표시를 다시 누르면 지워진다. 저장하지 않는다 — 화면을 캡처해서 알려주는 용도.
   canvas.addEventListener('pointerdown', (e) => {
     if (!markMoveOn || e.button !== 0 || e.ctrlKey || e.shiftKey) return;
     raycaster.setFromCamera(ndcFromEvent(e), camera);
-    const hit = raycaster.intersectObjects(ringDots(), false)[0];
-    if (!hit) return;
+    const old = raycaster.intersectObjects(markMoves, false)[0];
+    if (old) { e.stopImmediatePropagation(); e.preventDefault(); const m = old.object; if (m.userData.label) m.userData.label.remove(); if (m.parent) m.parent.remove(m); markMoves.splice(markMoves.indexOf(m), 1); markMoves.forEach((x, i) => { if (x.userData.label) x.userData.label.textContent = String(i + 1); }); return; }
+    // 누른 자리에서 가장 가까운 홀(부품 DB 연결점의 구멍, 보이는 쪽 면)을 찾는다: 광선과 홀 중심의 거리가 가깝고, 앞을 가리는 부품 뒤쪽이 아닌 것
+    const surf = raycaster.intersectObjects(scene.children, true).find(h => h.object.isMesh && h.object.visible && !h.object.userData.arrow && !h.object.userData.connMarks);
+    let best = null;
+    parts.forEach(part => {
+      if (!part.mesh || !part.type || part.type.indexOf('robot:') !== 0) return;
+      const info = robotPartsCache.find(x => x.id === part.type.slice(6));
+      const holes = info && info.connectors && info.connectors.holes; if (!holes) return;
+      part.mesh.updateWorldMatrix(true, false);
+      const nm = new THREE.Matrix3().getNormalMatrix(part.mesh.matrixWorld);
+      holes.forEach(h => {
+        const half = (h.len || 0) / 2;
+        [-1, 1].forEach(sg => {
+          const loc = new THREE.Vector3(h.pos[0] + h.dir[0] * half * sg, h.pos[1] + h.dir[1] * half * sg, h.pos[2] + h.dir[2] * half * sg);
+          const wp = part.mesh.localToWorld(loc.clone());
+          const nr = new THREE.Vector3(h.dir[0] * sg, h.dir[1] * sg, h.dir[2] * sg).applyMatrix3(nm).normalize();
+          if (nr.dot(raycaster.ray.direction) >= 0) return; // 보는 쪽 면만
+          const dist = raycaster.ray.distanceToPoint(wp), t = wp.clone().sub(raycaster.ray.origin).dot(raycaster.ray.direction);
+          if (dist > Math.max(4, (h.r || 3) * 1.3)) return;
+          if (surf && t > surf.distance + 6) return; // 다른 부품에 가려진 홀은 제외
+          if (!best || dist < best.dist - 0.01 || (Math.abs(dist - best.dist) <= 0.01 && t < best.t)) best = { dist, t, wp, nr, r: h.r || 3 };
+        });
+      });
+    });
+    if (!best) return; // 홀이 아니면 평소처럼 동작
     e.stopImmediatePropagation(); e.preventDefault();
-    const src = hit.object, wp = new THREE.Vector3(); src.getWorldPosition(wp);
-    const q = new THREE.Quaternion(); src.getWorldQuaternion(q);
-    const n = new THREE.Vector3(0, 0, 1).applyQuaternion(q).normalize();
-    const mk = new THREE.Mesh(new THREE.CircleGeometry(3.3, 32), new THREE.MeshBasicMaterial({ color: 0xf97316, transparent: true, opacity: 0.95, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6 }));
-    mk.renderOrder = 11; mk.quaternion.copy(src.quaternion);
-    src.parent.add(mk); mk.position.copy(src.position); markMoves.push(mk);
+    const nrm = best.nr, fin = best.wp.clone().addScaledVector(nrm, 0.4);
+    const mk = new THREE.Mesh(new THREE.CircleGeometry(Math.max(2.5, best.r * 1.1), 32), new THREE.MeshBasicMaterial({ color: 0xf97316, transparent: true, opacity: 0.95, side: THREE.DoubleSide, depthTest: false }));
+    mk.renderOrder = 20; mk.position.copy(fin); mk.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), nrm);
+    scene.add(mk); markMoves.push(mk);
     const label = document.createElement('div');
     label.style.cssText = 'position:fixed; z-index:30; pointer-events:none; background:#f97316; color:#fff; font:700 12px sans-serif; padding:2px 6px; border-radius:6px;';
-    document.body.appendChild(label); mk.userData.label = label; mk.userData.from = wp.toArray().map(v => Math.round(v * 10) / 10);
-    markDrag = { mk, wp, plane: new THREE.Plane().setFromNormalAndCoplanarPoint(n, wp), label };
-  }, true);
-  window.addEventListener('pointermove', (e) => {
-    if (!markDrag) return;
-    raycaster.setFromCamera(ndcFromEvent(e), camera);
-    const pt = raycaster.ray.intersectPlane(markDrag.plane, new THREE.Vector3());
-    if (!pt) return;
-    const off = pt.sub(markDrag.wp), nrm = markDrag.plane.normal;
-    off.addScaledVector(nrm, -off.dot(nrm)); // 판 면 안에서만
-    off.set(Math.round(off.x / 10) * 10, Math.round(off.y / 10) * 10, Math.round(off.z / 10) * 10);
-    off.addScaledVector(nrm, -off.dot(nrm));
-    const fin = markDrag.wp.clone().add(off);
-    markDrag.mk.position.copy(markDrag.mk.parent.worldToLocal(fin.clone()));
-    const dd = [off.x, off.y, off.z].map(v => Math.round(v));
-    const txt = dd.every(v => v === 0) ? '이동 없음' : '이동 ' + ['x', 'y', 'z'].map((k, i) => dd[i] ? k + ' ' + (dd[i] > 0 ? '+' : '') + dd[i] : '').filter(Boolean).join(', ') + ' mm';
-    markDrag.mk.userData.txt = txt; markDrag.mk.userData.to = fin.toArray().map(v => Math.round(v * 10) / 10);
-    markDrag.label.textContent = txt === '이동 없음' ? txt : (markMoves.indexOf(markDrag.mk) + 1) + '번 · ' + txt;
+    label.textContent = String(markMoves.length);
+    document.body.appendChild(label); mk.userData.label = label;
+    const pos = fin.toArray().map(v => Math.round(v * 10) / 10);
+    mk.userData.txt = '표시'; mk.userData.from = pos; mk.userData.to = pos;
     const sp = fin.clone().project(camera), r = canvas.getBoundingClientRect();
-    markDrag.label.style.left = (r.left + (sp.x + 1) / 2 * r.width + 14) + 'px';
-    markDrag.label.style.top = (r.top + (1 - sp.y) / 2 * r.height - 10) + 'px';
-  });
-  window.addEventListener('pointerup', () => { if (markDrag) { const m = markDrag.mk; if (m.userData.txt === undefined || m.userData.txt === '이동 없음') { m.userData.label.remove(); if (m.parent) m.parent.remove(m); markMoves.splice(markMoves.indexOf(m), 1); } markDrag = null; } });
-  // 끝내기: 지금 화면(주황 표시에 번호를 붙여서)과 이동 목록을 한 장의 그림(PNG)으로 만들어 돌려준다. 번호 = 옮긴 순서.
+    label.style.left = (r.left + (sp.x + 1) / 2 * r.width + 12) + 'px';
+    label.style.top = (r.top + (1 - sp.y) / 2 * r.height - 10) + 'px';
+  }, true);
+  // 끝내기: 지금 화면(주황 표시에 번호를 붙여서)과 표시 목록을 한 장의 그림(PNG)으로 만들어 돌려준다. 번호 = 옮긴 순서.
   async function markCapture(header) {
     const items = markMoves.filter(m => m.userData.txt && m.userData.txt !== '이동 없음');
     if (!items.length) return null;
     renderer.render(scene, camera);
     const W = canvas.width, H = canvas.height, k = W / canvas.getBoundingClientRect().width;
-    const lines = items.map((m, i) => (i + 1) + '번 · ' + m.userData.txt + '   (' + m.userData.from.join(', ') + ') → (' + m.userData.to.join(', ') + ')');
+    const lines = items.map((m, i) => (i + 1) + '번 · 표시   (' + m.userData.to.join(', ') + ')');
     const headH = Math.round(34 * k), lineH = Math.round(22 * k), footH = lineH * lines.length + Math.round(14 * k);
     const out = document.createElement('canvas'); out.width = W; out.height = H + headH + footH;
     const c = out.getContext('2d');
     c.fillStyle = '#fff'; c.fillRect(0, 0, out.width, out.height);
     c.drawImage(canvas, 0, headH);
     c.fillStyle = '#111827'; c.font = '700 ' + Math.round(16 * k) + 'px sans-serif'; c.textBaseline = 'middle';
-    c.fillText(header || '조립도 표시 옮기기', Math.round(12 * k), headH / 2);
+    c.fillText(header || '조립도 표시하기', Math.round(12 * k), headH / 2);
     items.forEach((m, i) => {
       const wp = new THREE.Vector3(); m.getWorldPosition(wp); const p = wp.project(camera);
       const x = (p.x + 1) / 2 * W, y = (1 - p.y) / 2 * H + headH, r = 11 * k;
@@ -4595,7 +4603,7 @@
         const holeOut = b.clone().addScaledVector(dir, 0.15);
         const cap = dot(2.6, pegPt, dir, !recv);
         const ring = dot(3.3, holeOut, dir, recv);
-        ring.userData.ring = true; // 위치 표시 옮기기(markMove)로 잡을 수 있는 구멍 칠
+        ring.userData.ring = true; // 구멍 칠(표시하기 mark 모드에서는 일반 부품처럼 눌러 표시)
         // 판의 양쪽 면(둘 다 구멍이 보인다)에 칠해서 어느 쪽에서 봐도 구멍에 표시가 보이게 한다
         const ring2 = recv ? dot(3.3, b.clone().addScaledVector(dir, -both - 0.15), dir, true) : null;
         if (ring2) ring2.userData.ring = true;
@@ -4630,7 +4638,7 @@
       setGuideDots(assemblyDotsVisible);
     },
     // 초록 점(돌기 끝·구멍 칠)을 보이거나 숨긴다 — 화살표는 그대로
-    // 위치 표시 옮기기: 초록 구멍 칠을 잡아 끌면 그 자리는 그대로 두고, 옮긴 자리에 주황 표시가 따로 생긴다(10mm 칸에 맞춤).
+    // 표시하기: 켜고 부품을 누르면 그 자리에 주황 표시가 생긴다(다시 누르면 지움).
     // 저장하지 않는다 — 화면을 캡처해서 알려주는 용도.
     markMove(on){ markMoveOn = !!on; if (!on) clearMarkMoves(); },
     markCapture,
