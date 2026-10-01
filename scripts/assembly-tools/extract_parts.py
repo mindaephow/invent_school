@@ -26,9 +26,28 @@ for r in rows:
     if (V.max(0)-V.min(0)).max()<5: V*=1000
     mn,mx=V.min(0),V.max(0); V=V-np.array([(mn[0]+mx[0])/2,mn[1],(mn[2]+mx[2])/2])
     V=V@(Rx(sh.get("rx",0))@Ry(sh.get("ry",0))@Rz(sh.get("rz",0))).T+np.array([sh.get("x",0),sh.get("y",0),sh.get("z",0)])
-    V=V-(V.max(0)+V.min(0))/2                                     # bbox 가운데 = 부품 위치
+    cen=(V.max(0)+V.min(0))/2
+    V=V-cen                                                       # bbox 가운데 = 부품 위치
     np.save(f"parts/{n}.npy",V.astype(np.float32)); conn[n]=d["connectors"]; dims[n]=[round(float(x),2) for x in V.max(0)-V.min(0)]
-    pj[n]={"color":sh["color"],"pos":base64.b64encode(V.astype(np.float32).tobytes()).decode()}
+    paints=[]
+    for ps in d["spec"]["shapes"]:                                # 색칠 조각(paint): 본체와 같은 좌표에서 bbox 가운데만큼 옮긴다
+        if not ps.get("paint"): continue
+        T=[]
+        if ps["type"]=="box":
+            w,h,dd=ps["w"]/2,ps["h"]/2,ps["d"]/2
+            c=np.array([[x,y,z] for x in(-w,w) for y in(-h,h) for z in(-dd,dd)])
+            for a,b,e in [(0,1,3),(0,3,2),(4,6,7),(4,7,5),(0,4,5),(0,5,1),(2,3,7),(2,7,6),(0,2,6),(0,6,4),(1,5,7),(1,7,3)]: T+= [c[a],c[b],c[e]]
+        elif ps["type"]=="wheel":
+            r,hw=ps["radius"],ps["width"]/2; N=24
+            for i in range(N):
+                a0,a1=2*np.pi*i/N,2*np.pi*(i+1)/N
+                p0=np.array([r*np.cos(a0),0,r*np.sin(a0)]);p1=np.array([r*np.cos(a1),0,r*np.sin(a1)])
+                up=np.array([0,hw,0]);dn=np.array([0,-hw,0]);z=np.zeros(3)
+                T+=[p0+up,p1+up,z+up, p1+dn,p0+dn,z+dn, p0+dn,p1+dn,p1+up, p0+dn,p1+up,p0+up]
+        else: continue
+        T=np.array(T)@(Rx(ps.get("rx",0))@Ry(ps.get("ry",0))@Rz(ps.get("rz",0))).T+np.array([ps.get("x",0),ps.get("y",0),ps.get("z",0)])-cen
+        paints.append({"color":ps.get("color","#888888"),"pos":base64.b64encode(T.astype(np.float32).tobytes()).decode()})
+    pj[n]={"paints":paints,"color":sh.get("color","#c7cbd1"),"pos":base64.b64encode(V.astype(np.float32).tobytes()).decode()}
 json.dump(conn,open("conn.json","w",encoding="utf-8"),ensure_ascii=False); json.dump(dims,open("dims.json","w",encoding="utf-8"),ensure_ascii=False)
 open("viewer/parts.js","w",encoding="utf-8").write("window.PARTS="+json.dumps(pj,ensure_ascii=False)+";")
 open("viewer/conn.js","w",encoding="utf-8").write("window.CONN="+json.dumps(conn,ensure_ascii=False)+";")
