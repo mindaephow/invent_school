@@ -248,6 +248,12 @@ for _pt in BASE[8]["parts"]:
         _bl = old1("3단블록", 9, _blk_i); _blk_i += 1
         _sm = settle_marks(_bl, _base_pl)
         if _sm: _pt["move"]["marks"] = _sm
+# 5·8단계 리벳: 토끼처럼 구멍 입구를 가리키는 안내점(위에서 내려와 꽂힘)을 단다 — 이전 데이터에 빠져 있었다(안내 화살표 검사)
+for _si in (4, 7):
+    for _pt in BASE[_si]["parts"]:
+        if _pt["n"] == "리벳" and "marks" not in _pt:
+            x, y, z = _pt["p"]
+            _pt["dir"] = [0, 1, 0]; _pt["marks"] = [[x, round(y - 1.5, 3), z]]
 def export_all():
     steps = shift_steps([dict(st) for st in BASE] + export_steps(A), FLOOR_DY)
     return steps

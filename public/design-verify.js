@@ -116,6 +116,21 @@
       if (hosts.size) lines.push(`   → 이번 단계가 붙은 기존 부품: ${[...hosts].map((h) => h.replace(/^\d+\.\d+ /, '') + '(' + h.split('.')[0] + '단계)').join(', ')}`)
       // 4) 카메라
       const cs = st.camSrc || (st.cam || st.view ? '지정' : '미지정')
+      // 안내 화살표: 앞 단계에 있던 부품과 결합하는 새 부품(옆자리에서 합쳐지거나 옮겨 붙는 부품 포함)은 그 단계의 안내점이 있어야 한다.
+      // 화면의 "끌면 화살표가 따라가는" 기능이 이 값(marks / 합칠 땐 settleMarks / 옮길 땐 move.marks)을 읽는다 — 토끼(검토 완료)는 리벳까지 전부 있었다.
+      {
+        const arriving = all.filter((a) => { const q = a.ref; return (a.step === si && !q.side) || (q.side && q.side.until === si) || (q.move && q.move.at === si) })
+        const arrSet = new Set(arriving.map((a) => a.key))
+        const prior = new Set(all.filter((a) => a.step < si).map((a) => a.key))
+        const outside = (k) => prior.has(k) && !arrSet.has(k) // 같이 합쳐지는 묶음 안의 결합은 뺀다
+        const lack = arriving.filter((a) => {
+          const q = a.ref
+          if (!res.mated.some((m) => (m.part === a.key && outside(m.into)) || (m.into === a.key && outside(m.part)))) return false
+          const got = q.move && q.move.at === si ? (q.move.marks || []) : q.side && q.side.until === si ? (q.settleMarks || []) : (q.marks || [])
+          return !got.length
+        })
+        if (lack.length) { const nm = {}; lack.forEach((a) => { nm[a.n] = (nm[a.n] || 0) + 1 }); issues.push(`${si}단계: 안내 화살표(marks)가 없는 부품 ${lack.length}개 — ${Object.keys(nm).map((n) => n + ' ' + nm[n]).join(', ')}`) }
+      }
       if (!st.cam && !st.view && si > 1) issues.push(`${si}단계: 카메라 각도(cam) 미지정 — 교재 그림과 같은 방향으로 지정할 것`)
       lines.push(`   카메라: ${st.cam ? `theta ${Math.round(st.cam.theta * 57.3)}° / phi ${Math.round(st.cam.phi * 57.3)}°` : '기본'} (${cs})`)
       report.push(...lines)
