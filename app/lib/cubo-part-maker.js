@@ -68,7 +68,7 @@ export const PART_STANDARD_TEXT = `# 큐보 부품 만들기 기본 규격 (프�
 
 ## 만드는 방법 (메모리 없는 클로드도 가능)
 1. 저장소(mindaephow/invent_school)가 있으면 STL 파일을 바로 만든다:
-   node scripts/make-part-stl.mjs frame 5 "C:/Users/user/Downloads/15프레임_규격.stl"   (kind 는 frame / block / bracket / arc. 두 번째는 프레임=구멍 수, 블록=칸 수, 브라켓=열 수 1 또는 2, arc=반원프레임 구멍 수 9 고정. 반원프레임은 구멍 9개가 호 위에서 10mm 간격·양 끝 60mm, 끝 구멍 아래 5mm 발: cubo-arc-frame-mesh.js)
+   node scripts/make-part-stl.mjs frame 5 "C:/Users/user/Downloads/15프레임_규격.stl"   (kind 는 frame / block / bracket / arc / servohorn / roundhorn. 두 번째는 프레임=구멍 수, 블록=칸 수, 브라켓=열 수 1 또는 2, arc=반원프레임 구멍 수 9 고정. 반원프레임은 구멍 9개가 호 위에서 10mm 간격·양 끝 60mm, 끝 구멍 아래 5mm 발: cubo-arc-frame-mesh.js)
    코드는 app/lib/cubo-plate-mesh.js(판) · cubo-frame-mesh.js · cubo-block-mesh.js · cubo-bracket-mesh.js · cubo-mesh-kit.js. 구멍·테두리를 자르는 계산 없이 삼각형을 직접 짜서 팅커캐드 STL 정도로 가볍다(15프레임 2,280개·111KB, 3단블록 2,408개·118KB).
 2. 파일 위치를 사용자에게 알려 주면 사용자가 부품 만들기에서 STL 가져오기로 직접 등록한다. 색은 STL 에 없으니 등록할 때 정한다(사용자에게 색을 물어 알려 준다).
 3. 저장소가 없으면 make_part_stl 로 크기만 확인하고, 사용자가 허락했을 때만 apply_part_to_db 로 부품 DB 에 넣는다.
@@ -82,6 +82,12 @@ export const PART_STANDARD_TEXT = `# 큐보 부품 만들기 기본 규격 (프�
 3. 만든 뒤 compute_attach 로 기존 블록·리벳과 실제로 끼워지는지 확인하고, 구멍 수·위치·면 방향을 직접 검사한다(겹침 없음 ≠ 정답).
 4. 연결점(돌기·구멍 좌표)을 기록한다.
 5. 부품 DB 쓰기는 사용자가 허락한 뒤에만.
+
+## 서보혼·둥근서보혼 (교재 큐보3 3쪽 그림 + 등록된 육각큰기어 3D 를 직접 재서 만듦)
+구멍 3종: 보통(프레임 구멍), 작은 구멍(가장 좁은 곳만 반지름 1.1), 육각 구멍 = 육각큰기어 가운데 구멍 구조(아래 면에 꼭짓점 반지름 2.5 정육각형 구멍 깊이 3 → 반지름 2.75 구멍 1mm → 맨 위 입구 반지름 3.5 깊이 1, 판 두께 5 에 맞춰 같은 순서로 쌓음).
+서보혼(막대형)은 15프레임과 같은 크기(50×10×5)에 구멍 5개: 한쪽 끝부터 보통 2 · 작은 구멍 2 · 육각 1. 둥근서보혼은 지름 30 원판(구멍 중심에서 가장자리까지 5)에 가운데 육각 구멍 + 둘레 보통 구멍 4개(가운데에서 10mm, 육각큰기어와 같은 배치). 모두 두께 5(판 3 + 테두리 1×2).
+만들기: node scripts/make-part-stl.mjs servohorn 1 파일.stl / roundhorn 1 파일.stl (cubo-horn-mesh.js, 면 나누기는 cubo-face-mesh.js 의 귀 자르기).
+교재 그림에는 둥근서보혼 면에 잎 모양 파임·가운데 돋움이 더 있다. 아직 넣지 않았으니 필요하면 사용자와 3D 로 보고 같은 방식으로 추가한다.
 
 ## 용량 기준 (새 모양도 같은 수준으로)
 구멍 둘레 분할은 20(둥글기 기준). 구멍 하나당 삼각형 약 450~530개·STL 약 22~26KB 안팎이면 다른 부품과 같은 수준이다: 15프레임 2,280개·111KB(구멍 5개), 3단블록 2,408개·118KB, 반원프레임 4,496개·220KB(구멍 9개). 구멍이 많은 부품은 구멍 수에 비례해 커지는 것이 정상이다. 이보다 훨씬 크면 자르기(CSG) 계산을 쓴 것이니 삼각형을 직접 짜는 방식으로 바꾼다.

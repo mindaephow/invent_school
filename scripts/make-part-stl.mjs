@@ -7,9 +7,18 @@ import { blockTriangles } from '../app/lib/cubo-block-mesh.js'
 import { bracketTriangles } from '../app/lib/cubo-bracket-mesh.js'
 import { trianglesToStl } from '../app/lib/cubo-mesh-kit.js'
 import { arcFrameTriangles } from '../app/lib/cubo-arc-frame-mesh.js'
+import { servoHornTriangles, roundHornTriangles } from '../app/lib/cubo-horn-mesh.js'
 
 const [kind, countArg, out] = process.argv.slice(2)
 const count = Number(countArg)
+if (kind === 'servohorn' || kind === 'roundhorn') { // 서보혼(막대형)·둥근서보혼: node scripts/make-part-stl.mjs servohorn 1 <저장할 파일.stl>
+  if (!out) { console.error(`사용: node scripts/make-part-stl.mjs ${kind} 1 <저장할 파일.stl>`); process.exit(1) }
+  const t = kind === 'servohorn' ? servoHornTriangles() : roundHornTriangles()
+  const s = trianglesToStl(t)
+  fs.writeFileSync(out, s)
+  console.log(`${kind}: 삼각형 ${t.length / 9}개, ${(s.length / 1024).toFixed(0)}KB → ${out}`)
+  process.exit(0)
+}
 if (kind === 'arc') { // 반원프레임(구멍 9개 고정):  node scripts/make-part-stl.mjs arc 9 <저장할 파일.stl>
   if (count !== 9 || !out) { console.error('사용: node scripts/make-part-stl.mjs arc 9 <저장할 파일.stl>'); process.exit(1) }
   const t = arcFrameTriangles()
