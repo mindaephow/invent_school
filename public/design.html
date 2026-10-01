@@ -1445,7 +1445,7 @@
       try {
         if (!accessToken || !cached || !cached.thumbnail3d) return null; // 3D 모델이 있는 부품만(저장 시 썸네일도 같이 만들어진다)
         // 이 컴퓨터에 저장해 둔 3D 모델(만들어 둔 점·면 데이터)이 있고 썸네일 지문이 같으면 받지도 만들지도 않고 바로 쓴다
-        const C = window.IVS_CACHE, ver = C ? C.hash(cached.thumbnail3d) + '|paint1' : null;
+        const C = window.IVS_CACHE, ver = C ? C.hash(cached.thumbnail3d) + '|paint2' : null;
         if (C) { const hit = await C.get('robot-model:' + partId); if (hit && hit.ver === ver && hit.data && hit.data.position) { perfMark('modelFromCache'); return hit.data; } }
         for (let i = 0; i < 40 && !viewerReady(); i++) await new Promise(r => setTimeout(r, 250)); // 3D 모듈이 아직 로딩 중이면 잠깐 기다린다
         if (!viewerReady()) return null;
@@ -1512,7 +1512,7 @@
         const c = robotPartsCache.find(x => x.id === id);
         let hit = null;
         try { hit = C ? await C.get('robot-model:' + id) : null; } catch (e) {}
-        if (!(hit && C && hit.ver === C.hash(c.thumbnail3d) + '|paint1' && hit.data && hit.data.position)) need.push(id);
+        if (!(hit && C && hit.ver === C.hash(c.thumbnail3d) + '|paint2' && hit.data && hit.data.position)) need.push(id);
       }
       let done = 0;
       const total = need.length;
