@@ -456,6 +456,7 @@
                 <b id="asmVolumeLabel" style="min-width:34px; text-align:right;">50%</b>
               </label>
               <p id="asmNote" hidden></p>
+              <button id="asmMarkMove" class="ghost" type="button" style="width:100%;" title="초록 구멍 표시를 잡아 끌면 옮긴 자리에 주황 표시가 생겨요(저장 안 됨, 캡처용)">📍 위치 표시 옮기기</button>
               <button id="asmClose" class="ghost" type="button" style="width:100%;">조립도 닫기</button>
             </div>
             <details id="asmRulesBox" style="margin-top:6px;">
@@ -4353,11 +4354,51 @@
   window.__ivsPlaySnap = playSnap; // 볼륨 슬라이더에서 들어 보기용
   let assemblyOrders = []; // 결합 순서 번호(부품별)
   let assemblyDotsVisible = true;
+  let markMoveOn = false, markDrag = null;
+  const markMoves = []; // 옮긴 표시(주황) 목록
+  function clearMarkMoves(){ markMoves.splice(0).forEach(m => { if (m.parent) m.parent.remove(m); if (m.userData.label && m.userData.label.parentNode) m.userData.label.remove(); m.geometry.dispose(); m.material.dispose(); }); }
+  function ringDots(){ const out = []; if (assemblyGuideGroup) assemblyGuideGroup.children.forEach(c => (c.userData.attached || []).forEach(m => { if (m.userData.ring && m.visible) out.push(m); })); return out; }
+  canvas.addEventListener('pointerdown', (e) => {
+    if (!markMoveOn || e.button !== 0 || e.ctrlKey || e.shiftKey) return;
+    raycaster.setFromCamera(ndcFromEvent(e), camera);
+    const hit = raycaster.intersectObjects(ringDots(), false)[0];
+    if (!hit) return;
+    e.stopImmediatePropagation(); e.preventDefault();
+    const src = hit.object, wp = new THREE.Vector3(); src.getWorldPosition(wp);
+    const q = new THREE.Quaternion(); src.getWorldQuaternion(q);
+    const n = new THREE.Vector3(0, 0, 1).applyQuaternion(q).normalize();
+    const mk = new THREE.Mesh(new THREE.CircleGeometry(3.3, 32), new THREE.MeshBasicMaterial({ color: 0xf97316, transparent: true, opacity: 0.95, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6 }));
+    mk.renderOrder = 11; mk.quaternion.copy(src.quaternion);
+    src.parent.add(mk); mk.position.copy(src.position); markMoves.push(mk);
+    const label = document.createElement('div');
+    label.style.cssText = 'position:fixed; z-index:30; pointer-events:none; background:#f97316; color:#fff; font:700 12px sans-serif; padding:2px 6px; border-radius:6px;';
+    document.body.appendChild(label); mk.userData.label = label;
+    markDrag = { mk, wp, plane: new THREE.Plane().setFromNormalAndCoplanarPoint(n, wp), label };
+  }, true);
+  window.addEventListener('pointermove', (e) => {
+    if (!markDrag) return;
+    raycaster.setFromCamera(ndcFromEvent(e), camera);
+    const pt = raycaster.ray.intersectPlane(markDrag.plane, new THREE.Vector3());
+    if (!pt) return;
+    const off = pt.sub(markDrag.wp), nrm = markDrag.plane.normal;
+    off.addScaledVector(nrm, -off.dot(nrm)); // 판 면 안에서만
+    off.set(Math.round(off.x / 10) * 10, Math.round(off.y / 10) * 10, Math.round(off.z / 10) * 10);
+    off.addScaledVector(nrm, -off.dot(nrm));
+    const fin = markDrag.wp.clone().add(off);
+    markDrag.mk.position.copy(markDrag.mk.parent.worldToLocal(fin.clone()));
+    const dd = [off.x, off.y, off.z].map(v => Math.round(v));
+    markDrag.label.textContent = dd.every(v => v === 0) ? '이동 없음' : '이동 ' + ['x', 'y', 'z'].map((k, i) => dd[i] ? k + ' ' + (dd[i] > 0 ? '+' : '') + dd[i] : '').filter(Boolean).join(', ') + ' mm';
+    const sp = fin.clone().project(camera), r = canvas.getBoundingClientRect();
+    markDrag.label.style.left = (r.left + (sp.x + 1) / 2 * r.width + 14) + 'px';
+    markDrag.label.style.top = (r.top + (1 - sp.y) / 2 * r.height - 10) + 'px';
+  });
+  window.addEventListener('pointerup', () => { if (markDrag) { const m = markDrag.mk; if (markDrag.label.textContent === '이동 없음' || !markDrag.label.textContent) { m.userData.label.remove(); if (m.parent) m.parent.remove(m); markMoves.splice(markMoves.indexOf(m), 1); } markDrag = null; } });
   function setGuideDots(v){
     if (!assemblyGuideGroup) return;
     assemblyGuideGroup.children.forEach(c => { c.traverse(o => { if (o.userData && o.userData.dot) o.visible = v; }); (c.userData.attached || []).forEach(m => { if (m.userData && m.userData.dot) m.visible = v; }); });
   }
   function clearAssemblyGuides(){
+    clearMarkMoves();
     if (!assemblyGuideGroup) return;
     assemblyGuideGroup.children.forEach(c => (c.userData.attached || []).forEach(m => { if (m.parent) m.parent.remove(m); if (m.geometry) m.geometry.dispose(); if (m.material) m.material.dispose(); }));
     scene.remove(assemblyGuideGroup);
@@ -4499,8 +4540,10 @@
         const holeOut = b.clone().addScaledVector(dir, 0.15);
         const cap = dot(2.6, pegPt, dir, !recv);
         const ring = dot(3.3, holeOut, dir, recv);
+        ring.userData.ring = true; // 위치 표시 옮기기(markMove)로 잡을 수 있는 구멍 칠
         // 판의 양쪽 면(둘 다 구멍이 보인다)에 칠해서 어느 쪽에서 봐도 구멍에 표시가 보이게 한다
         const ring2 = recv ? dot(3.3, b.clone().addScaledVector(dir, -both - 0.15), dir, true) : null;
+        if (ring2) ring2.userData.ring = true;
         const HEAD = 6;
         const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 1, 8), mat());
         const head = new THREE.Mesh(new THREE.ConeGeometry(2.6, HEAD, 12), mat());
@@ -4532,6 +4575,9 @@
       setGuideDots(assemblyDotsVisible);
     },
     // 초록 점(돌기 끝·구멍 칠)을 보이거나 숨긴다 — 화살표는 그대로
+    // 위치 표시 옮기기: 초록 구멍 칠을 잡아 끌면 그 자리는 그대로 두고, 옮긴 자리에 주황 표시가 따로 생긴다(10mm 칸에 맞춤).
+    // 저장하지 않는다 — 화면을 캡처해서 알려주는 용도.
+    markMove(on){ markMoveOn = !!on; if (!on) clearMarkMoves(); },
     guideDots(visible){ assemblyDotsVisible = !!visible; setGuideDots(assemblyDotsVisible); },
     // 지금 놓인 부품 중 몸통이 겹치는 쌍(검증용) — 조립 데이터가 겹침 금지 규칙을 지키는지 볼 때 쓴다
     overlaps(){

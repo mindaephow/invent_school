@@ -245,6 +245,7 @@
     if (!viewing) return;
     viewing = false;
     $('asmBar').hidden = true;
+    const mm = $('asmMarkMove'); if (mm && mm.dataset.on === '1') mm.click();
     $('asmStageBar').hidden = true;
     $('historyPanel').hidden = false;
     if (b) b.axes(false);
@@ -256,6 +257,8 @@
   document.addEventListener('DOMContentLoaded', () => {
     if (!$('asmClose')) return;
     $('asmClose').addEventListener('click', close);
+    const mm = $('asmMarkMove');
+    if (mm) mm.addEventListener('click', () => { const on = mm.dataset.on !== '1'; mm.dataset.on = on ? '1' : '0'; mm.className = on ? 'primary' : 'ghost'; mm.textContent = on ? '📍 위치 표시 옮기는 중 (다시 누르면 끝)' : '📍 위치 표시 옮기기'; bridge().markMove(on); });
     $('asmFirst').addEventListener('click', stopPlayClick(() => go(0)));
     $('asmPrev').addEventListener('click', stopPlayClick(() => go(step - 1)));
     $('asmNext').addEventListener('click', stopPlayClick(() => go(step + 1)));
