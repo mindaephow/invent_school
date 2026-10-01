@@ -186,7 +186,7 @@ armparts = [A1] + rvA + [A2, L1, L2, U1, U2]
 # 유닛의 안내(marks)는 L 구멍 3곳, 합칠 때(settleMarks)는 팔 구멍 — 변환 전에 정리한다
 for L, U, sg in ((L1, U1, 1), (L2, U2, -1)):
     U.extra["settleMarks"] = [U.extra["marks"][0]]; U.extra["marks"] = U.extra["marks"][1:]
-    U.extra["dir"] = rnd(AfR(np.eye(3)) @ np.array([0, -1, 0]))
+    U.extra["dir"] = rnd(AfR(np.eye(3)) @ np.array([-1, 0, 0]))   # 블록 돌기가 +u 쪽 L 판으로 들어가므로 블록은 그 반대(−u)에서 접근한다
 for pt in armparts: to_build2(pt, 23)
 # 유닛은 21 에서 팔에서 떨어진 자리(옆)에서 만들고 22 에서 팔에 붙는다(side → 제자리)
 for L, U, sg in ((L1, U1, 1), (L2, U2, -1)):
