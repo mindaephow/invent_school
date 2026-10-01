@@ -68,7 +68,7 @@ export const PART_STANDARD_TEXT = `# 큐보 부품 만들기 기본 규격 (프�
 
 ## 만드는 방법 (메모리 없는 클로드도 가능)
 1. 저장소(mindaephow/invent_school)가 있으면 STL 파일을 바로 만든다:
-   node scripts/make-part-stl.mjs frame 5 "C:/Users/user/Downloads/15프레임_규격.stl"   (kind 는 frame / block / bracket. 두 번째는 프레임=구멍 수, 블록=칸 수, 브라켓=열 수 1 또는 2)
+   node scripts/make-part-stl.mjs frame 5 "C:/Users/user/Downloads/15프레임_규격.stl"   (kind 는 frame / block / bracket / arc. 두 번째는 프레임=구멍 수, 블록=칸 수, 브라켓=열 수 1 또는 2, arc=반원프레임 구멍 수 9 고정. 반원프레임은 구멍 9개가 호 위에서 10mm 간격·양 끝 60mm, 끝 구멍 아래 5mm 발: cubo-arc-frame-mesh.js)
    코드는 app/lib/cubo-plate-mesh.js(판) · cubo-frame-mesh.js · cubo-block-mesh.js · cubo-bracket-mesh.js · cubo-mesh-kit.js. 구멍·테두리를 자르는 계산 없이 삼각형을 직접 짜서 팅커캐드 STL 정도로 가볍다(15프레임 2,280개·111KB, 3단블록 2,408개·118KB).
 2. 파일 위치를 사용자에게 알려 주면 사용자가 부품 만들기에서 STL 가져오기로 직접 등록한다. 색은 STL 에 없으니 등록할 때 정한다(사용자에게 색을 물어 알려 준다).
 3. 저장소가 없으면 make_part_stl 로 크기만 확인하고, 사용자가 허락했을 때만 apply_part_to_db 로 부품 DB 에 넣는다.

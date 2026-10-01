@@ -6,9 +6,18 @@ import { frameTriangles } from '../app/lib/cubo-frame-mesh.js'
 import { blockTriangles } from '../app/lib/cubo-block-mesh.js'
 import { bracketTriangles } from '../app/lib/cubo-bracket-mesh.js'
 import { trianglesToStl } from '../app/lib/cubo-mesh-kit.js'
+import { arcFrameTriangles } from '../app/lib/cubo-arc-frame-mesh.js'
 
 const [kind, countArg, out] = process.argv.slice(2)
 const count = Number(countArg)
+if (kind === 'arc') { // 반원프레임(구멍 9개 고정):  node scripts/make-part-stl.mjs arc 9 <저장할 파일.stl>
+  if (count !== 9 || !out) { console.error('사용: node scripts/make-part-stl.mjs arc 9 <저장할 파일.stl>'); process.exit(1) }
+  const t = arcFrameTriangles()
+  const s = trianglesToStl(t)
+  fs.writeFileSync(out, s)
+  console.log(`arc 9: 삼각형 ${t.length / 9}개, ${(s.length / 1024).toFixed(0)}KB → ${out}`)
+  process.exit(0)
+}
 if (!['frame', 'block', 'bracket'].includes(kind) || !Number.isInteger(count) || count < 1 || count > 30 || (kind === 'bracket' && count > 2) || !out) {
   console.error('사용: node scripts/make-part-stl.mjs <frame|block|bracket> <개수(프레임 구멍 수·블록 칸 수 1~30, 브라켓 열 수 1~2)> <저장할 파일.stl>')
   process.exit(1)
