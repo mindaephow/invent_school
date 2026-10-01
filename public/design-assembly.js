@@ -11,7 +11,7 @@
   const PEG_DEPTH = 5;   // 돌기가 구멍 안으로 들어가는 깊이(mm) — 프레임 두께와 같다
   let def = null;        // 지금 고른 차시에 맞는 조립 데이터
   let catId = null;      // 지금 고른 카테고리 id (부품 이름으로 부품을 찾을 때 씀)
-  let lastView = 0;      // 지금 보고 있는 각도(90도 단위)
+  let lastCamKey = '';   // 지금 단계에서 맞춰 둔 카메라 각도(theta|phi) — 바뀔 때만 돌린다
   let viewing = false;   // 조립 보기 중인지
   let step = 0;          // 0 = 빈 판, 1..N = 각 단계, N+1 = 완성
   let snapshot = null;   // 조립 보기 들어가기 전 작업(닫으면 그대로 되돌린다)
@@ -36,14 +36,16 @@
         const type = b.resolve(pt.n, catId);
         if (!type) { if (!missing.includes(pt.n)) missing.push(pt.n); return; }
         const useSide = pt.side && upTo < pt.side.until;
-        const base = useSide ? pt.side.p : pt.p;
+        const moved = pt.move && upTo >= pt.move.at; // move: 옆자리에서 다 만든 뒤 다른 자리로 한 번 더 옮겨 붙는 단계(예: 풍차 상자를 몸체에 끼우기)
+        const base = useSide ? pt.side.p : (moved ? add(pt.p, pt.move.by, 1) : pt.p);
         const rot = useSide ? pt.side.r : pt.r;
         // 이번 단계에 새로 놓이거나(또는 옆자리에서 제자리로 들어가는) 부품 — 완성 단계에선 없다
-        const isNew = target <= n && (si + 1 === target || (pt.side && pt.side.until === target));
+        const isNew = target <= n && (si + 1 === target || (pt.side && pt.side.until === target) || (pt.move && pt.move.at === target));
         let pos = base;
         // 옆자리 조립품이 제자리로 합쳐지는 단계(settle)에는 settleDir(없으면 dir)로 띄우고, settleMarks(있는 부품만) 자리로 안내한다
-        const settling = !!(pt.side && !useSide);
-        const dirH = settling ? (pt.settleDir || pt.dir) : pt.dir;
+        const moving = !!(pt.move && pt.move.at === target);
+        const settling = !!(pt.side && !useSide) || moving;
+        const dirH = moving ? pt.move.dir : (settling ? (pt.settleDir || pt.dir) : pt.dir);
         // 앞 단계에서 만든 부품을 이번 단계에서 "결합되기 전" 모습으로 띄워 보여준다(예: 14단계 T축+기어를 15프레임 위로)
         const ex = pt.explode && pt.explode.step === target ? pt.explode : null;
         if (ex) {
@@ -52,10 +54,10 @@
         }
         if (isNew && dirH) {
           // 띄우는 거리·돌기가 들어가는 깊이·판 두께는 부품마다 정할 수 있다(T축처럼 길게 꽂히는 것, 두꺼운 부시)
-          const hv = settling ? HOVER : (pt.hover || (pt.recv ? HOVER_RECV : HOVER)); // 합쳐지는 묶음은 모두 같은 거리로 띄워야 모양이 흐트러지지 않는다
+          const hv = moving ? (pt.move.hover || HOVER) : settling ? HOVER : (pt.hover || (pt.recv ? HOVER_RECV : HOVER)); // 합쳐지는 묶음은 모두 같은 거리로 띄워야 모양이 흐트러지지 않는다
           const depth = pt.pegDepth || PEG_DEPTH;
           pos = add(base, dirH, hv); // 끼우기 직전: 제자리에서 끼우는 방향으로 띄운다
-          const targets = settling ? (pt.settleMarks || []) : (pt.marks && pt.marks.length ? pt.marks : [base]);
+          const targets = moving ? (pt.move.marks || []) : settling ? (pt.settleMarks || []) : (pt.marks && pt.marks.length ? pt.marks : [base]);
           // 화살표는 띄워 놓은 부품의 돌기 끝(구멍에 들어갈 깊이만큼 아래)에서 시작해 구멍 위 원으로 들어간다
           if (pt.recv) {
             // 구멍을 받는 부품(프레임 등)이 움직일 때: 원은 떠 있는 부품의 구멍에, 화살표는 고정된 돌기 끝에서 그 구멍 쪽으로
@@ -134,8 +136,13 @@
     b.frame(focus.length ? focus : list.map((d) => d.pos), list.map((d) => d.pos));
     b.guides(guides);
     // 앞 벽이 뒤쪽 끝에 있는 단계(flip)는 반대편에서 보여준다
-    const view = (step > 0 && step < last() && def.steps[step - 1].view) || 0; // 0: 기본 각도, 1·2: 90도씩 돌려서(부품이 들어오는 쪽에서) 보여준다
-    if (b.turn && def.camera && view !== lastView) { b.turn(def.camera.theta + view * Math.PI / 2); lastView = view; } // 각도가 바뀌는 단계에서만 돌린다(직접 돌린 화면은 그대로)
+    // view: 기본 각도에서 90도×view 만큼 돌려서 보기 / cam: {theta, phi}로 교재 그림과 같은 각도를 직접 지정
+    const st = (step > 0 && step < last()) ? def.steps[step - 1] : null;
+    const view = (st && st.view) || 0;
+    const th = st && st.cam ? st.cam.theta : (def.camera ? def.camera.theta : 0) + view * Math.PI / 2;
+    const ph = st && st.cam ? st.cam.phi : (def.camera ? def.camera.phi : 1);
+    const camKey = th.toFixed(3) + '|' + ph.toFixed(3);
+    if (b.turn && def.camera && camKey !== lastCamKey) { b.turn(th, ph); lastCamKey = camKey; } // 각도가 바뀌는 단계에서만 돌린다(직접 돌린 화면은 그대로)
     const n = total();
     $('asmLabel').textContent = step === 0 ? '시작 전' : (step === last() ? '완성!' : step + ' / ' + n + ' 단계');
     $('asmNote').textContent = step === 0 ? '빈 판에서 시작해요. ▶ 를 눌러 한 단계씩 만들어 봐요.'
@@ -226,7 +233,7 @@
     if (!def || viewing) return;
     snapshot = b.serialize();
     viewing = true;
-    lastView = 0;
+    lastCamKey = def.camera.theta.toFixed(3) + '|' + def.camera.phi.toFixed(3);
     b.setViewing(true);
     b.camera(def.camera);
     $('asmBar').hidden = false;
