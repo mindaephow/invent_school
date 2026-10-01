@@ -35,3 +35,35 @@ if (process.argv[3]) {
   console.log('단계별 검증 절차 문제:',v.issues.length); v.issues.forEach(i=>console.log('  ',i));
   if (process.env.REPORT) v.report.forEach(l=>console.log(l));
 }
+// ── 안내 화살표 검사: 앞 단계 부품과 결합하는 새 부품은 그 단계에 안내점(marks, 옆자리에서 합칠 땐 settleMarks, 옮길 땐 move.marks)이 있어야 한다
+// (화면의 "끌면 화살표가 따라가는" 기능은 이 값을 쓴다 — 값이 없으면 화살표가 안 나온다. 3륜바이크 14단계 브라켓에서 빠뜨린 실수를 잡는다)
+{
+  const stepsAll = steps, miss = [];
+  const keyOf = (k, i, n) => `${k}.${i} ${n}`;
+  stepsAll.forEach((st, si) => {
+    const step = si + 1;
+    const upto = []; stepsAll.slice(0, step).forEach((s, k) => (s.parts || []).forEach((pt, i) => {
+      const mv = pt.move && pt.move.at <= step; const p = mv ? (pt.move.p || pt.p.map((v, j) => v + pt.move.by[j])) : pt.p;
+      upto.push({ key: keyOf(k + 1, i, pt.n), n: pt.n, p, r: (mv && pt.move.r) ? pt.move.r : (pt.r || [0, 0, 0]), step: k + 1, ref: pt });
+    }));
+    const res = M.check(upto, conn);
+    const prior = new Set(upto.filter(u => u.step < step).map(u => u.key));
+    // 이 단계에 "도착"하는 부품: 이 단계에 넣었고 옆자리 없음, 옆자리에서 이 단계에 합쳐짐(side.until), 이 단계에 옮겨 붙음(move.at)
+    const arriving = [];
+    stepsAll.forEach((s, k) => (s.parts || []).forEach((pt, i) => {
+      const own = k + 1 === step && !pt.side && !(pt.move && pt.move.at <= step && false);
+      const settle = pt.side && pt.side.until === step, moved = pt.move && pt.move.at === step;
+      if (own || settle || moved) arriving.push({ key: keyOf(k + 1, i, pt.n), pt, mode: moved ? 'move' : (settle ? 'settle' : 'own') });
+    }));
+    const arrSet = new Set(arriving.map(a => a.key));
+    arriving.forEach(({ key, pt, mode }) => {
+      if (pt.n === '리벳') return; // 리벳은 교재도 화살표 없이 꽂힌 채로 그린다(같이 도착하는 묶음 안의 결합도 제외)
+      const outside = (k) => prior.has(k) && !arrSet.has(k); // 같이 합쳐지는 묶음 안의 결합은 빼고, 이미 있던 부품과의 결합만 본다
+      const hasPrior = res.mated.some(m => (m.part === key && outside(m.into)) || (m.into === key && outside(m.part)));
+      if (!hasPrior) return;
+      const ok = mode === 'move' ? (pt.move.marks || []).length : mode === 'settle' ? (pt.settleMarks || []).length : (pt.marks || []).length;
+      if (!ok) miss.push(`${step}단계 ${pt.n}(${key}): 앞 부품과 결합하는데 안내점(${mode === 'move' ? 'move.marks' : mode === 'settle' ? 'settleMarks' : 'marks'})이 없음 → 화살표가 안 나옴`);
+    });
+  });
+  console.log('안내 화살표 없는 부품:', miss.length); miss.slice(0, 40).forEach(m => console.log('  ', m));
+}
