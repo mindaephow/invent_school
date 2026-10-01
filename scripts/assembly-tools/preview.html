@@ -64,13 +64,13 @@ function build(){scene.remove(group);group=new THREE.Group();scene.add(group);co
  const flipOn=flipActive(step);const items=[];const guides=[];
  steps.forEach((st,si)=>{if(si+1>step)return;(st.parts||[]).forEach(pt0=>{const pt=(flipOn&&!pt0.noflip)?flipPt(pt0):pt0;if(!PARTS[pt.n])return;
   const useSide=pt.side&&step<pt.side.until, moved=pt.move&&step>=pt.move.at;
-  let p=useSide?pt.side.p:(moved?[pt.p[0]+pt.move.by[0],pt.p[1]+pt.move.by[1],pt.p[2]+pt.move.by[2]]:pt.p);
-  let r=useSide?pt.side.r:pt.r;
+  let p=useSide?pt.side.p:(moved?(pt.move.p||[pt.p[0]+(pt.move.by||[0,0,0])[0],pt.p[1]+(pt.move.by||[0,0,0])[1],pt.p[2]+(pt.move.by||[0,0,0])[2]]):pt.p);
+  let r=useSide?pt.side.r:((moved&&pt.move.r)?pt.move.r:pt.r);
   const isNew=(si+1===step)||(pt.side&&pt.side.until===step)||(pt.move&&pt.move.at===step);
   if(isNew){const dirH=(pt.move&&pt.move.at===step)?pt.move.dir:((pt.side&&!useSide)?(pt.settleDir||pt.dir):pt.dir);
     if(dirH&&step<=steps.length){const hv=(pt.move&&pt.move.at===step)?(pt.move.hover||22):((pt.side&&!useSide)?22:(pt.hover||(pt.recv?20:22)));p=[p[0]+dirH[0]*hv,p[1]+dirH[1]*hv,p[2]+dirH[2]*hv];}}
-  if(isNew&&pt.dir&&step<=steps.length){const mv0=pt.move&&pt.move.at===step,settling=!!(pt.side&&!useSide)||mv0;const dirH=mv0?pt.move.dir:(settling?(pt.settleDir||pt.dir):pt.dir);const hv=mv0?(pt.move.hover||22):(settling?22:(pt.hover||(pt.recv?20:22)));const tg=mv0?(pt.move.marks||[]):(settling?(pt.settleMarks||[]):(pt.marks&&pt.marks.length?pt.marks:[pt.p]));const A_=(m,d,k)=>[m[0]+d[0]*k,m[1]+d[1]*k,m[2]+d[2]*k];
-    tg.forEach((m,i)=>{ if(pt.recv){const faces=(!settling&&pt.faceMarks)?pt.faceMarks:tg;guides.push({from:m,to:A_(faces[i]||m,dirH,hv),dir:dirH});}else guides.push({from:A_(m,dirH,hv-(pt.pegDepth||5)),to:m,dir:dirH});});}
+  if(isNew&&(pt.dir||(pt.move&&pt.move.at===step&&pt.move.dir))&&step<=steps.length){const mv0=pt.move&&pt.move.at===step,settling=!!(pt.side&&!useSide)||mv0;const dirH=mv0?pt.move.dir:(settling?(pt.settleDir||pt.dir):pt.dir);const hv=mv0?(pt.move.hover||22):(settling?22:(pt.hover||(pt.recv?20:22)));const tg=mv0?(pt.move.marks||[]):(settling?(pt.settleMarks||[]):(pt.marks&&pt.marks.length?pt.marks:[pt.p]));const A_=(m,d,k)=>[m[0]+d[0]*k,m[1]+d[1]*k,m[2]+d[2]*k];
+    tg.forEach((m,i)=>{ if(pt.recv&&!pt.pegTarget){const faces=(!settling&&pt.faceMarks)?pt.faceMarks:tg;guides.push({from:m,to:A_(faces[i]||m,dirH,hv),dir:dirH});}else guides.push({from:A_(m,dirH,hv-(pt.pegDepth||5)),to:m,dir:dirH});});}
   items.push({n:pt.n,p,r:r||[0,0,0],isNew});});});
  const xf=def.xform&&step>=def.xform.at?def.xform:null;
  if(xf)guides.forEach(g=>{g.from=xT(g.from);g.to=xT(g.to);g.dir=mv(xf.m,g.dir);});
@@ -91,9 +91,15 @@ function build(){scene.remove(group);group=new THREE.Group();scene.add(group);co
    if(L>8){const HEAD=6,gap=Math.min(4,Math.max(0,(L-10)/2)),L2=L-2*gap;
      const shaft=new THREE.Mesh(new THREE.CylinderGeometry(0.8,0.8,Math.max(L2-HEAD,0.1),8),mat());shaft.position.copy(a).addScaledVector(nd,gap+(L2-HEAD)/2);shaft.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),nd);shaft.renderOrder=999;group.add(shaft);
      const head=new THREE.Mesh(new THREE.ConeGeometry(2.6,HEAD,12),mat());head.position.copy(a).addScaledVector(nd,gap+L2-HEAD/2);head.quaternion.copy(shaft.quaternion);head.renderOrder=999;group.add(head);}});
- if(!box.isEmpty()){box.getCenter(tgt);}
+ labelHoles(items);
+ if(!box.isEmpty()){box.getCenter(tgt);} if(QQ.get('t')){const a=QQ.get('t').split(',').map(Number);tgt.set(a[0],a[1],a[2]);}
  document.getElementById('lab').textContent=step+' / '+N+' 단계';document.getElementById('note').textContent=step>=N?'완성!':((steps[step-1]||{}).note||'');sl.value=step;}
-function draw(){const a=az*D,e=el*D;cam.position.set(tgt.x+dist*Math.sin(a)*Math.cos(e),tgt.y+dist*Math.sin(e),tgt.z+dist*Math.cos(a)*Math.cos(e));cam.lookAt(tgt);renderer.render(scene,cam);}
+window.LBLS=[];
+function labelHoles(items){document.querySelectorAll('.hl').forEach(e=>e.remove());window.LBLS=[];
+  if(!new URLSearchParams(location.search).get('lbl'))return;
+  items.forEach(d=>{if(d.n!=='135도 프레임'||!CONN[d.n])return;const q=rot(d.r);CONN[d.n].holes.forEach(h=>{const v=new THREE.Vector3(...h.pos).applyQuaternion(q).add(new THREE.Vector3(...d.p));const k=10-parseInt(h.id.slice(1));window.LBLS.push({v,k});});});}
+function drawLabels(){document.querySelectorAll('.hl').forEach(e=>e.remove());window.LBLS.forEach(o=>{const p=o.v.clone().project(cam);if(p.z>1)return;const x=(p.x+1)/2*W,y=(1-p.y)/2*H;const e=document.createElement('div');e.className='hl';e.textContent=o.k;e.style.cssText='position:fixed;left:'+(x-8)+'px;top:'+(y-9)+'px;width:16px;height:16px;border-radius:8px;background:#ffd400;color:#000;font:bold 12px sans-serif;text-align:center;line-height:16px;z-index:9;border:1px solid #333';document.body.appendChild(e);});}
+function draw(){const a=az*D,e=el*D;cam.position.set(tgt.x+dist*Math.sin(a)*Math.cos(e),tgt.y+dist*Math.sin(e),tgt.z+dist*Math.cos(a)*Math.cos(e));cam.lookAt(tgt);renderer.render(scene,cam);drawLabels();}
 function go(s){step=Math.max(1,Math.min(N,s));build();draw();}
 document.getElementById('prev').onclick=()=>go(step-1);document.getElementById('next').onclick=()=>go(step+1);sl.oninput=()=>go(+sl.value);
 let drag=null;renderer.domElement.onmousedown=e=>{drag={x:e.clientX,y:e.clientY,btn:e.button}};

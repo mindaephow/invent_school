@@ -143,7 +143,7 @@ export function registerCuboAssemblyTools(server, getSupabase) {
           const r = checkOverlaps(list, site.IVS_COLLISION, tolerance)
           // 돌기↔구멍 결합 검사: 부품 DB의 연결점(data.connectors)으로 각 돌기가 다른 부품 구멍에 들어가 있는지 본다
           const partsFinal = []
-          list.forEach((s, si) => (s.parts || []).forEach((pt, k) => partsFinal.push({ key: `${si + 1}단계 ${pt.n}#${k}`, n: pt.n, p: pt.p, r: pt.r || [0, 0, 0] })))
+          list.forEach((s, si) => (s.parts || []).forEach((pt, k) => partsFinal.push({ key: `${si + 1}단계 ${pt.n}#${k}`, n: pt.n, p: (pt.move && (pt.move.p || pt.move.by)) ? (pt.move.p || pt.p.map((x, q) => x + pt.move.by[q])) : pt.p, r: (pt.move && pt.move.r) || pt.r || [0, 0, 0] })))
           const names = [...new Set(partsFinal.map((p) => p.n))]
           const { data: rows, error: cErr } = await getSupabase().from('ivs_part_catalog').select('name:data->>name, connectors:data->connectors').eq('data->>subject', 'robot').in('data->>name', names)
           const conn = {}

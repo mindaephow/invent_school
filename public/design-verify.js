@@ -50,15 +50,18 @@
     const worldOf = (pt) => (conn[pt.n] ? mates.worldConnectors({ p: pt.p, r: pt.r || [0, 0, 0] }, conn[pt.n]) : null)
     const all = []
     steps.forEach((st, k) => (st.parts || []).forEach((pt, i) => all.push({ key: `${k + 1}.${i} ${pt.n}`, n: pt.n, p: pt.p, r: pt.r || [0, 0, 0], ref: pt, step: k + 1, idx: i })))
-    const byKey = new Map(all.map((a) => [a.key, a]))
+    let byKey = new Map(all.map((a) => [a.key, a]))
+    // move{at,p|by,r}: 그 단계부터는 옮긴 자세로 검사한다
+    const poseNow = (pt, stp) => (pt.move && stp >= pt.move.at ? { p: pt.move.p || pt.p.map((x, q) => x + (pt.move.by || [0, 0, 0])[q]), r: pt.move.r || pt.r || [0, 0, 0] } : { p: pt.p, r: pt.r || [0, 0, 0] })
 
     // ── 단계별: 방향 확인 → 구멍 위치 목록 → 앞뒤 비교 ──
     const counts = {}
     steps.forEach((st, k) => {
       const si = k + 1
-      const upto = all.filter((a) => a.step <= si)
+      const upto = all.filter((a) => a.step <= si).map((a) => ({ ...a, ...poseNow(a.ref, si) }))
+      byKey = new Map(upto.map((a) => [a.key, a]))
       const res = mates.check(upto, conn)
-      const mine = all.filter((a) => a.step === si)
+      const mine = upto.filter((a) => a.step === si)
       const added = {}
       mine.forEach((a) => { added[a.n] = (added[a.n] || 0) + 1; counts[a.n] = (counts[a.n] || 0) + 1 })
       const addTxt = Object.keys(added).map((n) => `${n} ${added[n]}`).join(', ') || '(부품 없음 — 합치기/옮기기 단계)'
@@ -127,7 +130,7 @@
     }
     const poseAt = (pt, step) => { // 그 단계에서 실제로 놓인 자리(옆자리·옮기기 반영)
       if (pt.side && step < pt.side.until) return { p: pt.side.p, r: pt.side.r }
-      if (pt.move && step >= pt.move.at) return { p: [pt.p[0] + pt.move.by[0], pt.p[1] + pt.move.by[1], pt.p[2] + pt.move.by[2]], r: pt.r }
+      if (pt.move && step >= pt.move.at) return { p: pt.move.p || [pt.p[0] + pt.move.by[0], pt.p[1] + pt.move.by[1], pt.p[2] + pt.move.by[2]], r: pt.move.r || pt.r }
       return { p: pt.p, r: pt.r }
     }
     const flipPose = (po, end) => { const f = def.flip; const rg = (f.ranges || []).find((r) => end >= r[0] && end <= r[1]); const fy = rg && rg[2] != null ? rg[2] : f.y; const R = M().matFromEuler(po.r || [0, 0, 0]); const R2 = [R[0], [-R[1][0], -R[1][1], -R[1][2]], [-R[2][0], -R[2][1], -R[2][2]]]
@@ -137,7 +140,7 @@
     segEnds.forEach((sg) => {
       let lo = 1e9, loPart = '', hi = -1e9
       all.filter((a) => a.step <= sg.end).forEach((a) => {
-        const d = dims[a.n]; if (!d) return
+        const d = dims[a.n]; if (!d || /도 프레임$/.test(a.n)) return // 꺾인 프레임은 상자 근사가 실제보다 커서 바닥 검사에서 뺀다
         let po = poseAt(a.ref, sg.end)
         if (sg.flip && !a.ref.noflip) po = flipPose(po, sg.end)
         const xf = def.xform && sg.end >= def.xform.at ? def.xform : null

@@ -86,8 +86,9 @@
         if (!type) { if (!missing.includes(pt.n)) missing.push(pt.n); return; }
         const useSide = pt.side && upTo < pt.side.until;
         const moved = pt.move && upTo >= pt.move.at; // move: 옆자리에서 다 만든 뒤 다른 자리로 한 번 더 옮겨 붙는 단계(예: 풍차 상자를 몸체에 끼우기)
-        const base = useSide ? pt.side.p : (moved ? add(pt.p, pt.move.by, 1) : pt.p);
-        const rot = useSide ? pt.side.r : pt.r;
+        // move: { at, by } 평행 이동 또는 { at, p, r } 새 자세로 옮기기(회전 포함 — 예: 3륜바이크 7단계 샌드위치를 뒤집어 올림)
+        const base = useSide ? pt.side.p : (moved ? (pt.move.p || add(pt.p, pt.move.by || [0, 0, 0], 1)) : pt.p);
+        const rot = useSide ? pt.side.r : (moved && pt.move.r ? pt.move.r : pt.r);
         // 이번 단계에 새로 놓이거나(또는 옆자리에서 제자리로 들어가는) 부품 — 완성 단계에선 없다
         const isNew = target <= n && (si + 1 === target || (pt.side && pt.side.until === target) || (pt.move && pt.move.at === target));
         let pos = base;
@@ -108,7 +109,7 @@
           pos = add(base, dirH, hv); // 끼우기 직전: 제자리에서 끼우는 방향으로 띄운다
           const targets = moving ? (pt.move.marks || []) : settling ? (pt.settleMarks || []) : (pt.marks && pt.marks.length ? pt.marks : [base]);
           // 화살표는 띄워 놓은 부품의 돌기 끝(구멍에 들어갈 깊이만큼 아래)에서 시작해 구멍 위 원으로 들어간다
-          if (pt.recv) {
+          if (pt.recv && !pt.pegTarget) { // pegTarget: 구멍 받는 부품이 움직여도 교재처럼 화살표가 고정된 돌기 끝을 향하게 그린다(marks = 고정된 돌기 끝)
             // 구멍을 받는 부품(프레임 등)이 움직일 때: 원은 떠 있는 부품의 구멍에, 화살표는 고정된 돌기 끝에서 그 구멍 쪽으로
             // faceMarks: 돌기 끝이 판 바깥 면과 같은 높이가 아닐 때, 제자리에 끼운 뒤 판 바깥 면의 구멍 자리
             const faces = !settling && pt.faceMarks ? pt.faceMarks : targets;

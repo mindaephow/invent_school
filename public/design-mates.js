@@ -77,11 +77,12 @@
     const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
   const issues = []
   // move: 옆자리에서 다 만든 뒤 한 번 더 옮겨 붙는 부품(풍차 상자) — 그 단계 이후엔 옮긴 자리 기준으로 검사한다
-  const posAfterMove = (pt, stepNo) => (pt.move && stepNo >= pt.move.at ? pt.p.map((v, k) => v + pt.move.by[k]) : pt.p)
+  const posAfterMove = (pt, stepNo) => (pt.move && stepNo >= pt.move.at ? (pt.move.p || pt.p.map((v, k) => v + (pt.move.by || [0, 0, 0])[k])) : pt.p)
+  const rotAfterMove = (pt, stepNo) => (pt.move && pt.move.r && stepNo >= pt.move.at ? pt.move.r : (pt.r || [0, 0, 0]))
   const worldOf = (pt) => (conn[pt.n] ? M.worldConnectors({ p: pt.p, r: pt.r || [0, 0, 0] }, conn[pt.n]) : null)
   list.forEach((st, si) => {
     const upto = []
-    list.slice(0, si + 1).forEach((s, k) => (s.parts || []).forEach((pt, i) => upto.push({ key: `${k + 1}.${i} ${pt.n}`, n: pt.n, p: posAfterMove(pt, si + 1), r: pt.r || [0, 0, 0], ref: pt, step: k + 1 })))
+    list.slice(0, si + 1).forEach((s, k) => (s.parts || []).forEach((pt, i) => upto.push({ key: `${k + 1}.${i} ${pt.n}`, n: pt.n, p: posAfterMove(pt, si + 1), r: rotAfterMove(pt, si + 1), ref: pt, step: k + 1 })))
     const res = M.check(upto, conn)
     const worlds = upto.map((u) => ({ u, w: worldOf(u) }))
     ;(st.parts || []).forEach((pt, i) => {
@@ -90,10 +91,10 @@
       // 안내 위치: 고정된 쪽의 실제 구멍 축/돌기 끝과 맞는지(옆자리 조립품·분리 표시는 제외)
       if (pt.dir && pt.marks && !pt.side && !pt.explode) {
         pt.marks.forEach((m) => {
-          const ok = worlds.some(({ u, w }) => w && u.ref !== pt && (pt.recv
+          const ok = worlds.some(({ u, w }) => w && u.ref !== pt && ((pt.recv || pt.pegTarget)
             ? w.pegs.some((pg) => { const tip = [pg.pos[0] + pg.dir[0] * pg.len / 2, pg.pos[1] + pg.dir[1] * pg.len / 2, pg.pos[2] + pg.dir[2] * pg.len / 2]; if (Math.hypot(...sub(tip, m)) <= 3) return true; const base = [pg.pos[0] - pg.dir[0] * pg.len / 2, pg.pos[1] - pg.dir[1] * pg.len / 2, pg.pos[2] - pg.dir[2] * pg.len / 2]; return pg.len >= 30 && Math.hypot(...sub(base, m)) <= 3 }) // 축처럼 길게 꽂히는 돌기는 양 끝 어느 쪽에서도 끼울 수 있다(부시는 아래 끝에서)
             : w.holes.some((h) => { const rel = sub(m, h.pos); const along = dot(rel, h.dir); return Math.hypot(...sub(rel, h.dir.map((x) => x * along))) <= 1.8 && Math.abs(along) <= h.len / 2 + 3 })))
-          if (!ok) issues.push(`${si + 1}단계 ${pt.n}: 안내 위치 [${m}]에 ${pt.recv ? '고정된 돌기 끝' : '받는 구멍'}이 없음(위치 어긋남)`)
+          if (!ok) issues.push(`${si + 1}단계 ${pt.n}: 안내 위치 [${m}]에 ${(pt.recv || pt.pegTarget) ? '고정된 돌기 끝' : '받는 구멍'}이 없음(위치 어긋남)`)
         })
       }
       // 방향이 정해진 부품: T축 접시 머리(모델 −y)는 위로
@@ -111,7 +112,7 @@
     if (!(st.parts || []).length && !st.noPart && !list.some((s) => (s.parts || []).some((pt) => (pt.side && pt.side.until === si + 1) || (pt.move && pt.move.at === si + 1)))) issues.push(`${si + 1}단계: 부품이 하나도 없음`)
   })
   // 마지막 모양: 리벳은 양 끝 돌기가 모두 구멍에 들어가야 한다
-  const all = []; list.forEach((s, k) => (s.parts || []).forEach((pt, i) => all.push({ key: `${k + 1}.${i} ${pt.n}`, n: pt.n, p: posAfterMove(pt, 1e9), r: pt.r || [0, 0, 0] })))
+  const all = []; list.forEach((s, k) => (s.parts || []).forEach((pt, i) => all.push({ key: `${k + 1}.${i} ${pt.n}`, n: pt.n, p: posAfterMove(pt, 1e9), r: rotAfterMove(pt, 1e9) })))
   const fin = M.check(all, conn)
   all.filter((a) => a.n === '리벳').forEach((a) => {
     const pegs = new Set(fin.mated.filter((m) => m.part === a.key).map((m) => m.peg))
