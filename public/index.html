@@ -505,7 +505,7 @@
           <button type="button" class="ghost" id="quickXlsxExport">등록된 부품 다운로드</button>
           <span class="item-sub" id="quickXlsxMsg"></span>
         </div>
-        <p class="note" style="margin:0;">"샘플 다운로드"로 받은 엑셀에는 부품 이름이 모두 적혀 있어요. <b>필요한 부품의 수량만</b> 채우고, 차시를 골라 올리면 수량이 적힌 부품만 그 차시의 필요 부품으로 배정돼요(수량이 빈 줄은 무시). 그 차시에 이미 있는 부품은 엑셀 수량으로 바뀌어요.</p>
+        <p class="note" style="margin:0;">"샘플 다운로드"로 받은 엑셀에는 부품 이름이 모두 적혀 있어요. <b>필요한 부품의 수량만</b> 채우고, 차시를 골라 올리면 수량이 적힌 부품만 그 차시의 필요 부품으로 배정돼요(수량이 빈 줄은 무시). 그 차시에 이미 있는 부품은 엑셀 수량으로 바뀌어요. "등록된 부품 다운로드"는 고른 차시의 부품만, "권 전체"를 고르면 모든 차시의 부품을 받아요.</p>
         <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
           <b style="font-size:12px; flex:none;">⚡ 파일 빠르게 등록</b>
           <select id="quickUploadChapterSelect" style="max-width:200px;"></select>
@@ -2109,8 +2109,10 @@
     if ([...partChapterSel.options].some((o) => o.value === curPartChapter)) partChapterSel.value = curPartChapter;
     const xlsxChapterSel = document.getElementById('quickXlsxChapter');
     const curXlsxChapter = xlsxChapterSel.value;
-    xlsxChapterSel.innerHTML = chapterOptionsHtml;
+    // "권 전체"는 다운로드 전용(차시를 고르면 그 차시 부품만, 권 전체를 고르면 모든 차시). 올리기는 차시 하나를 골라야 한다.
+    xlsxChapterSel.innerHTML = '<option value="__all__">📘 ' + (tb.volume != null ? tb.volume + '권 ' : '') + '전체(다운로드용)</option>' + chapterOptionsHtml;
     if ([...xlsxChapterSel.options].some((o) => o.value === curXlsxChapter)) xlsxChapterSel.value = curXlsxChapter;
+    else if (tb.chapters.length) xlsxChapterSel.value = tb.chapters[0].id; // 처음엔 첫 차시를 골라 둔다
     const uploadChapterSel = document.getElementById('quickUploadChapterSelect');
     const curUploadChapter = uploadChapterSel.value;
     uploadChapterSel.innerHTML = '<option value="__whole__">📘 교재 전체(권 단위)</option>' + chapterOptionsHtml;
@@ -2258,7 +2260,10 @@
     if (!tb) return;
     if (typeof XLSX === 'undefined') { msgEl.textContent = '엑셀 기능을 불러오지 못했어요. 새로고침해 주세요.'; return; }
     const rows = [['부품명', '수량', '로봇이름', '단계', '회차']];
+    const pickedId = document.getElementById('quickXlsxChapter').value; // 차시를 고르면 그 차시 부품만, 권 전체를 고르면 모든 차시
+    const only = pickedId && pickedId !== '__all__' ? pickedId : null;
     tb.chapters.forEach((c, i) => {
+      if (only && c.id !== only) return;
       (c.parts || []).forEach((cp) => {
         const part = allParts.find((p) => p.id === cp.partId);
         rows.push([part ? part.name : '(삭제된 부품)', cp.qty, c.title || '', tb.name, i + '차시']); // 로봇이름 = 차시 제목(예: 토끼), 단계 = 교재 이름(예: 큐보1단계)
@@ -2269,7 +2274,7 @@
     ws['!cols'] = [{ wch: 22 }, { wch: 8 }, { wch: 18 }, { wch: 14 }, { wch: 8 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, '필요 부품');
-    XLSX.writeFile(wb, tb.name + '_필요부품.xlsx');
+    XLSX.writeFile(wb, tb.name + (only ? '_' + tb.chapters.findIndex((c) => c.id === only) + '차시' : '') + '_필요부품.xlsx');
     msgEl.textContent = '✅ ' + (rows.length - 1) + '줄을 내려받았어요.';
     clearTimeout(msgEl._t);
     msgEl._t = setTimeout(() => { msgEl.textContent = ''; }, 4000);
@@ -2279,7 +2284,7 @@
     if (!tb) return;
     const chapterId = document.getElementById('quickXlsxChapter').value;
     const msgEl = document.getElementById('quickXlsxMsg');
-    if (!chapterId) { msgEl.textContent = '차시를 먼저 골라주세요.'; return; }
+    if (!chapterId || chapterId === '__all__') { msgEl.textContent = '올릴 차시를 먼저 골라주세요(권 전체는 다운로드용이에요).'; return; }
     if (typeof XLSX === 'undefined') { msgEl.textContent = '엑셀 기능을 불러오지 못했어요. 새로고침해 주세요.'; return; }
     const input = document.createElement('input');
     input.type = 'file'; input.accept = '.xlsx,.xls,.csv';
