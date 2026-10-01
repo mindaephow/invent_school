@@ -4357,7 +4357,7 @@
   let markMoveOn = false, markDrag = null;
   const markMoves = []; // 옮긴 표시(주황) 목록
   function clearMarkMoves(){ markMoves.splice(0).forEach(m => { if (m.parent) m.parent.remove(m); if (m.userData.label && m.userData.label.parentNode) m.userData.label.remove(); m.geometry.dispose(); m.material.dispose(); }); }
-  function ringDots(){ const out = []; if (assemblyGuideGroup) assemblyGuideGroup.children.forEach(c => (c.userData.attached || []).forEach(m => { if (m.userData.ring && m.visible) out.push(m); })); return out; }
+  function ringDots(){ const out = []; if (!assemblyGuideGroup) return out; const add = m => { if (m.userData.ring && m.visible && !out.includes(m)) out.push(m); }; assemblyGuideGroup.children.forEach(c => { add(c); (c.userData.attached || []).forEach(add); }); return out; } // 판에 직접 칠한 구멍 표시(g 안)와 움직이는 부품에 붙은 표시(attached) 둘 다
   canvas.addEventListener('pointerdown', (e) => {
     if (!markMoveOn || e.button !== 0 || e.ctrlKey || e.shiftKey) return;
     raycaster.setFromCamera(ndcFromEvent(e), camera);
