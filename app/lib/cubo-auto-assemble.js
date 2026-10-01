@@ -228,7 +228,7 @@ export function autoCamera(ctx, info, prev) {
       let vis = 1
       if (marks.length && boxes.length) {
         let seen = 0
-        marks.forEach((m) => { const o = dir ? add(m, mul(dir, 2)) : m; if (!boxes.some((bx) => rayHitsObb(o, toCam, bx, 0.5))) seen++ })
+        marks.forEach((m) => { const o = dir ? add(m, mul(dir, 6)) : m; if (!boxes.some((bx) => rayHitsObb(o, toCam, bx, 0.5))) seen++ })
         vis = seen / marks.length
       }
       let dirTerm = 0.5
