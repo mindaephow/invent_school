@@ -231,7 +231,7 @@
     b.camera(def.camera);
     $('asmBar').hidden = false;
     { const adm = !!(window.__ivsIsAdmin && window.__ivsIsAdmin()); // 관리자만
-      ['asmMarkMove', 'asmMarkMove2', 'asmMarkShot'].forEach((id) => { if ($(id)) $(id).hidden = !adm; }); }
+      ['asmMarkMove2', 'asmMarkShot'].forEach((id) => { if ($(id)) $(id).hidden = !adm; }); }
     $('asmStageBar').hidden = false;
     $('historyPanel').hidden = true;
     b.axes(true);
@@ -247,7 +247,7 @@
     if (!viewing) return;
     viewing = false;
     $('asmBar').hidden = true;
-    const mm = $('asmMarkMove'); if (mm && mm.dataset.on === '1') { mm.dataset.on = '0'; mm.className = 'ghost'; mm.textContent = '📍 위치 표시 옮기기'; const m2 = $('asmMarkMove2'); if (m2) { m2.textContent = '📍 표시 옮기기'; m2.style.background = m2.style.color = ''; } if (b) b.markMove(false); } // 닫을 땐 사진 없이 끈다
+    const mm = $('asmMarkMove2'); if (mm && mm.dataset.on === '1') { mm.dataset.on = '0'; mm.textContent = '📍 표시 옮기기'; mm.style.background = mm.style.color = ''; if (b) b.markMove(false); } // 닫을 땐 사진 없이 끈다
     if ($('asmMarkMove2')) $('asmMarkMove2').hidden = $('asmMarkShot').hidden = true;
     $('asmStageBar').hidden = true;
     $('historyPanel').hidden = false;
@@ -260,8 +260,8 @@
   document.addEventListener('DOMContentLoaded', () => {
     if (!$('asmClose')) return;
     $('asmClose').addEventListener('click', close);
-    const mm = $('asmMarkMove'), mm2 = $('asmMarkMove2');
-    const toggleMark = () => { const on = mm.dataset.on !== '1'; mm.dataset.on = on ? '1' : '0'; mm.className = on ? 'primary' : 'ghost'; if (mm2) { mm2.style.background = on ? '#f97316' : ''; mm2.style.color = on ? '#fff' : ''; } mm.textContent = on ? '📍 위치 표시 옮기는 중 (다시 누르면 끝)' : '📍 위치 표시 옮기기'; if (mm2) mm2.textContent = on ? '📍 끝내기' : '📍 표시 옮기기'; bridge().markMove(on); };
+    const mm2 = $('asmMarkMove2');
+    const toggleMark = () => { const on = mm2.dataset.on !== '1'; mm2.dataset.on = on ? '1' : '0'; mm2.style.background = on ? '#f97316' : ''; mm2.style.color = on ? '#fff' : ''; mm2.textContent = on ? '📍 끝내기' : '📍 표시 옮기기'; bridge().markMove(on); };
     // 📸 수정스샷: 화면+번호+이동 목록을 한 장의 그림으로 만들어 클립보드에 복사하고 PNG로 내려받는다(번호 = 옮긴 순서)
     // 안내는 화면 아래쪽 글줄이라 눈에 안 띄므로, 스케치북 한가운데 위에 잠깐 큼직하게도 띄운다
     const toast = (msg, bad) => {
@@ -284,7 +284,7 @@
       toast(copied ? '📸 사진을 복사하고 내려받았어요 — Ctrl+V로 붙여넣어 보내 주세요' : '📸 사진을 내려받았어요(복사는 안 됐어요) — 파일을 보내 주세요');
       b.status(copied ? '사진을 복사하고 내려받았어요. 붙여넣기(Ctrl+V)로 보내 주세요.' : '사진을 내려받았어요(복사는 안 됐어요). 파일을 보내 주세요.', 'success');
     };
-    if (mm) mm.addEventListener('click', toggleMark);
+
     if (mm2) mm2.addEventListener('click', toggleMark);
     if ($('asmMarkShot')) $('asmMarkShot').addEventListener('click', shot);
     $('asmFirst').addEventListener('click', stopPlayClick(() => go(0)));
