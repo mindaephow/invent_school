@@ -8,9 +8,18 @@ import { bracketTriangles } from '../app/lib/cubo-bracket-mesh.js'
 import { trianglesToStl } from '../app/lib/cubo-mesh-kit.js'
 import { arcFrameTriangles } from '../app/lib/cubo-arc-frame-mesh.js'
 import { servoHornTriangles, roundHornTriangles } from '../app/lib/cubo-horn-mesh.js'
+import { boltTriangles, nutTriangles, servoBoltTriangles } from '../app/lib/cubo-bolt-mesh.js'
 
 const [kind, countArg, out] = process.argv.slice(2)
 const count = Number(countArg)
+if (kind === 'bolt' || kind === 'nut' || kind === 'servobolt') { // 볼트(8·12)·너트·서보고정볼트: node scripts/make-part-stl.mjs bolt 8 <파일> / nut 1 <파일> / servobolt 1 <파일>
+  if (!out || (kind === 'bolt' && count !== 8 && count !== 12)) { console.error('사용: node scripts/make-part-stl.mjs <bolt 8|12 | nut 1 | servobolt 1> <저장할 파일.stl>'); process.exit(1) }
+  const t = kind === 'bolt' ? boltTriangles(count) : kind === 'nut' ? nutTriangles() : servoBoltTriangles()
+  const s = trianglesToStl(t)
+  fs.writeFileSync(out, s)
+  console.log(`${kind} ${count}: 삼각형 ${t.length / 9}개, ${(s.length / 1024).toFixed(0)}KB → ${out}`)
+  process.exit(0)
+}
 if (kind === 'servohorn' || kind === 'roundhorn') { // 서보혼(막대형)·둥근서보혼: node scripts/make-part-stl.mjs servohorn 1 <저장할 파일.stl>
   if (!out) { console.error(`사용: node scripts/make-part-stl.mjs ${kind} 1 <저장할 파일.stl>`); process.exit(1) }
   const t = kind === 'servohorn' ? servoHornTriangles() : roundHornTriangles()
