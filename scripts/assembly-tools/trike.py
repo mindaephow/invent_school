@@ -126,7 +126,7 @@ for pt in (brL, brR, rvL, rvR):
 BUILD2 = np.array([150.0, 21.0, -260.0])         # 따로 만드는 자리(20~22)
 colBlk = old1("3단블록", 1, 0)                     # 기둥 위쪽 3단블록(x=+10), 반대쪽은 인덱스 1(x=−10)
 PIV = np.array([0.0, 83.64, -223.439]) + 10 * np.array([0.0, 0.7071, -0.7071])   # 기둥 위쪽 3단블록 구멍 h1(위쪽 끝 쪽, 사용자가 표시한 1번 홀) — h2 에서 기둥 방향으로 10mm 위
-K_PIV = 12
+K_PIV = 13   # 사용자가 표시하기로 짚은 1번 구멍(처음 추정한 12번째 옆, 위쪽 끝 쪽 이웃 구멍)
 SIN = (PIV[1] - 21.0) / (10 * (K_PIV - 1))
 COS = float(np.sqrt(1 - SIN ** 2))
 Ua = np.array([0, SIN, COS]); Wa = np.array([0, COS, -SIN]); Za = np.array([-1.0, 0, 0])
@@ -159,19 +159,20 @@ RB1 = AfR(np.column_stack([(0, 0, 1), (0, -1, 0), (1, 0, 0)])); RB2m = AfR(np.co
 U1 = s21.attach("2단블록", RB1, {"p2": (A2, Af(hk(14), 0, 2.5)), "p3": (L1, "h3"), "p4": (L1, "h2")}, hover=22)
 U2 = s21.attach("2단블록", RB2m, {"p2": (A1, Af(hk(14), 0, -2.5)), "p3": (L2, "h3"), "p4": (L2, "h2")}, hover=22)
 s22 = step("[교재 22] 유닛 2개의 2단블록 끝돌기를 팔의 14번째 구멍에 양쪽에서 끼워요.")
-s23 = step("[교재 23] 팔을 기둥 위쪽 두 3단블록 사이에 끼우고(팔 12번째 구멍을 블록 구멍에 맞춰요), 그 사이로 축을 끼운 뒤 양쪽 끝을 부시 2개로 고정해요.")
+s23 = step("[교재 23 ①] 운전대(앞바퀴 팔)를 기둥 위쪽 두 3단블록 사이에 끼워요: 팔 13번째 구멍을 3단블록 구멍과 맞춰요.")
+s23b = step("[교재 23 ②] 3단블록 구멍과 팔 구멍을 지나게 축을 끼우고, 양쪽 끝을 부시 2개로 고정해요.")
 # 23 ── 축(65)을 두 블록 구멍 h2 와 팔 구멍을 지나 끼우고 부시 2개
 blkL, blkR = old1("3단블록", 1, 1), old1("3단블록", 1, 0)           # x=−10, x=+10
 Rax = np.column_stack([(0, 0, 1), (1, 0, 0), (0, 1, 0)])
-axle23 = s23.place("축", Rax, PIV.copy(), dir=[-1, 0, 0], hover=40, pegDepth=40, marks=[rnd(PIV + np.array([-15.0, 0, 0]))])
-bu23a = s23.recv("부시", Rax, [(axle23, "p1")], p=PIV + np.array([17.75, 0, 0]), hover=22)
-bu23b = s23.recv("부시", Rax, [(axle23, "p1")], p=PIV + np.array([-17.75, 0, 0]), hover=22, dir=[-1, 0, 0])
+axle23 = s23b.place("축", Rax, PIV.copy(), dir=[-1, 0, 0], hover=40, pegDepth=40, marks=[rnd(PIV + np.array([-15.0, 0, 0]))])
+bu23a = s23b.recv("부시", Rax, [(axle23, "p1")], p=PIV + np.array([17.75, 0, 0]), hover=22)
+bu23b = s23b.recv("부시", Rax, [(axle23, "p1")], p=PIV + np.array([-17.75, 0, 0]), hover=22, dir=[-1, 0, 0])
 bu23b.extra["marks"] = [rnd(PIV + np.array([-32.5, 0, 0]))]
 # 24·25 ── 팔에 건 뒤(최종 자세)에서 손잡이·바퀴
 s24 = step("[교재 24] L 프레임 세로 다리 구멍 4곳에 리벳을 꽂고, 37프레임(손잡이)을 그 위에 얹어요.")
 Rrv = AfR(np.column_stack([(0, 0, 1), (1, 0, 0), (0, 1, 0)]))     # 리벳 축 = 팔 길이 방향(u)
 rv24 = [s24.attach("리벳", Rrv, {"p1": (L, Af(70, y, z))}, rivet=True) for L, z in ((L1, 30), (L2, -30)) for y in (-10, -20)]
-handle = s24.recv("37프레임", Rrv, [(r, "p2") for r in rv24], p=Af(72.5, -10, 0), hover=22)
+handle = s24.recv("37프레임", Rrv, [(r, "p2") for r in rv24], p=Af(72.5, -20, 0), hover=22)   # 판 구멍 y −30·−20·−10 중 리벳이 −10·−20 — 팔 끝(y ±5)을 피해 아래로
 s25 = step("[교재 25] 팔 끝 구멍에 축을 끼우고, 작은바퀴 2개를 양쪽 끝에 끼운 뒤 바깥쪽을 부시로 고정해요.")
 axle = s25.place("축", R_A, Af(hk(1), 0, 0), dir=(-Za).tolist(), hover=40, pegDepth=40, marks=[rnd(Af(hk(1), 0, -5))])
 RW = R_A
@@ -214,7 +215,7 @@ board.extra["marks"] = [[0, 40, -100], [0, 40, -80]]
 s29 = step("[교재 29] 메인보드 왼쪽·오른쪽 단자에 DC모터 선을 연결하면 3륜바이크 완성!", noPart=True)
 
 CAMS = {11: (-0.6, 0.9), 12: (0.5, 0.85), 13: (0.5, 0.85), 14: (0.5, 0.85), 15: (0.5, 0.85), 16: (0.5, 0.85), 17: (0.6, 0.85), 18: (0.6, 0.85),
-        19: (-0.6, 0.95), 20: (0.5, 0.9), 21: (0.5, 0.9), 22: (0.5, 0.9), 23: (-0.6, 0.95), 24: (0.5, 0.9), 25: (0.5, 0.9), 26: (0.8, 0.95), 27: (-0.8, 0.95), 28: (0.4, 1.05), 29: (0.4, 1.05)}
+        19: (-0.6, 0.95), 20: (0.5, 0.9), 21: (0.5, 0.9), 22: (0.5, 0.9), 23: (-0.6, 0.95), 24: (-0.6, 0.95), 25: (0.5, 0.9), 26: (0.5, 0.9), 27: (0.8, 0.95), 28: (-0.8, 0.95), 29: (0.4, 1.05), 30: (0.4, 1.05)}
 for k, (th, ph) in CAMS.items():
     A.steps[k - 11].cam = (th, ph); A.steps[k - 11].camSrc = "guess"
 
@@ -265,7 +266,7 @@ if __name__ == "__main__":
     # design-assemblies.js 항목으로 내보내기(trike_entry.js) — python emit.py trike_entry.js cubo-1-trike
     def jv(v): return json.dumps(v, ensure_ascii=False, separators=(", ", ": "))
     L = ["  {", f"      id: {jv(EX['id'])},", "      category: '큐보',", "      volume: 1,", f"      chapter: {jv(EX['chapter'])},",
-         f"      book: {jv('교재 46~51쪽 · 3륜바이크 (1~29단계)')},",
+         f"      book: {jv('교재 46~51쪽 · 3륜바이크 (1~30단계, 교재 23 은 ①②로 나눔)')},",
          f"      listNote: {jv('리모컨은 3D 모델이 없어 조립도에서 제외했다')},",
          f"      camera: {jv(EX['camera'])},", "      steps: ["]
     for st in steps:
