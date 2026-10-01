@@ -230,7 +230,7 @@
     b.setViewing(true);
     b.camera(def.camera);
     $('asmBar').hidden = false;
-    if ($('asmMarkMove2')) $('asmMarkMove2').hidden = false;
+    if ($('asmMarkMove2')) $('asmMarkMove2').hidden = $('asmMarkShot').hidden = false;
     $('asmStageBar').hidden = false;
     $('historyPanel').hidden = true;
     b.axes(true);
@@ -247,7 +247,7 @@
     viewing = false;
     $('asmBar').hidden = true;
     const mm = $('asmMarkMove'); if (mm && mm.dataset.on === '1') { mm.dataset.on = '0'; mm.className = 'ghost'; mm.textContent = '📍 위치 표시 옮기기'; const m2 = $('asmMarkMove2'); if (m2) { m2.textContent = '📍 표시 옮기기'; m2.style.background = m2.style.color = ''; } if (b) b.markMove(false); } // 닫을 땐 사진 없이 끈다
-    if ($('asmMarkMove2')) $('asmMarkMove2').hidden = true;
+    if ($('asmMarkMove2')) $('asmMarkMove2').hidden = $('asmMarkShot').hidden = true;
     $('asmStageBar').hidden = true;
     $('historyPanel').hidden = false;
     if (b) b.axes(false);
@@ -260,14 +260,13 @@
     if (!$('asmClose')) return;
     $('asmClose').addEventListener('click', close);
     const mm = $('asmMarkMove'), mm2 = $('asmMarkMove2');
-    const toggleMark = () => { const on = mm.dataset.on !== '1'; mm.dataset.on = on ? '1' : '0'; mm.className = on ? 'primary' : 'ghost'; if (mm2) { mm2.style.background = on ? '#f97316' : ''; mm2.style.color = on ? '#fff' : ''; } mm.textContent = on ? '📍 위치 표시 옮기는 중 (다시 누르면 끝)' : '📍 위치 표시 옮기기'; if (mm2) mm2.textContent = on ? '📍 끝내기' : '📍 표시 옮기기'; if (!on) finishMark(); else bridge().markMove(true); };
-    // 끝내기: 화면+번호+이동 목록을 한 장의 그림으로 만들어 클립보드에 복사하고 PNG로 내려받는다(번호 = 옮긴 순서)
-    const finishMark = async () => {
+    const toggleMark = () => { const on = mm.dataset.on !== '1'; mm.dataset.on = on ? '1' : '0'; mm.className = on ? 'primary' : 'ghost'; if (mm2) { mm2.style.background = on ? '#f97316' : ''; mm2.style.color = on ? '#fff' : ''; } mm.textContent = on ? '📍 위치 표시 옮기는 중 (다시 누르면 끝)' : '📍 위치 표시 옮기기'; if (mm2) mm2.textContent = on ? '📍 끝내기' : '📍 표시 옮기기'; bridge().markMove(on); };
+    // 📸 스샷: 화면+번호+이동 목록을 한 장의 그림으로 만들어 클립보드에 복사하고 PNG로 내려받는다(번호 = 옮긴 순서)
+    const shot = async () => {
       const b = bridge();
       const header = (def ? def.chapter : '') + ' 조립도 · ' + (step === last() ? '완성' : step + '단계') + ' · 표시 옮기기';
       let blob = null;
       try { blob = await b.markCapture(header); } catch (e) { /* 캡처 실패해도 끝내기는 계속 */ }
-      b.markMove(false);
       if (!blob) { b.status('옮긴 표시가 없어서 사진은 만들지 않았어요.', 'warn'); return; }
       let copied = false;
       try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); copied = true; } catch (e) { /* 복사 권한이 없으면 다운로드만 */ }
@@ -278,6 +277,7 @@
     };
     if (mm) mm.addEventListener('click', toggleMark);
     if (mm2) mm2.addEventListener('click', toggleMark);
+    if ($('asmMarkShot')) $('asmMarkShot').addEventListener('click', shot);
     $('asmFirst').addEventListener('click', stopPlayClick(() => go(0)));
     $('asmPrev').addEventListener('click', stopPlayClick(() => go(step - 1)));
     $('asmNext').addEventListener('click', stopPlayClick(() => go(step + 1)));
