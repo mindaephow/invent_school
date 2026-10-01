@@ -153,9 +153,11 @@ function parseSpec(body) {
         // 있었다('import' 타입이 빠졌던 것과 같은 종류의 버그). 유효한 값일 때만 포함한다.
         const colorHex = typeof s.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(s.color) ? s.color : null
         const brightnessNum = Number(s.brightness)
+        // paint: true 는 "색칠 조각" — 모양을 합치지 않고 부품 위에 자기 색으로 얹는다(예: DC모터의 축 결합 자리 빨강). 화이트리스트에 없으면 서버가 걸러 버린다.
         const colorFields = Object.assign(
           { brightness: Number.isFinite(brightnessNum) && brightnessNum >= 100 && brightnessNum <= 200 ? brightnessNum : 100 },
-          colorHex ? { color: colorHex } : {}
+          colorHex ? { color: colorHex } : {},
+          s.paint === true ? { paint: true } : {}
         )
         if (BOX_LIKE.includes(s.type)) {
           const w = Number(s.w), h = Number(s.h), d = Number(s.d)

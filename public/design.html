@@ -1445,7 +1445,7 @@
       try {
         if (!accessToken || !cached || !cached.thumbnail3d) return null; // 3D 모델이 있는 부품만(저장 시 썸네일도 같이 만들어진다)
         // 이 컴퓨터에 저장해 둔 3D 모델(만들어 둔 점·면 데이터)이 있고 썸네일 지문이 같으면 받지도 만들지도 않고 바로 쓴다
-        const C = window.IVS_CACHE, ver = C ? C.hash(cached.thumbnail3d) : null;
+        const C = window.IVS_CACHE, ver = C ? C.hash(cached.thumbnail3d) + '|paint1' : null;
         if (C) { const hit = await C.get('robot-model:' + partId); if (hit && hit.ver === ver && hit.data && hit.data.position) { perfMark('modelFromCache'); return hit.data; } }
         for (let i = 0; i < 40 && !viewerReady(); i++) await new Promise(r => setTimeout(r, 250)); // 3D 모듈이 아직 로딩 중이면 잠깐 기다린다
         if (!viewerReady()) return null;
@@ -1512,7 +1512,7 @@
         const c = robotPartsCache.find(x => x.id === id);
         let hit = null;
         try { hit = C ? await C.get('robot-model:' + id) : null; } catch (e) {}
-        if (!(hit && C && hit.ver === C.hash(c.thumbnail3d) && hit.data && hit.data.position)) need.push(id);
+        if (!(hit && C && hit.ver === C.hash(c.thumbnail3d) + '|paint1' && hit.data && hit.data.position)) need.push(id);
       }
       let done = 0;
       const total = need.length;
@@ -1541,9 +1541,20 @@
       g.translate(-c[0], -c[1], -c[2]); // 모델 한가운데가 부품 위치(다른 부품과 같은 기준)에 오게 한다
       robotGeomCache.set(data, g);
     }
+    const paintGeoms = (data.paints || []).map((pt) => { // 색칠 조각(부품의 일부만 다른 색): 본체와 같이 가운데 맞추고 자기 색으로
+      const pg = new THREE.BufferGeometry();
+      pg.setAttribute('position', new THREE.BufferAttribute(pt.position.slice(), 3));
+      pg.setAttribute('normal', new THREE.BufferAttribute(pt.normal.slice(), 3));
+      if (pt.index) pg.setIndex(new THREE.BufferAttribute(pt.index.slice(), 1));
+      const c0 = [0, 1, 2].map(i => (data.bbox.min[i] + data.bbox.max[i]) / 2);
+      pg.translate(-c0[0], -c0[1], -c0[2]);
+      return { g: pg, color: pt.color };
+    });
     // 등록된 색 그대로 보이게: 장면 조명(주변광 0.7 + 방향광 0.7)이 색을 실제보다 밝게 만들어서(연한 회색이 거의 흰색이 됨)
     // 그만큼 낮춰서 칠한다 — 팔레트 썸네일(조명 없이 등록된 색 그대로)과 같은 색으로 보인다.
-    return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: new THREE.Color(data.color).multiplyScalar(0.72) }));
+    const mesh = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: new THREE.Color(data.color).multiplyScalar(0.72) }));
+    paintGeoms.forEach((pt) => mesh.add(new THREE.Mesh(pt.g, new THREE.MeshStandardMaterial({ color: new THREE.Color(pt.color).multiplyScalar(0.72) })))); // 색칠 조각도 본체와 같은 밝기 보정
+    return mesh;
   }
   // ----- 연결점 보기: 부품 DB(data.connectors)의 돌기·구멍을 초록색으로 표시 — 돌기는 끝에 초록 원판, 구멍은 입구에 초록 고리 -----
   // 좌표는 3D 모델 bbox 가운데 기준이라 부품 메시(가운데 기준)의 자식으로 붙이면 부품과 함께 움직인다.

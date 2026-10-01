@@ -302,12 +302,23 @@ function computeMergedBrush(list) {
   }
   return result;
 }
+// 색칠 조각(shape.paint === true): 모양을 합치는 계산(CSG)에 넣지 않고, 부품 위에 자기 색으로 얹는다(예: DC모터의 축 결합 자리 빨강, 케이블 쪽 흰색).
+// 부품 하나는 한 가지 색으로만 그려지는데, 일부만 다른 색으로 보이게 하는 방법이다.
+function paintMatrix(s) {
+  return new THREE.Matrix4().compose(new THREE.Vector3(s.x || 0, s.y || 0, s.z || 0), new THREE.Quaternion().setFromEuler(new THREE.Euler(s.rx || 0, s.ry || 0, s.rz || 0)), new THREE.Vector3(1, 1, 1));
+}
 function meshFromShapes(list) {
-  const result = computeMergedBrush(list);
+  const base = list.filter((s) => !s.paint), paints = list.filter((s) => s.paint);
+  const result = computeMergedBrush(base);
   if (!result) return null;
-  const finalColor = materialColorForShape(list[0], 0);
+  const finalColor = materialColorForShape(base[0], 0);
   result.material = new THREE.MeshBasicMaterial({ color: finalColor });
   addEdgeOutline(result, finalColor);
+  paints.forEach((s) => {
+    const g = buildShapeGeometry(s); g.applyMatrix4(paintMatrix(s));
+    const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: materialColorForShape(s, 0) }));
+    result.add(m); // 합성 결과가 첫 도형의 위치·회전을 물려받으므로 첫 도형이 원점이면 그대로 맞는다
+  });
   return result;
 }
 
@@ -415,7 +426,8 @@ async function renderShapesThumbnail(shapesData, size) {
 // (위치·법선·인덱스·색)만 꺼내 준다 — 설계 화면은 이 모듈과 다른 three 인스턴스를 쓰므로 객체 대신 숫자 배열로 넘긴다.
 async function buildPartGeometryData(shapesData) {
   const list = await resolveImportGeometries(shapesData);
-  const mesh = meshFromShapes(list);
+  const baseList = list.filter((s) => !s.paint), paintList = list.filter((s) => s.paint);
+  const mesh = meshFromShapes(baseList);
   if (!mesh) return null;
   mesh.updateMatrixWorld(true);
   const geo = mesh.geometry.clone();
@@ -427,8 +439,14 @@ async function buildPartGeometryData(shapesData) {
     position: new Float32Array(geo.attributes.position.array),
     normal: new Float32Array(geo.attributes.normal.array),
     index: geo.index ? new Uint32Array(geo.index.array) : null,
-    color: materialColorForShape(list[0], 0),
+    color: materialColorForShape(baseList[0], 0),
     bbox: { min: [b.min.x, b.min.y, b.min.z], max: [b.max.x, b.max.y, b.max.z] },
+    // 색칠 조각: 부품 본체와 같은 좌표(가운데 맞추기 전)로 구운 점·면과 자기 색
+    paints: paintList.map((s) => {
+      const g = buildShapeGeometry(s); g.applyMatrix4(paintMatrix(s));
+      if (!g.attributes.normal) g.computeVertexNormals();
+      return { position: new Float32Array(g.attributes.position.array), normal: new Float32Array(g.attributes.normal.array), index: g.index ? new Uint32Array(g.index.array) : null, color: materialColorForShape(s, 0) };
+    }),
   };
 }
 window.__partsLabViewer = { renderShapesPreview, renderShapesThumbnail, buildPartGeometryData };
