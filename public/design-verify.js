@@ -38,7 +38,9 @@
       Rm = [0, 1, 2].map((i) => [0, 1, 2].map((j) => xf.m[i][0] * R[0][j] + xf.m[i][1] * R[1][j] + xf.m[i][2] * R[2][j]))
     }
     // 몸통 상자의 월드 y 반폭 = Σ|R[1][k]|·h[k]
-    const hy = Math.abs(Rm[1][0]) * h[0] + Math.abs(Rm[1][1]) * h[1] + Math.abs(Rm[1][2]) * h[2]
+    let hy = Math.abs(Rm[1][0]) * h[0] + Math.abs(Rm[1][1]) * h[1] + Math.abs(Rm[1][2]) * h[2]
+    // 바퀴는 원판이다(허브 축 = 모델 y): 기울어도 상자 모서리가 아니라 원 둘레가 바닥에 닿는다 — 상자로 보면 기운 바퀴가 바닥 아래로 잘못 나온다
+    if (/바퀴/.test(String(pt.n || ''))) { const ay = Math.abs(Rm[1][1]); hy = h[0] * Math.sqrt(Math.max(0, 1 - ay * ay)) + h[1] * ay }
     return { min: c[1] - hy, max: c[1] + hy }
   }
 
@@ -144,7 +146,7 @@
         let po = poseAt(a.ref, sg.end)
         if (sg.flip && !a.ref.noflip) po = flipPose(po, sg.end)
         const xf = def.xform && sg.end >= def.xform.at ? def.xform : null
-        const bx = obbMinY({ p: po.p, r: po.r }, d, xf)
+        const bx = obbMinY({ n: a.n, p: po.p, r: po.r }, d, xf)
         if (bx) { if (bx.min < lo) { lo = bx.min; loPart = a.key } if (bx.max > hi) hi = bx.max }
       })
       if (lo > 1e8) return
