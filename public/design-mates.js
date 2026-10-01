@@ -98,7 +98,7 @@
         })
       }
       // 방향이 정해진 부품: T축 접시 머리(모델 −y)는 위로
-      if (pt.n === 'T축' && !pt.headDown) { // headDown: true — 로봇을 뒤집은 방향이라 머리가 아래가 맞는 T축
+      if (pt.n === 'T축' && !pt.headDown && !pt.horizontal) { // headDown: true — 로봇을 뒤집은 방향이라 머리가 아래가 맞는 T축
         const m = M.matFromEuler(pt.r || [0, 0, 0])
         if (!(m[1][1] < -0.9)) issues.push(`${si + 1}단계 T축: 접시 머리가 위로 오지 않음(r=[180,0,0] 이어야 함)`)
       }
@@ -112,9 +112,9 @@
     if (!(st.parts || []).length && !st.noPart && !list.some((s) => (s.parts || []).some((pt) => (pt.side && pt.side.until === si + 1) || (pt.move && pt.move.at === si + 1)))) issues.push(`${si + 1}단계: 부품이 하나도 없음`)
   })
   // 마지막 모양: 리벳은 양 끝 돌기가 모두 구멍에 들어가야 한다
-  const all = []; list.forEach((s, k) => (s.parts || []).forEach((pt, i) => all.push({ key: `${k + 1}.${i} ${pt.n}`, n: pt.n, p: posAfterMove(pt, 1e9), r: rotAfterMove(pt, 1e9) })))
+  const all = []; list.forEach((s, k) => (s.parts || []).forEach((pt, i) => all.push({ key: `${k + 1}.${i} ${pt.n}`, n: pt.n, p: posAfterMove(pt, 1e9), r: rotAfterMove(pt, 1e9), ref: pt })))
   const fin = M.check(all, conn)
-  all.filter((a) => a.n === '리벳').forEach((a) => {
+  all.filter((a) => a.n === '리벳' && !(a.ref && a.ref.openEnd)).forEach((a) => {
     const pegs = new Set(fin.mated.filter((m) => m.part === a.key).map((m) => m.peg))
     if (pegs.size < 2) issues.push(`${a.key}: 리벳 한쪽 끝만 구멍에 들어감(${pegs.size}/2)`)
   })

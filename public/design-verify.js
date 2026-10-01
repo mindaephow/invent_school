@@ -153,6 +153,28 @@
       if (lo < -1) issues.push(`바닥 기준 ${tag}: ${loPart} 이 바닥(y=0) 아래로 ${Math.round(-lo * 10) / 10}mm 내려가 있음 — 그 방향에서 가장 낮은 부품이 y=0이 되게 맞출 것`)
     })
 
+    // ── 전체: 리벳이 끼운 부품 반대쪽으로 튀어나오지 않는가(결합 후) ──
+    {
+      const fin = all.map((a) => ({ ...a, ...poseNow(a.ref, 1e9) }))
+      const finRes = mates.check(fin, conn)
+      const wo = (a) => (conn[a.n] ? mates.worldConnectors({ p: a.p, r: a.r }, conn[a.n]) : null)
+      const byK = new Map(fin.map((a) => [a.key, a]))
+      const seenR = new Set()
+      const cnt = {}; finRes.mated.forEach((m) => { cnt[m.part + m.peg] = (cnt[m.part + m.peg] || 0) + 1 })
+      finRes.mated.forEach((m) => {
+        if (cnt[m.part + m.peg] > 1) return // 한 돌기가 겹친 두 구멍에 같이 걸리면(프레임+블록) 판정 생략
+        const a = byK.get(m.part), b = byK.get(m.into)
+        if (!a || !b || a.n !== '리벳' || seenR.has(m.part + m.peg + m.hole)) return
+        seenR.add(m.part + m.peg + m.hole)
+        const pg = wo(a).pegs.find((q) => q.id === m.peg), hl = wo(b).holes.find((q) => q.id === m.hole)
+        if (!pg || !hl) return
+        const ax = norm(hl.dir)
+        const sgn = dot(norm(pg.dir), ax) > 0 ? 1 : -1       // 돌기가 구멍 축 +방향으로 들어가는가
+        const rel = sub(pg.pos, hl.pos), along = dot(rel, ax) * sgn
+        const tip = along + (pg.len || 0) / 2, half = (hl.len || 0) / 2
+        if (tip - half > 0.6) issues.push(`리벳 ${a.key} 끝이 ${b.n}(${b.key}) 구멍 반대쪽 면 밖으로 ${Math.round((tip - half) * 10) / 10}mm 튀어나옴 — 결합 후 프레임 두께 안에 들어가야 함`)
+      })
+    }
     // ── 전체: 교재 부품 LIST 대조 ──
     if (opt.list) {
       const diffs = []
