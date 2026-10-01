@@ -1956,7 +1956,8 @@
   // 커지므로, STL 파일 때 겪은 것과 같은 종류의 용량 문제를 피하려고 파일 자체는 Storage에, DB엔 URL만
   // 저장한다). textbook-files 버킷은 공개 읽기라 URL 그대로 다운로드 링크로 쓸 수 있다.
   async function uploadTextbookFile(file){
-    if (file.size > 20 * 1024 * 1024) throw new Error('파일이 너무 커요(20MB 이하로 올려주세요).');
+    // 저장소(textbook-files 버킷)에는 크기 제한이 없고, Supabase 기본 업로드 한도가 50MB 라 그 안에서 받는다(예전엔 20MB 로 막아서 큰 PDF 가 안 올라갔다).
+    if (file.size > 50 * 1024 * 1024) throw new Error('파일이 너무 커요(' + (file.size / 1048576).toFixed(0) + 'MB). 50MB 이하로 줄여서 올려주세요.');
     const ext = (file.name.split('.').pop() || 'bin').toLowerCase();
     const path = Date.now() + '_' + Math.random().toString(36).slice(2, 8) + '.' + ext;
     const { error } = await db.client.storage.from('textbook-files').upload(path, file);
