@@ -50,7 +50,7 @@ let def=IVS_ASSEMBLIES.find(a=>a.id===ID);
 
 
 const steps=def.steps; const N=steps.length+1;
-let step=+(new URLSearchParams(location.search).get('step')||N), az=36, el=38, dist=420, tgt=new THREE.Vector3(30,10,30);
+const QQ=new URLSearchParams(location.search);let step=+(QQ.get('step')||N), az=+(QQ.get('az')||36), el=+(QQ.get('el')||38), dist=+(QQ.get('dist')||420), tgt=new THREE.Vector3(30,10,30);
 const sl=document.getElementById('sl');sl.max=N;
 function rot(r){return new THREE.Quaternion().setFromEuler(new THREE.Euler(r[0]*D,r[1]*D,r[2]*D,'ZYX'));}
 const gc={};function geo(n){if(gc[n])return gc[n];const b=atob(PARTS[n].pos);const u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(u.buffer),3));g.computeVertexNormals();return gc[n]=g;}
@@ -59,8 +59,9 @@ function mm(a,b){return [0,1,2].map(i=>[0,1,2].map(j=>a[i][0]*b[0][j]+a[i][1]*b[
 function e2m(r){const [a,b,c]=r.map(v=>v*D),ca=Math.cos(a),sa=Math.sin(a),cb=Math.cos(b),sb=Math.sin(b),cc=Math.cos(c),sc=Math.sin(c);return mm([[cc,-sc,0],[sc,cc,0],[0,0,1]],mm([[cb,0,sb],[0,1,0],[-sb,0,cb]],[[1,0,0],[0,ca,-sa],[0,sa,ca]]));}
 function m2e(m){const sy=Math.max(-1,Math.min(1,-m[2][0])),ry=Math.asin(sy);let rx,rz;if(Math.abs(sy)>0.99999){rz=0;rx=Math.atan2(m[0][1]/sy,m[0][2]/sy);}else{rx=Math.atan2(m[2][1],m[2][2]);rz=Math.atan2(m[1][0],m[0][0]);}return [rx/D,ry/D,rz/D];}
 function mv(m,v){return [0,1,2].map(i=>m[i][0]*v[0]+m[i][1]*v[1]+m[i][2]*v[2]);}
+function xT(v){return v;}
 function build(){scene.remove(group);group=new THREE.Group();scene.add(group);const box=new THREE.Box3();
- const flipOn=flipActive(step);const items=[];
+ const flipOn=flipActive(step);const items=[];const guides=[];
  steps.forEach((st,si)=>{if(si+1>step)return;(st.parts||[]).forEach(pt0=>{const pt=(flipOn&&!pt0.noflip)?flipPt(pt0):pt0;if(!PARTS[pt.n])return;
   const useSide=pt.side&&step<pt.side.until, moved=pt.move&&step>=pt.move.at;
   let p=useSide?pt.side.p:(moved?[pt.p[0]+pt.move.by[0],pt.p[1]+pt.move.by[1],pt.p[2]+pt.move.by[2]]:pt.p);
@@ -68,8 +69,11 @@ function build(){scene.remove(group);group=new THREE.Group();scene.add(group);co
   const isNew=(si+1===step)||(pt.side&&pt.side.until===step)||(pt.move&&pt.move.at===step);
   if(isNew){const dirH=(pt.move&&pt.move.at===step)?pt.move.dir:((pt.side&&!useSide)?(pt.settleDir||pt.dir):pt.dir);
     if(dirH&&step<=steps.length){const hv=(pt.move&&pt.move.at===step)?(pt.move.hover||22):((pt.side&&!useSide)?22:(pt.hover||(pt.recv?20:22)));p=[p[0]+dirH[0]*hv,p[1]+dirH[1]*hv,p[2]+dirH[2]*hv];}}
+  if(isNew&&pt.dir&&step<=steps.length){const mv0=pt.move&&pt.move.at===step,settling=!!(pt.side&&!useSide)||mv0;const dirH=mv0?pt.move.dir:(settling?(pt.settleDir||pt.dir):pt.dir);const hv=mv0?(pt.move.hover||22):(settling?22:(pt.hover||(pt.recv?20:22)));const tg=mv0?(pt.move.marks||[]):(settling?(pt.settleMarks||[]):(pt.marks&&pt.marks.length?pt.marks:[pt.p]));const A_=(m,d,k)=>[m[0]+d[0]*k,m[1]+d[1]*k,m[2]+d[2]*k];
+    tg.forEach((m,i)=>{ if(pt.recv){const faces=(!settling&&pt.faceMarks)?pt.faceMarks:tg;guides.push({from:m,to:A_(faces[i]||m,dirH,hv),dir:dirH});}else guides.push({from:A_(m,dirH,hv-(pt.pegDepth||5)),to:m,dir:dirH});});}
   items.push({n:pt.n,p,r:r||[0,0,0],isNew});});});
  const xf=def.xform&&step>=def.xform.at?def.xform:null;
+ if(xf)guides.forEach(g=>{g.from=xT(g.from);g.to=xT(g.to);g.dir=mv(xf.m,g.dir);});
  if(xf)items.forEach(d=>{const w=mv(xf.m,d.p);d.p=[w[0]+xf.t[0],w[1]+xf.t[1],w[2]+xf.t[2]];d.r=m2e(mm(xf.m,e2m(d.r)));});
  items.forEach(d=>{const isNew=d.isNew;
   const m=new THREE.Mesh(geo(d.n),new THREE.MeshStandardMaterial({color:new THREE.Color(PARTS[d.n].color).multiplyScalar(isNew?1.0:0.88),flatShading:true,roughness:0.75,emissive:isNew?0x330022:0x000000}));
@@ -77,6 +81,11 @@ function build(){scene.remove(group);group=new THREE.Group();scene.add(group);co
   (PARTS[d.n].paints||[]).forEach(pt=>{const b=atob(pt.pos);const u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(u.buffer),3));g.computeVertexNormals();
     const pm=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:new THREE.Color(pt.color),flatShading:true,roughness:0.6,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2,side:THREE.DoubleSide}));pm.position.copy(m.position);pm.quaternion.copy(m.quaternion);group.add(pm);});
   const e=new THREE.LineSegments(new THREE.EdgesGeometry(geo(d.n),35),new THREE.LineBasicMaterial({color:isNew?0xe0007a:0x333344}));e.position.copy(m.position);e.quaternion.copy(m.quaternion);group.add(e);box.expandByObject(m);});
+
+ guides.forEach(g=>{const a=new THREE.Vector3(...g.from),b=new THREE.Vector3(...g.to);const dir=b.clone().sub(a);const L=dir.length();if(L<1e-3)return;
+   const lm=new THREE.MeshBasicMaterial({color:0x22c04a,depthTest:false});const cyl=new THREE.Mesh(new THREE.CylinderGeometry(0.9,0.9,L,8),lm);cyl.position.copy(a).add(b).multiplyScalar(0.5);cyl.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),dir.clone().normalize());cyl.renderOrder=20;group.add(cyl);
+   const head=new THREE.Mesh(new THREE.ConeGeometry(3.2,8,10),lm);head.position.copy(b).addScaledVector(dir.clone().normalize(),-4);head.quaternion.copy(cyl.quaternion);head.renderOrder=20;group.add(head);
+   const ring=new THREE.Mesh(new THREE.TorusGeometry(5.2,0.9,8,24),lm);ring.position.copy(b);ring.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),dir.clone().normalize());ring.renderOrder=20;group.add(ring);});
  if(!box.isEmpty()){box.getCenter(tgt);}
  document.getElementById('lab').textContent=step+' / '+N+' 단계';document.getElementById('note').textContent=step>=N?'완성!':((steps[step-1]||{}).note||'');sl.value=step;}
 function draw(){const a=az*D,e=el*D;cam.position.set(tgt.x+dist*Math.sin(a)*Math.cos(e),tgt.y+dist*Math.sin(e),tgt.z+dist*Math.cos(a)*Math.cos(e));cam.lookAt(tgt);renderer.render(scene,cam);}
