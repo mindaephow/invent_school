@@ -1366,6 +1366,7 @@
   function refreshRequiredList(categoryId, volume, session){
     const card = document.getElementById('requiredList');
     if (!card) return;
+    try { scheduleModelPreload(categoryId, volume, session); } catch (e) {}
     // 이 카테고리·권에 교재(차시별 필요 부품)가 등록돼 있으면, 그 차시 하나에 등록된 부품만이 기준이다
     // (사용자 지적: "1차시엔 0차시의 부품이 필요한게 아니야" / "0차시엔 0차시 등록 부품만, 1차시엔 1차시
     // 등록 부품만" — 차시에 아직 아무것도 안 등록됐다고 해서 조용히 권 전체 누적 목록으로 바뀌면 안 됨,
@@ -1471,6 +1472,62 @@
     });
     robotModelLoading.set(partId, job);
     return job;
+  }
+  // ----- 차시를 고르면 그 차시 부품의 3D 모델을 미리 받아 이 컴퓨터에 저장해 둔다 -----
+  // 부품을 놓을 때마다 받으면 처음엔 느리므로, 차시를 고른 순간 뒤에서 한꺼번에 준비한다. 이 컴퓨터에 이미 있으면(저장된 것과
+  // 지문이 같으면) 조용히 메모리에만 올리고, 새로 받아야 하는 부품이 있을 때만 "불러오는 중" 표시를 띄운다.
+  // 부품이 새로 추가·수정되면 지문이 달라지므로 그 부품만 다시 받는다.
+  let preloadKey = '', preloadToastEl = null, preloadToastTimer = 0;
+  function showPreloadToast(text, done){
+    if (!preloadToastEl) {
+      preloadToastEl = document.createElement('div');
+      preloadToastEl.style.cssText = 'position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:60;background:#1f2a44;color:#fff;font-size:13px;font-weight:600;padding:9px 16px;border-radius:999px;box-shadow:0 4px 14px rgba(0,0,0,.25);max-width:92vw;text-align:center;';
+      preloadToastEl.setAttribute('role', 'status');
+      document.body.appendChild(preloadToastEl);
+    }
+    clearTimeout(preloadToastTimer);
+    preloadToastEl.hidden = false;
+    preloadToastEl.textContent = text;
+    if (done) preloadToastTimer = setTimeout(() => { if (preloadToastEl) preloadToastEl.hidden = true; }, 1800);
+  }
+  function lessonPartIds(categoryId, volume, session){
+    const tb = session != null ? textbooksCache.find(t => t.subject === 'robot' && t.category === categoryId && Number(t.volume) === Number(volume)) : null;
+    if (tb) {
+      const chapter = findTextbookChapter(categoryId, volume, session);
+      return ((chapter && Array.isArray(chapter.parts)) ? chapter.parts : []).map(cp => cp.partId);
+    }
+    const rawItems = robotPartsCache.filter(p => p.category === categoryId && (!p.volumes.length || p.volumes.some(v => Number(v.volume) <= Number(volume))));
+    return cumulativePartsAtVolume(rawItems, volume).filter(p => p.qty != null).map(p => p.id);
+  }
+  function scheduleModelPreload(categoryId, volume, session){
+    if (SUBJECT !== 'robot' || !accessToken || !robotPartsCache.length) return;
+    const ids = [...new Set(lessonPartIds(categoryId, volume, session))].filter(id => { const c = robotPartsCache.find(x => x.id === id); return c && c.thumbnail3d && !robotModelCache.has(id); });
+    const key = ids.join(',');
+    if (!ids.length || key === preloadKey) return;
+    preloadKey = key;
+    setTimeout(async () => {
+      const C = window.IVS_CACHE;
+      const need = [];
+      for (const id of ids) { // 이 컴퓨터에 없거나 달라진 부품만 "새로 받아야 하는" 부품
+        const c = robotPartsCache.find(x => x.id === id);
+        let hit = null;
+        try { hit = C ? await C.get('robot-model:' + id) : null; } catch (e) {}
+        if (!(hit && C && hit.ver === C.hash(c.thumbnail3d) && hit.data && hit.data.position)) need.push(id);
+      }
+      let done = 0;
+      const total = need.length;
+      if (total) showPreloadToast('⏳ 작업 속도를 위해 부품을 준비하는 중이에요 (0/' + total + ')');
+      const queue = ids.slice().sort((a, b) => (need.includes(a) ? 1 : 0) - (need.includes(b) ? 1 : 0)).reverse(); // 새로 받을 부품부터
+      const worker = async () => {
+        while (queue.length) {
+          const id = queue.shift();
+          await ensureRobotModel(id);
+          if (need.includes(id)) { done++; showPreloadToast('⏳ 작업 속도를 위해 부품을 준비하는 중이에요 (' + done + '/' + total + ')'); }
+        }
+      };
+      await Promise.all([worker(), worker(), worker()]);
+      if (total) showPreloadToast('✅ 부품 준비가 끝났어요', true);
+    }, 50);
   }
   const robotGeomCache = new WeakMap(); // 모델 데이터 → 가운데 맞춘 지오메트리 — 같은 종류 부품 여러 개(리벳 12개 등)가 하나를 같이 쓴다(매번 복사·변환하지 않음)
   function makeRobotModelMesh(data){
