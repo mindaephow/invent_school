@@ -498,6 +498,14 @@
         </div>
         <p class="note" style="margin:0;">부품·수량을 고른 채로 차시만 바꿔가며 "추가"를 누르면 여러 차시에 빠르게 배정할 수 있어요. 같은 부품을 또 추가하면 수량이 더해져요.</p>
         <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+          <b style="font-size:12px; flex:none;">⚡ 엑셀로 부품 올리기</b>
+          <select id="quickXlsxChapter" style="max-width:200px;"></select>
+          <button type="button" class="primary" id="quickXlsxBtn">엑셀 선택해서 올리기</button>
+          <button type="button" class="ghost" id="quickXlsxSample">샘플 다운로드</button>
+          <span class="item-sub" id="quickXlsxMsg"></span>
+        </div>
+        <p class="note" style="margin:0;">차시를 고르고 엑셀(.xlsx) 또는 CSV를 올리면 그 차시의 필요 부품으로 배정돼요. 첫 줄은 <b>부품명, 수량</b>, 다음 줄부터 부품 이름과 숫자예요. 그 차시에 이미 있는 부품은 엑셀 수량으로 바뀌어요.</p>
+        <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
           <b style="font-size:12px; flex:none;">⚡ 파일 빠르게 등록</b>
           <select id="quickUploadChapterSelect" style="max-width:200px;"></select>
           <button type="button" class="primary" id="quickUploadBtn">파일 선택해서 올리기</button>
@@ -2097,6 +2105,10 @@
     const curPartChapter = partChapterSel.value;
     partChapterSel.innerHTML = chapterOptionsHtml;
     if ([...partChapterSel.options].some((o) => o.value === curPartChapter)) partChapterSel.value = curPartChapter;
+    const xlsxChapterSel = document.getElementById('quickXlsxChapter');
+    const curXlsxChapter = xlsxChapterSel.value;
+    xlsxChapterSel.innerHTML = chapterOptionsHtml;
+    if ([...xlsxChapterSel.options].some((o) => o.value === curXlsxChapter)) xlsxChapterSel.value = curXlsxChapter;
     const uploadChapterSel = document.getElementById('quickUploadChapterSelect');
     const curUploadChapter = uploadChapterSel.value;
     uploadChapterSel.innerHTML = '<option value="__whole__">📘 교재 전체(권 단위)</option>' + chapterOptionsHtml;
@@ -2219,6 +2231,83 @@
     msgEl.textContent = '✅ ' + (part ? part.name : '부품') + ' — ' + chapterIdx + '차시에 배정했어요.';
     clearTimeout(msgEl._t);
     msgEl._t = setTimeout(() => { msgEl.textContent = ''; }, 4000);
+  });
+  // ⚡ 엑셀로 부품 올리기(사용자 지시: "차시를 고르고 그 차시만 올리는 방식으로 / 부품명, 숫자 / 샘플을 다운받게"):
+  // 고른 차시 하나에 엑셀(또는 CSV)의 "부품명, 수량" 줄들을 배정한다. 부품 이름이 부품 관리에 있는 것과 같아야 하고,
+  // 못 찾은 이름·잘못된 수량은 건너뛰고 알려 준다. 그 차시에 이미 있는 부품은 엑셀 수량으로 바꾼다(다시 올려도 두 배가 되지 않게).
+  const normPartName = (s) => String(s == null ? '' : s).replace(/\s+/g, '').toLowerCase();
+  document.getElementById('quickXlsxSample').addEventListener('click', () => {
+    if (typeof XLSX === 'undefined') { document.getElementById('quickXlsxMsg').textContent = '엑셀 기능을 불러오지 못했어요. 새로고침해 주세요.'; return; }
+    const tb = currentTextbook();
+    const known = tb ? allParts.filter((p) => p.subject === tb.subject).map((p) => p.name) : [];
+    const pick = ['15프레임', '3단블록', '리벳'].map((n) => known.includes(n) ? n : null);
+    const rows = [['부품명', '수량'], [pick[0] || '부품 이름', 8], [pick[1] || '부품 이름', 11], [pick[2] || '부품 이름', 50]];
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{ wch: 22 }, { wch: 8 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '부품');
+    XLSX.writeFile(wb, '부품목록_샘플.xlsx');
+  });
+  document.getElementById('quickXlsxBtn').addEventListener('click', () => {
+    const tb = currentTextbook();
+    if (!tb) return;
+    const chapterId = document.getElementById('quickXlsxChapter').value;
+    const msgEl = document.getElementById('quickXlsxMsg');
+    if (!chapterId) { msgEl.textContent = '차시를 먼저 골라주세요.'; return; }
+    if (typeof XLSX === 'undefined') { msgEl.textContent = '엑셀 기능을 불러오지 못했어요. 새로고침해 주세요.'; return; }
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = '.xlsx,.xls,.csv';
+    input.addEventListener('change', () => {
+      const file = input.files && input.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+          const aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' });
+          // 첫 줄이 "부품명, 수량" 머리글이면 건너뛴다(머리글 이름은 몇 가지 별칭을 받는다). 머리글이 없으면 첫 두 칸을 그대로 쓴다.
+          const nameKeys = ['부품명', '부품', '이름', '부품이름', 'name'], qtyKeys = ['수량', '숫자', '개수', '갯수', 'qty', '수'];
+          let nameCol = 0, qtyCol = 1, start = 0;
+          const head = (aoa[0] || []).map(normPartName);
+          const ni = head.findIndex((c) => nameKeys.includes(c)), qi = head.findIndex((c) => qtyKeys.includes(c));
+          if (ni >= 0 && qi >= 0) { nameCol = ni; qtyCol = qi; start = 1; }
+          const sp = allParts.filter((p) => p.subject === tb.subject);
+          const byName = new Map(sp.map((p) => [normPartName(p.name), p]));
+          const want = new Map(); // partId → 수량(엑셀 안에서 같은 부품이 여러 줄이면 더한다)
+          const unknown = [], badQty = [];
+          for (let i = start; i < aoa.length; i++) {
+            const row = aoa[i] || [];
+            const rawName = String(row[nameCol] == null ? '' : row[nameCol]).trim();
+            if (!rawName && (row[qtyCol] === '' || row[qtyCol] == null)) continue; // 빈 줄
+            const part = byName.get(normPartName(rawName));
+            if (!part) { unknown.push((i + 1) + '줄 "' + rawName + '"'); continue; }
+            const q = Number(row[qtyCol]);
+            if (!Number.isInteger(q) || q < 1) { badQty.push((i + 1) + '줄 "' + rawName + '" 수량 "' + row[qtyCol] + '"'); continue; }
+            want.set(part.id, (want.get(part.id) || 0) + q);
+          }
+          if (!want.size) { msgEl.textContent = '배정할 부품이 없어요.' + (unknown.length ? ' 못 찾은 이름: ' + unknown.join(', ') : '') + (badQty.length ? ' 수량 오류: ' + badQty.join(', ') : ''); return; }
+          const chapterIdx = tb.chapters.findIndex((c) => c.id === chapterId);
+          let changed = 0, added = 0;
+          const arr = tb.chapters.map((c) => {
+            if (c.id !== chapterId) return c;
+            const parts = (c.parts || []).slice();
+            want.forEach((qty, partId) => {
+              const idx = parts.findIndex((p) => p.partId === partId);
+              if (idx >= 0) { parts[idx] = { partId, qty }; changed++; } else { parts.push({ partId, qty }); added++; }
+            });
+            return Object.assign({}, c, { parts });
+          });
+          msgEl.textContent = '올리는 중...';
+          await saveChapters(tb, arr);
+          const problems = (unknown.length ? ' · 못 찾은 이름(건너뜀): ' + unknown.join(', ') : '') + (badQty.length ? ' · 수량 오류(건너뜀): ' + badQty.join(', ') : '');
+          msgEl.textContent = '✅ ' + chapterIdx + '차시에 ' + want.size + '종류를 배정했어요 (새로 ' + added + ', 수량 바꿈 ' + changed + ')' + problems;
+          clearTimeout(msgEl._t);
+          msgEl._t = setTimeout(() => { msgEl.textContent = ''; }, problems ? 15000 : 5000);
+        } catch (err) { msgEl.textContent = '엑셀을 읽지 못했어요: ' + err.message; }
+      };
+      reader.readAsArrayBuffer(file);
+    });
+    input.click();
   });
   // ⚡ 파일 빠르게 등록: 차시(또는 "교재 전체")를 고르고 파일을 선택하면 바로 그 자리에 업로드.
   // 사용자 지시: "그냥 파일업로드 => 1회차,1권 이렇게 해서 연동하면 안되나?" + "여러개 가능" — 한 번에
