@@ -2303,6 +2303,29 @@
       partListBody.appendChild(empty);
       return;
     }
+    // 조립 보기 중에는 "필요 부품"과 같은 방식(종류별 한 줄: 이름 + 개수)으로 보여 준다 — 부품 하나씩 나열하면 두 목록이 서로 안 맞아 보인다(사용자 지적)
+    if (window.__ivsAssembly && window.__ivsAssembly.isViewing()) {
+      const kinds = new Map();
+      parts.forEach(part => kinds.set(part.type, (kinds.get(part.type) || 0) + 1));
+      kinds.forEach((n, type) => {
+        const row = document.createElement('div');
+        row.className = 'required-row ok';
+        const dot = document.createElement('span');
+        dot.className = 'dot';
+        dot.style.background = partColor(type);
+        const name = document.createElement('span');
+        name.className = 'req-name';
+        name.appendChild(dot);
+        name.appendChild(document.createTextNode(' ' + (PART_SHORT[type] || PART_DEFS[type].label)));
+        const cnt = document.createElement('span');
+        cnt.className = 'req-count';
+        cnt.textContent = String(n);
+        row.appendChild(name);
+        row.appendChild(cnt);
+        partListBody.appendChild(row);
+      });
+      return;
+    }
     const order = Object.keys(PART_SHORT);
     // 세트로 놓은 부품은 세트별로 묶고, 나머지는 같은 종류끼리 모은다 (번호는 묶음 안에서 놓은 순서대로)
     const setGroups = new Map();
