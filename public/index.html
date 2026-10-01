@@ -2251,22 +2251,22 @@
     XLSX.utils.book_append_sheet(wb, ws, '부품');
     XLSX.writeFile(wb, '부품목록_샘플.xlsx');
   });
-  // 이 교재의 차시별 필요 부품(교재 관리에 등록한 것)을 엑셀로 내려받는다: 차시, 차시 제목, 부품명, 수량. 수량이 있는 것만 나온다.
+  // 이 교재의 차시별 필요 부품(교재 관리에 등록한 것)을 엑셀로 내려받는다(사용자 지시: 부품리스트와 수량, 로봇이름, 단계, 회차): 부품명, 수량, 로봇이름(차시 제목), 단계(교재 이름), 회차.
   document.getElementById('quickXlsxExport').addEventListener('click', () => {
     const msgEl = document.getElementById('quickXlsxMsg');
     const tb = currentTextbook();
     if (!tb) return;
     if (typeof XLSX === 'undefined') { msgEl.textContent = '엑셀 기능을 불러오지 못했어요. 새로고침해 주세요.'; return; }
-    const rows = [['차시', '차시 제목', '부품명', '수량']];
+    const rows = [['부품명', '수량', '로봇이름', '단계', '회차']];
     tb.chapters.forEach((c, i) => {
       (c.parts || []).forEach((cp) => {
         const part = allParts.find((p) => p.id === cp.partId);
-        rows.push([i + '차시', c.title || '', part ? part.name : '(삭제된 부품)', cp.qty]);
+        rows.push([part ? part.name : '(삭제된 부품)', cp.qty, c.title || '', tb.name, i + '차시']); // 로봇이름 = 차시 제목(예: 토끼), 단계 = 교재 이름(예: 큐보1단계)
       });
     });
     if (rows.length === 1) { msgEl.textContent = '아직 등록된 부품이 없어요.'; clearTimeout(msgEl._t); msgEl._t = setTimeout(() => { msgEl.textContent = ''; }, 4000); return; }
     const ws = XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols'] = [{ wch: 8 }, { wch: 24 }, { wch: 22 }, { wch: 8 }];
+    ws['!cols'] = [{ wch: 22 }, { wch: 8 }, { wch: 18 }, { wch: 14 }, { wch: 8 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, '필요 부품');
     XLSX.writeFile(wb, tb.name + '_필요부품.xlsx');
