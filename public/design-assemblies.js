@@ -552,6 +552,7 @@ window.IVS_ASSEMBLIES = [
       volume: 1,
       chapter: '3륜바이크',
       book: "교재 46~51쪽 · 3륜바이크 (1차: 1~6단계 — 7단계부터는 확인 후 이어서)",
+      listNote: '1차: 1~6단계만 만들어서 교재 LIST 와 개수가 다르다(7~29단계 미작성)',
       camera: { target: [20, 20, 0], radius: 330, theta: 0.6, phi: 0.95 },
       steps: [
         { cam: { theta: -0.524, phi: 0.908 }, camSrc: 'guess', note: "[교재 1] 39프레임 왼쪽 끝에 3단블록 2개를 눕혀서(돌기가 위·아래) 1~3번째 칸, 1번째·3번째 줄 구멍에 꽂아요. 가운데줄 6번째 구멍에는 리벳 1개를 꽂아요.", parts: [
