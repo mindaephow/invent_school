@@ -230,6 +230,7 @@
     b.setViewing(true);
     b.camera(def.camera);
     $('asmBar').hidden = false;
+    if ($('asmMarkMove2')) $('asmMarkMove2').hidden = false;
     $('asmStageBar').hidden = false;
     $('historyPanel').hidden = true;
     b.axes(true);
@@ -246,6 +247,7 @@
     viewing = false;
     $('asmBar').hidden = true;
     const mm = $('asmMarkMove'); if (mm && mm.dataset.on === '1') mm.click();
+    if ($('asmMarkMove2')) $('asmMarkMove2').hidden = true;
     $('asmStageBar').hidden = true;
     $('historyPanel').hidden = false;
     if (b) b.axes(false);
@@ -257,8 +259,10 @@
   document.addEventListener('DOMContentLoaded', () => {
     if (!$('asmClose')) return;
     $('asmClose').addEventListener('click', close);
-    const mm = $('asmMarkMove');
-    if (mm) mm.addEventListener('click', () => { const on = mm.dataset.on !== '1'; mm.dataset.on = on ? '1' : '0'; mm.className = on ? 'primary' : 'ghost'; mm.textContent = on ? '📍 위치 표시 옮기는 중 (다시 누르면 끝)' : '📍 위치 표시 옮기기'; bridge().markMove(on); });
+    const mm = $('asmMarkMove'), mm2 = $('asmMarkMove2');
+    const toggleMark = () => { const on = mm.dataset.on !== '1'; mm.dataset.on = on ? '1' : '0'; mm.className = on ? 'primary' : 'ghost'; if (mm2) { mm2.style.background = on ? '#f97316' : ''; mm2.style.color = on ? '#fff' : ''; } mm.textContent = on ? '📍 위치 표시 옮기는 중 (다시 누르면 끝)' : '📍 위치 표시 옮기기'; if (mm2) mm2.textContent = on ? '📍 끝내기' : '📍 표시 옮기기'; bridge().markMove(on); };
+    if (mm) mm.addEventListener('click', toggleMark);
+    if (mm2) mm2.addEventListener('click', toggleMark);
     $('asmFirst').addEventListener('click', stopPlayClick(() => go(0)));
     $('asmPrev').addEventListener('click', stopPlayClick(() => go(step - 1)));
     $('asmNext').addEventListener('click', stopPlayClick(() => go(step + 1)));
