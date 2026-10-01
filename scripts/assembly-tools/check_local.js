@@ -17,9 +17,11 @@ function quat(r){const m=M.matFromEuler(r);const t=m[0][0]+m[1][1]+m[2][2];let w
  else{const s=Math.sqrt(1+m[2][2]-m[0][0]-m[1][1])*2;w=(m[1][0]-m[0][1])/s;x=(m[0][2]+m[2][0])/s;y=(m[1][2]+m[2][1])/s;z=s/4;}
  return {x,y,z,w};}
 const all=[];steps.forEach((s,k)=>(s.parts||[]).forEach((pt,i)=>all.push({k:k+1,i,pt})));
-const items=all.map(a=>({a,boxes:C.coreBoxes(a.pt.n,dims[a.pt.n]||[0,0,0]),q:quat(a.pt.r||[0,0,0]),pos:{x:a.pt.p[0],y:a.pt.p[1],z:a.pt.p[2]}}));
+const fin=(pt)=>{ const mv=pt.move; if(!mv) return {p:pt.p,r:pt.r||[0,0,0]}; return {p:mv.p||pt.p.map((v,k)=>v+mv.by[k]), r:mv.r||pt.r||[0,0,0]}; }; // 옮겨 붙는 부품은 마지막 자세(제자리)로 겹침을 본다
+const items=all.map(a=>{const f=fin(a.pt);return {a,boxes:C.coreBoxes(a.pt.n,dims[a.pt.n]||[0,0,0]),q:quat(f.r),pos:{x:f.p[0],y:f.p[1],z:f.p[2]}};});
 let n=0;
 for(let i=0;i<items.length;i++)for(let j=i+1;j<items.length;j++){const A=items[i],B=items[j];if(!A.boxes||!B.boxes)continue;
+ if(/(135|90)도/.test(A.a.pt.n+B.a.pt.n))continue; // 꺾인 프레임은 몸통 상자가 실제보다 커서 오탐
  if(C.boxesOverlap(A.boxes,A.pos,A.q,B.boxes,B.pos,B.q,0.6)){n++;if(n<=40)console.log('  겹침',A.a.k+'.'+A.a.i,A.a.pt.n,'<>',B.a.k+'.'+B.a.i,B.a.pt.n);}}
 console.log('몸통 겹침:',n);
 // 바닥 기준: 가장 낮은 부품 바닥

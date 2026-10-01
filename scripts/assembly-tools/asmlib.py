@@ -132,7 +132,7 @@ class Step:
             if calc:
                 myh = tmp.hole(pid); base = g["pos"] - d * g["len"] / 2
                 hole_center = base + d * myh["len"] / 2 if g["len"] >= myh["len"] else g["pos"] + d * (myh["len"] - g["len"]) / 2
-                if p is None: p = hole_center - R @ np.array(myh["pos"], float)
+                if p is None: p = hole_center - myh["pos"]   # myh 는 이미 세계 방향으로 돌린 값(tmp 의 p=0)
             if d0 is None: d0 = d
             marks.append(rnd(tip))
         part = Part(n, R, p, s, extra)
