@@ -1,9 +1,9 @@
 // 큐보 서보혼(막대형)과 둥근서보혼을 자르기 없이 삼각형으로 직접 짠다. 규격은 cubo-part-maker.js 의 CUBO_FRAME_STD(판 3·테두리 1·구멍 구조·간격 10).
 // 구멍 종류:
 //  - through : 프레임 구멍 그대로(입구 반지름 3.5 깊이 1 → 가장 좁은 곳 2.75)
-//  - pilot   : 위만 열린 얕은 홈(입구 반지름 3.5)에 나사 구멍(반지름 1.1)만 아래까지 뚫림, 아래 면은 막힘(교재 3쪽 서보혼 3·4번째 구멍)
-//  - hex     : 육각큰기어의 육각 구멍(등록된 육각큰기어 3D 를 직접 쟀다: 꼭짓점 반지름 2.5 정육각형, 깊이 3)을 위 면에 내고,
-//              바닥에는 나사 구멍(반지름 1.1)만 아래까지 뚫는다. 아래 면은 막힘.
+//  - pilot   : 위만 열린 얕은 홈(입구 반지름 3.5)에 나사 구멍(반지름 1.1)만 뚫림, 바닥 두께 1 로 막힘(교재 3쪽 서보혼 3·4번째 구멍)
+//  - hex     : 육각큰기어의 육각 구멍(등록된 육각큰기어 3D 를 직접 쟀다: 꼭짓점 반지름 2.5 정육각형)을 위 면에 깊이 4 로 내고,
+//              바닥(두께 1)에는 나사 구멍(반지름 1.1)만 뚫는다. 아래 면은 막힘.
 // 좌표: x·z 가운데가 0, 높이 y 는 바닥 0~5(프레임과 같은 방향).
 import { CUBO_FRAME_STD as S } from './cubo-part-maker.js'
 import { makeKit, trianglesToStl } from './cubo-mesh-kit.js'
@@ -11,7 +11,7 @@ import { ringFace, circlePts } from './cubo-face-mesh.js'
 
 export { trianglesToStl }
 
-export const HORN_STD = { pilotR: 1.1, hexR: 2.5, hexDepth: 3, hexAngle: 30 } // 육각 꼭짓점 반지름·깊이·첫 꼭짓점 각도(도)
+export const HORN_STD = { pilotR: 1.1, hexR: 2.5, hexDepth: 4, hexAngle: 30 } // 육각 꼭짓점 반지름·깊이·첫 꼭짓점 각도(도)
 
 const RO = S.rimOuterR - 0.01
 const E = S.edgeWall
@@ -43,13 +43,14 @@ function addHole(kit, cx, cz, type) {
     return
   }
   kit.annulus(cx, cz, S.rimInnerR, RO, Y5, 1)
-  kit.cyl(cx, cz, S.rimInnerR, Y4, Y5, -1)
-  if (type === 'pilot') {
-    kit.annulus(cx, cz, screwR, S.rimInnerR, Y4, 1) // 입구 바닥에 나사 구멍만 뚫림
-    kit.cyl(cx, cz, screwR, Y0, Y4, -1)
+  if (type === 'pilot') { // 위에서 바닥(두께 1)까지 파인 홈 + 나사 구멍
+    kit.cyl(cx, cz, S.rimInnerR, Y1, Y5, -1)
+    kit.annulus(cx, cz, screwR, S.rimInnerR, Y1, 1)
+    kit.cyl(cx, cz, screwR, Y0, Y1, -1)
     kit.annulus(cx, cz, screwR, RO, Y0, -1) // 아래 면은 막힘
     return
   }
+  kit.cyl(cx, cz, S.rimInnerR, Y4, Y5, -1)
   kit.annulus(cx, cz, S.rimInnerR, RO, Y0, -1)
   kit.cyl(cx, cz, S.rimInnerR, Y0, Y1, -1)
   kit.annulus(cx, cz, S.boreR, S.rimInnerR, Y1, -1)
