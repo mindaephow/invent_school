@@ -54,9 +54,11 @@
     return [rx / D2R, ry / D2R, rz / D2R].map((v) => Math.round(v * 1e4) / 1e4 + 0);
   }
   function flipActive(target) { return !!(def && def.flip && (def.flip.ranges || []).some((rg) => target >= rg[0] && target <= rg[1])); }
-  function flipPt(pt) {
+  function flipPt(pt, target) {
     const f = def.flip;
-    const P = (p) => [p[0], f.y - p[1], f.z - p[2]];
+    const rg = (f.ranges || []).find((r) => target >= r[0] && target <= r[1]);
+    const fy = rg && rg[2] != null ? rg[2] : f.y; // 범위별로 바닥 기준이 다르면 ranges 의 [시작, 끝, y]
+    const P = (p) => [p[0], fy - p[1], f.z - p[2]];
     const V = (v) => [v[0], -v[1], -v[2]];
     const R = (r) => { const A = matFromEuler(r || [0, 0, 0]); return eulerFromMat([A[0], [-A[1][0], -A[1][1], -A[1][2]], [-A[2][0], -A[2][1], -A[2][2]]]); };
     const o = Object.assign({}, pt);
@@ -79,7 +81,7 @@
     const flipOn = flipActive(target);
     def.steps.slice(0, upTo).forEach((s, si) => {
       (s.parts || []).forEach((pt0) => {
-        const pt = flipOn && !pt0.noflip ? flipPt(pt0) : pt0; // 뒤집기 전 방향으로 보여 주는 단계(noflip: 로봇과 따로 만드는 손잡이는 그대로)
+        const pt = flipOn && !pt0.noflip ? flipPt(pt0, target) : pt0; // 뒤집기 전 방향으로 보여 주는 단계(noflip: 로봇과 따로 만드는 손잡이는 그대로)
         const type = b.resolve(pt.n, catId);
         if (!type) { if (!missing.includes(pt.n)) missing.push(pt.n); return; }
         const useSide = pt.side && upTo < pt.side.until;

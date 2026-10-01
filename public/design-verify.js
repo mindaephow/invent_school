@@ -73,18 +73,14 @@
         if (eff && conn[a.n]) {
           const d = norm(eff)
           const w = worldOf(a)
+          // 끼워 넣는 쪽 돌기 중 하나라도 올바른 방향이면 통과(리벳처럼 양 끝이 서로 다른 부품에 들어가는 부품은 앞 단계 쪽 돌기도 함께 잡히므로 "전부"가 아니라 "하나 이상")
           if (!pt.recv && myPegs.length) {
-            myPegs.forEach((m) => {
-              const peg = w.pegs.find((q) => q.id === m.peg)
-              if (peg && dot(norm(peg.dir), d) > -0.9) issues.push(`${si}단계 ${a.n}: 띄우는 방향 dir=${axisName(d)} 이면 돌기가 반대(${axisName(mul3(d, -1))})로 향해야 하는데 돌기 ${m.peg} 는 ${axisName(peg.dir)} 쪽을 향함(방향 어긋남)`)
-            })
+            const okAny = myPegs.some((m) => { const peg = w.pegs.find((q) => q.id === m.peg); return peg && dot(norm(peg.dir), d) <= -0.9 })
+            if (!okAny) issues.push(`${si}단계 ${a.n}: 띄우는 방향 dir=${axisName(d)} 이면 돌기가 반대(${axisName(mul3(d, -1))})로 향해야 하는데 연결된 돌기(${myPegs.map((m) => m.peg).join(', ')})가 모두 다른 쪽을 향함(방향 어긋남)`)
           }
           if (pt.recv && myHoles.length) {
-            myHoles.forEach((m) => {
-              const host = byKey.get(m.part); const hw = host && worldOf(host)
-              const peg = hw && hw.pegs.find((q) => q.id === m.peg)
-              if (peg && dot(norm(peg.dir), d) < 0.9) issues.push(`${si}단계 ${a.n}: 띄우는 방향 dir=${axisName(d)} 이면 고정된 돌기(${host.n} ${m.peg})가 ${axisName(d)} 쪽을 향해야 하는데 ${axisName(peg.dir)} 쪽임(방향 어긋남)`)
-            })
+            const okAny = myHoles.some((m) => { const host = byKey.get(m.part); const hw = host && worldOf(host); const peg = hw && hw.pegs.find((q) => q.id === m.peg); return peg && dot(norm(peg.dir), d) >= 0.9 })
+            if (!okAny) issues.push(`${si}단계 ${a.n}: 띄우는 방향 dir=${axisName(d)} 이면 고정된 돌기가 ${axisName(d)} 쪽을 향해야 하는데 연결된 돌기가 모두 다른 쪽을 향함(방향 어긋남)`)
           }
         }
         // 2) 구멍 위치 목록 (받는 쪽 기준)
@@ -134,16 +130,16 @@
       if (pt.move && step >= pt.move.at) return { p: [pt.p[0] + pt.move.by[0], pt.p[1] + pt.move.by[1], pt.p[2] + pt.move.by[2]], r: pt.r }
       return { p: pt.p, r: pt.r }
     }
-    const flipPose = (po) => { const f = def.flip; const R = M().matFromEuler(po.r || [0, 0, 0]); const R2 = [R[0], [-R[1][0], -R[1][1], -R[1][2]], [-R[2][0], -R[2][1], -R[2][2]]]
+    const flipPose = (po, end) => { const f = def.flip; const rg = (f.ranges || []).find((r) => end >= r[0] && end <= r[1]); const fy = rg && rg[2] != null ? rg[2] : f.y; const R = M().matFromEuler(po.r || [0, 0, 0]); const R2 = [R[0], [-R[1][0], -R[1][1], -R[1][2]], [-R[2][0], -R[2][1], -R[2][2]]]
       const sy = Math.max(-1, Math.min(1, -R2[2][0])), ry = Math.asin(sy); let rx, rz
       if (Math.abs(sy) < 0.99999) { rx = Math.atan2(R2[2][1], R2[2][2]); rz = Math.atan2(R2[1][0], R2[0][0]) } else { rx = Math.atan2(-R2[1][2], R2[1][1]); rz = 0 }
-      return { p: [po.p[0], f.y - po.p[1], f.z - po.p[2]], r: [rx * 57.29578, ry * 57.29578, rz * 57.29578] } }
+      return { p: [po.p[0], fy - po.p[1], f.z - po.p[2]], r: [rx * 57.29578, ry * 57.29578, rz * 57.29578] } }
     segEnds.forEach((sg) => {
       let lo = 1e9, loPart = '', hi = -1e9
       all.filter((a) => a.step <= sg.end).forEach((a) => {
         const d = dims[a.n]; if (!d) return
         let po = poseAt(a.ref, sg.end)
-        if (sg.flip && !a.ref.noflip) po = flipPose(po)
+        if (sg.flip && !a.ref.noflip) po = flipPose(po, sg.end)
         const xf = def.xform && sg.end >= def.xform.at ? def.xform : null
         const bx = obbMinY({ p: po.p, r: po.r }, d, xf)
         if (bx) { if (bx.min < lo) { lo = bx.min; loPart = a.key } if (bx.max > hi) hi = bx.max }
@@ -151,7 +147,7 @@
       if (lo > 1e8) return
       const tag = `${sg.start ? sg.start : 1}~${sg.end}단계${sg.flip ? '(뒤집은 방향)' : ''}`
       report.push(`바닥 기준 ${tag}: 가장 낮은 부품 바닥 y=${Math.round(lo * 10) / 10} (${loPart}), 가장 높은 곳 y=${Math.round(hi * 10) / 10}`)
-      if (lo < -1 && !sg.flip) issues.push(`바닥 기준 ${tag}: ${loPart} 이 바닥(y=0) 아래로 ${Math.round(-lo * 10) / 10}mm 내려가 있음 — 그 방향에서 가장 낮은 부품이 y=0이 되게 맞출 것`)
+      if (lo < -1) issues.push(`바닥 기준 ${tag}: ${loPart} 이 바닥(y=0) 아래로 ${Math.round(-lo * 10) / 10}mm 내려가 있음 — 그 방향에서 가장 낮은 부품이 y=0이 되게 맞출 것`)
     })
 
     // ── 전체: 교재 부품 LIST 대조 ──
