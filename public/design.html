@@ -4372,7 +4372,7 @@
     src.parent.add(mk); mk.position.copy(src.position); markMoves.push(mk);
     const label = document.createElement('div');
     label.style.cssText = 'position:fixed; z-index:30; pointer-events:none; background:#f97316; color:#fff; font:700 12px sans-serif; padding:2px 6px; border-radius:6px;';
-    document.body.appendChild(label); mk.userData.label = label;
+    document.body.appendChild(label); mk.userData.label = label; mk.userData.from = wp.toArray().map(v => Math.round(v * 10) / 10);
     markDrag = { mk, wp, plane: new THREE.Plane().setFromNormalAndCoplanarPoint(n, wp), label };
   }, true);
   window.addEventListener('pointermove', (e) => {
@@ -4387,12 +4387,38 @@
     const fin = markDrag.wp.clone().add(off);
     markDrag.mk.position.copy(markDrag.mk.parent.worldToLocal(fin.clone()));
     const dd = [off.x, off.y, off.z].map(v => Math.round(v));
-    markDrag.label.textContent = dd.every(v => v === 0) ? '이동 없음' : '이동 ' + ['x', 'y', 'z'].map((k, i) => dd[i] ? k + ' ' + (dd[i] > 0 ? '+' : '') + dd[i] : '').filter(Boolean).join(', ') + ' mm';
+    const txt = dd.every(v => v === 0) ? '이동 없음' : '이동 ' + ['x', 'y', 'z'].map((k, i) => dd[i] ? k + ' ' + (dd[i] > 0 ? '+' : '') + dd[i] : '').filter(Boolean).join(', ') + ' mm';
+    markDrag.mk.userData.txt = txt; markDrag.mk.userData.to = fin.toArray().map(v => Math.round(v * 10) / 10);
+    markDrag.label.textContent = txt === '이동 없음' ? txt : (markMoves.indexOf(markDrag.mk) + 1) + '번 · ' + txt;
     const sp = fin.clone().project(camera), r = canvas.getBoundingClientRect();
     markDrag.label.style.left = (r.left + (sp.x + 1) / 2 * r.width + 14) + 'px';
     markDrag.label.style.top = (r.top + (1 - sp.y) / 2 * r.height - 10) + 'px';
   });
-  window.addEventListener('pointerup', () => { if (markDrag) { const m = markDrag.mk; if (markDrag.label.textContent === '이동 없음' || !markDrag.label.textContent) { m.userData.label.remove(); if (m.parent) m.parent.remove(m); markMoves.splice(markMoves.indexOf(m), 1); } markDrag = null; } });
+  window.addEventListener('pointerup', () => { if (markDrag) { const m = markDrag.mk; if (m.userData.txt === undefined || m.userData.txt === '이동 없음') { m.userData.label.remove(); if (m.parent) m.parent.remove(m); markMoves.splice(markMoves.indexOf(m), 1); } markDrag = null; } });
+  // 끝내기: 지금 화면(주황 표시에 번호를 붙여서)과 이동 목록을 한 장의 그림(PNG)으로 만들어 돌려준다. 번호 = 옮긴 순서.
+  async function markCapture(header) {
+    const items = markMoves.filter(m => m.userData.txt && m.userData.txt !== '이동 없음');
+    if (!items.length) return null;
+    renderer.render(scene, camera);
+    const W = canvas.width, H = canvas.height, k = W / canvas.getBoundingClientRect().width;
+    const lines = items.map((m, i) => (i + 1) + '번 · ' + m.userData.txt + '   (' + m.userData.from.join(', ') + ') → (' + m.userData.to.join(', ') + ')');
+    const headH = Math.round(34 * k), lineH = Math.round(22 * k), footH = lineH * lines.length + Math.round(14 * k);
+    const out = document.createElement('canvas'); out.width = W; out.height = H + headH + footH;
+    const c = out.getContext('2d');
+    c.fillStyle = '#fff'; c.fillRect(0, 0, out.width, out.height);
+    c.drawImage(canvas, 0, headH);
+    c.fillStyle = '#111827'; c.font = '700 ' + Math.round(16 * k) + 'px sans-serif'; c.textBaseline = 'middle';
+    c.fillText(header || '조립도 표시 옮기기', Math.round(12 * k), headH / 2);
+    items.forEach((m, i) => {
+      const wp = new THREE.Vector3(); m.getWorldPosition(wp); const p = wp.project(camera);
+      const x = (p.x + 1) / 2 * W, y = (1 - p.y) / 2 * H + headH, r = 11 * k;
+      c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fillStyle = '#f97316'; c.fill(); c.lineWidth = 2 * k; c.strokeStyle = '#fff'; c.stroke();
+      c.fillStyle = '#fff'; c.font = '800 ' + Math.round(14 * k) + 'px sans-serif'; c.textAlign = 'center'; c.fillText(String(i + 1), x, y + 1); c.textAlign = 'left';
+    });
+    c.fillStyle = '#c2410c'; c.font = '600 ' + Math.round(14 * k) + 'px sans-serif';
+    lines.forEach((t, i) => c.fillText(t, Math.round(12 * k), H + headH + Math.round(8 * k) + lineH * (i + 0.5)));
+    return await new Promise(res => out.toBlob(res, 'image/png'));
+  }
   function setGuideDots(v){
     if (!assemblyGuideGroup) return;
     assemblyGuideGroup.children.forEach(c => { c.traverse(o => { if (o.userData && o.userData.dot) o.visible = v; }); (c.userData.attached || []).forEach(m => { if (m.userData && m.userData.dot) m.visible = v; }); });
@@ -4578,6 +4604,7 @@
     // 위치 표시 옮기기: 초록 구멍 칠을 잡아 끌면 그 자리는 그대로 두고, 옮긴 자리에 주황 표시가 따로 생긴다(10mm 칸에 맞춤).
     // 저장하지 않는다 — 화면을 캡처해서 알려주는 용도.
     markMove(on){ markMoveOn = !!on; if (!on) clearMarkMoves(); },
+    markCapture,
     guideDots(visible){ assemblyDotsVisible = !!visible; setGuideDots(assemblyDotsVisible); },
     // 지금 놓인 부품 중 몸통이 겹치는 쌍(검증용) — 조립 데이터가 겹침 금지 규칙을 지키는지 볼 때 쓴다
     overlaps(){
