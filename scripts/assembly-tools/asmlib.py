@@ -194,7 +194,13 @@ def export_steps(A):
     out = []
     for st in A.steps:
         o = {"note": st.note}
-        if st.cam: o["cam"] = {"theta": round(st.cam[0], 3), "phi": round(st.cam[1], 3)}; o["camSrc"] = st.camSrc
+        if st.cam:
+            o["cam"] = {"theta": round(st.cam[0], 3), "phi": round(st.cam[1], 3)}; o["camSrc"] = st.camSrc
+            if len(st.cam) > 2 and st.cam[2]: o["cam"]["tight"] = True   # 이번 부품만 크게(교재가 그 부분만 크게 그린 단계)
+            if len(st.cam) > 3 and st.cam[3]: o["cam"]["focus"] = [[round(float(v), 1) for v in q] for q in st.cam[3]]   # 이 점들을 화면 가운데에(부품 없는 단계)
+            if len(st.cam) > 4 and st.cam[4]: o["cam"]["axes"] = [round(float(v), 1) for v in st.cam[4]]   # 바닥 방향선(+X·+Z·+Y) 원점을 이 자리로(원점에서 떨어진 자리에서 만드는 단계)
+            if len(st.cam) > 5 and st.cam[5]: o["cam"]["holeNums"] = True
+            if len(st.cam) > 6 and st.cam[6]: o["cam"]["rings"] = [[round(float(v), 1) for v in r] for r in st.cam[6]]   # 이 단계에 고정으로 칠할 결합 점   # 이 단계에서 프레임 구멍 번호를 칠해서 보여줌   # 바닥 방향선(+X·+Z·+Y) 원점을 이 자리로(원점에서 떨어진 자리에서 만드는 단계)
         o.update(st.kw)
         o["parts"] = [part_dict(pt) for pt in st.parts]
         out.append(o)

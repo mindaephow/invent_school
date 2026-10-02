@@ -1614,6 +1614,8 @@
     m.userData.robotModel = true;
     m.position.copy(oldMesh.position);
     m.quaternion.copy(oldMesh.quaternion);
+    // 조립 보기의 초록 결합 점(임시 상자 모양에 붙어 있던 것)을 새 모양으로 옮긴다 — 안 옮기면 모양이 늦게 로드될 때 점이 사라진다
+    oldMesh.children.slice().forEach((ch) => { if (ch.userData && ch.userData.dot) { oldMesh.remove(ch); m.add(ch); } });
     scene.remove(oldMesh);
     scene.add(m);
     part.mesh = m;
@@ -4319,6 +4321,7 @@
     parts.slice().forEach(removePart);
     goalTargetPart = null;
     const made = [];
+    assemblyListParts = made; // 조립 보기: 목록 번호 → 부품(모양 없는 부품을 건너뛰면 parts[] 번호가 어긋나므로 이 배열로 찾는다)
     (list || []).forEach((d, i) => {
       if (!PART_DEFS[d.type] || !d.pos || !d.quat) return;
       addPart(d.type, { x: d.pos[0], y: d.pos[1], z: d.pos[2], mount: d.mount, len: d.len });
@@ -4469,6 +4472,8 @@
     assemblyGuideGroup = null;
   }
   let assemblyAxesGroup = null; // 조립 보기의 베이스 X·Y·Z 방향선
+  let assemblyLabelGroup = null;
+  let assemblyListParts = []; // 조립 보기 목록 번호(i) → 부품 // 조립 보기의 프레임 구멍 번호(열-줄)
   window.__ivsAssemblyBridge = {
     resolve(name, categoryId){
       const p = robotPartsCache.find(x => x.name === name && (!categoryId || x.category === categoryId));
@@ -4482,7 +4487,7 @@
     // 고른 부품을 제자리(구멍 자리)로 부드럽게 옮겨 붙인다. 반환: 'ok' | 'none'(고른 부품 없음) | 'notTarget'(이번 단계에 끼우는 부품이 아님)
     combineSelected(){
       if (!selected || selected.isGroup) return 'none';
-      const idx = parts.indexOf(selected);
+      const idx = assemblyListParts.indexOf(selected) >= 0 ? assemblyListParts.indexOf(selected) : parts.indexOf(selected);
       const t = assemblyTargets[idx];
       if (!t) return 'notTarget';
       assemblyTargets[idx] = null;
@@ -4524,11 +4529,13 @@
       return moves.length;
     },
     // 바닥(모눈) 위 X·Z 방향선(원점 (0,0,0)에서 +와 − 양쪽으로)과 위쪽 Y — 위치를 말할 때 "+X쪽", "−Z쪽"처럼 기준으로 쓴다.
-    axes(on){
+    axes(on, at){
+      if (!on && assemblyLabelGroup) { scene.remove(assemblyLabelGroup); assemblyLabelGroup = null; }
       if (assemblyAxesGroup) { scene.remove(assemblyAxesGroup); assemblyAxesGroup.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } }); assemblyAxesGroup = null; }
       if (!on) return;
+      const mkGroup = (pos) => {
       const g = new THREE.Group();
-      g.position.set(0, 0.3, 0);
+      g.position.set(pos[0], pos[1] + 0.3, pos[2]);
       const tag = (text, css) => {
         const c = document.createElement('canvas'); c.width = 128; c.height = 64;
         const x = c.getContext('2d');
@@ -4563,8 +4570,33 @@
       const ring = new THREE.Mesh(new THREE.RingGeometry(5, 6, 32), new THREE.MeshBasicMaterial({ color: 0x111827, side: THREE.DoubleSide, depthTest: false, transparent: true, opacity: 0.85 }));
       ring.rotation.x = -Math.PI / 2; ring.position.y = 0.05; ring.renderOrder = 20;
       g.add(center); g.add(ring);
-      scene.add(g);
-      assemblyAxesGroup = g;
+        return g;
+      };
+      // 원점(0,0,0)의 방향선은 항상, 단계가 원점에서 떨어진 자리에서 만들면 그 조립 자리(at)에도 같이 그린다
+      const root = new THREE.Group();
+      root.add(mkGroup([0, 0, 0]));
+      if (at && (Math.abs(at[0]) + Math.abs(at[1]) + Math.abs(at[2]) > 1)) root.add(mkGroup(at));
+      scene.add(root);
+      assemblyAxesGroup = root;
+    },
+    // 프레임 구멍 번호: [{ pos:[x,y,z], text }] — 현재 단계에서 결합 위치가 있는 프레임의 구멍마다 "열-줄"을 판 위에 표시(구멍 위치 혼란 방지). 빈 목록이면 지운다.
+    holeLabels(items){
+      if (assemblyLabelGroup) { scene.remove(assemblyLabelGroup); assemblyLabelGroup.traverse(o => { if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } }); assemblyLabelGroup = null; }
+      if (!items || !items.length) return;
+      const g = new THREE.Group();
+      const Zv = new THREE.Vector3(0, 0, 1);
+      items.forEach(({ pos, text, n }) => {
+        // 구멍에 색칠하듯: 판 면에 붙은 색 원판에 번호를 칠한다(초록 결합 원과 같은 방식 — 면에 딱 붙이고 깊이 검사를 켜서 블록 뒤에서는 가려진다)
+        const c = document.createElement('canvas'); c.width = 128; c.height = 128;
+        const x = c.getContext('2d');
+        x.beginPath(); x.arc(64, 64, 60, 0, Math.PI * 2); x.fillStyle = 'rgba(37,99,235,0.88)'; x.fill();
+        x.lineWidth = 6; x.strokeStyle = 'rgba(255,255,255,0.95)'; x.stroke();
+        x.font = '800 68px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillStyle = '#ffffff'; x.fillText(text, 64, 70);
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(7.2, 7.2), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -5, polygonOffsetUnits: -5 }));
+        const nn = n ? new THREE.Vector3(n[0], n[1], n[2]).normalize() : new THREE.Vector3(0, 1, 0);
+        m.quaternion.setFromUnitVectors(Zv, nn); m.position.set(pos[0], pos[1], pos[2]); m.renderOrder = 12; m.userData.dot = true; g.add(m);
+      });
+      scene.add(g); assemblyLabelGroup = g;
     },
     // 교재 그림의 초록 안내: { from, to, dir }마다 돌기 끝 점 → 화살표 → 구멍 점을 그린다.
     // 움직이는 부품 쪽 점(돌기 끝 또는 프레임 구멍)은 그 부품에 붙여서 부품을 끌면 함께 따라가고, 화살표는 두 점을 매 프레임 이어 준다.
@@ -4572,15 +4604,22 @@
       clearAssemblyGuides();
       if (!list || !list.length) return;
       const g = new THREE.Group();
-      const mat = () => new THREE.MeshBasicMaterial({ color: 0x22c55e, depthTest: false, transparent: true });
+      const mat = () => new THREE.MeshBasicMaterial({ color: 0x22c55e, depthTest: true, transparent: true }); // 화살표는 부품에 가려져야 한다(물리적으로 안 보이는 곳까지 보이면 구멍 위치가 오히려 헷갈린다 — 사용자 지적)
       const paint = () => new THREE.MeshBasicMaterial({ color: 0x22c55e, transparent: true, opacity: 0.95, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
       const Z = new THREE.Vector3(0, 0, 1);
-      list.forEach(({ from, to, idx, both }) => {
+      list.forEach(({ from, to, idx, both, ringOnly, dir: gdir }) => {
+        if (ringOnly) { // 프레임 구멍에 고정된 결합 위치 원(부품이 움직여도 그대로, 화살표 없음) — 교재의 구멍 표시
+          const n = gdir ? new THREE.Vector3(gdir[0], gdir[1], gdir[2]).normalize() : new THREE.Vector3(0, 1, 0);
+          const rm = new THREE.Mesh(new THREE.CircleGeometry(3.3, 32), paint());
+          rm.renderOrder = 10; rm.userData.dot = true; rm.userData.ring = true;
+          rm.position.set(to[0], to[1], to[2]).addScaledVector(n, 0.15); rm.quaternion.setFromUnitVectors(Z, n); g.add(rm);
+          return;
+        }
         const a = new THREE.Vector3(from[0], from[1], from[2]), b = new THREE.Vector3(to[0], to[1], to[2]);
         const len = b.clone().sub(a).length();
         if (len < 1) return;
         const dir = b.clone().sub(a).normalize();
-        const moving = parts[idx]; // 이번 단계에 끼우는(끌 수 있는) 부품
+        const moving = assemblyListParts[idx] || parts[idx]; // 이번 단계에 끼우는(끌 수 있는) 부품 — 목록 번호로 찾는다
         const attached = [];
         // 면에 딱 붙여 칠한 원판 — 깊이 검사를 켜서 부품 뒤에 가려지면 가려지고, 면과 겹쳐 깜빡이지 않게 살짝 앞으로 뺀다
         const dot = (r, point, normal, onPart) => {
@@ -4602,15 +4641,17 @@
         const pegPt = a.clone().addScaledVector(dir, 0.15);
         const holeOut = b.clone().addScaledVector(dir, 0.15);
         const cap = dot(2.6, pegPt, dir, !recv);
-        const ring = dot(3.3, holeOut, dir, recv);
+        // 프레임이 움직이는 단계(recv): 결합 점은 허공이 아니라 프레임 구멍에 딱 맞춰, 양면에 따로 칠하지 않고 두께 가운데에 하나만 그린다(사용자 지시)
+        const ring = dot(3.3, recv ? b.clone().addScaledVector(dir, -both / 2) : holeOut, dir, recv); // 판이 움직이는 단계의 점은 판에 붙여서 부품을 따라 움직이고 화살표가 늘어나게 한다(번호는 assemblyListParts 로 정확히 찾는다)
         ring.userData.ring = true; // 구멍 칠(표시하기 mark 모드에서는 일반 부품처럼 눌러 표시)
-        // 판의 양쪽 면(둘 다 구멍이 보인다)에 칠해서 어느 쪽에서 봐도 구멍에 표시가 보이게 한다
-        const ring2 = recv ? dot(3.3, b.clone().addScaledVector(dir, -both - 0.15), dir, true) : null;
-        if (ring2) ring2.userData.ring = true;
+        if (recv) { // 판 두께 가운데의 결합 점은 구멍 테두리에 가려 안 보이므로 항상 보이게 한다(사용자 지적: 프레임 중앙에 초록 점이 안 보인다)
+          ring.material.depthTest = false; ring.material.polygonOffset = false; ring.renderOrder = 40; ring.scale.setScalar(1.15);
+        }
+        const ring2 = null;
         const HEAD = 6;
         const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 1, 8), mat());
         const head = new THREE.Mesh(new THREE.ConeGeometry(2.6, HEAD, 12), mat());
-        shaft.renderOrder = head.renderOrder = 999;
+        shaft.renderOrder = head.renderOrder = 11;
         const arrowGroup = new THREE.Group();
         arrowGroup.userData.idx = idx; // 어느 부품의 안내인지(결합하면 그 안내만 지운다)
         arrowGroup.userData.attached = attached;
@@ -4657,6 +4698,7 @@
     serialize(){ return serializeParts(); },
     restore(list){ restoreParts(list, {}, true); },
     camera(c){ target.set(c.target[0], c.target[1], c.target[2]); orbit.radius = c.radius; orbit.theta = c.theta; orbit.phi = c.phi; },
+    camState(){ return { theta: orbit.theta, phi: orbit.phi, radius: orbit.radius, target: [target.x, target.y, target.z] }; }, // 지금 카메라 각도(조립 보기 📷 버튼이 복사해 쓴다)
     // 지금 보이는 부품들이 화면에 알맞게 차도록 카메라 거리·중심만 맞춘다(보는 각도는 그대로).
     frame(points, context){
       if (!points || !points.length) return;

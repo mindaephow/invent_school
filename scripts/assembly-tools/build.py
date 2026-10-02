@@ -31,5 +31,35 @@ if bad:
     print("\n❌ 문제 있음 — 고친 뒤 다시 돌릴 것:"); [print("  ", b) for b in bad]
     sys.exit(1)
 print("\n✅ 문제 0건 (겹침 경고는 위 목록에서 오탐인지 직접 확인)")
-if write:
+# ───── 규칙 준수 확인(가이드 6-1 체크리스트) ─────
+# 자동 검사로는 안 보이는 것을 단계별로 기록한다: <이름>_rules.json = {"view":[화면 확대로 본 단계], "count":[교재와 칸 수 대조한 단계], "camera":[교재와 카메라 확인한 단계]}
+# 눈으로 확인할 때마다 해당 단계 번호를 이 파일에 적는다. --write 는 모든 단계가 세 목록에 있어야 한다(아니면 --unverified 로 미확인임을 알고 넣는다).
+asm = json.load(open(files[0], encoding="utf-8"))["steps"]
+n_steps = len(asm)
+rf = name + "_rules.json"
+rules = json.load(open(rf, encoding="utf-8")) if os.path.exists(rf) else {}
+srcs = {}
+for k, st in enumerate(asm, 1): srcs.setdefault(st.get("camSrc") or "없음", []).append(k)
+print("\n── 규칙 준수 확인 (가이드 6-1) ──")
+print("자동 검사: 통과 (위)")
+print("카메라 출처:", ", ".join(f"{v} {len(ks)}개" for v, ks in srcs.items()), "| 짐작/없음 단계:", sorted(srcs.get("guess", []) + srcs.get("없음", [])))
+# 기준선(바닥 방향선) 점검: 원점에서 150mm 넘게 떨어진 자리에서 만드는 단계는 cam.axes 가 있어야 한다(가이드 6-1 11번)
+far = []
+for k, st in enumerate(asm, 1):
+    pts = []
+    for pt_ in st.get("parts", []):
+        pp = (pt_.get("side") or {}).get("p") or pt_.get("p")
+        if pp and not (pt_.get("move") and pt_["move"].get("at") == k): pts.append(pp)
+    if pts and max(max(abs(q[0]), abs(q[2])) for q in pts) > 150 and not (st.get("cam") or {}).get("axes"): far.append(k)
+print("기준선(cam.axes) 없는데 원점에서 먼 단계:", far if far else "없음")
+if far: print("⚠ 가이드 6-1 11번: 이 단계들은 기준선이 안 보일 수 있다.")
+unver = False
+for key, label in (("view", "화면 확대 확인"), ("count", "교재와 칸 수 대조"), ("camera", "교재와 카메라 확인")):
+    done = set(rules.get(key, [])); miss = [k for k in range(1, n_steps + 1) if k not in done]
+    unver = unver or bool(miss)
+    print(f"{label}: {n_steps - len(miss)}/{n_steps} 단계" + (f" — 안 한 단계 {miss}" if miss else ""))
+if unver: print("⚠ 위 '안 한 단계'는 보고할 때 안 했다고 말해야 한다.")
+if write and unver and "--unverified" not in sys.argv:
+    sys.exit("❌ 규칙 확인이 끝나지 않아 --write 를 하지 않는다. 확인하고 " + rf + " 에 적거나, 미확인을 알고 넣으려면 --unverified 를 붙인다.")
+if write:  # (규칙 확인은 위에서 이미 검사)
     rc, out = run([sys.executable, "emit.py", name + "_entry.js", "cubo-1-" + name]); print(out.strip())
