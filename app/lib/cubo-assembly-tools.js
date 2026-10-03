@@ -8,6 +8,7 @@ import { z } from 'zod'
 import { buildGuide, dimsOf } from './cubo-assembly-guide.js'
 import { autoAssemble, autoCamera } from './cubo-auto-assemble.js'
 import { stlFromDataUrl, measureModel, formatMeasure } from './cubo-part-measure.js'
+import { stepContext } from './cubo-step-context.js'
 
 const text = (t) => ({ content: [{ type: 'text', text: t }] })
 const fail = (t) => ({ content: [{ type: 'text', text: `❌ ${t}` }], isError: true })
@@ -445,6 +446,34 @@ export function registerCuboAssemblyTools(server, getSupabase) {
               { type: 'image', data: b64, mimeType: 'image/jpeg' },
             ],
           }
+        } catch (e) { return fail(e.message) }
+      }
+    )
+
+    server.registerTool(
+      'get_step_context',
+      {
+        title: '단계 직전 상태(쓴 부품·남은 부품·빈 구멍) — 교재 그림 읽기 전에 부른다',
+        description: '조립은 순서대로만 쌓이므로, 단계 k 를 만들거나 검토하기 전에 이 도구로 k−1 단계까지의 상태를 본다: ① 이미 쓴 부품 ② 교재 부품 목록(LIST)에서 남은 부품(이번에 들어올 부품) ③ 부품마다 빈 구멍·빈 돌기(면 이름·번호) ④ 조립 데이터에 이 단계가 있으면 새 부품과 이 단계에서 생긴 결합. 앞 단계가 맞다면 이번 초록 원은 빈 구멍에만 있을 수 있고, 새 부품은 돌기 수만큼의 빈 구멍이 같은 간격으로 있는 자리에만 들어가므로 교재 그림에서 구멍을 일일이 세지 않고 후보 중 하나를 고르면 된다. step 이 조립 데이터 단계 수 + 1 이면 아직 없는 새 단계(만드는 중)로 본다.',
+        inputSchema: {
+          assemblyId: z.string().describe('조립 데이터 id (list_assemblies). 예: cubo-1-autogun'),
+          step: z.number().int().describe('보려는 단계 번호(1부터). 이 단계 직전까지의 상태를 계산한다.'),
+        },
+      },
+      async ({ assemblyId, step }) => {
+        try {
+          const site = await loadSite()
+          const a = (site.IVS_ASSEMBLIES || []).find((x) => x.id === assemblyId)
+          if (!a) return fail('assemblyId 를 찾을 수 없어요(list_assemblies 로 id 확인).')
+          if (step < 1 || step > a.steps.length + 1) return fail('step 은 1~' + (a.steps.length + 1) + ' 사이여야 해요(' + (a.steps.length + 1) + ' = 아직 없는 새 단계).')
+          const sb = getSupabase()
+          const names = [...new Set(a.steps.slice(0, step).flatMap((st) => (st.parts || []).map((pt) => pt.n)))]
+          const { data: rows, error } = await sb.from('ivs_part_catalog').select('name:data->>name, connectors:data->connectors').eq('data->>subject', 'robot').in('data->>name', names)
+          if (error) return fail(error.message)
+          const conn = {}; (rows || []).forEach((r) => { if (r.connectors) conn[r.name] = r.connectors })
+          let listCounts = null
+          try { listCounts = await textbookList(sb, a) } catch (e) { /* LIST 를 못 읽어도 나머지는 계산 */ }
+          return text(stepContext({ steps: a.steps, step, conn, F: site.IVS_FACES, M: site.IVS_MATES, listCounts }).text)
         } catch (e) { return fail(e.message) }
       }
     )
