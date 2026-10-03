@@ -13,8 +13,8 @@
   let catId = null;      // 지금 고른 카테고리 id (부품 이름으로 부품을 찾을 때 씀)
   let lastAxKey = '';
   let renderSeq = 0; // 단계를 다시 그릴 때마다 올려서, 늦게 도는 안내점 다시 붙이기가 옛 단계 것이면 건너뛴다
-  let showHoleNums = true; // 프레임 구멍 번호(열-줄) 표시
-  try { if (localStorage.getItem('ivs-asm-holenums') === '0') showHoleNums = false; } catch (e) { /* 저장 못 해도 기본값 */ }
+  let savedCams = {};    // 관리자가 📷 로 저장한 단계별 시점 { 단계: { theta, phi, radius, target } } (표 ivs_assembly_cams)
+  let baseCam = null;    // 이 단계의 교재 시점(방향·높이각·보는 중심·거리) — 하단 카메라 표시줄용
   let lastCamKey = '';   // 지금 단계에서 맞춰 둔 카메라 각도(theta|phi) — 바뀔 때만 돌린다
   let viewing = false;   // 조립 보기 중인지
   let step = 0;          // 0 = 빈 판, 1..N = 각 단계, N+1 = 완성
@@ -83,6 +83,8 @@
     const n = total();
     const upTo = Math.min(target, n);
     const flipOn = flipActive(target);
+    // 부품 번호("리벳 3/14"): design-faces.js 의 규칙 — 조립 MCP(get_part_faces)와 같은 번호
+    const { numOf } = window.IVS_FACES.numberParts(def.steps);
     def.steps.slice(0, upTo).forEach((s, si) => {
       (s.parts || []).forEach((pt0) => {
         const pt = flipOn && !pt0.noflip ? flipPt(pt0, target) : pt0; // 뒤집기 전 방향으로 보여 주는 단계(noflip: 로봇과 따로 만드는 손잡이는 그대로)
@@ -131,7 +133,7 @@
         }
         // holeMarks: 프레임 구멍에 고정된 결합 위치 원(교재처럼 판 구멍에 표시, 부품이 움직여도 그 자리)
         if (isNew && !moving && pt.holeMarks) pt.holeMarks.forEach((m) => guides.push({ from: m, to: m, dir: dirH || [0, 1, 0], idx: list.length, ringOnly: true }));
-        list.push({ name: pt.n, type, mount: 'floor', pos: pos.slice(), quat: b.quat(rot), rot: rot.slice(), isNew, final: (isNew && dirH) || ex ? base.slice() : null, order: settling ? 1 : (pt.joinOrder || (ex && ex.order) || 1) }); // 합쳐지는 묶음(settle)은 모두 한꺼번에 내려온다 // ex: 14단계처럼 "결합 전"으로 띄운 부품도 제자리(결합 후)가 있다
+        list.push({ name: pt.n, label: pt.n + ' ' + numOf.get(pt0) + '번', type, mount: 'floor', pos: pos.slice(), quat: b.quat(rot), rot: rot.slice(), isNew, final: (isNew && dirH) || ex ? base.slice() : null, order: settling ? 1 : (pt.joinOrder || (ex && ex.order) || 1) }); // 합쳐지는 묶음(settle)은 모두 한꺼번에 내려온다 // ex: 14단계처럼 "결합 전"으로 띄운 부품도 제자리(결합 후)가 있다
       });
     });
     // xform: 이 단계부터는 지금까지 만든 것 전체를 통째로 돌려서 놓는다(예: 풍차 몸체를 세워서 받침에 올리기). 부품 자리는 원래 좌표 그대로 두고 여기서 한꺼번에 변환한다.
@@ -219,68 +221,6 @@
     }
     if (stc && Array.isArray(stc.rings)) stc.rings.forEach((m) => guides.push({ from: m, to: m, dir: [0, 1, 0], idx: -1, ringOnly: true })); // cam.rings: 이 단계에 고정으로 칠할 결합 점(예: 받침 흰 판 구멍)
     b.guides(guides);
-    // 프레임 구멍 번호: 이번 단계에 결합 위치(초록 원·돌기 끝)가 걸리는 프레임에서, 같은 줄의 "이미 꽂힌 부품(블록 돌기·T축 등) 다음 구멍부터 1, 2, 3…"으로 센다
-    // (두 부품 사이는 왼쪽 부품 다음부터 1, 2, 3…, 판 끝과 부품 사이는 부품 쪽에서부터) — 사용자 지시: "블록 다음부터 1,2,3 · T축과 T축 사이에 1,2,3"
-    if (b.holeLabels) {
-      const items = [];
-      if (showHoleNums && stc && stc.holeNums && guides.length) { // cam.holeNums: 이 단계에서만 구멍 번호를 보여준다(단계마다 조립 데이터가 정함)
-        const conns = b.connectorsByName ? b.connectorsByName() : {};
-        const pts = []; guides.forEach((g) => { pts.push(g.to); pts.push(g.from); });
-        // 다른 부품의 돌기(월드 좌표): 위치·방향·길이
-        const pegs = [];
-        list.forEach((d2) => {
-          const c2 = conns[d2.name]; if (!c2 || !c2.pegs) return;
-          const R2 = matFromEuler(d2.rot || [0, 0, 0]);
-          c2.pegs.forEach((pg) => { const w = mvec(R2, pg.pos); pegs.push({ owner: d2, p: [d2.pos[0] + w[0], d2.pos[1] + w[1], d2.pos[2] + w[2]], len: pg.len || 5 }); });
-        });
-        list.forEach((d) => {
-          const c = conns[d.name]; if (!c || !c.holes || !/프레임$/.test(d.name) || /도 프레임/.test(d.name)) return;
-          const hs = c.holes.filter((h) => Math.abs(h.dir[1]) > 0.9); if (hs.length < 3) return; // 판 두께 방향으로 뚫린 구멍(프레임)
-          const R = matFromEuler(d.rot || [0, 0, 0]); const Rt = [0, 1, 2].map((i) => [0, 1, 2].map((j) => R[j][i]));
-          const xs = hs.map((h) => h.pos[0]), zs = hs.map((h) => h.pos[2]);
-          const lo = [Math.min(...xs) - 8, Math.min(...zs) - 8], hi = [Math.max(...xs) + 8, Math.max(...zs) + 8];
-          const hit = pts.some((q) => { const l = mvec(Rt, [q[0] - d.pos[0], q[1] - d.pos[1], q[2] - d.pos[2]]); return l[0] >= lo[0] && l[0] <= hi[0] && l[2] >= lo[1] && l[2] <= hi[1] && Math.abs(l[1]) <= 30; });
-          if (!hit) return;
-          const n = mvec(R, [0, 1, 0]); const sg = n[1] >= -0.01 ? 1 : -1; // 위를 보는 면에 붙인다
-          const info = hs.map((h) => {
-            const w = mvec(R, h.pos);
-            const hw = [d.pos[0] + w[0], d.pos[1] + w[1], d.pos[2] + w[2]];
-            // 이 구멍에 다른 부품의 돌기가 꽂혀 있나(구멍 축 위·판 가운데 평면이 돌기 길이 안)
-            const occ = pegs.some((pg) => {
-              if (pg.owner === d) return false;
-              const v = [pg.p[0] - hw[0], pg.p[1] - hw[1], pg.p[2] - hw[2]]; const al = v[0] * n[0] + v[1] * n[1] + v[2] * n[2];
-              const lat = Math.hypot(v[0] - al * n[0], v[1] - al * n[1], v[2] - al * n[2]);
-              return lat <= 3.6 && Math.abs(al) <= pg.len / 2 + 1.5;
-            });
-            // 이번 단계에 이 구멍으로 꽂힐 부품(초록 결합 위치 — 예: 교재 18 의 T축 2개)도 기준 부품으로 본다
-            const tgt = !d.isNew && guides.some((g) => {
-              const v = [g.to[0] - hw[0], g.to[1] - hw[1], g.to[2] - hw[2]]; const al = v[0] * n[0] + v[1] * n[1] + v[2] * n[2];
-              return Math.hypot(v[0] - al * n[0], v[1] - al * n[1], v[2] - al * n[2]) <= 3.6 && Math.abs(al) <= 8;
-            });
-            return { col: h.pos[0], row: Math.round(h.pos[2]), hw, occ: occ || tgt }; // 줄 = 판 폭 방향 위치, 열 = 길이 방향 위치(좌표)
-          });
-          const rows = {}; info.forEach((o) => { (rows[o.row] = rows[o.row] || []).push(o); });
-          // 제일 윗줄만 번호를 붙인다(사용자 지시): 눕힌 판은 화면에서 먼 쪽(z 가 가장 작은) 줄, 세운 판은 가장 높은 줄
-          const rowKeys = Object.keys(rows); const mean = (arr, i) => arr.reduce((a1, o) => a1 + o.hw[i], 0) / arr.length;
-          const topKey = rowKeys.sort((ka, kb) => (Math.abs(n[1]) > 0.5 ? mean(rows[ka], 2) - mean(rows[kb], 2) : mean(rows[kb], 1) - mean(rows[ka], 1)))[0];
-          [rows[topKey]].forEach((arr) => {
-            arr.sort((a1, b1) => a1.col - b1.col);
-            let i = 0;
-            while (i < arr.length) {
-              if (arr[i].occ) { i++; continue; }
-              let j = i; while (j < arr.length && !arr[j].occ) j++;     // arr[i..j-1] 이 빈 구멍 구간
-              const leftLm = i > 0, rightLm = j < arr.length;            // 양옆이 부품인지(아니면 판 끝)
-              for (let k = i; k < j; k++) {
-                const num = (!leftLm && rightLm) ? (j - k) : (k - i + 1); // 오른쪽 부품만 있으면 그쪽에서부터, 그 외엔 왼쪽 부품(또는 판 왼쪽 끝) 다음부터
-                items.push({ pos: [arr[k].hw[0] + n[0] * 2.65 * sg, arr[k].hw[1] + n[1] * 2.65 * sg, arr[k].hw[2] + n[2] * 2.65 * sg], text: String(num), n: [n[0] * sg, n[1] * sg, n[2] * sg] });
-              }
-              i = j;
-            }
-          });
-        });
-      }
-      b.holeLabels(items);
-    }
     // 앞 벽이 뒤쪽 끝에 있는 단계(flip)는 반대편에서 보여준다
     // view: 기본 각도에서 90도×view 만큼 돌려서 보기 / cam: {theta, phi}로 교재 그림과 같은 각도를 직접 지정
     const st = (step > 0 && step < last()) ? def.steps[step - 1] : null;
@@ -288,11 +228,16 @@
     const th = st && st.cam ? st.cam.theta : (def.camera ? def.camera.theta : 0) + view * Math.PI / 2;
     const ph = st && st.cam ? st.cam.phi : (def.camera ? def.camera.phi : 1);
     const camKey = th.toFixed(3) + '|' + ph.toFixed(3);
-    if (b.turn && def.camera && camKey !== lastCamKey) { b.turn(th, ph); lastCamKey = camKey; } // 각도가 바뀌는 단계에서만 돌린다(직접 돌린 화면은 그대로)
+    if (b.turn && def.camera) { b.turn(th, ph); lastCamKey = camKey; } // 단계를 열 때마다 그 단계의 시점으로 — 돌려 놓은 각도는 다음 단계로 넘어가지 않는다(사용자 지시 2026-10-03)
+    const sv = savedCams[step]; // 관리자가 저장한 시점(보는 중심·거리까지)이 있으면 그걸로 연다
+    if (sv && b.camera && Array.isArray(sv.target)) b.camera({ target: sv.target, radius: sv.radius, theta: sv.theta, phi: sv.phi });
+    { const myStep = step, myTh = sv ? sv.theta : th, myPh = sv ? sv.phi : ph, mySrc = sv ? 'admin' : (st && st.camSrc ? st.camSrc : ''); // 교재 시점 = 단계 데이터의 방향·높이각 + 화면에 맞춘 보는 중심·거리. 카메라가 자리 잡은 뒤(0.15초) 저장해 하단 표시줄이 지금 시점과 비교한다
+      setTimeout(() => { if (step !== myStep || !b.camState) return; const cs = b.camState(); baseCam = { step: myStep, th: myTh, ph: myPh, target: cs.target, radius: cs.radius, src: mySrc }; }, 150); }
     const n = total();
     $('asmLabel').textContent = step === 0 ? '시작 전' : (step === last() ? '완성!' : step + ' / ' + n + ' 단계');
     $('asmNote').textContent = step === 0 ? '빈 판에서 시작해요. ▶ 를 눌러 한 단계씩 만들어 봐요.'
       : (step === last() ? '완성! 부품이 모두 제자리에 끼워졌어요.' : (def.steps[step - 1].note || ''));
+    { const adm2 = !!(window.__ivsIsAdmin && window.__ivsIsAdmin()); ['asmCamCopy', 'asmCamReset'].forEach((id) => { const e2 = $(id); if (e2) e2.hidden = !adm2; }); } // 📷(시점 맞춤)는 본사 관리자 로그인일 때만 보인다(사용자 지시 2026-10-03)
     $('asmSlider').value = String(step);
     $('asmStageNote').textContent = step === last() ? $('asmNote').textContent : $('asmLabel').textContent + ' · ' + $('asmNote').textContent;
     markStepButtons();
@@ -390,6 +335,8 @@
     b.axes(true);
     $('asmSlider').max = String(last());
     buildStepButtons();
+    savedCams = {};
+    if (b.camStore) b.camStore.load(def.id).then((m) => { savedCams = m || {}; if (viewing) render(); }); // 관리자가 저장한 단계별 시점
     go(last()); // 처음엔 완성된 모습부터 보여준다
     pf.asmOpened = Math.round(performance.now());
     b.status('조립 보기 중이에요. 닫으면 하던 작업으로 돌아가요.', 'success');
@@ -474,25 +421,67 @@
       if (viewing) go(n);
     });
     $('asmStagePrev').addEventListener('click', stopPlayClick(() => go(step - 1)));
-    { // 프레임 구멍 번호 보이기/숨기기 버튼(#)
+    {
       const row = document.querySelector('#asmStageBar .asm-stage-row');
+      if (row && !$('asmCamRead')) { // 현재 카메라: 방향(좌우)·높이(위아래 각도)·보고 있는 쪽·부품까지 거리 — 실시간(사용자 지시 2026-10-03)
+        const bar = $('asmStageBar');
+        const rd = document.createElement('div');
+        rd.id = 'asmCamRead'; rd.style.cssText = 'font-size:11px; color:#6b7280; margin:3px 2px 0; line-height:1.3;';
+        bar.appendChild(rd);
+        let last = '';
+        setInterval(() => {
+          if (!viewing) return;
+          const b3 = bridge(); if (!b3 || !b3.camState || !b3.camDistance) return;
+          const c = b3.camState(), d = b3.camDistance();
+          const deg = (r) => r * 180 / Math.PI;
+          const wrap = (a) => ((a + 180) % 360 + 360) % 360 - 180;
+          const f0 = (v) => Math.round(v);
+          const posOf = (th, ph, tg, r) => [tg[0] + r * Math.sin(ph) * Math.sin(th), tg[1] + r * Math.cos(ph), tg[2] + r * Math.sin(ph) * Math.cos(th)];
+          const sideOf = (th) => { const x = Math.sin(th), z = Math.cos(th); return (Math.abs(x) > 0.38 ? (x > 0 ? '+X' : '-X') : '') + (Math.abs(z) > 0.38 ? (z > 0 ? '+Z' : '-Z') : ''); };
+          const line = (title, th, ph, pos, ctr, tail) => title + ' · 방향 ' + f0(wrap(deg(th))) + '° · 높이각 ' + f0(90 - deg(ph)) + '° · ' + sideOf(th) + ' 쪽에서 봄 · 카메라 x ' + f0(pos[0]) + ' y(높이) ' + f0(pos[1]) + ' z ' + f0(pos[2]) + ' / 보는 중심 x ' + f0(ctr[0]) + ' y ' + f0(ctr[1]) + ' z ' + f0(ctr[2]) + (tail || '');
+          const lines = [];
+          if (baseCam && baseCam.step === step) {
+            const srcTxt = { guess: '짐작', user: '사용자가 맞춤', fit: '교재 그림에서 계산', auto: '자동', admin: '관리자가 저장' }[baseCam.src] || '';
+            lines.push(line('교재 시점', baseCam.th, baseCam.ph, posOf(baseCam.th, baseCam.ph, baseCam.target, baseCam.radius), baseCam.target, srcTxt ? ' · ' + srcTxt : ''));
+          }
+          lines.push(line('지금 시점', c.theta, c.phi, d.pos, d.center, ' · ' + (d.toPart ? d.label + '까지 ' : '화면 중심까지 ') + f0(d.mm) + 'mm'));
+          if (baseCam && baseCam.step === step) {
+            const dAz = wrap(deg(c.theta) - deg(baseCam.th)), dEl = (90 - deg(c.phi)) - (90 - deg(baseCam.ph));
+            lines.push(Math.abs(dAz) < 1 && Math.abs(dEl) < 1 ? '교재 시점과 같은 각도입니다' : '교재 시점과 차이: 방향 ' + (dAz >= 0 ? '+' : '') + f0(dAz) + '° · 높이각 ' + (dEl >= 0 ? '+' : '') + f0(dEl) + '°');
+          }
+          const txt = lines.join('|');
+          if (txt !== last) { rd.innerHTML = ''; lines.forEach((t) => { const dv = document.createElement('div'); dv.textContent = t; rd.appendChild(dv); }); last = txt; }
+        }, 250);
+      }
       if (row && !$('asmCamCopy')) { // 📷: 지금 보는 각도를 "카메라 N단계: theta … phi …"로 복사 — 교재와 같은 각도로 돌린 뒤 눌러 알려 주면 그 단계 카메라로 저장한다(camSrc user)
         const cb = document.createElement('button');
         cb.type = 'button'; cb.className = 'ghost asm-nav'; cb.id = 'asmCamCopy'; cb.textContent = '📷'; cb.title = '지금 각도를 이 단계 카메라로 복사'; cb.setAttribute('aria-label', '지금 카메라 각도 복사');
-        cb.addEventListener('click', () => {
+        cb.title = '지금 보이는 모습(방향·높이각·밀기·확대)을 이 단계의 시점으로 저장 — 관리자 전용';
+        cb.addEventListener('click', async () => {
           const b2 = bridge(); if (!b2 || !b2.camState) return;
           const c = b2.camState(); const txt = '카메라 ' + step + '단계: theta ' + c.theta.toFixed(3) + ' phi ' + c.phi.toFixed(3);
-          try { if (navigator.clipboard) navigator.clipboard.writeText(txt).catch(() => {}); } catch (e) { /* 복사 못 해도 아래 안내로 보인다 */ }
-          b2.status(txt + ' (복사됨 — 채팅에 붙여 주세요)', 'success');
+          try { if (navigator.clipboard) navigator.clipboard.writeText(txt).catch(() => {}); } catch (e) { /* 복사 못 해도 상관없다 */ }
+          if (!(window.__ivsIsAdmin && window.__ivsIsAdmin()) || !b2.camStore) { b2.status(txt + ' (복사됨)', 'success'); return; }
+          const r3 = (v) => Math.round(v * 1000) / 1000, r1 = (v) => Math.round(v * 10) / 10;
+          const cam = { theta: r3(c.theta), phi: r3(c.phi), radius: r1(c.radius), target: c.target.map(r1) };
+          const myStep = step;
+          try {
+            await b2.camStore.save(def.id, myStep, cam);
+            savedCams[myStep] = cam;
+            baseCam = { step: myStep, th: cam.theta, ph: cam.phi, target: cam.target, radius: cam.radius, src: 'admin' };
+            b2.status(myStep + '단계 시점을 저장했습니다. 이제 이 단계를 열면 이 모습으로 보여요.', 'success');
+          } catch (e) { b2.status('시점 저장에 실패했어요: ' + e.message, 'error'); }
         });
         row.appendChild(cb);
-      }
-      if (row && !$('asmHoleNums')) {
-        const hb = document.createElement('button');
-        hb.type = 'button'; hb.className = 'ghost asm-nav'; hb.id = 'asmHoleNums'; hb.textContent = '#'; hb.title = '프레임 구멍 번호(열-줄) 보이기/숨기기'; hb.setAttribute('aria-label', '프레임 구멍 번호 보이기 숨기기');
-        const paint = () => { hb.style.opacity = showHoleNums ? '1' : '0.45'; hb.setAttribute('aria-pressed', showHoleNums ? 'true' : 'false'); };
-        hb.addEventListener('click', () => { showHoleNums = !showHoleNums; try { localStorage.setItem('ivs-asm-holenums', showHoleNums ? '1' : '0'); } catch (e) { /* 저장 못 해도 이번에는 적용 */ } paint(); render(); });
-        paint(); row.appendChild(hb);
+        const rb = document.createElement('button');
+        rb.type = 'button'; rb.className = 'ghost asm-nav'; rb.id = 'asmCamReset'; rb.textContent = '⟲'; rb.title = '이 단계에 저장한 시점을 지우고 기본 시점으로 — 관리자 전용'; rb.setAttribute('aria-label', '저장한 시점 지우기');
+        rb.addEventListener('click', async () => {
+          const b2 = bridge(); if (!b2 || !b2.camStore || !savedCams[step]) { if (b2) b2.status('이 단계에는 저장한 시점이 없어요.', 'info'); return; }
+          const myStep = step;
+          try { await b2.camStore.remove(def.id, myStep); delete savedCams[myStep]; render(); b2.status(myStep + '단계 저장 시점을 지웠어요. 기본 시점으로 보여요.', 'success'); }
+          catch (e) { b2.status('지우기에 실패했어요: ' + e.message, 'error'); }
+        });
+        row.appendChild(rb);
       }
     }
     $('asmStageNext').addEventListener('click', stopPlayClick(() => go(step + 1)));

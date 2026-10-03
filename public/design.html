@@ -190,6 +190,22 @@
   .selected-controls p{font-size:14px; color:var(--ink); font-weight:600; margin:0;}
   #closeSelected{padding:4px 10px; font-size:16px; line-height:1; border-radius:8px;}
   #selectedLabel{font-weight:600; color:var(--ink);}
+
+  /* 조립 보기의 부품 창은 작게: 폭 250px, 버튼·글자 축소 (사용자 지시 2026-10-03 "모달이 너무 커") */
+  .selected-controls.asm-compact{width:min(250px, calc(100% - 32px)); padding:10px; border-radius:12px;}
+  .asm-compact .modal-head{margin-bottom:6px;}
+  .asm-compact .modal-head p{font-size:13px;}
+  .asm-compact #closeSelected{padding:2px 8px; font-size:14px;}
+  .asm-compact #asmFaceInfo{font-size:12px !important; line-height:1.4 !important; margin:2px 0 6px !important;}
+  .asm-compact .asm-btn-row{gap:4px !important; margin:0;}
+  .asm-compact .asm-btn-row button{flex:1; padding:5px 0; font-size:12px; min-width:0;}
+  .asm-compact .note{font-size:11px; line-height:1.35;}
+  .asm-compact .nudge-grid{gap:4px; margin-bottom:6px;}
+  .asm-compact .nudge-grid button{padding:4px 0; font-size:11px;}
+  .asm-compact .rotate-row{gap:4px; margin-bottom:6px;}
+  .asm-compact .rotate-row button{padding:5px 0; font-size:12px;}
+  .asm-compact .axis-row .axis-tag{min-height:30px; font-size:14px;}
+  .asm-compact .axis-hint{font-size:9px;}
   .nudge-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:8px;}
   .nudge-grid button{padding:8px 2px; font-size:12px;}
   .rotate-row{display:flex; gap:6px; margin-bottom:8px;}
@@ -593,10 +609,15 @@
           <p><span class="drag-handle">⠿</span>선택한 부품: <span id="selectedLabel"></span></p>
           <button id="closeSelected" class="ghost">✕</button>
         </div>
+        <div id="asmFaceInfo" hidden style="margin:4px 0 8px; font-size:13px; line-height:1.55; color:#374151;"></div>
+        <div id="asmNumLegend" hidden style="margin:-2px 0 6px; font-size:12px; font-weight:700;"></div>
         <div id="asmDemoBlock" hidden>
           <div style="display:flex; flex-direction:column; gap:6px; margin:6px 0 8px;">
-            <button id="asmCombine" class="primary" type="button" title="이 부품이 제자리 구멍으로 가서 딱 붙어요">🔗 결합</button>
-            <button id="asmReset" class="ghost" type="button" title="움직인 부품을 이 단계의 처음 자리로">↺ 원위치</button>
+            <div class="asm-btn-row" style="display:flex; gap:6px;">
+              <button id="asmNumBtn" class="ghost" type="button" title="선택한 부품 한 면의 구멍·돌기에 번호를 붙여요" hidden>🔢 번호</button>
+              <button id="asmCombine" class="primary" type="button" title="이 부품이 제자리 구멍으로 가서 딱 붙어요">🔗 결합</button>
+              <button id="asmReset" class="ghost" type="button" title="움직인 부품을 이 단계의 처음 자리로">↺ 원위치</button>
+            </div>
             <p class="note" style="margin:0;">부품을 끌어서 움직여요(저장되지 않아요). 제자리에 가까워지면 딱 붙어요.</p>
           </div>
         </div>
@@ -723,6 +744,7 @@
 <script src="design-sets.js"></script>
 <script src="design-lessons.js"></script>
 <script src="design-assemblies.js"></script>
+<script src="design-faces.js"></script>
 <script src="design-assembly.js"></script>
 <script src="design-collision.js"></script>
 <script src="design-robot-categories.js"></script>
@@ -2189,7 +2211,159 @@
     s.renderOrder = 21;
     return s;
   }
+  // 조립 보기: 선택한 부품의 6면 이름표(+x −x +y −y +z −z). 부품 모델 축에 고정돼 있어서 부품을 돌려도 같은 면에 붙어 다닌다.
+  // 월드 방향선(색 있는 대문자 +X…)과 헷갈리지 않게 회색 알약 + 소문자. 가려진 면의 이름표는 같이 가려진다.
+  let partFaceTags = null;
+  function updatePartFaceTags(){
+    if (partFaceTags) {
+      scene.remove(partFaceTags);
+      partFaceTags.traverse(o => { if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } });
+      partFaceTags = null;
+    }
+    if (!selected || selected.isGroup || selected.isMarker || !selected.asmLabel || showPartNumbers) return; // 번호를 켜면 면 이름표는 숨겨 번호가 가려지지 않게 한다
+    const def = defOf(selected);
+    const q = selected.body.quaternion;
+    const qq = new THREE.Quaternion(q.x, q.y, q.z, q.w);
+    const half = { x: def.w / 2, y: def.h / 2, z: def.d / 2 };
+    const g = new THREE.Group();
+    ['x', 'y', 'z'].forEach(a => [1, -1].forEach(s => {
+      const text = (s > 0 ? '+' : '−') + a;
+      const c = document.createElement('canvas'); c.width = 128; c.height = 64;
+      const x = c.getContext('2d');
+      x.fillStyle = 'rgba(55,65,81,0.92)'; x.beginPath(); x.roundRect ? x.roundRect(4, 4, 120, 56, 28) : x.rect(4, 4, 120, 56); x.fill();
+      x.lineWidth = 4; x.strokeStyle = 'rgba(255,255,255,0.95)'; x.stroke();
+      x.font = '800 38px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillStyle = '#ffffff'; x.fillText(text, 64, 34);
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthTest: true }));
+      const off = new THREE.Vector3(a === 'x' ? s * (half.x + 7) : 0, a === 'y' ? s * (half.y + 7) : 0, a === 'z' ? s * (half.z + 7) : 0).applyQuaternion(qq);
+      sp.position.set(selected.body.position.x + off.x, selected.body.position.y + off.y, selected.body.position.z + off.z);
+      sp.scale.set(15, 7.5, 1); sp.renderOrder = 13;
+      g.add(sp);
+    }));
+    scene.add(g); partFaceTags = g;
+  }
+  // 조립 보기: 부품 창의 "번호 보기" 버튼 — 선택한 부품의 구멍·돌기 위에 번호를 붙인다(부품에 고정된 번호: design-faces.js 규칙).
+  // 한 줄뿐인 면은 숫자 하나, 격자 면은 "열3 / 줄2" 두 줄. 가려진 면의 번호는 같이 가려진다(depthTest).
+  let showPartNumbers = false, partNumberTags = null;
+  let numFaceKey = null; // 부품 창에서 직접 누른 면(예: '돌기면 +z'). 없으면 카메라 쪽을 가장 많이 보는 면 하나
+  const numTexCache = new Map();
+  function numTexture(text, color){
+    color = color || 'rgba(37,99,235,0.92)';
+    const ck = color + '|' + text;
+    if (numTexCache.has(ck)) return numTexCache.get(ck);
+    const c = document.createElement('canvas'); c.width = 128; c.height = 128;
+    const x = c.getContext('2d');
+    x.beginPath(); x.arc(64, 64, 60, 0, Math.PI * 2); x.fillStyle = color; x.fill();
+    x.lineWidth = 6; x.strokeStyle = 'rgba(255,255,255,0.95)'; x.stroke();
+    x.fillStyle = '#ffffff'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    const lines = text.split('\n');
+    if (lines.length === 1) { x.font = '800 78px sans-serif'; x.fillText(lines[0], 64, 68); }
+    else { x.font = '800 40px sans-serif'; x.fillText(lines[0], 64, 44); x.fillText(lines[1], 64, 88); }
+    const tex = new THREE.CanvasTexture(c); numTexCache.set(ck, tex); return tex;
+  }
+  function updatePartNumberTags(){
+    if (partNumberTags) {
+      scene.remove(partNumberTags);
+      partNumberTags.traverse(o => { if (o.material) o.material.dispose(); }); // 글자 그림(texture)은 캐시라서 남겨 둔다
+      partNumberTags = null;
+    }
+    const legend = document.getElementById('asmNumLegend');
+    legend.hidden = true;
+    const ok = showPartNumbers && selected && !selected.isGroup && !selected.isMarker && selected.asmLabel && window.IVS_FACES;
+    if (!ok) return;
+    const cached = robotPartsCache.find(x => 'robot:' + x.id === selected.type);
+    if (!cached || !cached.connectors) return;
+    const def = defOf(selected);
+    const half = { x: def.w / 2, y: def.h / 2, z: def.d / 2 };
+    const q = selected.body.quaternion, qq = new THREE.Quaternion(q.x, q.y, q.z, q.w);
+    const AXI = { x: 0, y: 1, z: 2 };
+    const g = new THREE.Group();
+    const allFaces = window.IVS_FACES.facesOf(cached.connectors);
+    // 번호는 한 면에만: 직접 고른 면, 없으면 카메라를 가장 정면으로 보는 면
+    let chosen = allFaces.find(f => f.key === numFaceKey);
+    if (!chosen) {
+      const toCam = new THREE.Vector3().subVectors(camera.position, new THREE.Vector3(selected.body.position.x, selected.body.position.y, selected.body.position.z)).normalize();
+      let best = -2;
+      allFaces.forEach(f => { const d = new THREE.Vector3(f.normal[0], f.normal[1], f.normal[2]).applyQuaternion(qq).dot(toCam); if (d > best) { best = d; chosen = f; } });
+    }
+    if (chosen && chosen.rows > 1) { legend.innerHTML = `<span style="color:#2563eb">파랑 열 1~${chosen.cols}</span> · <span style="color:#ea580c">주황 줄 1~${chosen.rows}</span>`; legend.hidden = false; }
+    [chosen].filter(Boolean).forEach(f => {
+      const grid = f.rows > 1;
+      const colI = AXI[f.colAxis];
+      const add = (lp, text, color, size) => {
+        const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: numTexture(text, color), transparent: true, depthTest: false })); // 번호는 가장 위 레이어: 화살표·다른 부품에 가려지지 않는다
+        const off = new THREE.Vector3(lp[0], lp[1], lp[2]).applyQuaternion(qq);
+        sp.position.set(selected.body.position.x + off.x, selected.body.position.y + off.y, selected.body.position.z + off.z);
+        sp.scale.set(size, size, 1); sp.renderOrder = 100;
+        g.add(sp);
+      };
+      f.items.forEach(it => {
+        const lp = it.pos.slice();
+        // 홀면: 부품 겉면 바로 바깥, 돌기면: 돌기 끝 바깥
+        lp[AXI[f.axis]] = f.kind === '홀' ? f.sign * (half[f.axis] + 0.6) : it.pos[AXI[f.axis]] + f.sign * ((it.len || 0) / 2 + 1);
+        if (!grid) { add(lp, it.label, null, 6.5); return; }
+        // 격자 면: 번호를 다 붙이지 않고 ① 줄1 의 가로(열) 번호 전부(파랑) ② 열1 의 세로(줄) 번호만(주황, 부품 바깥쪽)
+        if (it.row === 1) add(lp, String(it.col), null, 6.5);
+        if (it.col === 1) { const lq = lp.slice(); lq[colI] -= 10; add(lq, String(it.row), 'rgba(234,88,12,0.95)', 6.5); }
+      });
+    });
+    scene.add(g); partNumberTags = g;
+  }
+  document.getElementById('asmFaceInfo').addEventListener('click', (e) => {
+    const row = e.target.closest('[data-face]');
+    if (!row) return;
+    numFaceKey = (showPartNumbers && numFaceKey === row.dataset.face) ? null : row.dataset.face; // 같은 면을 다시 누르면 자동으로 돌아간다
+    showPartNumbers = true; paintNumBtn(); refreshFaceInfo(true);
+  });
+  document.getElementById('asmNumBtn').addEventListener('click', () => {
+    if (showPartNumbers) numFaceKey = null; // 끌 때 직접 고른 면도 초기화
+    showPartNumbers = !showPartNumbers;
+    paintNumBtn(); refreshFaceInfo(true);
+  });
+  function paintNumBtn(){
+    const b = document.getElementById('asmNumBtn');
+    b.textContent = showPartNumbers ? '🔢 끄기' : '🔢 번호';
+    b.style.background = showPartNumbers ? '#dbeafe' : '';
+    b.setAttribute('aria-pressed', showPartNumbers ? 'true' : 'false');
+  }
+  // 조립 보기: 선택한 부품의 면마다 "지금 어느 쪽을 보는지"를 위·아래·왼쪽·오른쪽(카메라 기준)으로 보여 준다.
+  // 면 이름은 부품 자체의 축(+y …)이고 부품을 돌려도 안 바뀐다. 보는 쪽은 부품 자세와 카메라 각도에 따라 바뀌어서 카메라를 돌리면 같이 갱신한다.
+  let faceInfoKey = '';
+  function screenDirText(v){
+    const th = orbit.theta;
+    const right = v.x * Math.cos(th) - v.z * Math.sin(th);   // 카메라 오른쪽
+    const depth = -v.x * Math.sin(th) - v.z * Math.cos(th);   // 카메라에서 멀어지는 쪽(+)
+    const cand = [[Math.abs(v.y), v.y >= 0 ? '위쪽' : '아래쪽'], [Math.abs(right), right >= 0 ? '오른쪽' : '왼쪽'], [Math.abs(depth), depth >= 0 ? '안쪽(멀리)' : '카메라 쪽']];
+    cand.sort((a, b) => b[0] - a[0]);
+    return cand[0][1];
+  }
+  function refreshFaceInfo(force){
+    const box = document.getElementById('asmFaceInfo');
+    if (!box) return;
+    const ok = selected && !selected.isGroup && !selected.isMarker && selected.asmLabel && window.IVS_FACES;
+    document.getElementById('asmNumBtn').hidden = !ok;
+    if (!ok) { if (!box.hidden) { box.hidden = true; box.innerHTML = ''; } faceInfoKey = ''; return; }
+    const q = selected.body.quaternion;
+    const key = [selected.id || selected.type, q.x.toFixed(3), q.y.toFixed(3), q.z.toFixed(3), q.w.toFixed(3), orbit.theta.toFixed(2), orbit.phi.toFixed(2), numFaceKey, showPartNumbers].join('|');
+    if (!force && key === faceInfoKey && !box.hidden) return;
+    faceInfoKey = key;
+    const cached = robotPartsCache.find(x => 'robot:' + x.id === selected.type);
+    if (!cached || !cached.connectors) { box.hidden = true; return; }
+    const qq = new THREE.Quaternion(q.x, q.y, q.z, q.w);
+    const lines = window.IVS_FACES.facesOf(cached.connectors).map(f => {
+      const v = new THREE.Vector3(f.normal[0], f.normal[1], f.normal[2]).applyQuaternion(qq);
+      const axis = (f.sign > 0 ? '+' : '−') + f.axis;
+      const side = f.axis === 'y' ? (f.sign > 0 ? ', 앞면' : ', 뒷면') : '';
+      const on = showPartNumbers && f.key === numFaceKey;
+      return `<div data-face="${f.key}" style="cursor:pointer; padding:1px 4px; border-radius:6px; ${on ? 'background:#dbeafe;' : ''}">${f.kind}면(${axis}${side}) → <b>${screenDirText(v)}</b>${on ? ' 🔢' : ''}</div>`;
+    });
+    box.innerHTML = lines.join('') + '<div style="font-size:11px; color:#6b7280; margin-top:2px;">면을 누르면 그 면의 번호가 보여요 </div>';
+    box.hidden = !lines.length;
+    updatePartNumberTags(); // 카메라·자세가 바뀌면 번호도 맞는 면으로 다시 붙인다
+    updatePartFaceTags();
+  }
   function updateAxisGizmo(){
+    updatePartFaceTags();
+    updatePartNumberTags();
     if (axisGizmo) {
       scene.remove(axisGizmo);
       axisGizmo.traverse(o => {
@@ -2230,9 +2404,11 @@
         return;
       }
       const arrow = new THREE.Group();
-      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(2.2 * k, 2.2 * k, len, 8), mat);
+      // 조립 보기(작은 로봇 부품)에서는 화살표가 부품을 가리지 않게 절반 굵기로 그린다(사용자 지시 2026-10-03)
+      const th = (window.__ivsAssembly && window.__ivsAssembly.isViewing()) ? 0.35 : 1;
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(2.2 * k * th, 2.2 * k * th, len, 8), mat);
       shaft.position.y = len / 2;
-      const head = new THREE.Mesh(new THREE.ConeGeometry(7 * k, 22 * k, 14), mat);
+      const head = new THREE.Mesh(new THREE.ConeGeometry(7 * k * th, 22 * k * (th < 1 ? 0.75 : 1), 14), mat);
       head.position.y = len + 8 * k;
       shaft.renderOrder = 20; head.renderOrder = 20;
       arrow.add(shaft); arrow.add(head);
@@ -2622,11 +2798,12 @@
     syncAxisButtons();
     selected = p;
     const demoMode = !!(window.__ivsAssembly && window.__ivsAssembly.isViewing()); // 조립 보기 시연 중엔 부품 창 없이 끌어서 움직인다
+    selectedControls.classList.toggle('asm-compact', demoMode);
     selectedControls.hidden = !p;
     modalBackdrop.hidden = !p || demoMode; // 조립 보기에선 뒷배경을 깔지 않아 부품을 계속 끌 수 있다
     document.getElementById('asmDemoBlock').hidden = !demoMode; // 🔗 결합·움직임 방식·원위치는 이 창 안에
     if (p) {
-      selectedLabel.textContent = p.isGroup ? `${p.set.label} 전체 · 부품 ${p.members.length}개` : `${PART_DEFS[p.type].label} · ${MOUNT_LABEL[p.mount]}`;
+      selectedLabel.textContent = p.isGroup ? `${p.set.label} 전체 · 부품 ${p.members.length}개` : (p.asmLabel ? p.asmLabel : `${PART_DEFS[p.type].label} · ${MOUNT_LABEL[p.mount]}`);
       const baseMount = p.mount.startsWith('wall') ? 'wall' : p.mount;
       document.querySelectorAll('#selectedMountSelect .mount-btn').forEach(b => b.classList.toggle('active', b.dataset.mount === baseMount));
       document.getElementById('connectToPanel').hidden = !isConnectorType(p.type);
@@ -2645,6 +2822,7 @@
       goalBtn.textContent = p.isGoal ? '✅ 도착 지점 해제하기' : '🏁 도착 지점으로 정하기';
     }
     updateSelectionOutline();
+    refreshFaceInfo(true);
     updatePanelLabels();
     updateAxisGizmo();
     refreshAxisPanel();
@@ -4211,6 +4389,7 @@
     }
     if (timerRunSince !== null) timerRender();
     applyJoins();
+    if (selected && selected.asmLabel) refreshFaceInfo(false);
     parts.forEach(p => {
       p.mesh.position.copy(p.body.position);
       p.mesh.quaternion.copy(p.body.quaternion);
@@ -4331,6 +4510,7 @@
       if (Array.isArray(d.rot) && d.rot.length === 3) p.rot = { x: d.rot[0], y: d.rot[1], z: d.rot[2] };
       if (Array.isArray(d.set) && d.set.length === 2) { p.set = { id: d.set[0], label: d.set[1] }; setCounter = Math.max(setCounter, d.set[0]); }
       if (d.goal) { p.isGoal = true; goalTargetPart = p; }
+      if (d.label) p.asmLabel = d.label; // 조립 보기: "리벳 3/14" 같은 부품 번호
       made[i] = p;
     });
     (list || []).forEach((d, i) => {
@@ -4472,8 +4652,7 @@
     assemblyGuideGroup = null;
   }
   let assemblyAxesGroup = null; // 조립 보기의 베이스 X·Y·Z 방향선
-  let assemblyLabelGroup = null;
-  let assemblyListParts = []; // 조립 보기 목록 번호(i) → 부품 // 조립 보기의 프레임 구멍 번호(열-줄)
+  let assemblyListParts = []; // 조립 보기 목록 번호(i) → 부품
   window.__ivsAssemblyBridge = {
     resolve(name, categoryId){
       const p = robotPartsCache.find(x => x.name === name && (!categoryId || x.category === categoryId));
@@ -4530,7 +4709,6 @@
     },
     // 바닥(모눈) 위 X·Z 방향선(원점 (0,0,0)에서 +와 − 양쪽으로)과 위쪽 Y — 위치를 말할 때 "+X쪽", "−Z쪽"처럼 기준으로 쓴다.
     axes(on, at){
-      if (!on && assemblyLabelGroup) { scene.remove(assemblyLabelGroup); assemblyLabelGroup = null; }
       if (assemblyAxesGroup) { scene.remove(assemblyAxesGroup); assemblyAxesGroup.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } }); assemblyAxesGroup = null; }
       if (!on) return;
       const mkGroup = (pos) => {
@@ -4578,25 +4756,6 @@
       if (at && (Math.abs(at[0]) + Math.abs(at[1]) + Math.abs(at[2]) > 1)) root.add(mkGroup(at));
       scene.add(root);
       assemblyAxesGroup = root;
-    },
-    // 프레임 구멍 번호: [{ pos:[x,y,z], text }] — 현재 단계에서 결합 위치가 있는 프레임의 구멍마다 "열-줄"을 판 위에 표시(구멍 위치 혼란 방지). 빈 목록이면 지운다.
-    holeLabels(items){
-      if (assemblyLabelGroup) { scene.remove(assemblyLabelGroup); assemblyLabelGroup.traverse(o => { if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } }); assemblyLabelGroup = null; }
-      if (!items || !items.length) return;
-      const g = new THREE.Group();
-      const Zv = new THREE.Vector3(0, 0, 1);
-      items.forEach(({ pos, text, n }) => {
-        // 구멍에 색칠하듯: 판 면에 붙은 색 원판에 번호를 칠한다(초록 결합 원과 같은 방식 — 면에 딱 붙이고 깊이 검사를 켜서 블록 뒤에서는 가려진다)
-        const c = document.createElement('canvas'); c.width = 128; c.height = 128;
-        const x = c.getContext('2d');
-        x.beginPath(); x.arc(64, 64, 60, 0, Math.PI * 2); x.fillStyle = 'rgba(37,99,235,0.88)'; x.fill();
-        x.lineWidth = 6; x.strokeStyle = 'rgba(255,255,255,0.95)'; x.stroke();
-        x.font = '800 68px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillStyle = '#ffffff'; x.fillText(text, 64, 70);
-        const m = new THREE.Mesh(new THREE.PlaneGeometry(7.2, 7.2), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -5, polygonOffsetUnits: -5 }));
-        const nn = n ? new THREE.Vector3(n[0], n[1], n[2]).normalize() : new THREE.Vector3(0, 1, 0);
-        m.quaternion.setFromUnitVectors(Zv, nn); m.position.set(pos[0], pos[1], pos[2]); m.renderOrder = 12; m.userData.dot = true; g.add(m);
-      });
-      scene.add(g); assemblyLabelGroup = g;
     },
     // 교재 그림의 초록 안내: { from, to, dir }마다 돌기 끝 점 → 화살표 → 구멍 점을 그린다.
     // 움직이는 부품 쪽 점(돌기 끝 또는 프레임 구멍)은 그 부품에 붙여서 부품을 끌면 함께 따라가고, 화살표는 두 점을 매 프레임 이어 준다.
@@ -4649,8 +4808,17 @@
         }
         const ring2 = null;
         const HEAD = 6;
-        const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 1, 8), mat());
-        const head = new THREE.Mesh(new THREE.ConeGeometry(2.6, HEAD, 12), mat());
+        const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 1, 8), mat()); // 화살표 줄은 얇게(사용자 지시 2026-10-03)
+        // 화살표 머리는 속이 찬 원뿔 대신 V자(두 줄)로: 끝의 초록 결합 점과 헷갈리지 않게 한다(사용자 지시 2026-10-03)
+        const head = new THREE.Group();
+        { const LEG = HEAD * 1.1, ANG = 30 * Math.PI / 180;
+          [1, -1].forEach(sg => {
+            const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, LEG, 6), mat());
+            // 끝(꼭짓점)은 머리 그룹의 +y 쪽 HEAD/2 지점, 두 다리는 거기서 뒤로 ±30° 벌어진다
+            leg.position.set(sg * Math.sin(ANG) * LEG / 2, HEAD / 2 - Math.cos(ANG) * LEG / 2, 0);
+            leg.rotation.z = sg * ANG; leg.renderOrder = 11;
+            head.add(leg);
+          }); }
         shaft.renderOrder = head.renderOrder = 11;
         const arrowGroup = new THREE.Group();
         arrowGroup.userData.idx = idx; // 어느 부품의 안내인지(결합하면 그 안내만 지운다)
@@ -4664,8 +4832,8 @@
           if (L <= 8) return;
           d.multiplyScalar(1 / L);
           const gap = Math.min(4, Math.max(0, (L - 10) / 2)), L2 = L - 2 * gap;
-          shaft.scale.set(1, Math.max(L2 - HEAD, 0.1), 1);
-          shaft.position.copy(pa).addScaledVector(d, gap + (L2 - HEAD) / 2);
+          shaft.scale.set(1, Math.max(L2, 0.1), 1); // V자 머리는 속이 비어 있어서 줄이 꼭짓점(화살표 끝)까지 이어져야 붙어 보인다
+          shaft.position.copy(pa).addScaledVector(d, gap + L2 / 2);
           shaft.quaternion.setFromUnitVectors(up, d);
           head.position.copy(pa).addScaledVector(d, gap + L2 - HEAD / 2);
           head.quaternion.copy(shaft.quaternion);
@@ -4694,11 +4862,41 @@
       return out;
     },
     // 부품 이름별 연결점(돌기·구멍) — 조립 데이터가 돌기↔구멍으로 실제 결합되는지 검증할 때 쓴다
-    connectorsByName(){ const o = {}; robotPartsCache.forEach(x => { if (x.connectors && x.name) o[x.name] = x.connectors; }); return o; },
     serialize(){ return serializeParts(); },
     restore(list){ restoreParts(list, {}, true); },
     camera(c){ target.set(c.target[0], c.target[1], c.target[2]); orbit.radius = c.radius; orbit.theta = c.theta; orbit.phi = c.phi; },
-    camState(){ return { theta: orbit.theta, phi: orbit.phi, radius: orbit.radius, target: [target.x, target.y, target.z] }; }, // 지금 카메라 각도(조립 보기 📷 버튼이 복사해 쓴다)
+    camState(){ return { theta: orbit.theta, phi: orbit.phi, radius: orbit.radius, target: [target.x, target.y, target.z] }; },
+    // 관리자가 📷 로 저장한 단계별 시점(ivs_assembly_cams). 표가 없거나 읽기에 실패하면 빈 값으로 본다(자동 시점으로 열림).
+    camStore: {
+      _h(extra){ return Object.assign({ apikey: SUPABASE_KEY, Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' }, extra || {}); },
+      async load(assemblyId){
+        try {
+          const res = await fetch(SUPABASE_URL + '/rest/v1/ivs_assembly_cams?select=step,cam&assembly_id=eq.' + encodeURIComponent(assemblyId), { headers: this._h() });
+          if (!res.ok) return {};
+          const out = {};
+          (await res.json()).forEach(r => { if (r && r.cam) out[r.step] = r.cam; });
+          return out;
+        } catch (e) { return {}; }
+      },
+      async save(assemblyId, step, cam){
+        const res = await fetch(SUPABASE_URL + '/rest/v1/ivs_assembly_cams?on_conflict=assembly_id,step', {
+          method: 'POST', headers: this._h({ Prefer: 'resolution=merge-duplicates,return=minimal' }),
+          body: JSON.stringify([{ assembly_id: assemblyId, step, cam, updated_at: new Date().toISOString() }])
+        });
+        if (!res.ok) throw new Error('저장 실패 (' + res.status + ') ' + (await res.text()).slice(0, 120));
+      },
+      async remove(assemblyId, step){
+        const res = await fetch(SUPABASE_URL + '/rest/v1/ivs_assembly_cams?assembly_id=eq.' + encodeURIComponent(assemblyId) + '&step=eq.' + step, { method: 'DELETE', headers: this._h() });
+        if (!res.ok) throw new Error('삭제 실패 (' + res.status + ')');
+      }
+    },
+    // 카메라에서 선택한 부품(없으면 화면 중심)까지의 거리(mm)와 부품 이름 — 조립 보기의 카메라 표시줄이 쓴다
+    camDistance(){
+      const c = camera.position;
+      const sel = selected && !selected.isGroup && !selected.isMarker ? selected.body.position : null;
+      const to = sel || target;
+      return { mm: Math.hypot(c.x - to.x, c.y - to.y, c.z - to.z), toPart: !!sel, label: sel ? (selected.asmLabel || selectedLabel.textContent) : '', pos: [c.x, c.y, c.z], center: [target.x, target.y, target.z] };
+    }, // 지금 카메라 각도(조립 보기 📷 버튼이 복사해 쓴다)
     // 지금 보이는 부품들이 화면에 알맞게 차도록 카메라 거리·중심만 맞춘다(보는 각도는 그대로).
     frame(points, context){
       if (!points || !points.length) return;

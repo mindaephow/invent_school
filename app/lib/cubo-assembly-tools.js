@@ -1,7 +1,7 @@
-// 큐보 조립 도구 6개 — 기존 발명학교 MCP(app/api/mcp/route.js)에 함께 등록된다.
+// 큐보 조립 도구 — 기존 발명학교 MCP(app/api/mcp/route.js)에 함께 등록된다.
 // 설계 화면의 "조립 보기"(교재 단계별 3D 조립도)를 기억 없는 클로드도 이어서 만들 수 있게,
 // 조립 안내서(규칙·좌표계·부품 측정 사실·작업 절차)와 조립 단계 데이터, 겹침 검사, 부품 돌기·구멍 연결점 기록을 제공한다.
-//   - get_assembly_guide / list_assemblies / get_assembly / validate_assembly / get_part_connectors / set_part_connectors
+//   - get_assembly_guide / list_assemblies / get_assembly / validate_assembly / get_part_faces / get_part_connectors / set_part_connectors
 // 조립 규칙·단계 데이터·겹침 검사 코드는 배포된 public/design-assemblies.js·design-collision.js 를 읽어 온다 —
 // 화면과 같은 파일이 원본이라 둘이 어긋나지 않는다. (선택 환경변수 SITE_ORIGIN, 기본 https://invent-school-sigma.vercel.app)
 import { z } from 'zod'
@@ -17,7 +17,7 @@ let _site = null, _siteAt = 0
 export async function loadSite() {
   if (_site && Date.now() - _siteAt < 60_000) return _site
   const win = {}
-  for (const file of ['design-assemblies.js', 'design-collision.js', 'design-mates.js', 'design-verify.js']) {
+  for (const file of ['design-assemblies.js', 'design-collision.js', 'design-mates.js', 'design-verify.js', 'design-faces.js']) {
     const res = await fetch(`${SITE_ORIGIN()}/${file}?t=${Date.now()}`)
     if (!res.ok) throw new Error(`${file} 를 못 읽었어요 (${res.status})`)
     new Function('window', await res.text())(win) // 같은 저장소의 파일만 읽는다
@@ -115,7 +115,16 @@ export function registerCuboAssemblyTools(server, getSupabase) {
           const site = await loadSite()
           const a = (site.IVS_ASSEMBLIES || []).find((x) => x.id === assemblyId)
           if (!a) return fail(`id="${assemblyId}" 조립 데이터를 찾을 수 없어요. list_assemblies 로 확인하세요.`)
-          return text(JSON.stringify(a, null, 1))
+          // 관리자가 화면의 📷 로 저장한 단계별 시점(ivs_assembly_cams)을 합쳐서 보여 준다 — 있으면 그 단계 cam 을 이걸로 보고 camSrc 는 'admin'(사용자가 맞춘 값)이다
+          let saved = {}
+          try {
+            const { data: rows } = await getSupabase().from('ivs_assembly_cams').select('step, cam, updated_at').eq('assembly_id', assemblyId)
+            ;(rows || []).forEach((r) => { saved[r.step] = { ...r.cam, saved_at: r.updated_at } })
+          } catch (e) { /* 표가 아직 없으면 저장된 시점 없음 */ }
+          const merged = { ...a, steps: a.steps.map((st, i) => saved[i + 1] ? { ...st, cam: { ...(st.cam || {}), theta: saved[i + 1].theta, phi: saved[i + 1].phi, radius: saved[i + 1].radius, target: saved[i + 1].target }, camSrc: 'admin' } : st) }
+          const n = Object.keys(saved).length
+          return text((n ? `※ 관리자가 화면에서 저장한 시점 ${n}개를 합쳤어요(단계 ${Object.keys(saved).join(', ')} — camSrc: 'admin'). 조립 프로그램의 CAMS 를 만들 때 이 값의 theta·phi 를 쓰세요.
+` : '') + JSON.stringify(merged, null, 1))
         } catch (e) { return fail(e.message) }
       }
     )
@@ -233,6 +242,62 @@ export function registerCuboAssemblyTools(server, getSupabase) {
             }
           }
           return text(out.join('\n'))
+        } catch (e) { return fail(e.message) }
+      }
+    )
+
+    server.registerTool(
+      'get_part_faces',
+      {
+        title: '부품의 면·구멍·돌기 번호 조회(월드 좌표 포함)',
+        description: '조립도의 부품 하나를 "35프레임 2번" 같은 부품 번호로 지정하면, 그 부품의 면(홀면/돌기면 ±x ±y ±z)과 면 안의 구멍·돌기 번호(열·줄), 부품 축이 지금 월드 어느 방향(+X −X +Y −Y +Z −Z)인지, 각 번호의 월드 좌표를 돌려준다. 스크린샷이나 좌표를 눈으로 읽는 대신 이 값을 읽을 것. 번호는 부품에 고정돼 있어서 부품을 돌려 놓아도 같은 면·같은 구멍이다. 부품 번호는 조립도 전체에서 같은 이름 부품이 나온 순서(단계 → 부품 순). joins 는 이 부품의 돌기가 다른 부품의 어느 구멍에 들어가 있는지(추정 — 좌표·방향이 맞는 것).',
+        inputSchema: {
+          assemblyId: z.string().describe('list_assemblies 의 id. 예: cubo-1-autogun'),
+          part: z.string().describe('부품 번호. 예: "35프레임 2번", "리벳 14번"(옛 표기 "35프레임 2/2"도 받음). 이름만 주면(예: "35프레임") 그 이름의 부품 번호 목록을 돌려준다'),
+          step: z.number().optional().describe('이 단계에서의 자세로 계산(옆자리·옮김 반영). 생략하면 완성 자세'),
+        },
+      },
+      async ({ assemblyId, part, step }) => {
+        try {
+          const site = await loadSite()
+          const a = (site.IVS_ASSEMBLIES || []).find((x) => x.id === assemblyId)
+          if (!a) return fail(`id="${assemblyId}" 조립 데이터를 찾을 수 없어요. list_assemblies 로 확인하세요.`)
+          const F = site.IVS_FACES
+          if (!F) return fail('design-faces.js 를 못 읽었어요(배포 전일 수 있어요).')
+          const { total, numOf } = F.numberParts(a.steps)
+          const m = String(part).trim().match(/^(.+?)\s+(\d+)\s*(?:번|\/\s*(\d+))?$/)
+          const name = m ? m[1] : String(part).trim()
+          if (!total[name]) return fail(`"${name}" 부품이 이 조립도에 없어요. 있는 부품: ${Object.keys(total).join(', ')}`)
+          const all = []
+          a.steps.forEach((s, si) => (s.parts || []).forEach((pt) => { if (pt.n === name) all.push({ pt, k: numOf.get(pt), step: si + 1 }) }))
+          if (!m) return text(`${name} 는 ${total[name]}개: ` + all.map((x) => `${name} ${x.k}번 (${x.step}단계 등장)`).join(', ') + '\n번호를 붙여 다시 부르세요. 예: "' + name + ' 1번"')
+          const hit = all.find((x) => x.k === Number(m[2]))
+          if (!hit || (m[3] && Number(m[3]) !== total[name])) return fail(`"${part}" 없음. ${name} 는 총 ${total[name]}개예요(${name} 1번 ~ ${name} ${total[name]}번).`)
+          const { data: rows, error } = await getSupabase().from('ivs_part_catalog').select('name:data->>name, connectors:data->connectors').eq('data->>subject', 'robot')
+          if (error) return fail(error.message)
+          const conn = {}; (rows || []).forEach((r) => { if (r.connectors) conn[r.name] = r.connectors })
+          if (!conn[name]) return fail(`${name} 의 연결점 기록이 없어요(get_part_connectors 로 확인).`)
+          // 단계 step 에서의 자세: 옆자리(side.until 전) → 제자리, move.at 이후는 옮긴 자리
+          const upTo = step || a.steps.length
+          const poseOf = (pt) => (pt.side && upTo < pt.side.until) ? { p: pt.side.p, r: pt.side.r } : (pt.move && upTo >= pt.move.at && pt.move.p) ? { p: pt.move.p, r: pt.move.r || pt.r } : { p: pt.p, r: pt.r }
+          const pose = poseOf(hit.pt)
+          const d = F.describe({ n: name, p: pose.p, r: pose.r }, conn[name], hit.k, total[name])
+          // 결합 추정: 이 부품의 돌기 ↔ 다른 부품의 구멍
+          const joins = []
+          const me = F.worldConnectors({ n: name, p: pose.p, r: pose.r }, conn[name])
+          a.steps.slice(0, upTo).forEach((s, si) => (s.parts || []).forEach((q) => {
+            if (q === hit.pt || !conn[q.n]) return
+            const qp = poseOf(q), w = F.worldConnectors({ n: q.n, p: qp.p, r: qp.r }, conn[q.n])
+            const qd = F.describe({ n: q.n, p: qp.p, r: qp.r }, conn[q.n], numOf.get(q), total[q.n])
+            const pairs = (pegs, holes, mineIsPeg) => pegs.forEach((pg) => holes.forEach((ho) => {
+              if (F.mates(pg, ho)) {
+                const sel = (rec, holeLike) => F.nameWorldItem(rec, holeLike)
+                joins.push(mineIsPeg ? { 내_돌기: sel(d, pg), 상대: `${qd.name} ${F.nameWorldItem(qd, ho, pg.dir)}`, 단계: si + 1 } : { 내_구멍: F.nameWorldItem(d, ho, pg.dir), 상대: `${qd.name} ${F.nameWorldItem(qd, pg)}`, 단계: si + 1 })
+              }
+            }))
+            pairs(me.pegs, w.holes, true); pairs(w.pegs, me.holes, false)
+          }))
+          return text(JSON.stringify({ ...d, 단계: upTo, 이름_규칙: '번호는 부품 모델 축에 고정(부품을 돌려도 같은 면·같은 구멍). 열=첫째 축, 줄=둘째 축, 각 축 − 끝부터 1.', 결합_추정: joins }, null, 1))
         } catch (e) { return fail(e.message) }
       }
     )

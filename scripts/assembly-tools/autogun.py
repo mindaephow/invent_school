@@ -7,6 +7,10 @@ from asmlib import *
 
 A = Asm("cubo-1-autogun", "오토건", "교재 64~69쪽 · 오토건 (1~32단계)", camera={"target": [60, 20, 0], "radius": 380, "theta": 0.9, "phi": 1.0},
         listNote="고무밴드(3D 모델 없음)는 조립도에서 제외했다")
+import sys
+RELOCK = "--relock" in sys.argv   # 잠금 기록을 새로 만들 때(수정 지시는 이번 빌드에서 무시한다)
+if not RELOCK: A.load_fixes("autogun_fixes.json")   # 관리자 수정 지시(앞 단계 수정 - 뒤 단계가 따라온다). 파일이 없으면 아무 일도 안 한다
+A.load_links("autogun_links.json", relock=RELOCK)   # 좌표로 쓴 결합·절대 좌표로 놓은 판을 이름(어느 부품의 어느 구멍)으로 잠가 두는 기록 - 앞을 고치면 뒤가 따라온다
 UP = (0, 1, 0)
 
 R_FLAT = np.eye(3)                                  # 315프레임: 긴 쪽 x, 구멍축 y
@@ -103,24 +107,29 @@ R_L = R_LIE                                          # 눕힌 블록(긴 쪽 x, 
 def up_pegs(blk): return [c["id"] for c in blk.conn["pegs"] if blk.world("peg", c)["dir"][1] > 0.9]
 def pt(x, y, z): return (x + BODY_O[0], y + BODY_O[1], z + BODY_O[2])
 
-s14 = A.step("[교재 14] 총몸 아래층: 검정 315프레임(A)과 37프레임(B)을 직각으로 맞대고(B 가 앞쪽 +z 로 뻗음), 블록 3개를 꽂아요: 3단블록은 이음매 위쪽 줄(A 끝 1칸 + B 2칸), 2단블록은 이음매 아래쪽 줄(A 끝 1칸 + B 3번째 줄 1칸), 또 하나의 3단블록은 B 맨 끝 줄(바깥 두 구멍). (교재에서 칸을 세어 맞춤)")
+s14 = A.step("[교재 14] 총몸 아래층: 검정 315프레임(A)과 37프레임(B)을 직각으로 맞대고(B 가 앞쪽 +z 로 뻗음), 블록 3개를 꽂아요: 3단블록은 이음매 위쪽 줄(A 끝 1칸 + B 2칸), 2단블록은 이음매 아래쪽 줄(A 끝 1칸 + B 3번째 줄 1칸), 또 하나의 3단블록은 B 맨 끝 줄의 구멍 3개(교재는 바깥 두 곳만 초록 원으로 표시하고, 양 끝 돌기를 꽂으면 가운데 돌기는 자동으로 꽂혀요). (교재에서 칸을 세어 맞춤)")
 bA = s14.place("315프레임", R_FLAT, pt(75, 2.5, 0))
-bB = s14.place("37프레임", R_Z, pt(165, 2.5, 20))
+bB = s14.place_next("37프레임", R_Z, "홀면 +y 열1·줄3", bA, "홀면 +y 열15·줄1", (10, 0, 0))   # 315프레임 끝에서 한 칸 옆(앞 판을 고치면 따라온다)
 k1 = s14.attach("3단블록", R_LIE, {"p5": (bA, pt(145, 5, -10)), "p4": (bB, pt(155, 5, -10)), "p3": (bB, pt(165, 5, -10))}, hover=60)
 k2 = s14.attach("2단블록", R_LIE, {"p3": (bA, pt(145, 5, 10)), "p4": (bB, pt(155, 5, 10))}, hover=60)
 k3 = s14.attach("3단블록", R_LIE, {"p5": (bB, pt(155, 5, 50)), "p4": (bB, pt(165, 5, 50)), "p3": (bB, pt(175, 5, 50))}, hover=60)
 k3.extra["marks"] = [k3.extra["marks"][0], k3.extra["marks"][2]]   # 교재(칸 셈): B 맨 끝 줄 첫째·셋째 구멍 2곳에만 초록 원
 
-s15 = A.step("[교재 15] 14번의 앞쪽(B 반대편) 끝에 35프레임(C)을 이어 붙이고, 블록 2개를 이음매에 꽂아요. (추정)")
-bC = s15.place("35프레임", R_FLAT, pt(-25, 2.5, 0))
+s15 = A.step("[교재 15] 14번의 앞쪽(B 반대편) 끝에 35프레임(C)을 이어 붙이고, 블록 2개를 이음매에 꽂아요: 3단블록은 윗줄(C 끝 1칸 + 315프레임 1·2번째 칸), 2단블록은 아랫줄(C 끝 1칸 + 315프레임 1번째 칸), 가운데 줄은 비워요. (교재 스캔으로 확인: 초록 원 5개 = 돌기 3+2)")
+bC = s15.place_next("35프레임", R_FLAT, "홀면 +y 열5·줄1", bA, "홀면 +y 열1·줄1", (-10, 0, 0))   # 315프레임 반대쪽 끝에서 한 칸 옆
 k4 = s15.attach("3단블록", R_L, {"p5": (bC, pt(-5, 5, -10)), "p4": (bA, pt(5, 5, -10)), "p3": (bA, pt(15, 5, -10))}, hover=45)
 k5 = s15.attach("2단블록", R_L, {"p3": (bC, pt(-5, 5, 10)), "p4": (bA, pt(5, 5, 10))}, hover=45)
 
 s16 = A.step("[교재 16] 앞쪽에 29프레임(D)을 이어 붙이고, 블록 3개를 꽂아요: 맨 앞 3단블록은 D 끝 구멍 2개에(돌기 하나는 판 밖으로 나와요), 나머지는 D·C 이음매에. (추정)")
-bD = s16.place("29프레임", R_FLAT, pt(-95, 2.5, -5))
+bD = s16.place_next("29프레임", R_FLAT, "홀면 +y 열9·줄1", bC, "홀면 +y 열1·줄1", (-10, 0, 0))   # 35프레임에서 한 칸 옆
 k6 = s16.attach("3단블록", R_L, {"p5": (bD, pt(-65, 5, -10)), "p4": (bD, pt(-55, 5, -10)), "p3": (bC, pt(-45, 5, -10))}, hover=45)
 k7 = s16.attach("3단블록", R_L, {"p4": (bD, pt(-135, 5, -10)), "p3": (bD, pt(-125, 5, -10))}, hover=60)   # 교재 16: 맨 앞 블록은 돌기 2개만 D 끝 구멍 2개에(셋째 돌기는 판 밖으로 나옴)
 k8 = s16.attach("2단블록", R_L, {"p3": (bD, pt(-55, 5, 0)), "p4": (bC, pt(-45, 5, 0))}, hover=45)
+
+def _tip(blk, pid):
+    g = blk.peg(pid)
+    return g["pos"] + g["dir"] * g["len"] / 2
+
 
 def tips_in(blocks, xr, zr):
     """블록 윗돌기(+y 방향) 끝 점 중 판 범위(xr, zr, 몸 좌표) 안에 있는 것들."""
@@ -134,8 +143,8 @@ def tips_in(blocks, xr, zr):
     return out
 ALLK = [k1, k2, k3, k4, k5, k6, k7, k8]
 s17 = A.step("[교재 17] 위층: 35프레임(C')과 29프레임(D')을 블록 윗돌기 위에 덮어요. (추정)")
-tC = s17.place("35프레임", R_FLAT, pt(-25, 17.5, 0), recv=True, dir=[0, 1, 0], hover=45, marks=tips_in(ALLK, (-50, 0), (-15, 15)))
-tD = s17.place("29프레임", R_FLAT, pt(-95, 17.5, -5), recv=True, dir=[0, 1, 0], hover=45, marks=tips_in(ALLK, (-140, -50), (-15, 5)))
+tC = s17.place("35프레임", R_FLAT, pt(-25, 17.5, 0), recv=True, dir=[0, 1, 0], hover=45, marks=tips_over(ALLK))
+tD = s17.place("29프레임", R_FLAT, pt(-95, 17.5, -5), recv=True, dir=[0, 1, 0], hover=45, marks=tips_over(ALLK))
 
 s18 = A.step("[교재 18] T축 2개를 315프레임(A) 아래에서 위로 꽂아요(기어·방아쇠 축). (추정)")
 tax1 = s18.place("T축", np.eye(3), pt(55, 14, -10), dir=[0, -1, 0], hover=50, pegDepth=28.6, headDown=True, marks=[list(pt(55, 5, -10))])   # 교재: 판 윗면 구멍에 초록 원
@@ -170,12 +179,12 @@ s21 = A.step("[교재 21] 큰기어를 첫 번째 T축에, 방아쇠(십자 블�
 gear_b = s21.place("큰기어", np.eye(3), pt(55, 9.5, -10), recv=True, dir=[0, 1, 0], hover=50, marks=[list(pt(55, 29, -10))], holeMarks=[list(pt(55, 5, -10))])   # 결합 위치 원은 프레임 구멍(T축이 서 있는 자리)에 고정
 S21 = len(A.steps)                                        # 방아쇠가 합쳐지는 단계 번호(이 단계)
 for p_ in TRG: to_side(p_, np.eye(3), np.array([95.0, 10.0, 5.0]) + BODY_O, np.array([95.0, 10.0, 265.0]) + BODY_O, S21, (0, 1, 0))
-t2.extra['settleMarks'] = [rnd(pt(95, 29, -10))]; t2.extra['holeMarks'] = [rnd(pt(95, 5, -10))]   # 십자 블록(2단블록)의 큰 구멍에 두 번째 T축 끝이 들어감
+A.lock_marks(t2, 'settleMarks', [rnd(pt(95, 29, -10))]); A.lock_marks(t2, 'holeMarks', [rnd(pt(95, 5, -10))])   # 십자 블록(2단블록)의 큰 구멍에 두 번째 T축 끝이 들어감
 
 s22 = A.step("[교재 22] 위층 315프레임(A')과 37프레임(B')을 블록 윗돌기와 T축 위에 덮어요. (추정)")
-bAt = s22.place("315프레임", R_FLAT, pt(75, 17.5, 0), recv=True, dir=[0, 1, 0], hover=45, marks=tips_in(ALLK, (0, 150), (-15, 15)) + [list(pt(55, 29, -10)), list(pt(95, 29, -10))])
+bAt = s22.place("315프레임", R_FLAT, pt(75, 17.5, 0), recv=True, dir=[0, 1, 0], hover=45, marks=tips_over(ALLK) + [list(pt(55, 29, -10)), list(pt(95, 29, -10))])
 bAt.extra["faceMarks"] = [[m_[0], 20.0, m_[2]] for m_ in bAt.extra["marks"]]   # 결합 점은 허공(T축 끝 높이)이 아니라 위판 구멍 높이(판 윗면 y=20)에 — 사용자 지시
-bBt = s22.place("37프레임", R_Z, pt(165, 17.5, 20), recv=True, dir=[0, 1, 0], hover=45, marks=[m_ for m_ in tips_in(ALLK, (150, 180), (-15, 55)) if not (abs(m_[0] - BODY_O[0] - 165) < 1 and abs(m_[2] - BODY_O[2] - 50) < 1)])   # 교재 22: B 끝 블록(3단)은 바깥 돌기 2개에만 원(가운데 돌기 제외)
+bBt = s22.place("37프레임", R_Z, pt(165, 17.5, 20), recv=True, dir=[0, 1, 0], hover=45, marks=tips_over(ALLK).where(lambda m_: float(np.linalg.norm(np.array(m_) - _tip(k3, 'p6'))) > 1))   # 교재 22: B 끝 블록(3단)은 바깥 돌기 2개에만 원(가운데 돌기 제외)
 
 s23 = A.step("[교재 23] 빨간 부시 2개를 T축 끝에 끼우고, 리벳 1개를 위판 구멍에 꽂아요(고무밴드 걸이). (추정)")
 bu1 = s23.place("부시", np.eye(3), pt(55, 26.25, -10), recv=True, dir=[0, 1, 0], hover=45, marks=[list(pt(55, 29, -10))])
@@ -316,7 +325,6 @@ for k in (32, 33): AXES[k] = tuple(TO)
 for k in (7, 8): AXES[k] = (115.0, 0.0, -230.0)                                                               # 기어판을 따로 만드는 옆자리(교재 7①·7②)                                                                  # 타깃 자리
 # 교재 29: 기둥 아래 블록 2개의 끝 돌기가 받침 흰 판(59프레임) 구멍 2곳에 — 결합 점(구멍에 고정)
 RINGS = {}
-HOLENUMS = {19}                                        # 프레임 구멍 번호(제일 윗줄)를 보여줄 단계: 19(교재 18 T축 2개 꽂기 — 블록 다음부터 1,2,3 · T축과 T축 사이 1,2,3)
 FOCUS = {                                              # 부품이 없는 단계: 총몸·타깃을 가운데에 크게
     21: [pt(70, 0, 235), pt(125, 25, 320)], 25: [pt(25, 0, -30), pt(135, 35, 50)],   # 25(교재 24): 기어·두 T축·리벳·방아쇠 부분만 크게(교재가 그 부분만 가까이 그림)
       # 21: 따로 만든 방아쇠(옆자리 위)를 가운데에
@@ -324,8 +332,10 @@ FOCUS = {                                              # 부품이 없는 단계
 }
 for k, v in CAMS.items():
     th, ph, src = v[:3]
-    A.steps[k - 1].cam = (th, ph, k in TIGHT, FOCUS.get(k), AXES.get(k), k in HOLENUMS, RINGS.get(k)); A.steps[k - 1].camSrc = src
+    A.steps[k - 1].cam = (th, ph, k in TIGHT, FOCUS.get(k), AXES.get(k), RINGS.get(k)); A.steps[k - 1].camSrc = src
 
+A.save_links()                                    # 이번 빌드의 잠금 기록 저장(수정 지시가 있는 빌드는 갱신하지 않는다)
+A.check_fixes()                                   # 적용되지 않은 수정 지시가 있으면 경고(번호가 밀렸거나 오타)
 A.report = lambda: [print("경고:", w) for w in A.warn]
 if __name__ == "__main__":
     steps = export_steps(A)
