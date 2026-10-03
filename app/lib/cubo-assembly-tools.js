@@ -77,8 +77,8 @@ export function registerCuboAssemblyTools(server, getSupabase) {
     server.registerTool(
       'get_assembly_guide',
       {
-        title: '큐보 조립 안내서 읽기',
-        description: '큐보 조립도(설계 화면 "조립 보기") 작업을 시작하기 전에 가장 먼저 읽을 것. 조립 규칙, 좌표계·단위, 3D 모델로 측정한 부품 사실(돌기 위치·방향), 교재 구조, 작업 절차, 데이터 형식, 코드 위치를 돌려준다.',
+        title: '큐보 스튜디오 안내서 읽기',
+        description: '사용자가 "큐보 스튜디오"(교재를 보고 조립도를 만들고·고치고·검토하는 곳)를 말하거나 큐보 조립도(설계 화면 "조립 보기") 작업을 시작하기 전에 가장 먼저 읽을 것 - 만들기·수정·검토 절차가 맨 앞에 있다. 조립 규칙, 좌표계·단위, 3D 모델로 측정한 부품 사실(돌기 위치·방향), 교재 구조, 작업 절차, 데이터 형식, 코드 위치를 돌려준다.',
         inputSchema: {},
       },
       async () => {

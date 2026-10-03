@@ -312,6 +312,13 @@
     }
   }
 
+  // 3D 작업 영역 제목: 평소엔 "스케치북". 큐보 조립도를 보는 동안만 "큐보 스튜디오"(다른 로봇은 이름이 달라서 바꾸지 않는다 - 사용자 지시 2026-10-03)
+  function setStudioTitle(on) {
+    const el = document.querySelector('.scene-title');
+    if (!el) return;
+    if (el.dataset.orig === undefined) el.dataset.orig = el.textContent;
+    el.textContent = (on && def && def.category === '큐보') ? '큐보 스튜디오' : el.dataset.orig;
+  }
   async function open() {
     const b = bridge();
     if (!def || !b) return;
@@ -324,6 +331,7 @@
     if (!def || viewing) return;
     snapshot = b.serialize();
     viewing = true;
+    setStudioTitle(true);   // 큐보 조립도를 열면 3D 영역 제목이 "스케치북" -> "큐보 스튜디오"
     lastCamKey = def.camera.theta.toFixed(3) + '|' + def.camera.phi.toFixed(3);
     b.setViewing(true);
     b.camera(def.camera);
@@ -346,6 +354,7 @@
     stop();
     if (!viewing) return;
     viewing = false;
+    setStudioTitle(false);
     $('asmBar').hidden = true;
     const mm = $('asmMarkMove2'); if (mm && mm.dataset.on === '1') { mm.dataset.on = '0'; mm.textContent = '📍 표시하기'; mm.style.background = mm.style.color = ''; if (b) b.markMove(false); } // 닫을 땐 사진 없이 끈다
     if ($('asmMarkMove2')) $('asmMarkMove2').hidden = $('asmMarkShot').hidden = true;
