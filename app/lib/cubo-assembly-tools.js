@@ -393,6 +393,62 @@ export function registerCuboAssemblyTools(server, getSupabase) {
       }
     )
 
+    // ── 교재 쪽 이미지: 서버 PDF 는 원본 절반 해상도라, 원본에서 뽑은 쪽 이미지를 저장소에 올려 두고 꺼내 본다 ──
+    const PAGE_BUCKET = 'textbook-files'
+    const pagePath = (volume, page, small) => 'pages/cubo' + volume + '/p' + String(page).padStart(3, '0') + (small ? '_s' : '') + '.jpg'
+    server.registerTool(
+      'upload_textbook_page',
+      {
+        title: '교재 쪽 이미지 올리기(원본 해상도 + 작은 판)',
+        description: '교재 PDF 원본에서 뽑은 쪽 이미지를 저장소(textbook-files/pages/cubo<권>/p<쪽>.jpg 와 p<쪽>_s.jpg)에 올린다. 보통 scripts/assembly-tools/textbook_pages.py 가 쪽마다 이 도구를 불러 올린다(직접 부를 일은 거의 없다). 이미 있으면 덮어쓴다.',
+        inputSchema: {
+          volume: z.number().int().describe('권'),
+          page: z.number().int().describe('PDF 쪽 번호(1부터)'),
+          hi: z.string().describe('원본 해상도 JPEG 의 base64'),
+          small: z.string().describe('작은 판(가로 약 1262px) JPEG 의 base64'),
+        },
+      },
+      async ({ volume, page, hi, small }) => {
+        try {
+          const sb = getSupabase()
+          for (const [data, isSmall] of [[hi, false], [small, true]]) {
+            const buf = Buffer.from(data, 'base64')
+            if (buf.length < 1000 || buf[0] !== 0xff || buf[1] !== 0xd8) return fail('JPEG 가 아니에요(' + (isSmall ? 'small' : 'hi') + ').')
+            const { error } = await sb.storage.from(PAGE_BUCKET).upload(pagePath(volume, page, isSmall), buf, { contentType: 'image/jpeg', upsert: true })
+            if (error) return fail(error.message)
+          }
+          return text('✅ ' + volume + '권 ' + page + '쪽 올림: ' + sb.storage.from(PAGE_BUCKET).getPublicUrl(pagePath(volume, page, false)).data.publicUrl)
+        } catch (e) { return fail(e.message) }
+      }
+    )
+
+    server.registerTool(
+      'get_textbook_page',
+      {
+        title: '교재 쪽 이미지 보기(원본 해상도 쪽에서 뽑은 작은 판 + 확대용 주소)',
+        description: '교재의 한 쪽을 이미지로 돌려준다(큐보 1권 등 올려 둔 권). 돌려주는 그림은 가로 약 1262px 작은 판이라 한 단계 그림 전체는 보이지만 작은 구멍을 세기엔 모자랄 수 있다 → 같이 돌려주는 원본 해상도(가로 2524px) 주소를 scripts/assembly-tools/textbook_view.py 로 내려받아 필요한 곳만 크게 잘라 보고, 흰 구멍을 자동으로 찾아 번호를 붙일 수 있다(--holes). PDF 쪽 번호 = 교재 쪽 번호. 올려 두지 않은 쪽은 올리는 방법을 알려 준다.',
+        inputSchema: {
+          page: z.number().int().describe('PDF 쪽 번호. 예: 66(오토건 교재 12~13)'),
+          volume: z.number().int().optional().describe('권. 기본 1'),
+        },
+      },
+      async ({ page, volume = 1 }) => {
+        try {
+          const sb = getSupabase()
+          const pub = (small) => sb.storage.from(PAGE_BUCKET).getPublicUrl(pagePath(volume, page, small)).data.publicUrl
+          const res = await fetch(pub(true))
+          if (!res.ok) return fail(volume + '권 ' + page + '쪽 이미지가 아직 안 올라가 있어요. 교재 PDF 원본이 있는 PC 에서: python scripts/assembly-tools/textbook_pages.py upload "<PDF 경로>" ' + volume + ' ' + page + ' ' + page + '  (IVS_MCP_URL 환경변수 필요)')
+          const b64 = Buffer.from(await res.arrayBuffer()).toString('base64')
+          return {
+            content: [
+              { type: 'text', text: volume + '권 ' + page + '쪽 (작은 판). 원본 해상도: ' + pub(false) + '\n크게 잘라 보기: python scripts/assembly-tools/textbook_view.py ' + volume + ' ' + page + ' 0.1 0.2 0.6 0.5   (가로·세로를 0~1 비율로: 왼쪽 위 x y, 오른쪽 아래 x y — 결과 PNG 경로가 출력되면 Read 도구로 본다)\n구멍 자동 찾기: 같은 명령 끝에 --holes' },
+              { type: 'image', data: b64, mimeType: 'image/jpeg' },
+            ],
+          }
+        } catch (e) { return fail(e.message) }
+      }
+    )
+
     server.registerTool(
       'check_chapter_parts',
       {
