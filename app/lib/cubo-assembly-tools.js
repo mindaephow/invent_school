@@ -334,6 +334,77 @@ export function registerCuboAssemblyTools(server, getSupabase) {
     )
 
     server.registerTool(
+      'check_chapter_parts',
+      {
+        title: '새 조립도 시작 점검(교재 부품 목록 ↔ 부품 DB)',
+        description: '새 조립도를 시작할 때 맨 먼저 부른다. 권(volume)과 차시 제목(chapter)을 주면 교재관리(ivs_textbooks)의 그 차시 부품 목록(LIST)을 읽어 부품마다 ① 부품 DB 에 있는지 ② 3D 모델이 있는지 ③ 돌기·구멍 연결점이 있는지·신뢰도(checked/auto) ④ 면 이름이 확정된 부품인지를 한 번에 보여 주고, 이미 만든 조립도가 있는지, 앞으로 등록·확인해야 할 부품 목록을 정리해 준다. 없는 부품은 멈추지 말고 교재를 보고 직접 등록한 뒤 진행한다(get_assembly_guide 의 "첫 30분").',
+        inputSchema: {
+          chapter: z.string().describe('차시 제목. 예: 조종형비행기 (띄어쓰기는 무시하고 찾는다)'),
+          volume: z.number().int().optional().describe('권. 기본 1'),
+          category: z.string().optional().describe('카테고리 id. 기본 큐보(6fa8abd9-7684-47a2-bd7f-2bc9a6e3fbe6)'),
+        },
+      },
+      async ({ chapter, volume = 1, category = '6fa8abd9-7684-47a2-bd7f-2bc9a6e3fbe6' }) => {
+        try {
+          const sb = getSupabase()
+          const { data: books, error } = await sb.from('ivs_textbooks').select('id, data').eq('data->>category', category).eq('data->>volume', String(volume))
+          if (error) return fail(error.message)
+          if (!books || !books.length) return fail('그 권의 교재가 교재관리에 없어요(category=' + category + ', volume=' + volume + ').')
+          const norm = (x) => String(x || '').replace(/\s+/g, '')
+          const book = books[0].data || {}
+          const chapters = book.chapters || []
+          const idx = chapters.findIndex((c) => norm(c.title) === norm(chapter))
+          const idx2 = idx >= 0 ? idx : chapters.findIndex((c) => norm(c.title).includes(norm(chapter)) || norm(chapter).includes(norm(c.title)))
+          if (idx2 < 0) return fail('차시 "' + chapter + '" 를 못 찾았어요. 있는 차시: ' + chapters.map((c, i) => i + '차시 ' + c.title).join(', '))
+          const ch = chapters[idx2]
+          const pdf = ((book.files || [])[0] || {}).url || null
+          const lines = []
+          lines.push('■ ' + ch.title + ' — 큐보 ' + volume + '권 ' + idx2 + '차시 (책의 ' + (idx2 + 1) + '번째 차시)')
+          lines.push('교재 PDF: ' + (pdf || '(등록된 파일 없음)') + '  ← curl 로 받아 Read 도구 pages 로 쪽을 본다(서버 PDF 는 원본 절반 해상도)')
+          const parts = ch.parts || []
+          if (!parts.length) { lines.push('⚠ 이 차시에는 부품 목록(LIST)이 등록돼 있지 않아요 — 교재 그림에서 부품을 읽어 교재관리에 먼저 적어야 해요.') }
+          const ids = parts.map((q) => q.partId)
+          const { data: rows, error: e2 } = ids.length
+            ? await sb.from('ivs_part_catalog').select('id, name:data->>name, shape:data->spec->shapes->0->>type, connectors:data->connectors').in('id', ids)
+            : { data: [], error: null }
+          if (e2) return fail(e2.message)
+          const byId = new Map((rows || []).map((r) => [r.id, r]))
+          const site = await loadSite()
+          const CONF = site.IVS_FACES && site.IVS_FACES.CONFIRMED
+          const needRegister = [], needConnectors = [], needConfirm = [], noModel = []
+          let total = 0
+          parts.forEach((q) => {
+            total += q.qty || 0
+            const r = byId.get(q.partId)
+            if (!r) { lines.push('✗ ' + q.qty + '개  (partId ' + q.partId + ') — 부품 DB 에 없어요'); needRegister.push(q.partId); return }
+            const c = r.connectors
+            const np = c ? (c.pegs || []).length : 0, nh = c ? (c.holes || []).length : 0
+            const hasModel = !!r.shape
+            const conf = c ? (c.confidence || '기록됨') : '연결점 없음'
+            const confirmed = CONF ? CONF.test(r.name) : false
+            const flags = []
+            if (!hasModel) { flags.push('3D 모델 없음'); noModel.push(r.name) }
+            if (!c) { flags.push('연결점 없음'); if (hasModel) needConnectors.push(r.name) }
+            else if (c.confidence === 'auto') { flags.push('연결점 자동탐지(확인 필요)'); needConnectors.push(r.name) }
+            if (hasModel && c && !confirmed) needConfirm.push(r.name)
+            lines.push((flags.length ? '⚠ ' : '✓ ') + q.qty + '개  ' + r.name + ' — 돌기 ' + np + ' 구멍 ' + nh + ' [' + conf + ']' + (confirmed ? ' · 면 이름 확정' : ' · 면 이름 미확정') + (flags.length ? ' · ' + flags.join(', ') : ''))
+          })
+          lines.push('부품 ' + parts.length + '종 · 총 ' + total + '개')
+          const existing = (site.IVS_ASSEMBLIES || []).filter((a) => norm(a.chapter) === norm(ch.title) && Number(a.volume) === Number(volume))
+          lines.push(existing.length ? '이미 있는 조립도: ' + existing.map((a) => a.id + ' (' + a.steps.length + '단계)').join(', ') + ' → 수정(B)/검토(C) 절차' : '이 차시의 조립도는 아직 없어요 → 새로 만들기(A) 절차. 조립도 id 는 cubo-' + volume + '-영문이름, chapter 는 "' + ch.title + '" 와 글자까지 똑같이.')
+          lines.push('')
+          lines.push('── 해야 할 일 ──')
+          lines.push(needRegister.length ? '1) DB 에 없는 부품 ' + needRegister.length + '종: 교재 그림·치수를 보고 직접 등록(get_part_standard → make_part_stl → apply_part_to_db → set_part_connectors)' : '1) 부품 등록: 필요 없음')
+          lines.push(needConnectors.length ? '2) 연결점 없음/자동탐지 부품: ' + [...new Set(needConnectors)].join(', ') + ' — 3D 뷰어(?subject=robot → 큐보 부품 전체 리스트)에서 구멍·돌기 개수와 위치를 세어 확인하고 필요하면 set_part_connectors' : '2) 연결점 확인: 모두 checked')
+          lines.push(needConfirm.length ? '3) 면 이름 미확정 부품: ' + [...new Set(needConfirm)].join(', ') + ' — get_assembly_guide 4-1절 "확정 메모"가 있으면 따르고, 없으면 모양을 보고 앞뒤를 정해 기록' : '3) 면 이름: 모두 확정')
+          if (noModel.length) lines.push('4) 3D 모델 없는 부품(조립도에서 제외 대상): ' + [...new Set(noModel)].join(', '))
+          lines.push('다음: get_assembly_guide 의 "큐보 스튜디오 A" 절 3번(스크립트 작성)부터.')
+          return text(lines.join('\n'))
+        } catch (e) { return fail(e.message) }
+      }
+    )
+
+    server.registerTool(
       'get_part_connectors',
       {
         title: '부품 돌기·구멍 연결점 조회',
