@@ -7,6 +7,7 @@
 import { z } from 'zod'
 import { buildGuide, dimsOf } from './cubo-assembly-guide.js'
 import { autoAssemble, autoCamera } from './cubo-auto-assemble.js'
+import { stlFromDataUrl, measureModel, formatMeasure } from './cubo-part-measure.js'
 
 const text = (t) => ({ content: [{ type: 'text', text: t }] })
 const fail = (t) => ({ content: [{ type: 'text', text: `❌ ${t}` }], isError: true })
@@ -362,6 +363,32 @@ export function registerCuboAssemblyTools(server, getSupabase) {
             pairs(me.pegs, w.holes, true); pairs(w.pegs, me.holes, false)
           }))
           return text(JSON.stringify({ ...d, 단계: upTo, 이름_규칙: '번호는 부품 모델 축에 고정(부품을 돌려도 같은 면·같은 구멍). 열=첫째 축, 줄=둘째 축, 각 축 − 끝부터 1.', 결합_추정: joins }, null, 1))
+        } catch (e) { return fail(e.message) }
+      }
+    )
+
+    server.registerTool(
+      'measure_part',
+      {
+        title: '부품 3D 모델 실측(크기·대칭·돌기·구멍)과 등록된 연결점 대조',
+        description: '부품 이름을 주면 DB 의 3D 모델(STL)을 서버에서 읽어 ① 크기 ② 가운데 면 기준 대칭도 ③ 둥근 돌기·구멍의 위치·반지름·길이/깊이·방향을 재고, 등록된 연결점(get_part_connectors)과 하나씩 대조해 일치/차이/없음을 알려 준다. 새 부품을 등록하거나 연결점이 auto 인 부품을 확인할 때 눈으로 세는 대신 먼저 부른다. 좌표는 연결점과 같은 모델 로컬(bbox 가운데 기준, y 위)이라 나온 숫자를 set_part_connectors 에 그대로 쓸 수 있다. 한계: 둥근 벽만 찾는다(십자 + 소켓·네모 구멍은 못 찾음), STL 로 만든 부품만 된다(도형으로 만든 프레임은 대상 아님).',
+        inputSchema: {
+          name: z.string().describe('부품 이름. 예: 서보모터'),
+        },
+      },
+      async ({ name }) => {
+        try {
+          const sb = getSupabase()
+          const { data, error } = await sb.from('ivs_part_catalog').select('id, name:data->>name, shape:data->spec->shapes->0, connectors:data->connectors').eq('data->>subject', 'robot').eq('data->>name', name)
+          if (error) return fail(error.message)
+          if (!data || !data.length) return fail(name + ' 부품을 못 찾았어요(list_design_parts 로 이름 확인).')
+          const r = data[0]
+          const sh = r.shape
+          if (!sh || sh.type !== 'import' || !sh.fileDataUrl) return fail(name + ' 은 STL 모델이 아니라(' + (sh ? sh.type : '모양 없음') + ') 실측 대상이 아니에요.')
+          const num = (v) => { const x = Number(v); return Number.isFinite(x) ? x : 0 }
+          const raw = stlFromDataUrl(sh.fileDataUrl)
+          const m = measureModel(raw, { x: num(sh.x), y: num(sh.y), z: num(sh.z), rx: num(sh.rx), ry: num(sh.ry), rz: num(sh.rz) }, r.connectors || null)
+          return text(formatMeasure(name, m, !!r.connectors) + '\n\n좌표는 부품 연결점과 같은 기준(bbox 가운데, y 위). 돌기 pos 는 돌기 가운데, 구멍 pos 는 구멍 깊이의 가운데(입구는 따로 표시).')
         } catch (e) { return fail(e.message) }
       }
     )
