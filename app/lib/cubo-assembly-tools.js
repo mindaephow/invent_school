@@ -27,6 +27,25 @@ export async function loadSite() {
   return win
 }
 
+// 연결점 이름 → 연결점 id (사용자 지시 2026-10-03): "홀면 +y 열5·줄1", "돌기면 +z 1" 처럼 면 이름으로 쓰면 id(h3, p2 …)로 바꿔 준다.
+// 이미 id 면 그대로 돌려주고, 이름 규칙(design-faces.js facesOf 와 같은 면·번호)에 맞는데 없는 번호면 가능한 번호를 알려 주는 오류를 낸다.
+export function resolveConnectorName(F, partConn, name, partLabel = '') {
+  if (typeof name !== 'string') return name
+  const c = partConn || {}
+  if ([...(c.pegs || []), ...(c.holes || [])].some((q) => q.id === name)) return name
+  const m = /^(홀면|돌기면)\s*\(?\s*([+\-−])\s*([xyz])\s*\)?\s*(.*)$/.exec(name.trim())
+  if (!m) return name // 이름 규칙이 아니면 그대로(id 로 보고 아래에서 "없어요" 오류가 난다)
+  const key = `${m[1]} ${m[2] === '+' ? '+' : '-'}${m[3]}`
+  const faces = F.facesOf(c)
+  const f = faces.find((x) => x.key === key)
+  if (!f) throw new Error(`${partLabel} "${name}": 그런 면이 없어요. 있는 면: ${faces.map((x) => x.key).join(', ')}`)
+  let label = m[4].trim().replace(/\s+/g, '').replace(/^열(\d+)[·,]?줄(\d+)$/, '열$1·줄$2')
+  if (!label && f.items.length === 1) return f.items[0].id
+  const it = f.items.find((x) => x.label === label)
+  if (!it) throw new Error(`${partLabel} "${name}": 이 면에 '${label}' 이(가) 없어요. 가능한 번호: ${f.items.map((x) => x.label).join(', ')}`)
+  return it.id
+}
+
 // 오일러(도, ZYX: R = Rz·Ry·Rx) → 쿼터니언
 export function quatFromEulerZYX(r) {
   const h = (d) => (d * Math.PI) / 360
@@ -222,6 +241,18 @@ export function registerCuboAssemblyTools(server, getSupabase) {
           if (error) return fail(error.message)
           const conn = {}; (rows || []).forEach((r) => { if (r.connectors) conn[r.name] = r.connectors })
           const dims = {}; names.forEach((n) => { const d = dimsOf(n); if (d) dims[n] = d })
+          // 연결점 이름("홀면 +y 열5·줄1")·부품 번호("315프레임 3번")를 id·key 로 바꾼다
+          const alias = {}
+          if (!placed && assemblyId) { const cnt = {}; base.forEach((b) => { cnt[b.n] = (cnt[b.n] || 0) + 1; alias[`${b.n} ${cnt[b.n]}번`] = b.key }) }
+          const keyOf = new Map(base.map((b) => [b.key, b]))
+          for (const q of plan) {
+            for (const j of (q.joins || [])) {
+              if (alias[j.host]) j.host = alias[j.host]
+              j.mine = resolveConnectorName(site.IVS_FACES, conn[q.n], j.mine, q.n)
+              const h = keyOf.get(j.host)
+              if (h && j.theirs) j.theirs = resolveConnectorName(site.IVS_FACES, conn[h.n], j.theirs, `${h.n}(${j.host})`)
+            }
+          }
           const ctx = { M: site.IVS_MATES, COL: site.IVS_COLLISION, conn, dims, placed: base }
           const res = autoAssemble(ctx, plan)
           const out = [res.ok ? `✅ 자동 조립 완료: ${res.placed.length}개 부품 확정` : `❌ ${res.stoppedAt + 1}번째 부품(${plan[res.stoppedAt] && plan[res.stoppedAt].n})에서 막힘 — 아래 로그의 [오류]를 보고 joins 를 고쳐 다시 호출하세요`, ...res.log]

@@ -7,7 +7,7 @@
 // 검사·좌표 코드는 배포된 public/design-mates.js·design-collision.js 를 읽어 쓴다(화면과 같은 코드).
 import { z } from 'zod'
 import { dimsOf, PART_DIMS } from './cubo-assembly-guide.js'
-import { loadSite, quatFromEulerZYX, checkOverlaps } from './cubo-assembly-tools.js'
+import { loadSite, quatFromEulerZYX, checkOverlaps, resolveConnectorName } from './cubo-assembly-tools.js'
 import { CUBO_FRAME_STD, CUBO_BLOCK_STD, PART_STANDARD_TEXT } from './cubo-part-maker.js'
 import { frameTriangles } from './cubo-frame-mesh.js'
 import { blockTriangles } from './cubo-block-mesh.js'
@@ -240,9 +240,9 @@ export function registerCuboDesignTools(server, getSupabase) {
       description: '고정된 부품의 연결점(구멍 또는 돌기)에 새 부품의 연결점을 끼웠을 때 새 부품의 p·r 을 계산한다. "돌기를 구멍에 꽂기"(moving 이 돌기, fixed 가 구멍) 또는 "구멍을 돌기에 끼우기"(moving 이 구멍, fixed 가 돌기)를 지원한다. roll 은 끼우는 축 둘레 회전(도)이라 프레임을 돌려 놓을 때 고른다 — 4방향(0/90/180/270) 결과를 모두 돌려주고 각 결과를 결합 검사로 확인한다. list_design_parts(name=…) 로 connector id 를 본다.',
       inputSchema: {
         fixed: z.object({ n: z.string(), p: z.array(z.number()).length(3), r: z.array(z.number()).length(3).optional() }).describe('이미 놓인 부품'),
-        fixedConnector: z.string().describe('고정 부품의 연결점 id (예: h3 또는 p2)'),
+        fixedConnector: z.string().describe('고정 부품의 연결점: id (예: h3 또는 p2) 또는 면 이름 (예: "홀면 +y 열5·줄1", "돌기면 +z 1" — get_part_faces 와 같은 이름)'),
         movingName: z.string().describe('새로 놓을 부품 이름'),
-        movingConnector: z.string().describe('새 부품의 연결점 id (예: p1 또는 h4)'),
+        movingConnector: z.string().describe('새 부품의 연결점: id (예: p1 또는 h4) 또는 면 이름 (예: "돌기면 +z 1")'),
         side: z.enum(['front', 'back']).optional().describe('관통 구멍에서 들어가는 쪽. 기본 front(구멍 dir 방향), back 은 반대편에서'),
         roll: z.number().optional().describe('끼우는 축 둘레 회전(도). 생략하면 0/90/180/270 모두 계산'),
       },
@@ -254,6 +254,9 @@ export function registerCuboDesignTools(server, getSupabase) {
         const conn = connOf(cat)
         if (!conn[fixed.n]) return fail(`${fixed.n} 의 연결점이 DB에 없어요.`)
         if (!conn[movingName]) return fail(`${movingName} 의 연결점이 DB에 없어요.`)
+        // 연결점은 id(h3, p2)뿐 아니라 면 이름("홀면 +y 열5·줄1", "돌기면 +z 1")으로도 쓴다
+        fixedConnector = resolveConnectorName(site.IVS_FACES, conn[fixed.n], fixedConnector, fixed.n)
+        movingConnector = resolveConnectorName(site.IVS_FACES, conn[movingName], movingConnector, movingName)
         const fx = { n: fixed.n, p: fixed.p, r: fixed.r || [0, 0, 0] }
         const W = site.IVS_MATES.worldConnectors(fx, conn[fx.n])
         const fh = W.holes.find((h) => h.id === fixedConnector), fp = W.pegs.find((p) => p.id === fixedConnector)
