@@ -319,6 +319,56 @@
     if (el.dataset.orig === undefined) el.dataset.orig = el.textContent;
     el.textContent = (on && def && def.category === '큐보') ? '큐보 스튜디오' : el.dataset.orig;
   }
+  // ── 큐보 부품 전체 리스트(사용자 지시 2026-10-03): 등록된 큐보 부품 전부를 한 화면에 펼쳐 둔다. 조립도 엔진을 그대로 써서(닫기·부품 창·번호·🟢 연결점) 단계 하나짜리 가짜 조립도로 연다.
+  let catAny = null;
+  let lessonFound = false;
+  let connAutoOn = false; // 조립도를 열면서 연결점을 자동으로 켰는지(닫을 때 되돌리기 위해)
+  // "큐보 부품 전체 리스트" 버튼은 큐보를 고른 관리자에게만 보인다(사용자 지시 2026-10-03). 조립도가 없는 차시에서도 열 수 있어야 해서 상자도 같이 맞춘다.
+  function syncAllPartsBtn() {
+    const box = $('assemblyBox'), btn = $('asmAllParts');
+    if (!box || !btn) return;
+    const admin = !!(window.__ivsIsAdmin && window.__ivsIsAdmin());
+    const show = !!(catAny && catAny.name === '큐보' && admin);
+    btn.hidden = !show;
+    if (!viewing) box.hidden = !lessonFound && !show;
+  }
+  setInterval(syncAllPartsBtn, 1500); // 로그인이 늦게 끝나도 버튼이 맞게 나타난다
+  const ALL_PARTS_ORDER = ['15프레임', '17프레임', '19프레임', '25프레임', '27프레임', '29프레임', '35프레임', '37프레임', '39프레임', '59프레임', '115프레임', '215프레임', '315프레임', '515프레임', '713프레임', '90도 프레임', '135도 프레임', '반원프레임', '2단블록', '3단블록', '1열브라켓', '2열브라켓', '리벳', '축', 'T축', '부시', '너트', '8볼트', '12볼트', '서보고정볼트', '작은기어', '큰기어', '육각큰기어', '작은바퀴', '중간바퀴', '데코바퀴', '눈블록', 'DC모터', '서보모터', '서보혼', '둥근서보혼', 'IR센서', 'LED센서', '터치센서', '메인보드', '스프라켓', '캐터필러', '큐보분리기'];
+  const ALL_PARTS_FLIP = { '육각큰기어': [180, 0, 0] }; // 목록에서 육각이 위로 보이게 뒤집어 놓을 부품(사용자 지시 2026-10-03)
+  function buildAllPartsDef() {
+    const b = bridge();
+    if (!b || !b.listParts || !catAny) return null;
+    const all = b.listParts(catAny.id).filter((it) => it.size); // 3D 모델이 없는 부품(고무밴드·3P 케이블·리모컨 등 임시 상자 모양)은 목록에서 뺀다(사용자 지시 2026-10-03)
+    const rank = (n) => { const i = ALL_PARTS_ORDER.indexOf(n); return i < 0 ? 999 : i; };
+    all.sort((x, y) => rank(x.name) - rank(y.name) || String(x.name).localeCompare(String(y.name), 'ko'));
+    // 3D 공간(가로세로 ±750mm) 안에, 모든 부품을 바닥(y=0)에 붙여 놓는다. 크기는 실제 모델 크기(없으면 등록 크기)를 쓰고, 프레임부터 정해 둔 순서대로 줄을 채운다.
+    const HALF = 450, GAP = 20;
+    let x = -HALF, z = -HALF, rowD = 0, maxX = -HALF;
+    const parts = all.map((it) => {
+      const d = (window.IVS_PART_DEFS || {})[it.type] || {};
+      const sz = it.size || [d.w || 30, d.h || 10, d.d || 30];
+      const w = Math.max(sz[0], 20), h = sz[1], dd = Math.max(sz[2], 20);
+      if (x > -HALF && x + w > HALF) { x = -HALF; z += rowD + GAP; rowD = 0; }
+      const pt = { n: it.name, p: [x + w / 2, h / 2 + 0.01, z + dd / 2], r: (ALL_PARTS_FLIP[it.name] || [0, 0, 0]) };
+      x += w + GAP; rowD = Math.max(rowD, dd); maxX = Math.max(maxX, x);
+      return pt;
+    });
+    if (!parts.length) return null;
+    const cam = { theta: 0, phi: 0.45, focus: [[-HALF, 0, -HALF], [maxX, 0, z + rowD]], axes: [-HALF, 0, -HALF] };
+    return { id: 'cubo-all-parts', category: '큐보', volume: 0, chapter: '큐보 부품 전체 리스트', camera: { theta: 0, phi: 0.45, radius: Math.max(520, (maxX + HALF + z + HALF + rowD) * 0.42), target: [(maxX - HALF) / 2, 0, (z + rowD - HALF) / 2] }, steps: [{ note: '큐보 부품 전체 리스트 (' + parts.length + '종) — 부품을 누르면 이름과 면 번호가 나와요. 🟢 연결점 버튼으로 구멍·돌기를 확인하세요.', parts, cam }] };
+  }
+  async function openAllParts() {
+    if (viewing) close();
+    const b0 = bridge();
+    if (b0 && b0.listParts && catAny) { try { await b0.preload(b0.listParts(catAny.id).map((it) => it.name), catAny.id); } catch (e) { /* 못 받은 부품은 등록 크기로 */ } } // 실제 모델 크기를 알아야 바닥 아래로 안 내려간다
+    const d = buildAllPartsDef();
+    if (!d) { const b = bridge(); if (b) b.status('부품 목록을 아직 못 불러왔어요. 잠시 뒤에 다시 눌러 주세요.', 'warn'); return; }
+    def = d; catId = catAny.id;
+    buildOrderList(); buildStepButtons();
+    await open();
+    if (viewing) go(1); // 한 장짜리라 완성 화면 대신 1단계(펼친 전체 화면)로
+    { const cb = $('connToggle'); if (viewing && cb && !cb.hidden && cb.getAttribute('aria-pressed') !== 'true') { cb.click(); connAutoOn = true; } } // 부품 전체 리스트에서만 연결점(구멍·돌기 초록 원판)을 처음부터 켠다 — 일반 조립도는 그 단계의 결합 점만 보인다
+  }
   async function open() {
     const b = bridge();
     if (!def || !b) return;
@@ -362,6 +412,7 @@
     $('historyPanel').hidden = false;
     if (b) b.axes(false);
     if (b) { b.guides([]); b.restore(snapshot || []); b.setViewing(false); }
+    { const cb = $('connToggle'); if (connAutoOn && cb && cb.getAttribute('aria-pressed') === 'true') cb.click(); connAutoOn = false; } // 자동으로 켠 연결점은 닫을 때 같이 끈다(손으로 켠 건 그대로)
     snapshot = null;
   }
 
@@ -369,6 +420,7 @@
   document.addEventListener('DOMContentLoaded', () => {
     if (!$('asmClose')) return;
     $('asmClose').addEventListener('click', close);
+    if ($('asmAllParts')) $('asmAllParts').addEventListener('click', openAllParts);
     const mm2 = $('asmMarkMove2');
     const toggleMark = () => { const on = mm2.dataset.on !== '1'; mm2.dataset.on = on ? '1' : '0'; mm2.style.background = on ? '#f97316' : ''; mm2.style.color = on ? '#fff' : ''; mm2.textContent = on ? '📍 끝내기' : '📍 표시하기'; bridge().markMove(on); };
     // 📸 수정스샷: 화면+번호+이동 목록을 한 장의 그림으로 만들어 클립보드에 복사하고 PNG로 내려받는다(번호 = 옮긴 순서)
@@ -518,7 +570,10 @@
       if (viewing && found !== def) close();
       def = found;
       catId = found ? cat.id : null;
-      box.hidden = !found;
+      catAny = cat;
+      lessonFound = !!found;
+      syncAllPartsBtn();
+      ['asmOrderHead', 'asmOrderList', 'asmSteps'].forEach((id) => { if ($(id)) $(id).style.display = found ? '' : 'none'; });
       buildOrderList();
       if (def) buildStepButtons(); // 번호 줄도 조립 보기를 열기 전부터 보인다
       $('asmRules').innerHTML = (window.IVS_ASSEMBLY_RULES || []).map((r) => '<li>' + r + '</li>').join('');

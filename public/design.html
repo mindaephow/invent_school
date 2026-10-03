@@ -447,7 +447,8 @@
           <h3 id="lessonMissionHead">미션</h3>
           <p class="lesson-mission"></p>
           <div id="assemblyBox" hidden style="margin:8px 0;">
-            <h3 style="margin:0 0 4px;">조립 순서</h3>
+            <button id="asmAllParts" class="ghost" type="button" hidden style="width:100%; margin:0 0 8px;" title="큐보 부품 전부를 한 화면에 펼쳐서 보여요(🟢 연결점 버튼으로 구멍·돌기 확인)">🧩 큐보 부품 전체 리스트</button>
+            <h3 id="asmOrderHead" style="margin:0 0 4px;">조립 순서</h3>
             <ol id="asmOrderList" style="list-style:none; margin:0 0 8px; padding:0; display:flex; flex-direction:column; gap:2px; font-size:12.5px; line-height:1.35;"></ol>
             <div id="asmSteps" style="display:flex; flex-wrap:wrap; gap:4px; margin:0 0 8px;" aria-label="단계 바로가기"></div>
             <div id="asmBar" hidden style="display:flex; flex-direction:column; gap:6px;">
@@ -569,7 +570,7 @@
         <div class="view-tools">
           <button id="panToggle" type="button" aria-pressed="false" title="켜고 빈 곳을 끌면 화면이 밀려요 (마우스 오른쪽 버튼이나 손가락 두 개로도 돼요)">✋ 이동</button>
           <button id="viewHome" type="button" title="처음 화면으로">⌂ 처음</button>
-          <button id="connToggle" type="button" aria-pressed="false" hidden title="부품의 돌기(초록 원판)와 구멍(초록 고리) 연결점을 보여요">🟢 연결점</button>
+          <button id="connToggle" type="button" aria-pressed="false" hidden title="부품의 돌기(끝의 초록 원판)와 구멍(두께 가운데를 막는 초록 원판) 연결점을 보여요">🟢 연결점</button>
           <button id="clearBtn" type="button" class="ghost" title="스케치북을 싹 비우고 새로 시작해요">🔄 초기화</button>
         </div>
         <div class="side-cards">
@@ -1582,7 +1583,7 @@
     paintGeoms.forEach((pt) => mesh.add(new THREE.Mesh(pt.g, new THREE.MeshStandardMaterial({ color: new THREE.Color(pt.color).multiplyScalar(0.72) })))); // 색칠 조각도 본체와 같은 밝기 보정
     return mesh;
   }
-  // ----- 연결점 보기: 부품 DB(data.connectors)의 돌기·구멍을 초록색으로 표시 — 돌기는 끝에 초록 원판, 구멍은 입구에 초록 고리 -----
+  // ----- 연결점 보기: 부품 DB(data.connectors)의 돌기·구멍을 초록색으로 표시 — 돌기는 끝에 초록 원판, 구멍은 두께 가운데를 초록 원판으로 막는다 -----
   // 좌표는 3D 모델 bbox 가운데 기준이라 부품 메시(가운데 기준)의 자식으로 붙이면 부품과 함께 움직인다.
   let showConnectors = false;
   function decorateConnectors(part){
@@ -1594,16 +1595,17 @@
     if (!c) return;
     const g = new THREE.Group();
     g.userData.connMarks = true;
-    const mat = () => new THREE.MeshBasicMaterial({ color: 0x22c55e, depthTest: false, transparent: true, opacity: 0.9, side: THREE.DoubleSide });
-    const place = (m, pos, dir) => { m.position.set(pos[0], pos[1], pos[2]); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(dir[0], dir[1], dir[2]).normalize()); m.renderOrder = 998; g.add(m); };
+    // 조립도 안의 초록 결합 점(guides)과 같은 모양: 속이 찬 초록 원판, 투명도 0.95, 부품에 가려지면 안 보임(사용자 지시 2026-10-03: 연결점 표시방식을 모든 조립도에서 동일하게)
+    const mat = () => new THREE.MeshBasicMaterial({ color: 0x22c55e, depthTest: true, transparent: true, opacity: 0.95, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+    const place = (m, pos, dir) => { m.position.set(pos[0], pos[1], pos[2]); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(dir[0], dir[1], dir[2]).normalize()); m.renderOrder = 998; g.add(m); }; // 초록 원판은 부품에 가려지는 각도에선 보이지 않는다(depthTest, 사용자 지시 2026-10-03)
     (c.pegs || []).forEach(p => {
       const tip = [p.pos[0] + p.dir[0] * (p.len || 0) / 2, p.pos[1] + p.dir[1] * (p.len || 0) / 2, p.pos[2] + p.dir[2] * (p.len || 0) / 2];
-      place(new THREE.Mesh(new THREE.CircleGeometry(Math.max(1.6, (p.r || 2.5) * 0.8), 20), mat()), tip, p.dir);
+      place(new THREE.Mesh(new THREE.CircleGeometry(Math.min(2.6, Math.max(1.4, (p.r || 2.5) * 1.05)), 32), mat()), tip, p.dir); // 돌기 끝 원판 = 조립도의 돌기 끝 점(반지름 2.6)과 같은 크기
     });
     (c.holes || []).forEach(h => {
-      const half = (h.len || 0) / 2, entrance = [h.pos[0] - h.dir[0] * half, h.pos[1] - h.dir[1] * half, h.pos[2] - h.dir[2] * half];
-      const r = Math.max(1.4, h.r || 3);
-      place(new THREE.Mesh(new THREE.RingGeometry(r * 0.8, r * 1.15, 24), mat()), entrance, h.dir);
+      // 구멍은 고리가 아니라 구멍을 초록으로 막는 원판 — 부품 두께의 가운데(h.pos)에 놓는다(사용자 지시 2026-10-03)
+      const r = Math.min(3.3, Math.max(1.4, h.r || 3)); // 구멍 원판 = 조립도의 구멍 점(반지름 3.3)과 같은 크기
+      place(new THREE.Mesh(new THREE.CircleGeometry(r, 32), mat()), h.pos, h.dir);
     });
     part.mesh.add(g);
   }
@@ -4659,6 +4661,7 @@
       return p && PART_DEFS['robot:' + p.id] ? 'robot:' + p.id : null;
     },
     quat(rot){ const q = quatFromRot({ x: rot[0], y: rot[1], z: rot[2] }); return [q.x, q.y, q.z, q.w].map(round5); },
+    listParts(categoryId){ return robotPartsCache.filter(x => (!categoryId || x.category === categoryId) && PART_DEFS['robot:' + x.id]).map(x => { const m = robotModelCache.get(x.id), bb = m && m.bbox; return { name: x.name, type: 'robot:' + x.id, size: bb ? [bb.max[0] - bb.min[0], bb.max[1] - bb.min[1], bb.max[2] - bb.min[2]] : null }; }); }, // 큐보 부품 전체 리스트용: 이 카테고리의 3D 모델이 있는 부품과 실제 모델 크기(w,h,d)
     preload(names, categoryId){ return Promise.all(names.map(n => { const t = this.resolve(n, categoryId); return t ? ensureRobotModel(t.slice(6)) : null; })); },
     show(list, targets, orders){ assemblyTargets = targets || []; assemblyOrders = orders || []; restoreParts(list, {}, true); },
     // 아직 제자리로 안 들어간 부품들의 결합 순서 번호(작은 것부터) — 재생이 순서대로 하나씩 결합시킨다
@@ -4771,7 +4774,7 @@
           const n = gdir ? new THREE.Vector3(gdir[0], gdir[1], gdir[2]).normalize() : new THREE.Vector3(0, 1, 0);
           const rm = new THREE.Mesh(new THREE.CircleGeometry(3.3, 32), paint());
           rm.renderOrder = 10; rm.userData.dot = true; rm.userData.ring = true;
-          rm.position.set(to[0], to[1], to[2]).addScaledVector(n, 0.15); rm.quaternion.setFromUnitVectors(Z, n); g.add(rm);
+          rm.position.set(to[0], to[1], to[2]).addScaledVector(n, -2.5); rm.quaternion.setFromUnitVectors(Z, n); g.add(rm); // 구멍을 막는 초록 원판은 판 두께(5)의 가운데에 — 연결점 표시와 같은 방식(사용자 지시 2026-10-03)
           return;
         }
         const a = new THREE.Vector3(from[0], from[1], from[2]), b = new THREE.Vector3(to[0], to[1], to[2]);
@@ -4798,7 +4801,7 @@
         };
         const recv = !!both; // 프레임 같은 판이 움직이는 단계: 구멍 쪽이 움직이는 부품
         const pegPt = a.clone().addScaledVector(dir, 0.15);
-        const holeOut = b.clone().addScaledVector(dir, 0.15);
+        const holeOut = b.clone().addScaledVector(dir, 2.5); // 구멍 쪽 점도 판 두께(5)의 가운데 — 연결점 표시와 같은 방식(사용자 지시 2026-10-03)
         const cap = dot(2.6, pegPt, dir, !recv);
         // 프레임이 움직이는 단계(recv): 결합 점은 허공이 아니라 프레임 구멍에 딱 맞춰, 양면에 따로 칠하지 않고 두께 가운데에 하나만 그린다(사용자 지시)
         const ring = dot(3.3, recv ? b.clone().addScaledVector(dir, -both / 2) : holeOut, dir, recv); // 판이 움직이는 단계의 점은 판에 붙여서 부품을 따라 움직이고 화살표가 늘어나게 한다(번호는 assemblyListParts 로 정확히 찾는다)
