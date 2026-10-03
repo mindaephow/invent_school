@@ -317,6 +317,7 @@ ${rulesText}
 - 새 차시를 만들 때: 1) 교재 LIST 를 list.json 으로 2) 높이·폭 맞음(블록 30mm = 벽 폭 30mm 등)으로 좌표를 먼저 논리로 정하고 3) 부품 개수가 LIST 와 맞는지 보고 4) check_local.js 문제 0건 5) emit.py 로 넣고 화면에서 확인.
 
 ## 7. 연결점(돌기·구멍) 기록 — 부품 DB
+**set_part_connectors 는 저장하면서 이 부품을 쓰는 조립도를 바꾸기 전·후로 검사해서 알려 준다(사용자 지시 2026-10-03)**: 결합 건수, 새로 연결 안 된 부품, 새 단계별 문제를 비교하고, 새로 생긴 문제(경고)가 있으면 그 조립도 스크립트를 다시 빌드(python build.py 이름 --write)해야 한다. 이 도구는 구멍 len·부품 size·confidence 도 그대로 저장한다(예전에는 조용히 버려졌다). 연결점을 고친 뒤에는 이 보고를 꼭 읽는다.
 부품마다 돌기·구멍 위치를 ivs_part_catalog.data.connectors 에 기록하면 다음 클로드가 "돌기가 어느 쪽인지" 짐작하지 않아도 된다. get_part_connectors / set_part_connectors 로 읽고 쓴다.
 형식(모델 로컬 좌표, 원점 = 3D 모델 bbox 가운데): { pegs: [{ id, pos:[x,y,z], dir:[x,y,z](돌기가 뻗는 방향 단위벡터), len, r }], holes: [{ id, pos:[x,y,z], dir:[x,y,z](구멍으로 들어가는 방향), r, through: true|false }], note: '설명' }.
 부품 수정(update_part)은 이 필드를 지우지 않는다(body.connectors 로 주면 새로 기록).

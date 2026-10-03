@@ -92,6 +92,40 @@ async function textbookList(sb, def) {
   return out
 }
 
+// 조립 데이터(steps)의 부품을 "제자리" 배치로 모은다(validate_assembly 와 같은 규칙).
+export function partsFinalOf(list) {
+  const out = []
+  list.forEach((s, si) => (s.parts || []).forEach((pt, k) => out.push({ key: `${si + 1}단계 ${pt.n}#${k}`, n: pt.n, p: (pt.move && (pt.move.p || pt.move.by)) ? (pt.move.p || pt.p.map((x, q) => x + pt.move.by[q])) : pt.p, r: (pt.move && pt.move.r) || pt.r || [0, 0, 0] })))
+  return out
+}
+
+// 연결점 기준 조립 요약: 결합 건수, 어디에도 연결 안 된 부품, 단계별 정밀 검사 문제. 부품 연결점을 바꾸기 전·후를 비교하는 데 쓴다.
+export function connectorSummary(site, steps, conn) {
+  const partsFinal = partsFinalOf(steps)
+  const mates = site.IVS_MATES.check(partsFinal, conn)
+  const linked = new Set(); mates.mated.forEach((m) => { linked.add(m.part); linked.add(m.into) })
+  const loose = partsFinal.filter((p) => conn[p.n] && !linked.has(p.key)).map((p) => p.key)
+  let stepIssues = []
+  try { stepIssues = site.IVS_MATES.checkSteps(steps, conn) } catch (e) { stepIssues = ['(단계별 정밀 검사를 못 돌렸어요: ' + e.message + ')'] }
+  return { mated: mates.mated.length, loose, stepIssues }
+}
+
+// 두 요약의 차이를 사람이 읽는 줄로 만든다(같으면 한 줄).
+export function diffSummary(label, before, after) {
+  const lines = []
+  const newLoose = after.loose.filter((x) => !before.loose.includes(x)), fixedLoose = before.loose.filter((x) => !after.loose.includes(x))
+  const newIssues = after.stepIssues.filter((x) => !before.stepIssues.includes(x)), fixedIssues = before.stepIssues.filter((x) => !after.stepIssues.includes(x))
+  const same = before.mated === after.mated && !newLoose.length && !fixedLoose.length && !newIssues.length && !fixedIssues.length
+  if (same) return [`✓ ${label}: 변화 없음 (결합 ${after.mated}건, 연결 안 된 부품 ${after.loose.length}개, 단계별 문제 ${after.stepIssues.length}건)`]
+  const head = (newLoose.length || newIssues.length) ? '⚠' : '✓'
+  lines.push(`${head} ${label}: 결합 ${before.mated}건 → ${after.mated}건`)
+  newLoose.forEach((x) => lines.push(`   ⚠ 새로 생김 — 어디에도 연결 안 됨: ${x}`))
+  newIssues.forEach((x) => lines.push(`   ⚠ 새로 생김 — ${x}`))
+  fixedLoose.forEach((x) => lines.push(`   ✓ 해결됨 — 연결 안 됨이던 ${x}`))
+  fixedIssues.forEach((x) => lines.push(`   ✓ 해결됨 — ${x}`))
+  return lines
+}
+
 export function registerCuboAssemblyTools(server, getSupabase) {
     server.registerTool(
       'get_assembly_guide',
@@ -170,8 +204,7 @@ export function registerCuboAssemblyTools(server, getSupabase) {
           }
           const r = checkOverlaps(list, site.IVS_COLLISION, tolerance)
           // 돌기↔구멍 결합 검사: 부품 DB의 연결점(data.connectors)으로 각 돌기가 다른 부품 구멍에 들어가 있는지 본다
-          const partsFinal = []
-          list.forEach((s, si) => (s.parts || []).forEach((pt, k) => partsFinal.push({ key: `${si + 1}단계 ${pt.n}#${k}`, n: pt.n, p: (pt.move && (pt.move.p || pt.move.by)) ? (pt.move.p || pt.p.map((x, q) => x + pt.move.by[q])) : pt.p, r: (pt.move && pt.move.r) || pt.r || [0, 0, 0] })))
+          const partsFinal = partsFinalOf(list)
           const names = [...new Set(partsFinal.map((p) => p.n))]
           const { data: rows, error: cErr } = await getSupabase().from('ivs_part_catalog').select('name:data->>name, connectors:data->connectors').eq('data->>subject', 'robot').in('data->>name', names)
           const conn = {}
@@ -434,15 +467,17 @@ export function registerCuboAssemblyTools(server, getSupabase) {
     server.registerTool(
       'set_part_connectors',
       {
-        title: '부품 돌기·구멍 연결점 기록',
+        title: '부품 돌기·구멍 연결점 기록(이 부품을 쓰는 조립도 영향 검사 포함)',
         description: '로봇 부품의 돌기(pegs)·구멍(holes) 연결점을 ivs_part_catalog.data.connectors 에 기록한다(다른 필드는 그대로). 좌표는 3D 모델 bbox 가운데를 원점으로 한 모델 로컬 좌표(y 위). 형식은 get_assembly_guide 7장 참고.',
         inputSchema: {
           partId: z.string().describe('ivs_part_catalog 행 id'),
           connectors: z.object({
-            pegs: z.array(z.object({ id: z.string(), pos: z.array(z.number()).length(3), dir: z.array(z.number()).length(3), len: z.number().optional(), r: z.number().optional() })).optional(),
-            holes: z.array(z.object({ id: z.string(), pos: z.array(z.number()).length(3), dir: z.array(z.number()).length(3), r: z.number().optional(), through: z.boolean().optional() })).optional(),
+            pegs: z.array(z.object({ id: z.string(), pos: z.array(z.number()).length(3), dir: z.array(z.number()).length(3), len: z.number().optional(), r: z.number().optional() }).passthrough()).optional(),
+            holes: z.array(z.object({ id: z.string(), pos: z.array(z.number()).length(3), dir: z.array(z.number()).length(3), len: z.number().optional(), r: z.number().optional(), through: z.boolean().optional() }).passthrough()).optional(),
+            size: z.array(z.number()).optional(),
+            confidence: z.string().optional().describe('checked(눈으로 확인) 또는 auto(자동 탐지)'),
             note: z.string().optional(),
-          }).describe('연결점'),
+          }).passthrough().describe('연결점 (구멍 len·부품 size·confidence 도 그대로 저장된다)'),
         },
       },
       async ({ partId, connectors }) => {
@@ -450,9 +485,25 @@ export function registerCuboAssemblyTools(server, getSupabase) {
         const { data: existing, error: getErr } = await sb.from('ivs_part_catalog').select('data').eq('id', partId).maybeSingle()
         if (getErr) return fail(getErr.message)
         if (!existing) return fail(`id="${partId}" 부품을 찾을 수 없어요.`)
+        const partName = existing.data?.name || partId
+        // 이 부품을 쓰는 조립도: 바꾸기 전·후의 결합 검사를 비교해서 어긋남이 생기는지 바로 알려 준다(사용자 지시 2026-10-03)
+        let impact = []
+        try {
+          const site = await loadSite()
+          const users = (site.IVS_ASSEMBLIES || []).filter((a) => (a.steps || []).some((st) => (st.parts || []).some((pt) => pt.n === partName)))
+          if (users.length) {
+            const names = [...new Set(users.flatMap((a) => a.steps.flatMap((st) => (st.parts || []).map((pt) => pt.n))))]
+            const { data: rows } = await sb.from('ivs_part_catalog').select('name:data->>name, connectors:data->connectors').eq('data->>subject', 'robot').in('data->>name', names)
+            const base = {}; (rows || []).forEach((r) => { if (r.connectors) base[r.name] = r.connectors })
+            const connBefore = { ...base }; if (existing.data?.connectors) connBefore[partName] = existing.data.connectors
+            const connAfter = { ...base, [partName]: connectors }
+            users.forEach((a) => { impact.push(...diffSummary(`${a.id} (${a.chapter})`, connectorSummary(site, a.steps, connBefore), connectorSummary(site, a.steps, connAfter))) })
+          }
+        } catch (e) { impact = ['(영향받는 조립도 검사를 못 했어요: ' + e.message + ')'] }
         const { error } = await sb.from('ivs_part_catalog').update({ data: { ...existing.data, connectors } }).eq('id', partId)
         if (error) return fail(error.message)
-        return text(`✅ ${existing.data?.name || partId} 연결점 기록 (돌기 ${(connectors.pegs || []).length}개, 구멍 ${(connectors.holes || []).length}개)`)
+        const head = `✅ ${partName} 연결점 기록 (돌기 ${(connectors.pegs || []).length}개, 구멍 ${(connectors.holes || []).length}개)`
+        return text(impact.length ? head + '\n── 이 부품을 쓰는 조립도 검사 (바꾸기 전 → 후) ──\n' + impact.join('\n') + '\n※ 조립도 데이터(위치)는 그대로이니 ⚠ 가 새로 생겼다면 해당 조립도 스크립트를 다시 빌드해야 한다(python build.py 이름 --write).' : head + '\n(이 부품을 쓰는 조립도는 없어요)')
       }
     )
 }
