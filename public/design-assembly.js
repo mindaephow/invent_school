@@ -595,8 +595,13 @@
     $('asmSlider').addEventListener('input', (e) => { stop(); go(Number(e.target.value)); });
     $('asmCombine').addEventListener('click', () => {
       const r = bridge().combineSelected();
-      if (r === 'none') bridge().status('먼저 끼울 부품을 눌러서 고르세요.', 'warn');
+      if (r === 'none') bridge().status('먼저 끼울 부품 하나를 눌러서 고르세요. 그룹은 [그룹 결합] 을 쓰세요.', 'warn');
       else if (r === 'notTarget') bridge().status('이 부품은 이번 단계에서 끼우는 부품이 아니에요. 떠 있는 부품을 눌러 보세요.', 'warn');
+    });
+    $('asmCombineGroup').addEventListener('click', () => {
+      const r = bridge().combineGroup();
+      if (r === 'none') bridge().status('먼저 그룹을 눌러서 고르세요. 부품 하나는 [부품 결합] 을 쓰세요.', 'warn');
+      else if (r === 'notTarget') bridge().status('이 그룹에는 이번 단계에서 끼우는 부품이 없어요. 떠 있는 그룹을 눌러 보세요.', 'warn');
     });
     $('asmReset').addEventListener('click', () => { stop(); go(step); });
     $('asmOrderList').addEventListener('click', async (e) => {

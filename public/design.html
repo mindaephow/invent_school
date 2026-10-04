@@ -643,7 +643,8 @@
           <div style="display:flex; flex-direction:column; gap:6px; margin:6px 0 8px;">
             <div class="asm-btn-row" style="display:flex; gap:6px;">
               <button id="asmNumBtn" class="ghost" type="button" title="선택한 부품 한 면의 구멍·돌기에 번호를 붙여요" hidden>🔢 번호</button>
-              <button id="asmCombine" class="primary" type="button" title="이 부품이 제자리 구멍으로 가서 딱 붙어요">🔗 결합</button>
+              <button id="asmCombine" class="primary" type="button" title="고른 부품 하나가 제자리 구멍으로 가서 딱 붙어요">🔗 부품 결합</button>
+              <button id="asmCombineGroup" class="primary" type="button" title="고른 그룹이 통째로 제자리 구멍으로 가서 딱 붙어요">🔗 그룹 결합</button>
               <button id="asmReset" class="ghost" type="button" title="움직인 부품을 이 단계의 처음 자리로">↺ 원위치</button>
             </div>
             <p class="note" style="margin:0;">부품을 끌어서 움직여요(저장되지 않아요). 제자리에 가까워지면 딱 붙어요.</p>
@@ -4782,6 +4783,31 @@
       })(t0);
       if (assemblyGuideGroup) {
         assemblyGuideGroup.children.filter(c => c.userData.idx === idx).forEach(dropGuideArrow);
+      }
+      return 'ok';
+    },
+    // 고른 그룹(묶음)을 통째로 제자리로 부드럽게 옮겨 붙인다. 반환: 'ok' | 'none'(고른 그룹 없음) | 'notTarget'(이 그룹에는 이번 단계에 끼우는 부품이 없음)
+    combineGroup(){
+      if (!selected || !selected.isGroup) return 'none';
+      const moves = [], idxs = [];
+      selected.members.forEach((part) => {
+        const idx = assemblyListParts.indexOf(part) >= 0 ? assemblyListParts.indexOf(part) : parts.indexOf(part);
+        const t = assemblyTargets[idx];
+        if (!t) return;
+        assemblyTargets[idx] = null;
+        const p = part.body.position;
+        moves.push({ part, from: { x: p.x, y: p.y, z: p.z }, t }); idxs.push(idx);
+      });
+      if (!moves.length) return 'notTarget';
+      const t0 = performance.now(), DUR = 450;
+      (function step(now){
+        const k = Math.min(1, (now - t0) / DUR), e = 1 - Math.pow(1 - k, 3);
+        moves.forEach(({ part, from, t }) => { if (!parts.includes(part)) return; part.body.position.set(from.x + (t[0] - from.x) * e, from.y + (t[1] - from.y) * e, from.z + (t[2] - from.z) * e); });
+        if (k < 1) requestAnimationFrame(step);
+        else { moves.forEach(({ part, t }) => { if (parts.includes(part)) part.body.position.set(t[0], t[1], t[2]); }); setStatus('딱! 그룹을 결합했어요.', 'success'); playSnap(); }
+      })(t0);
+      if (assemblyGuideGroup) {
+        assemblyGuideGroup.children.filter(c => idxs.includes(c.userData.idx)).forEach(dropGuideArrow);
       }
       return 'ok';
     },
