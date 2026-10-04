@@ -211,7 +211,13 @@ class Asm:
         import os
         if not hasattr(s, "links_path"):
             return None
-        anchors = compute_anchors(s)
+        # 그룹으로 옮겨진 부품(move_group)은 원래 자세로 되돌려 놓고 기록한다 - 옮긴 자리로 기록하면 다음 빌드에서 판이 엉뚱한 부품에 붙어 버린다(조종형비행기 21번에서 빌드가 번갈아 실패했다)
+        _sw = [(q, q.p, q.R) for q in s.parts if getattr(q, "_base", None) is not None]
+        for q, _, _ in _sw: q.p, q.R = q._base[0].copy(), q._base[1].copy()
+        try:
+            anchors = compute_anchors(s)
+        finally:
+            for q, pp, RR in _sw: q.p, q.R = pp, RR
         out = {"attach": s.rec["attach"], "place": {}, "marks": s.rec["marks"]}
         for me, rec in s.rec["place"].items():
             if me in anchors:

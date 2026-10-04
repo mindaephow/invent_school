@@ -306,6 +306,7 @@
   .group-row .gthumb{ width:100%; border-radius:8px; display:block; margin-top:2px; }
   .slot-card{ border-radius:14px; border:1px solid rgba(0,0,0,.08); background:#fff; padding:8px 10px; box-shadow:0 3px 10px rgba(0,0,0,.10); display:flex; flex-direction:column; gap:4px; }
   .slot-card.empty{ background:rgba(255,255,255,.55); box-shadow:none; color:#9ca3af; }
+  .slot-card.viewing{ outline:3px dashed #16a34a; background:#f0fdf4; }
   .slot-card.active{ outline:3px solid #2563eb; background:#eff6ff; }
   .slot-head{ display:flex; justify-content:space-between; align-items:center; gap:6px; font-size:13px; }
   .slot-head b{ font-weight:800; } .slot-tag{ font-size:12px; font-weight:700; color:#2563eb; } .slot-card.empty .slot-tag{ color:#9ca3af; font-weight:600; }
@@ -637,6 +638,7 @@
           <p><span class="drag-handle">⠿</span>선택한 부품: <span id="selectedLabel"></span></p>
           <button id="closeSelected" class="ghost">✕</button>
         </div>
+        <div id="selCoord" hidden style="margin:2px 0 6px; display:flex; align-items:center; gap:6px; font-size:12.5px; font-weight:700; color:#1e3a8a; font-variant-numeric:tabular-nums;"><span id="selCoordText" style="flex:1"></span><button type="button" id="selCoordCopy" class="ghost" title="이 좌표를 복사해요" style="padding:3px 8px; font-size:12px; white-space:nowrap;">📋 복사</button></div>
         <div id="asmFaceInfo" hidden style="margin:4px 0 8px; font-size:13px; line-height:1.55; color:#374151;"></div>
         <div id="asmNumLegend" hidden style="margin:-2px 0 6px; font-size:12px; font-weight:700;"></div>
         <div id="asmDemoBlock" hidden>
@@ -1616,6 +1618,10 @@
   // 좌표는 3D 모델 bbox 가운데 기준이라 부품 메시(가운데 기준)의 자식으로 붙이면 부품과 함께 움직인다.
   let showConnectors = false;
   let assemblyPanelOn = false; // 오른쪽 그룹 목록(1~5 자리)은 맞물림 방식 조립 보기에서 항상 보인다
+  let assemblySlotThumbs = {}; // 창고 카드에 올리는 썸네일 { 창고번호: 사진 }(단계 데이터 slotThumb)
+  let assemblyViewThumb = ''; // 보는 창고에 들어 있는 묶음의 썸네일
+  let assemblyViewLabel = ''; // 보는 창고에 들어 있는 묶음의 이름(예: 14번까지 만든 본체)
+  let assemblyViewSlot = null; // 카드를 눌러 보는 중인 창고(없으면 null)
   let assemblySlot = 0; // 지금 작업 중인 창고 자리 번호
   let assemblyStored = null; // 지금 안 보이는(창고 N번 자리에 둔) 묶음 { names, counts, thumb }
   let assemblyGroups = []; // 조립 보기 그룹 [{ name, parts, on }] — 결합이 끝난 덩어리(사용자 지시 2026-10-04: 묶음마다 오른쪽에 표시, 저장은 바뀌지 않음)
@@ -2759,6 +2765,7 @@
       },
       quaternion: {
         x: 0, y: 0, z: 0, w: 1,
+        clone(){ return new THREE.Quaternion(this.x, this.y, this.z, this.w); }, // 돌리기(setRotAxis)가 지금 각도를 복사해 두려고 부른다 — 이게 없어서 그룹 돌리기가 멈췄다
         set(x, y, z, w){
           const nq = new THREE.Quaternion(x, y, z, w).normalize();
           const oq = new THREE.Quaternion(this.x, this.y, this.z, this.w);
@@ -2841,6 +2848,7 @@
     selected = p;
     const demoMode = !!(window.__ivsAssembly && window.__ivsAssembly.isViewing()); // 조립 보기 시연 중엔 부품 창 없이 끌어서 움직인다
     selectedControls.classList.toggle('asm-compact', demoMode);
+    document.querySelectorAll('#axisBlock [data-mode]').forEach(b => { b.textContent = (p && p.isGroup ? '그룹 ' : '') + (b.dataset.mode === 'rotate' ? '돌리기' : '이동'); }); // 그룹을 골랐을 땐 "그룹 돌리기 / 그룹 이동"(묶음 전체에 적용된다)
     selectedControls.hidden = !p;
     modalBackdrop.hidden = !p || demoMode; // 조립 보기에선 뒷배경을 깔지 않아 부품을 계속 끌 수 있다
     document.getElementById('asmDemoBlock').hidden = !demoMode; // 🔗 결합·움직임 방식·원위치는 이 창 안에
@@ -4423,6 +4431,14 @@
   }
 
   let assemblyGuideGroup = null; // 조립 보기의 초록 안내(화살표·칠한 점) 묶음 — animate()가 매 프레임 갱신하므로 그보다 먼저 선언한다
+  { const cb = document.getElementById('selCoordCopy'); // 좌표 복사: 부품 창에 보이는 좌표 글을 클립보드로
+    if (cb) cb.addEventListener('click', async () => {
+      const txt = (document.getElementById('selCoordText') || {}).textContent || '';
+      const label = (document.getElementById('selectedLabel') || {}).textContent || '';
+      const out = (label ? label + ' — ' : '') + txt;
+      try { await navigator.clipboard.writeText(out); setStatus('좌표를 복사했어요: ' + out, 'success'); }
+      catch (e) { const ta = document.createElement('textarea'); ta.value = out; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); setStatus('좌표를 복사했어요: ' + out, 'success'); } catch (e2) { setStatus('복사하지 못했어요. 좌표 글을 직접 드래그해서 복사하세요.', 'warn'); } ta.remove(); }
+    }); }
   function animate(){
     requestAnimationFrame(animate);
     if (playing) {
@@ -4432,6 +4448,21 @@
     if (timerRunSince !== null) timerRender();
     applyJoins();
     if (selected && selected.asmLabel) refreshFaceInfo(false);
+    { const sc = document.getElementById('selCoord'); // 부품 창에 지금 좌표(mm)·회전(도) — 조립 보기에서 관리자만(옮긴 자리를 말로 전할 때 쓴다)
+      if (sc) {
+        const show = !!(selected && window.__ivsAssembly && window.__ivsAssembly.isViewing() && window.__ivsIsAdmin && window.__ivsIsAdmin());
+        sc.hidden = !show;
+        if (show) {
+          const r1 = (v) => (Math.round(v * 10) / 10).toFixed(1);
+          if (selected.isGroup) {
+            const ms = selected.members, cx = ms.reduce((a, m) => a + m.body.position.x, 0) / ms.length, cy = ms.reduce((a, m) => a + m.body.position.y, 0) / ms.length, cz = ms.reduce((a, m) => a + m.body.position.z, 0) / ms.length;
+            document.getElementById('selCoordText').textContent = '그룹 중심 · x ' + r1(cx) + '  y ' + r1(cy) + '  z ' + r1(cz) + ' (mm)';
+          } else {
+            const rr = getRot(selected), q = selected.body.position;
+            document.getElementById('selCoordText').textContent = '위치 · x ' + r1(q.x) + '  y ' + r1(q.y) + '  z ' + r1(q.z) + ' (mm)  ·  회전 ' + r1(rr.x) + '°, ' + r1(rr.y) + '°, ' + r1(rr.z) + '°';
+          }
+        }
+      } }
     parts.forEach(p => {
       p.mesh.position.copy(p.body.position);
       p.mesh.quaternion.copy(p.body.quaternion);
@@ -4705,6 +4736,8 @@
     assemblyGuideGroup = null;
   }
   // 오른쪽 그룹 목록: 묶음마다 한 줄. 누르면 그 묶음을 해제(부품별로 움직임) ↔ 그룹(통째로 움직임). 저장은 바뀌지 않는다.
+  const LOCK_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" style="vertical-align:-2px"><rect x="4.5" y="11" width="15" height="10.5" rx="2.2" fill="currentColor"/><path d="M7.8 11V8.2a4.2 4.2 0 0 1 8.4 0V11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>';
+  const UNLOCK_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" style="vertical-align:-2px"><rect x="4.5" y="11" width="15" height="10.5" rx="2.2" fill="currentColor"/><path d="M7.8 11V8.2a4.2 4.2 0 0 1 8.2-1.4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>';
   function refreshGroupChip(){
     const box = document.getElementById('groupList'); if (!box) return;
     box.hidden = !assemblyPanelOn;
@@ -4714,11 +4747,14 @@
     // 결합하는 단계는 1·2번에 있던 것을 0번으로 끌어와 0번 카드 안에 모두 표시하고, 새 조립품을 만드느라 안 보이는 묶음은 자기 칸에 "보관 중"으로 남는다.
     const bySlot = {};
     assemblyGroups.forEach(g => { (bySlot[g.slot] = bySlot[g.slot] || []).push(g); });
-    if (assemblyStored && assemblyStored.names.length) { const sl = assemblyStored.slot === undefined ? 1 : assemblyStored.slot; (bySlot[sl] = bySlot[sl] || []).push({ stored: true }); }
+    if (assemblyStored && assemblyStored.names.length) assemblyStored.names.forEach(nm_ => { const sl = (assemblyStored.slots && assemblyStored.slots[nm_] !== undefined) ? assemblyStored.slots[nm_] : (assemblyStored.slot === undefined ? 1 : assemblyStored.slot); (bySlot[sl] = bySlot[sl] || []).push({ stored: true, name: nm_ }); });
     for (let n = 0; n <= 5; n++) {
       const items = bySlot[n] || [];
       const active = assemblySlot === n;
       const card = document.createElement('div'); card.className = 'slot-card' + (active ? ' active' : '') + (items.length ? '' : ' empty');
+      if (assemblyViewSlot === n) card.classList.add('viewing');
+      card.style.cursor = 'pointer'; card.title = '눌러서 이 창고 화면 보기(작업 창고를 누르면 돌아와요)';
+      card.addEventListener('click', (ev) => { if (ev.target.closest('.slot-line')) return; if (window.__ivsAssembly && window.__ivsAssembly.setViewSlot) window.__ivsAssembly.setViewSlot(n); });
       const head = document.createElement('div'); head.className = 'slot-head';
       const nm = document.createElement('b'); nm.textContent = n === 0 ? '창고 0 (메인)' : '창고 ' + n;
       const tag = document.createElement('span'); tag.className = 'slot-tag'; tag.textContent = active ? '작업 중' : (items.length ? '' : '비어 있음');
@@ -4727,26 +4763,31 @@
         const line = document.createElement('button'); line.type = 'button'; line.className = 'slot-line';
         const lb = document.createElement('span');
         if (g.stored) {
-          const label = assemblyStored.names[0];
+          const label = g.name || assemblyStored.names[0];
           lb.textContent = '그룹 ' + (gi + 1) + ' · ' + assemblyStored.counts[label] + '개'; line.title = label; line.disabled = true; line.classList.add('stored');
           const st = document.createElement('span'); st.className = 'gs'; st.textContent = '보관 중';
           line.appendChild(lb); line.appendChild(st); card.appendChild(line);
-          if (assemblyStored.thumb) { const im = document.createElement('img'); im.src = assemblyStored.thumb; im.alt = ''; im.className = 'gthumb'; card.appendChild(im); }
+          { const sub = document.createElement('div'); sub.textContent = label; sub.style.cssText = 'font-size:11.5px; color:#6b7280; margin:-2px 0 2px 8px;'; card.appendChild(sub); } // 무엇이 보관돼 있는지(예: 14번까지 만든 본체)
+          const th_ = (assemblyStored.thumbBy && assemblyStored.thumbBy[label]) || (assemblyStored.names.length === 1 ? assemblyStored.thumb : null);
+          const th2_ = assemblySlotThumbs[n] ? null : th_; // 이 창고에 저장한 썸네일이 있으면 그걸 카드 아래에 한 번만 보여 준다
+          if (th2_) { const im = document.createElement('img'); im.src = th2_; im.alt = ''; im.className = 'gthumb'; card.appendChild(im); }
         } else {
-          lb.textContent = '그룹 ' + (gi + 1) + ' · ' + g.parts.length + '개'; if (!g.on) line.classList.add('off');
-          const st = document.createElement('span'); st.className = 'gs'; st.textContent = g.on ? '🔒 그룹' : '🔓 해제';
+          lb.textContent = '그룹 ' + (gi + 1) + ' · ' + (g.ghost ? g.n : g.parts.length) + '개'; if (!g.on) line.classList.add('off'); if (g.ghost) { line.disabled = true; line.classList.add('stored'); }
+          const st = document.createElement('span'); st.className = 'gs'; st.innerHTML = (g.on ? LOCK_SVG : UNLOCK_SVG) + (g.on ? ' 그룹' : ' 해제'); // 잠기면 닫힌 자물쇠, 해제하면 열린 자물쇠
           line.title = g.on ? '눌러서 해제하면 이 묶음의 부품을 하나씩 움직여요(저장되지 않아요)' : '눌러서 그룹으로 되돌리면 이 묶음이 통째로 움직여요(저장되지 않아요)';
-          line.addEventListener('click', () => { g.on = !g.on; select(null); refreshGroupChip(); });
+          if (!g.ghost) line.addEventListener('click', () => { g.on = !g.on; select(null); refreshGroupChip(); });
           line.appendChild(lb); line.appendChild(st); card.appendChild(line);
         }
       });
+      if (assemblySlotThumbs[n] && assemblyViewSlot !== n) { const im2 = document.createElement('img'); im2.src = assemblySlotThumbs[n]; im2.alt = ''; im2.className = 'gthumb'; card.appendChild(im2); }
+      if (assemblyViewSlot === n && assemblyViewLabel) { const sub = document.createElement('div'); sub.textContent = assemblyViewLabel; sub.style.cssText = 'font-size:11.5px; color:#166534; font-weight:700; margin:-2px 0 2px 8px;'; card.appendChild(sub); if (assemblyViewThumb) { const im = document.createElement('img'); im.src = assemblyViewThumb; im.alt = ''; im.className = 'gthumb'; card.appendChild(im); } }
       box.appendChild(card);
     }
   }
   // 단계를 바꾸면 그 단계 모습으로 다시 그리고 모든 묶음이 그룹 상태로 시작한다. comps: [{ name, idx:[목록 번호…] }]
   function applyAssemblyGroups(comps){
     assemblyPanelOn = Array.isArray(comps);
-    assemblyGroups = (comps || []).map(c => ({ name: c.name || '그룹', parts: (c.idx || []).map(i => assemblyListParts[i]).filter(Boolean), on: true, slot: c.slot === undefined ? 1 : c.slot })).filter(g => g.parts.length > 1);
+    assemblyGroups = (comps || []).map(c => ({ name: c.name || '그룹', parts: (c.idx || []).map(i => assemblyListParts[i]).filter(Boolean), on: true, slot: c.slot === undefined ? 1 : c.slot, ghost: !!c.ghost, n: c.n, origin: c.origin })).filter(g => g.ghost || g.parts.length > 1); // ghost: 다른 창고를 보는 중에 그 창고에 있는 묶음 — 개수만 보여 준다
     refreshGroupChip();
   }
   let assemblyAxesGroup = null; // 조립 보기의 베이스 X·Y·Z 방향선
@@ -4757,7 +4798,20 @@
       return p && PART_DEFS['robot:' + p.id] ? 'robot:' + p.id : null;
     },
     setSlot(n){ assemblySlot = n || 0; refreshGroupChip(); },
+    setSlotThumbs(m){ assemblySlotThumbs = m || {}; refreshGroupChip(); },
+    setViewSlot(n, label, thumb){ assemblyViewSlot = (n === null || n === undefined) ? null : n; assemblyViewLabel = label || ''; assemblyViewThumb = thumb || ''; refreshGroupChip(); },
     setStored(info){ assemblyStored = info; refreshGroupChip(); },
+    // 그룹 번호는 화면에서 왼쪽에 있는 것부터 1번(사용자 지시 2026-10-04) — 단계를 열고 카메라가 자리 잡은 뒤 한 번 매긴다
+    relabelGroups(){
+      if (!assemblyGroups.length) return;
+      updateCamera(); camera.updateMatrixWorld(); camera.updateProjectionMatrix();
+      const sx = (g) => { if (g.ghost || !g.parts.length) return 1e9; const v = new THREE.Vector3(); g.parts.forEach(m => v.add(m.body.position)); v.multiplyScalar(1 / Math.max(1, g.parts.length)); return v.project(camera).x; };
+      const key = new Map(assemblyGroups.map(g => [g, sx(g)]));
+      // 작업 창고에 원래 있던 묶음이 먼저(그룹 1), 다른 창고에서 가져온 묶음은 그다음 — 같은 무리 안에서는 화면 왼쪽부터(사용자 지시 2026-10-04)
+      const rank = (g) => (g.origin === assemblySlot ? 0 : 1);
+      assemblyGroups.sort((a, b) => (rank(a) - rank(b)) || (key.get(a) - key.get(b)));
+      refreshGroupChip();
+    },
     connectors(type){ const info = robotPartsCache.find(x => 'robot:' + x.id === type); return info && info.connectors ? info.connectors : null; }, // 부품 종류의 돌기·구멍 정보(부품 DB) — 연결점은 항상 부품의 같은 자리
     quat(rot){ const q = quatFromRot({ x: rot[0], y: rot[1], z: rot[2] }); return [q.x, q.y, q.z, q.w].map(round5); },
     listParts(categoryId){ return robotPartsCache.filter(x => (!categoryId || x.category === categoryId) && PART_DEFS['robot:' + x.id]).map(x => { const m = robotModelCache.get(x.id), bb = m && m.bbox; return { name: x.name, type: 'robot:' + x.id, size: bb ? [bb.max[0] - bb.min[0], bb.max[1] - bb.min[1], bb.max[2] - bb.min[2]] : null }; }); }, // 큐보 부품 전체 리스트용: 이 카테고리의 3D 모델이 있는 부품과 실제 모델 크기(w,h,d)
@@ -4924,9 +4978,17 @@
           const info = part && part.type && part.type.indexOf('robot:') === 0 ? robotPartsCache.find(x => x.id === part.type.slice(6)) : null;
           const c = info && info.connectors && (kind === 'peg' ? info.connectors.pegs : info.connectors.holes).find(q => q.id === id);
           if (!part || !part.mesh || !c) { connDots.set(key, null); return null; }
-          const m = new THREE.Mesh(new THREE.CircleGeometry(kind === 'peg' ? Math.min(2.6, Math.max(1.4, (c.r || 2.5) * 1.05)) : Math.min(3.3, Math.max(1.4, c.r || 3)), 32), paint());
+          // 십자 구멍(DC모터 옆면 십자 소켓)은 동그라미가 아니라 초록 십자(+)로 표시한다(사용자 지시 2026-10-04)
+          const isCross = kind === 'hole' && /^cross/.test(c.id) && /DC모터/.test((info && info.name) || '');
+          let geo;
+          if (isCross) {
+            const R = 3.9, W = 1.5, sh = new THREE.Shape();
+            sh.moveTo(-W, -R); sh.lineTo(W, -R); sh.lineTo(W, -W); sh.lineTo(R, -W); sh.lineTo(R, W); sh.lineTo(W, W); sh.lineTo(W, R); sh.lineTo(-W, R); sh.lineTo(-W, W); sh.lineTo(-R, W); sh.lineTo(-R, -W); sh.lineTo(-W, -W); sh.closePath();
+            geo = new THREE.ShapeGeometry(sh);
+          } else geo = new THREE.CircleGeometry(kind === 'peg' ? Math.min(2.6, Math.max(1.4, (c.r || 2.5) * 1.05)) : Math.min(3.3, Math.max(1.4, c.r || 3)), 32);
+          const m = new THREE.Mesh(geo, paint());
           m.renderOrder = 10; m.userData.dot = true; m.userData.users = new Set(); m.userData.connKey = key;
-          if (kind === 'hole') m.userData.ring = true;
+          if (kind === 'hole' && !isCross) m.userData.ring = true;
           const at = kind === 'peg' ? [c.pos[0] + c.dir[0] * (c.len || 0) / 2, c.pos[1] + c.dir[1] * (c.len || 0) / 2, c.pos[2] + c.dir[2] * (c.len || 0) / 2] : c.pos;
           m.position.set(at[0], at[1], at[2]);
           m.quaternion.setFromUnitVectors(Z, new THREE.Vector3(c.dir[0], c.dir[1], c.dir[2]).normalize());
@@ -4936,6 +4998,7 @@
         };
         const items = [];
         mateList.forEach((e) => {
+          [e.pegIdx, e.holeIdx].forEach((pi) => { const q = assemblyListParts[pi] || parts[pi]; if (q && q.mesh && q.body) { q.mesh.position.copy(q.body.position); q.mesh.quaternion.copy(q.body.quaternion); q.mesh.updateMatrixWorld(true); } }); // 점 자리를 재기 전에 부품 몸을 지금 자세로 맞춘다(안 맞추면 모두 원점에 있는 것으로 계산돼 겹친다고 오해해 화살표가 지워진다)
           const dp = connDot(e.pegIdx, e.pegKind || 'peg', e.pegId), dh = connDot(e.holeIdx, 'hole', e.holeId);
           if (!dp || !dh) return;
           const from = e.moverIdx === e.pegIdx ? dp : dh, to = e.moverIdx === e.pegIdx ? dh : dp;
@@ -5112,6 +5175,46 @@
       async remove(assemblyId, step){
         const res = await fetch(SUPABASE_URL + '/rest/v1/ivs_assembly_cams?assembly_id=eq.' + encodeURIComponent(assemblyId) + '&step=eq.' + step, { method: 'DELETE', headers: this._h() });
         if (!res.ok) throw new Error('삭제 실패 (' + res.status + ')');
+      }
+    },
+    // 지금 3D 화면을 작은 사진(JPEG 주소)으로 — 관리자가 📷 를 눌렀을 때만 찍는다(사용자 지시: 구경하려고 열 때 저절로 찍지 않는다)
+    snapshot(w){
+      try {
+        renderer.render(scene, camera);
+        const W = renderer.domElement.width, H = renderer.domElement.height, c2 = document.createElement('canvas');
+        c2.width = w || 300; c2.height = Math.round(c2.width * H / W);
+        const g2 = c2.getContext('2d'); g2.fillStyle = '#eef3fb'; g2.fillRect(0, 0, c2.width, c2.height); g2.drawImage(renderer.domElement, 0, 0, c2.width, c2.height);
+        return c2.toDataURL('image/jpeg', 0.8);
+      } catch (e) { return null; }
+    },
+    // 부품 모습 기록(ivs_assembly_poses): 관리자가 ❄ 를 눌러 단계마다 부품의 위치·회전을 저장한다
+    poseStore: {
+      _h(extra){ return Object.assign({ apikey: SUPABASE_KEY, Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' }, extra || {}); },
+      async load(assemblyId){
+        try {
+          const res = await fetch(SUPABASE_URL + '/rest/v1/ivs_assembly_poses?select=step,poses&assembly_id=eq.' + encodeURIComponent(assemblyId), { headers: this._h() });
+          if (!res.ok) return {};
+          const out = {}; (await res.json()).forEach(r => { if (r && r.poses) out[r.step] = r.poses; }); return out;
+        } catch (e) { return {}; }
+      },
+      async save(assemblyId, step, poses){
+        const res = await fetch(SUPABASE_URL + '/rest/v1/ivs_assembly_poses?on_conflict=assembly_id,step', { method: 'POST', headers: this._h({ Prefer: 'resolution=merge-duplicates,return=minimal' }), body: JSON.stringify([{ assembly_id: assemblyId, step, poses, updated_at: new Date().toISOString() }]) });
+        if (!res.ok) throw new Error('(' + res.status + ') ' + (await res.text()).slice(0, 100));
+      }
+    },
+    // 창고 카드 썸네일(ivs_assembly_thumbs): 단계·창고마다 한 장
+    thumbStore: {
+      _h(extra){ return Object.assign({ apikey: SUPABASE_KEY, Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' }, extra || {}); },
+      async load(assemblyId){
+        try {
+          const res = await fetch(SUPABASE_URL + '/rest/v1/ivs_assembly_thumbs?select=step,slot,img&assembly_id=eq.' + encodeURIComponent(assemblyId), { headers: this._h() });
+          if (!res.ok) return {};
+          const out = {}; (await res.json()).forEach(r => { if (r && r.img) out[r.step + ':' + r.slot] = r.img; }); return out;
+        } catch (e) { return {}; }
+      },
+      async save(assemblyId, step, slot, img){
+        const res = await fetch(SUPABASE_URL + '/rest/v1/ivs_assembly_thumbs?on_conflict=assembly_id,step,slot', { method: 'POST', headers: this._h({ Prefer: 'resolution=merge-duplicates,return=minimal' }), body: JSON.stringify([{ assembly_id: assemblyId, step, slot, img, updated_at: new Date().toISOString() }]) });
+        if (!res.ok) throw new Error('(' + res.status + ') ' + (await res.text()).slice(0, 100));
       }
     },
     // 관리자가 단계마다 적는 작업 상태(ivs_assembly_status): 'edit' 수정중 / 'done' 완료. 표가 없으면 빈 값.

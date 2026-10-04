@@ -77,12 +77,12 @@
   // 창고 카드: 이 단계에서 카메라에 안 보이게 치워 둔 부품을 게임 창고처럼 따로 보여 준다(사용자 지시 2026-10-04)
   // 오른쪽 패널: 위의 "창고"(메인)는 평소에 비어 있다. 지금 안 보이는 묶음(예: 새 조립품을 만드는 동안 본체)은 창고로 옮기지 않고 창고 N번 자리에 그대로 둔다(사용자 지시 2026-10-04).
   let storedSlotNow = 1;
-  function renderStorage(stored, thumb, kinds, slot) {
+  function renderStorage(stored, thumb, kinds, slot, slots, thumbBy) {
     storedSlotNow = slot === undefined ? 1 : slot;
     const box = $('storageList'); if (!box) return;
     const on = !!(def && def.guideMode === 'mates');
     box.hidden = !on;
-    if (b_ready()) bridge().setStored && bridge().setStored(on ? { names: Object.keys(stored || {}), counts: stored || {}, thumb: thumb || null, slot: storedSlotNow } : null);
+    if (b_ready()) bridge().setStored && bridge().setStored(on ? { names: Object.keys(stored || {}), counts: stored || {}, thumb: thumb || null, slot: storedSlotNow, slots: slots || {}, thumbBy: thumbBy || {} } : null);
     if (!on) return;
     $('storageCount').textContent = '0';
     $('storageBody').innerHTML = '<div class="required-summary" style="opacity:.55">비어 있음</div>';
@@ -90,7 +90,7 @@
   function b_ready() { try { return !!bridge(); } catch (e) { return false; } }
 
   // 창고 자리(사용자 지시 2026-10-04): 0번 = 메인(결합하는 곳), 1~5번 = 따로 만드는 자리. 부품이 지금 있는 자리 = 만든 단계의 자리, 합쳐지는 단계(side.until)가 지났으면 그 단계의 자리.
-  function slotOfStep(n) { const st = def.steps[n - 1]; return st && st.slot !== undefined && st.slot !== null ? st.slot : 1; }
+  function slotOfStep(n) { if (n > def.steps.length && def.finalSlot !== undefined) return def.finalSlot; const st = def.steps[n - 1]; return st && st.slot !== undefined && st.slot !== null ? st.slot : 1; }
   function effStepOf(pt, madeStep, upTo) { return pt.side && pt.side.until && upTo >= pt.side.until ? pt.side.until : madeStep; }
   // 맞물림 방식 안내(def.guideMode === 'mates'): 연결점은 부품에 붙어 있는 고정된 자리(부품 DB 의 돌기·구멍)이고, 이번 단계에 결합할 자리일 때만 보인다.
   // 제자리 자세로 돌기↔구멍이 맞물리는 쌍을 구하고, 그 쌍 중 지금 떨어져 있는(띄운 높이가 다른) 쌍만 안내한다. 마크·보정 값이 필요 없다.
@@ -107,6 +107,8 @@
       const i = Number(String(m.part).slice(1)), j = Number(String(m.into).slice(1));
       const a = list[i], c = list[j];
       if (!a || !c || !(a.isNew || c.isNew)) return;
+      const skipM = (a.skipMates || []).concat(c.skipMates || []);
+      if (skipM.length && (skipM.includes(a.name + '.' + m.peg) || skipM.includes(c.name + '.' + m.hole))) return; // skipMates: 교재가 안내 화살표를 그리지 않는 돌기(예: 3단블록 가운데 돌기)
       const oa = off(a), oc = off(c);
       if (Math.hypot(oa[0] - oc[0], oa[1] - oc[1], oa[2] - oc[2]) < 2) return; // 이미 붙어 있는(같이 움직이는) 쌍은 안내하지 않는다
       const key = i + ':' + m.peg + '>' + j + ':' + m.hole;
@@ -119,7 +121,7 @@
     // 교재처럼 돌기·구멍 맞물림이 아닌 안내 화살표: 부품 데이터의 arrowFrom {name, hole, myHole} = 그 이름 부품의 hole 에서 출발해 이 부품의 myHole 로 도착(예: 1열브라켓 팔 구멍 → 부시)
     list.forEach((d, i) => {
       if (!d.arrowFrom || !d.isNew) return;
-      const j = list.findIndex((x, k) => k !== i && x.name === d.arrowFrom.name);
+      const j = list.findIndex((x, k) => k !== i && x.name === d.arrowFrom.name && (d.arrowFrom.step === undefined || x.step === d.arrowFrom.step)); // step: 같은 이름 부품이 여럿일 때 그 단계에서 만든 것
       if (j < 0) return;
       out.push({ mate: true, pegKind: 'hole', pegIdx: j, pegId: d.arrowFrom.hole, holeIdx: i, holeId: d.arrowFrom.myHole, moverIdx: j, idx: i });
     });
@@ -136,13 +138,16 @@
     const par = list.map((_, i) => i);
     const find = (x) => { while (par[x] !== x) { par[x] = par[par[x]]; x = par[x]; } return x; };
     (res.mated || []).forEach((m) => { const i = Number(String(m.part).slice(1)), j = Number(String(m.into).slice(1)); if (!isNaN(i) && !isNaN(j)) par[find(i)] = find(j); });
+    // 옆자리에서 따로 만드는 세트(같은 side.until)는 떠 있어서 맞물려 보이지 않아도 제자리에서 맞물리는 부품끼리 한 묶음이다 → 클릭하면 세트 전체가 잡힌다(사용자 지시 2026-10-04)
+    { const resF = M.check(list.map((d, i) => ({ key: '#' + i, n: d.name, p: d.fin || d.pos, r: d.finRot || d.rot })), conn);
+      (resF.mated || []).forEach((m) => { const i = Number(String(m.part).slice(1)), j = Number(String(m.into).slice(1)); if (!isNaN(i) && !isNaN(j) && list[i].sideUntil && list[i].sideUntil === list[j].sideUntil) par[find(i)] = find(j); }); }
     const groups = {};
     list.forEach((_, i) => { const r = find(i); (groups[r] = groups[r] || []).push(i); });
     // 이름: 1단계 부품이 들어 있으면 본체, 아니면 그 묶음이 처음 만들어진 단계 번호로 N번 조립품
     return Object.values(groups).filter((g) => g.length > 1).map((idx) => {
       const first = Math.min(...idx.map((i) => list[i].step || 1));
       const eff = Math.max(...idx.map((i) => list[i].eff || list[i].step || 1));
-      return { name: first === 1 ? '본체' : stepTag(first) + '번 조립품', idx, slot: slotOfStep(step) }; // 지금 화면에 보이는 묶음은 모두 이 단계가 작업하는 창고 자리에 있다(결합하는 단계는 1·2번에 있던 것을 0번으로 끌어와 결합한다 — 사용자 지시 2026-10-04)
+      return { name: first === 1 ? '본체' : stepTag(first) + '번 조립품', idx, origin: slotOfStep(first), slot: (viewSlot !== null && viewSlot !== slotOfStep(step)) ? viewSlot : slotOfStep(step) }; // 지금 화면에 보이는 묶음은 모두 이 단계가 작업하는 창고 자리에 있다(결합하는 단계는 1·2번에 있던 것을 0번으로 끌어와 결합한다 — 사용자 지시 2026-10-04)
     });
   }
 
@@ -152,13 +157,17 @@
     const list = [];
     const guides = [];
     const missing = [];
-    let storedThumb = null, storedEff = 0;
+    let storedThumb = null, storedEff = 0; const storedEffBy = {}, storedThumbBy = {};
     const storedTypes = {}; // 창고에 들어간 부품도 이미 쓴 부품이다 → 사용 부품 숫자·목록에 넣는다(종류 → 개수)
     const stored = {};
     const deferredShift = []; // 화살표 시작점을 먼저 결합하는 부품(리벳)의 떠 있는 자리로 옮기는 일 — 목록이 다 만들어진 뒤에 한다 // 이 단계에서 화면에서 치워 창고에 넣어 둔 부품(이름 → 개수)
     const n = total();
     const upTo = Math.min(target, n);
     const flipOn = flipActive(target);
+    const viewS = (viewSlot !== null && viewSlot !== slotOfStep(upTo)) ? viewSlot : null; // 다른 창고 화면을 보는 중이면 그 창고에 있는 묶음만 그린다
+    let viewEff = 0; // 보는 창고의 묶음이 마지막으로 만들어진 단계(예: 창고 0 = 14번) — 그 단계의 마지막 시점으로 보여 준다
+    const slotByName = {};
+    if (viewS !== null) def.steps.slice(0, upTo).forEach((s2, si2) => (s2.parts || []).forEach((p2) => { if (p2.hideAt && p2.hideAt.includes(upTo)) { const k2 = (p2.store && typeof p2.store === 'object' ? p2.store[upTo] : p2.store) || '보관 중'; slotByName[k2] = Math.max(slotByName[k2] || 0, effStepOf(p2, si2 + 1, upTo)); } }));
     // 부품 번호("리벳 3/14"): design-faces.js 의 규칙 — 조립 MCP(get_part_faces)와 같은 번호
     const { numOf } = window.IVS_FACES.numberParts(def.steps);
     def.steps.slice(0, upTo).forEach((s, si) => {
@@ -166,7 +175,12 @@
         const pt = flipOn && !pt0.noflip ? flipPt(pt0, target) : pt0; // 뒤집기 전 방향으로 보여 주는 단계(noflip: 로봇과 따로 만드는 손잡이는 그대로)
         const type = b.resolve(pt.n, catId);
         if (!type) { if (!missing.includes(pt.n)) missing.push(pt.n); return; }
-        if (pt.hideAt && pt.hideAt.includes(upTo)) { const pick = (v) => (v && typeof v === 'object' ? v[upTo] : v); const k = pick(pt.store) || '보관 중'; stored[k] = (stored[k] || 0) + 1; storedTypes[type] = (storedTypes[type] || 0) + 1; storedEff = Math.max(storedEff, effStepOf(pt, si + 1, upTo)); if (pick(pt.storeThumb)) storedThumb = pick(pt.storeThumb); return; } // store·storeThumb 는 글자 하나 또는 {단계번호: 값} // hideAt: 이 단계에서는 따로 보관해 두고 안 보여준다(예: 비행기 6번은 5번까지 만든 본체와 따로 만드는 조립품)
+        if (viewS !== null) { // 창고 화면 보기: 보관 중이던 묶음 중 이 창고에 있는 것만 보이고, 지금 작업하던 부품은 숨긴다
+          if (!(pt.hideAt && pt.hideAt.includes(upTo))) return;
+          const k3 = (pt.store && typeof pt.store === 'object' ? pt.store[upTo] : pt.store) || '보관 중';
+          if (slotOfStep(slotByName[k3] || 0) !== viewS) return;
+          viewEff = Math.max(viewEff, effStepOf(pt, si + 1, upTo));
+        } else if (pt.hideAt && pt.hideAt.includes(upTo)) { const pick = (v) => (v && typeof v === 'object' ? v[upTo] : v); const k = pick(pt.store) || '보관 중'; stored[k] = (stored[k] || 0) + 1; storedTypes[type] = (storedTypes[type] || 0) + 1; storedEff = Math.max(storedEff, effStepOf(pt, si + 1, upTo)); storedEffBy[k] = Math.max(storedEffBy[k] || 0, effStepOf(pt, si + 1, upTo)); if (pick(pt.storeThumb)) { storedThumb = pick(pt.storeThumb); storedThumbBy[k] = storedThumb; } return; } // store·storeThumb 는 글자 하나 또는 {단계번호: 값} // hideAt: 이 단계에서는 따로 보관해 두고 안 보여준다(예: 비행기 6번은 5번까지 만든 본체와 따로 만드는 조립품)
         const useSide = pt.side && upTo < pt.side.until;
         const moved = pt.move && upTo >= pt.move.at; // move: 옆자리에서 다 만든 뒤 다른 자리로 한 번 더 옮겨 붙는 단계(예: 풍차 상자를 몸체에 끼우기)
         // move: { at, by } 평행 이동 또는 { at, p, r } 새 자세로 옮기기(회전 포함 — 예: 3륜바이크 7단계 샌드위치를 뒤집어 올림)
@@ -218,7 +232,7 @@
         }
         // holeMarks: 프레임 구멍에 고정된 결합 위치 원(교재처럼 판 구멍에 표시, 부품이 움직여도 그 자리)
         if (isNew && !moving && pt.holeMarks) pt.holeMarks.forEach((m) => guides.push({ from: m, to: m, dir: dirH || [0, 1, 0], idx: list.length, ringOnly: true }));
-        list.push({ step: si + 1, eff: effStepOf(pt, si + 1, upTo), name: pt.n, label: pt.n + ' ' + numOf.get(pt0) + '번', type, mount: 'floor', pos: pos.slice(), quat: b.quat(rot), rot: rot.slice(), isNew, final: (isNew && dirH) || ex ? base.slice() : null, order: settling ? (pt.settleOrder || 1) : (pt.joinOrder || (ex && ex.order) || 1), arrowFrom: pt.arrowFrom || null }); // 합쳐지는 묶음(settle)은 모두 한꺼번에 내려온다 // ex: 14단계처럼 "결합 전"으로 띄운 부품도 제자리(결합 후)가 있다
+        list.push({ step: si + 1, eff: effStepOf(pt, si + 1, upTo), name: pt.n, label: pt.n + ' ' + numOf.get(pt0) + '번', type, mount: 'floor', pos: pos.slice(), quat: b.quat(rot), rot: rot.slice(), isNew, final: (isNew && dirH) || ex ? base.slice() : null, order: settling ? (pt.settleOrder || 1) : (pt.joinOrder || (ex && ex.order) || 1), arrowFrom: pt.arrowFrom || null, skipMates: pt.skipMates || null, sideUntil: pt.side ? pt.side.until : null, fin: moved ? (pt.move.p || add(pt.p, pt.move.by || [0, 0, 0], 1)) : pt.p, finRot: (moved && pt.move.r) ? pt.move.r : pt.r }); // 합쳐지는 묶음(settle)은 모두 한꺼번에 내려온다 // ex: 14단계처럼 "결합 전"으로 띄운 부품도 제자리(결합 후)가 있다
       });
     });
     deferredShift.forEach((fn) => fn());
@@ -234,7 +248,7 @@
       guides.forEach((g) => { g.from = T(g.from); g.to = T(g.to); g.dir = mvec(xf.m, g.dir); });
     }
     const guidesOut = def.guideMode === 'mates' ? mateGuides(list) : guides;
-    return { list, guides: guidesOut, missing, stored, storedThumb, storedSlot: storedEff ? slotOfStep(storedEff) : 1, storedTypes, targets: list.map((d) => d.final || null), orders: list.map((d) => d.order || 1) };
+    return { list, guides: guidesOut, missing, stored, storedThumb, storedSlot: storedEff ? slotOfStep(storedEff) : 1, viewEff, storedSlots: Object.fromEntries(Object.keys(storedEffBy).map((k) => [k, slotOfStep(storedEffBy[k])])), storedThumbBy, storedTypes, targets: list.map((d) => d.final || null), orders: list.map((d) => d.order || 1) };
   }
 
   // 단계 이름표: label 이 있는 단계(예: "창고")는 이름으로, 나머지는 label 없는 단계만 세어 번호를 붙인다
@@ -242,6 +256,21 @@
   // 1, 2, 3 … 단계 번호 버튼(+ 마지막 "완성") — 눌러서 그 단계로 바로 가고, 지금 단계는 진하게 보인다.
   // 관리자 전용 단계 상태(수정중/완료): DB(ivs_assembly_status)에 단계별로 저장하고, 단계 번호 버튼에 ✓(완료)·🛠(수정중)로 표시한다.
   let stepStatus = {};
+  let posesDB = {}; // 단계별로 기록한 부품 모습 { 단계: { 부품 이름 번호: {p, q, r} } } (ivs_assembly_poses)
+  let lastLabels = []; // 지금 화면 부품 순서의 이름(모습 기록에 쓴다)
+  let thumbsDB = {}; // 창고 카드 썸네일 { '단계:창고': 사진 } (ivs_assembly_thumbs)
+  // 지금 단계의 창고 카드마다 "그 창고에서 가장 최근에 저장한 사진"을 보낸다(단계 데이터 slotThumb 은 사진이 없을 때의 대비)
+  function pushSlotThumbs() {
+    const b = bridge(); if (!b || !b.setSlotThumbs || !def) return;
+    const m = Object.assign({}, (step >= 1 && step < last() && def.steps[step - 1] && def.steps[step - 1].slotThumb) || {});
+    for (let n = 0; n <= 5; n++) {
+      for (let s2 = Math.min(step, last() - 1); s2 >= 1; s2--) {
+        const sl = def.steps[s2 - 1] ? def.steps[s2 - 1].slot : undefined;
+        if (sl === n && thumbsDB[s2 + ':' + n]) { m[n] = thumbsDB[s2 + ':' + n]; break; }
+      }
+    }
+    b.setSlotThumbs(m);
+  }
   const isAdm = () => !!(window.__ivsIsAdmin && window.__ivsIsAdmin());
   const STATUS_LABEL = { done: '✅ 완료', edit: '🛠 수정중' };
   function paintStatus() {
@@ -251,6 +280,9 @@
         b.textContent = tag + (st === 'done' ? ' ✓' : st === 'edit' ? ' 🛠' : ''); }); });
     const sb = $('asmStatusBtn'); if (!sb) return;
     sb.hidden = !adm || step < 1 || step >= last();
+    { const tb = $('asmThumbBtn'); if (tb) tb.hidden = sb.hidden; }
+    { const rb = $('asmReloadBtn'); if (rb) rb.hidden = !adm || step < 0; }
+    { const fb = $('asmFreezeBtn'); if (fb) fb.hidden = sb.hidden; }
     const st = stepStatus[step]; sb.textContent = STATUS_LABEL[st] || '⬜ 상태 없음';
     sb.style.background = st === 'done' ? '#16a34a' : st === 'edit' ? '#f59e0b' : ''; sb.style.color = st ? '#fff' : '';
     sb.title = '이 단계의 상태(관리자만 보여요): 누를 때마다 상태 없음 → 수정중 → 완료 → 상태 없음. DB에 저장돼요';
@@ -260,6 +292,39 @@
     const sb = document.createElement('button'); sb.type = 'button'; sb.id = 'asmStatusBtn'; sb.hidden = true;
     sb.style.cssText = 'padding:6px 12px;font-size:12px;font-weight:600;border-radius:999px;background:var(--panel);border:1px solid var(--panel-border);color:var(--ink);';
     $('asmMarkMove2').parentNode.insertBefore(sb, $('asmMarkMove2'));
+    { const fb = document.createElement('button'); fb.type = 'button'; fb.id = 'asmFreezeBtn'; fb.hidden = true; fb.textContent = '❄ 모습 기록';
+      fb.style.cssText = sb.style.cssText; fb.title = '지금 부품들의 위치·회전을 이 단계의 모습으로 기록해요(관리자만). 기록한 단계는 열 때 이 모습으로 보여요';
+      sb.parentNode.insertBefore(fb, sb);
+      fb.addEventListener('click', async () => {
+        const b2 = bridge(); if (!b2 || !b2.poseStore || !def || step < 1 || step >= last()) return;
+        const ser = b2.serialize();
+        if (ser.length !== lastLabels.length) { b2.status('부품 수가 달라서 기록하지 못했어요. 단계를 다시 열고 눌러 주세요.', 'error'); return; }
+        const r1 = (v) => Math.round(v * 100) / 100, poses = {};
+        ser.forEach((x, i) => { poses[lastLabels[i]] = { p: x.pos.map(r1), q: (x.quat || []).map((v) => Math.round(v * 100000) / 100000), r: (x.rot || []).map(r1) }; });
+        const mine = step;
+        try { await b2.poseStore.save(def.id, mine, poses); posesDB[mine] = poses; paintStatus(); b2.status(mine + '단계 부품 모습을 기록했어요. 이제 이 단계를 열면 이 모습으로 보여요.', 'success'); }
+        catch (e) { b2.status('모습 기록 실패: ' + e.message + ' (supabase/assembly_poses.sql 을 실행했는지 확인)', 'error'); }
+      });
+    }
+    { const rb = document.createElement('button'); rb.type = 'button'; rb.id = 'asmReloadBtn'; rb.hidden = true; rb.textContent = '↻ 새로고침';
+      rb.style.cssText = sb.style.cssText; rb.title = '페이지를 새로 불러오고 지금 보던 차시·단계를 다시 열어요(관리자만)';
+      sb.parentNode.insertBefore(rb, sb);
+      rb.addEventListener('click', () => { // 페이지 전체를 다시 불러온다(데이터·화면 코드 모두 새 것) — 보던 차시와 단계는 다시 열어 준다
+        try { sessionStorage.setItem('ivs-asm-restore', JSON.stringify({ sel: [...document.querySelectorAll('select')].slice(0, 3).map((x) => x.value), step })); } catch (e) { /* 저장 못 해도 새로고침은 한다 */ }
+        location.reload();
+      });
+    }
+    { const tb = document.createElement('button'); tb.type = 'button'; tb.id = 'asmThumbBtn'; tb.hidden = true; tb.textContent = '📷 썸네일 저장';
+      tb.style.cssText = sb.style.cssText; tb.title = '지금 3D 화면을 이 단계 작업 창고의 썸네일로 저장해요(관리자만, 누를 때만 찍어요)';
+      sb.parentNode.insertBefore(tb, sb);
+      tb.addEventListener('click', async () => {
+        const b2 = bridge(); if (!b2 || !b2.thumbStore || !b2.snapshot || !def || curSlot < 0) return;
+        const img = b2.snapshot(300); if (!img) { b2.status('사진을 만들지 못했어요.', 'error'); return; }
+        const mine = step, mySlot = curSlot;
+        try { await b2.thumbStore.save(def.id, mine, mySlot, img); thumbsDB[mine + ':' + mySlot] = img; pushSlotThumbs(); b2.status(mine + '단계 · 창고 ' + mySlot + ' 썸네일을 저장했어요.', 'success'); }
+        catch (e) { b2.status('썸네일 저장 실패: ' + e.message + ' (supabase/assembly_thumbs.sql 을 실행했는지 확인)', 'error'); }
+      });
+    }
     sb.addEventListener('click', async () => {
       const b2 = bridge(); if (!b2 || !b2.statusStore || !def) return;
       const cur = stepStatus[step], next = !cur ? 'edit' : cur === 'edit' ? 'done' : null, mine = step;
@@ -322,35 +387,55 @@
 
   function render() {
     const b = bridge();
-    const { list, guides, missing, stored, storedThumb, storedSlot, storedTypes, targets, orders } = buildList(step);
+    const { list, guides, missing, stored, storedThumb, storedSlot, storedSlots, storedThumbBy, storedTypes, targets, orders, viewEff } = buildList(step);
     window.__asmStored = storedTypes; // design.html 의 사용 부품 목록이 읽는다
-    renderStorage(stored, storedThumb, Object.keys(storedTypes || {}).length, storedSlot);
-    b.show(list.map(({ isNew, name, final, order, ...d }) => d), targets, orders, def.guideMode === 'mates' ? mateComponents(list) : []);
+    { const sp = posesDB[step]; // ❄ 로 기록한 모습이 있으면 그 자리·자세로 보여 준다(제자리 target 은 그대로라 결합은 원래 자리로 된다)
+      if (sp) list.forEach((d) => { const o = sp[d.label]; if (o && Array.isArray(o.p)) { d.pos = o.p.slice(); if (Array.isArray(o.r)) d.rot = o.r.slice(); if (Array.isArray(o.q)) d.quat = o.q.slice(); } });
+      lastLabels = list.map((d) => d.label); }
+    // 다른 창고 화면을 보는 중에도 오른쪽 카드는 모든 창고의 내용을 그대로 보여 준다(화면에 그리는 것은 보는 창고뿐, 나머지 창고는 개수만 표시)
+    const viewing0 = viewSlot !== null && viewSlot !== slotOfStep(step);
+    let viewLabel = '', viewThumb = '';
+    let storedP = stored, storedSlotP = storedSlot, storedSlotsP = storedSlots, storedThumbByP = storedThumbBy, kindsP = Object.keys(storedTypes || {}).length, ghostComps = [];
+    if (viewing0) {
+      const sv0 = viewSlot; viewSlot = null; let Rn, comps0 = []; try { Rn = buildList(step); comps0 = mateComponents(Rn.list); } finally { viewSlot = sv0; }
+      storedP = {}; Object.keys(Rn.stored || {}).forEach((k) => { if ((Rn.storedSlots || {})[k] !== sv0) storedP[k] = Rn.stored[k]; });
+      viewLabel = Object.keys(Rn.stored || {}).filter((k) => (Rn.storedSlots || {})[k] === sv0).join(', ');
+      viewThumb = (Object.keys(Rn.stored || {}).filter((k) => (Rn.storedSlots || {})[k] === sv0).map((k) => (Rn.storedThumbBy || {})[k]).filter(Boolean))[0] || ''; // 보는 창고의 썸네일도 그대로
+      storedSlotP = Rn.storedSlot; storedSlotsP = Rn.storedSlots; storedThumbByP = Rn.storedThumbBy; kindsP = Object.keys(Rn.storedTypes || {}).length;
+      ghostComps = comps0.filter((g) => g.slot !== sv0).map((g) => ({ name: g.name, slot: g.slot, ghost: true, n: g.idx.length, idx: [] }));
+    }
+    renderStorage(storedP, storedThumb, kindsP, storedSlotP, storedSlotsP, storedThumbByP);
+    pushSlotThumbs();
+    if (b.setViewSlot) b.setViewSlot(viewSlot !== null && viewSlot !== slotOfStep(step) ? viewSlot : null, viewLabel, viewThumb);
+    b.show(list.map(({ isNew, name, final, order, ...d }) => d), targets, orders, def.guideMode === 'mates' ? mateComponents(list).concat(ghostComps) : []);
     // 지금 단계에 보이는 부품(끼우기 직전 위치 포함)에 카메라를 맞춘다 — 처음부터 너무 멀리서 보이지 않게
     // 이번 단계에 끼우는 부품과 그 끼워지는 자리를 화면 가운데에 크게 보여준다(나머지 부품은 배경)
     const focus = list.filter((d) => d.isNew).map((d) => d.pos).concat(guides.filter((g) => g.to).map((g) => g.to)); // 맞물림 방식 안내는 좌표가 없다(연결점이 부품에 붙어 있다)
     const stc = (step > 0 && step < last()) ? def.steps[step - 1].cam : null; // cam.tight: 이번에 끼우는 부분만 크게(교재가 그 부분만 크게 그린 단계)
     { const axAt = stc && Array.isArray(stc.axes) ? stc.axes : null; const axKey = axAt ? axAt.join(',') : ''; // cam.axes: 이 단계의 기준점(방향선 원점)
       if (axKey !== lastAxKey) { lastAxKey = axKey; b.axes(true, axAt); } }
-    const camFocus = stc && Array.isArray(stc.focus) && stc.focus.length ? stc.focus : null; // cam.focus: 부품이 없는 단계 등에서 이 점들을 화면 가운데에 크게(조립 프로그램이 지정)
+    const viewActive = viewSlot !== null && viewSlot !== slotOfStep(step); // 다른 창고 화면을 볼 땐 그 단계의 확대 설정을 쓰지 않고 보이는 부품 전체에 맞춘다
+    const camFocus = !viewActive && stc && Array.isArray(stc.focus) && stc.focus.length ? stc.focus : null; // cam.focus: 부품이 없는 단계 등에서 이 점들을 화면 가운데에 크게(조립 프로그램이 지정)
     const axPt = stc && Array.isArray(stc.axes) ? stc.axes : [0, 0, 0]; // 바닥 기준선(방향선) 자리 — 카메라가 보는 범위에 항상 같이 들어오게 한다
     if (camFocus) b.frame(camFocus.concat([axPt]), camFocus.concat([axPt]));
     else {
       const f0 = focus.length ? focus : list.map((d) => d.pos);
-      b.frame(f0.concat(stc && stc.tight ? [axPt] : []), stc && stc.tight ? f0.concat([axPt]) : list.map((d) => d.pos));
+      b.frame(f0.concat(stc && stc.tight && !viewActive ? [axPt] : []), stc && stc.tight && !viewActive ? f0.concat([axPt]) : list.map((d) => d.pos));
     }
     if (stc && Array.isArray(stc.rings)) stc.rings.forEach((m) => guides.push({ from: m, to: m, dir: [0, 1, 0], idx: -1, ringOnly: true })); // cam.rings: 이 단계에 고정으로 칠할 결합 점(예: 받침 흰 판 구멍)
     b.guides(guides);
     // 앞 벽이 뒤쪽 끝에 있는 단계(flip)는 반대편에서 보여준다
     // view: 기본 각도에서 90도×view 만큼 돌려서 보기 / cam: {theta, phi}로 교재 그림과 같은 각도를 직접 지정
-    const st = (step > 0 && step < last()) ? def.steps[step - 1] : null;
+    const camStep = (viewActive && viewEff >= 1) ? viewEff : step; // 창고 화면 보기: 그 묶음이 마지막으로 만들어진 단계의 시점
+    const st = (camStep > 0 && camStep < last()) ? def.steps[camStep - 1] : null;
     const view = (st && st.view) || 0;
     const th = st && st.cam ? st.cam.theta : (def.camera ? def.camera.theta : 0) + view * Math.PI / 2;
     const ph = st && st.cam ? st.cam.phi : (def.camera ? def.camera.phi : 1);
     const camKey = th.toFixed(3) + '|' + ph.toFixed(3);
     if (b.turn && def.camera) { b.turn(th, ph); lastCamKey = camKey; } // 단계를 열 때마다 그 단계의 시점으로 — 돌려 놓은 각도는 다음 단계로 넘어가지 않는다(사용자 지시 2026-10-03)
-    const sv = savedCams[step]; // 관리자가 저장한 시점(보는 중심·거리까지)이 있으면 그걸로 연다
+    const sv = savedCams[camStep]; // 관리자가 저장한 시점(보는 중심·거리까지)이 있으면 그걸로 연다
     if (sv && b.camera && Array.isArray(sv.target)) b.camera({ target: sv.target, radius: sv.radius, theta: sv.theta, phi: sv.phi });
+    { const myStep0 = step; setTimeout(() => { if (step === myStep0 && b.relabelGroups) b.relabelGroups(); }, 120); } // 그룹 이름은 왼쪽부터 1번
     { const myStep = step, myTh = sv ? sv.theta : th, myPh = sv ? sv.phi : ph, mySrc = sv ? 'admin' : (st && st.camSrc ? st.camSrc : ''); // 교재 시점 = 단계 데이터의 방향·높이각 + 화면에 맞춘 보는 중심·거리. 카메라가 자리 잡은 뒤(0.15초) 저장해 하단 표시줄이 지금 시점과 비교한다
       setTimeout(() => { if (step !== myStep || !b.camState) return; const cs = b.camState(); baseCam = { step: myStep, th: myTh, ph: myPh, target: cs.target, radius: cs.radius, src: mySrc }; }, 150); }
     const n = total();
@@ -365,9 +450,16 @@
     $('asmFirst').disabled = $('asmPrev').disabled = step === 0;
     $('asmNext').disabled = $('asmLast').disabled = step === last();
     paintStatus();
-    curSlot = (step >= 1 && step < last() && def.steps[step - 1] && def.steps[step - 1].slot !== undefined) ? def.steps[step - 1].slot : -1; setStudioTitle(true); if (b.setSlot) b.setSlot(curSlot);
+    curSlot = (step >= 1 && step < last() && def.steps[step - 1] && def.steps[step - 1].slot !== undefined) ? def.steps[step - 1].slot : ((step === last() && step >= 1 && def.finalSlot !== undefined) ? def.finalSlot : -1); setStudioTitle(true); if (b.setSlot) b.setSlot(curSlot); // (완성 화면의 작업 창고는 조립도 데이터 finalSlot)
     { const hs = step >= 1 && def.steps[step - 1] ? def.steps[step - 1].history : ''; if (hs) $('asmNote').textContent += '  ▸ ' + hs; } // 내역: 창고로 갔는지 불러왔는지(단계 번호에는 넣지 않는다)
     if (missing.length) $('asmNote').textContent += ' (부품을 못 찾았어요: ' + missing.join(', ') + ')';
+    // 화면 아래 단계 설명 칸에도 "작업 창고 N · 어디서 무엇을 가져오는지"를 한 줄 더 보여 준다(사용자 지시 2026-10-04: 각 번호마다 작업공간과 가져온 곳이 보여야 한다)
+    { const sn = $('asmStageNote'); const hs2 = step >= 1 && def.steps[step - 1] ? def.steps[step - 1].history : '';
+      if (sn && (curSlot >= 0 || hs2)) {
+        const ln = document.createElement('div'); ln.style.cssText = 'margin-top:4px; font-weight:800; color:#1e3a8a; font-size:13px;';
+        ln.textContent = (curSlot >= 0 ? '작업 창고 ' + curSlot : '') + (hs2 ? (curSlot >= 0 ? ' · ' : '') + hs2 : '');
+        sn.appendChild(ln);
+      } }
   }
 
   function stop() {
@@ -377,6 +469,7 @@
     const br = bridge(); if (br && br.guideDots) br.guideDots(true); // 멈추면 초록 점이 다시 보인다
   }
   function go(target) {
+    viewSlot = null;
     step = Math.max(0, Math.min(last(), target));
     render();
   }
@@ -437,7 +530,8 @@
   }
 
   // 3D 작업 영역 제목: 평소엔 "스케치북". 큐보 조립도를 보는 동안만 "큐보 스튜디오"(다른 로봇은 이름이 달라서 바꾸지 않는다 - 사용자 지시 2026-10-03)
-  let curSlot = -1; // 지금 단계가 작업하는 창고 자리(단계 데이터의 slot)
+  let curSlot = -1;
+  let viewSlot = null; // 오른쪽 창고 카드를 눌러 "그 창고 화면"을 보는 중(사용자 지시 2026-10-04). null = 지금 단계의 작업 창고 그대로 // 지금 단계가 작업하는 창고 자리(단계 데이터의 slot)
   function setStudioTitle(on) {
     const el = document.querySelector('.scene-title');
     if (!el) return;
@@ -519,7 +613,7 @@
     $('asmSlider').max = String(last());
     buildStepButtons();
     savedCams = {};
-    ensureStatusBtn(); stepStatus = {}; if (isAdm() && b.statusStore) b.statusStore.load(def.id).then((m) => { stepStatus = m || {}; paintStatus(); });
+    ensureStatusBtn(); posesDB = {}; if (b.poseStore) b.poseStore.load(def.id).then((m) => { posesDB = m || {}; paintStatus(); if (Object.keys(posesDB).length && viewing) render(); }); thumbsDB = {}; if (b.thumbStore) b.thumbStore.load(def.id).then((m) => { thumbsDB = m || {}; pushSlotThumbs(); }); stepStatus = {}; if (isAdm() && b.statusStore) b.statusStore.load(def.id).then((m) => { stepStatus = m || {}; paintStatus(); });
     if (b.camStore) b.camStore.load(def.id).then((m) => { savedCams = m || {}; if (viewing) render(); }); // 관리자가 저장한 단계별 시점
     go(last()); // 처음엔 완성된 모습부터 보여준다
     pf.asmOpened = Math.round(performance.now());
@@ -710,5 +804,22 @@
       $('asmRules').innerHTML = (window.IVS_ASSEMBLY_RULES || []).map((r) => '<li>' + r + '</li>').join('');
     },
     isViewing() { return viewing; },
+    setViewSlot(n) { if (!viewing || !def || step < 1 || step >= last()) return; viewSlot = (n === slotOfStep(step) || n === viewSlot) ? null : n; render(); },
   };
+  // 새로고침 버튼으로 다시 열었으면, 보던 차시(분류·권·차시 선택)와 단계를 자동으로 다시 연다
+  (function restoreAfterReload() {
+    let st = null; try { st = JSON.parse(sessionStorage.getItem('ivs-asm-restore') || 'null'); sessionStorage.removeItem('ivs-asm-restore'); } catch (e) { st = null; }
+    if (!st || !Array.isArray(st.sel)) return;
+    let tries = 0;
+    const timer = setInterval(() => {
+      tries++;
+      const sels = [...document.querySelectorAll('select')].slice(0, 3);
+      const ready = sels.length === 3 && sels[2].options.length > 1 && sels[0].querySelector('option[value="' + st.sel[0] + '"]');
+      if (ready) {
+        clearInterval(timer);
+        [0, 1, 2].forEach((k) => { if (sels[k].value !== st.sel[k]) { sels[k].value = st.sel[k]; sels[k].dispatchEvent(new Event('change', { bubbles: true })); } });
+        let t2 = 0; const timer2 = setInterval(() => { t2++; const b = document.querySelector('#asmSteps button[data-step="' + st.step + '"]'); if (b) { clearInterval(timer2); b.click(); } else if (t2 > 40) clearInterval(timer2); }, 250);
+      } else if (tries > 60) clearInterval(timer);
+    }, 250);
+  })();
 })();
