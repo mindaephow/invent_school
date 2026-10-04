@@ -75,15 +75,23 @@
   }
 
   // 창고 카드: 이 단계에서 카메라에 안 보이게 치워 둔 부품을 게임 창고처럼 따로 보여 준다(사용자 지시 2026-10-04)
-  function renderStorage(stored, thumb, kinds) {
+  // 오른쪽 패널: 위의 "창고"(메인)는 평소에 비어 있다. 지금 안 보이는 묶음(예: 새 조립품을 만드는 동안 본체)은 창고로 옮기지 않고 창고 N번 자리에 그대로 둔다(사용자 지시 2026-10-04).
+  let storedSlotNow = 1;
+  function renderStorage(stored, thumb, kinds, slot) {
+    storedSlotNow = slot === undefined ? 1 : slot;
     const box = $('storageList'); if (!box) return;
-    const keys = Object.keys(stored || {});
-    box.hidden = !keys.length;
-    if (!keys.length) return;
-    $('storageCount').textContent = String(keys.length);
-    $('storageBody').innerHTML = keys.map((k) => (thumb ? '<img src="' + thumb + '" alt="" style="width:100%;border-radius:8px;display:block;margin-bottom:4px">' : '') + '<div class="required-summary">' + k + ' · 부품 ' + stored[k] + '개</div>').join('');
+    const on = !!(def && def.guideMode === 'mates');
+    box.hidden = !on;
+    if (b_ready()) bridge().setStored && bridge().setStored(on ? { names: Object.keys(stored || {}), counts: stored || {}, thumb: thumb || null, slot: storedSlotNow } : null);
+    if (!on) return;
+    $('storageCount').textContent = '0';
+    $('storageBody').innerHTML = '<div class="required-summary" style="opacity:.55">비어 있음</div>';
   }
+  function b_ready() { try { return !!bridge(); } catch (e) { return false; } }
 
+  // 창고 자리(사용자 지시 2026-10-04): 0번 = 메인(결합하는 곳), 1~5번 = 따로 만드는 자리. 부품이 지금 있는 자리 = 만든 단계의 자리, 합쳐지는 단계(side.until)가 지났으면 그 단계의 자리.
+  function slotOfStep(n) { const st = def.steps[n - 1]; return st && st.slot !== undefined && st.slot !== null ? st.slot : 1; }
+  function effStepOf(pt, madeStep, upTo) { return pt.side && pt.side.until && upTo >= pt.side.until ? pt.side.until : madeStep; }
   // 맞물림 방식 안내(def.guideMode === 'mates'): 연결점은 부품에 붙어 있는 고정된 자리(부품 DB 의 돌기·구멍)이고, 이번 단계에 결합할 자리일 때만 보인다.
   // 제자리 자세로 돌기↔구멍이 맞물리는 쌍을 구하고, 그 쌍 중 지금 떨어져 있는(띄운 높이가 다른) 쌍만 안내한다. 마크·보정 값이 필요 없다.
   function mateGuides(list) {
@@ -108,7 +116,34 @@
       const mover = (a.order || 1) !== (c.order || 1) ? ((a.order || 1) > (c.order || 1) ? i : j) : (Math.abs(la - lc) > 0.5 ? (la > lc ? i : j) : (a.isNew ? i : j));
       out.push({ mate: true, pegIdx: i, pegId: m.peg, holeIdx: j, holeId: m.hole, moverIdx: mover, idx: mover });
     });
+    // 교재처럼 돌기·구멍 맞물림이 아닌 안내 화살표: 부품 데이터의 arrowFrom {name, hole, myHole} = 그 이름 부품의 hole 에서 출발해 이 부품의 myHole 로 도착(예: 1열브라켓 팔 구멍 → 부시)
+    list.forEach((d, i) => {
+      if (!d.arrowFrom || !d.isNew) return;
+      const j = list.findIndex((x, k) => k !== i && x.name === d.arrowFrom.name);
+      if (j < 0) return;
+      out.push({ mate: true, pegKind: 'hole', pegIdx: j, pegId: d.arrowFrom.hole, holeIdx: i, holeId: d.arrowFrom.myHole, moverIdx: j, idx: i });
+    });
     return out;
+  }
+
+  // 지금 화면 자세에서 맞물려 이어진 부품 덩어리(그룹) — [{ name, idx:[목록 번호…] }]. 떠 있는 새 부품은 맞물리지 않아 자동으로 빠지고, 옆자리 조립품은 따로 덩어리가 된다.
+  function mateComponents(list) {
+    const b = bridge(), M = window.IVS_MATES;
+    if (!M || !M.check) return [];
+    const conn = {};
+    list.forEach((d) => { if (d.type && !conn[d.name]) { const c = b.connectors && b.connectors(d.type); if (c) conn[d.name] = c; } });
+    const res = M.check(list.map((d, i) => ({ key: '#' + i, n: d.name, p: d.pos, r: d.rot })), conn);
+    const par = list.map((_, i) => i);
+    const find = (x) => { while (par[x] !== x) { par[x] = par[par[x]]; x = par[x]; } return x; };
+    (res.mated || []).forEach((m) => { const i = Number(String(m.part).slice(1)), j = Number(String(m.into).slice(1)); if (!isNaN(i) && !isNaN(j)) par[find(i)] = find(j); });
+    const groups = {};
+    list.forEach((_, i) => { const r = find(i); (groups[r] = groups[r] || []).push(i); });
+    // 이름: 1단계 부품이 들어 있으면 본체, 아니면 그 묶음이 처음 만들어진 단계 번호로 N번 조립품
+    return Object.values(groups).filter((g) => g.length > 1).map((idx) => {
+      const first = Math.min(...idx.map((i) => list[i].step || 1));
+      const eff = Math.max(...idx.map((i) => list[i].eff || list[i].step || 1));
+      return { name: first === 1 ? '본체' : stepTag(first) + '번 조립품', idx, slot: slotOfStep(step) }; // 지금 화면에 보이는 묶음은 모두 이 단계가 작업하는 창고 자리에 있다(결합하는 단계는 1·2번에 있던 것을 0번으로 끌어와 결합한다 — 사용자 지시 2026-10-04)
+    });
   }
 
   // target 단계까지의 부품 목록과, 이번 단계의 초록 안내(화살표·구멍 원)를 만든다.
@@ -117,7 +152,7 @@
     const list = [];
     const guides = [];
     const missing = [];
-    let storedThumb = null;
+    let storedThumb = null, storedEff = 0;
     const storedTypes = {}; // 창고에 들어간 부품도 이미 쓴 부품이다 → 사용 부품 숫자·목록에 넣는다(종류 → 개수)
     const stored = {};
     const deferredShift = []; // 화살표 시작점을 먼저 결합하는 부품(리벳)의 떠 있는 자리로 옮기는 일 — 목록이 다 만들어진 뒤에 한다 // 이 단계에서 화면에서 치워 창고에 넣어 둔 부품(이름 → 개수)
@@ -131,7 +166,7 @@
         const pt = flipOn && !pt0.noflip ? flipPt(pt0, target) : pt0; // 뒤집기 전 방향으로 보여 주는 단계(noflip: 로봇과 따로 만드는 손잡이는 그대로)
         const type = b.resolve(pt.n, catId);
         if (!type) { if (!missing.includes(pt.n)) missing.push(pt.n); return; }
-        if (pt.hideAt && pt.hideAt.includes(upTo)) { const pick = (v) => (v && typeof v === 'object' ? v[upTo] : v); const k = pick(pt.store) || '보관 중'; stored[k] = (stored[k] || 0) + 1; storedTypes[type] = (storedTypes[type] || 0) + 1; if (pick(pt.storeThumb)) storedThumb = pick(pt.storeThumb); return; } // store·storeThumb 는 글자 하나 또는 {단계번호: 값} // hideAt: 이 단계에서는 따로 보관해 두고 안 보여준다(예: 비행기 6번은 5번까지 만든 본체와 따로 만드는 조립품)
+        if (pt.hideAt && pt.hideAt.includes(upTo)) { const pick = (v) => (v && typeof v === 'object' ? v[upTo] : v); const k = pick(pt.store) || '보관 중'; stored[k] = (stored[k] || 0) + 1; storedTypes[type] = (storedTypes[type] || 0) + 1; storedEff = Math.max(storedEff, effStepOf(pt, si + 1, upTo)); if (pick(pt.storeThumb)) storedThumb = pick(pt.storeThumb); return; } // store·storeThumb 는 글자 하나 또는 {단계번호: 값} // hideAt: 이 단계에서는 따로 보관해 두고 안 보여준다(예: 비행기 6번은 5번까지 만든 본체와 따로 만드는 조립품)
         const useSide = pt.side && upTo < pt.side.until;
         const moved = pt.move && upTo >= pt.move.at; // move: 옆자리에서 다 만든 뒤 다른 자리로 한 번 더 옮겨 붙는 단계(예: 풍차 상자를 몸체에 끼우기)
         // move: { at, by } 평행 이동 또는 { at, p, r } 새 자세로 옮기기(회전 포함 — 예: 3륜바이크 7단계 샌드위치를 뒤집어 올림)
@@ -183,7 +218,7 @@
         }
         // holeMarks: 프레임 구멍에 고정된 결합 위치 원(교재처럼 판 구멍에 표시, 부품이 움직여도 그 자리)
         if (isNew && !moving && pt.holeMarks) pt.holeMarks.forEach((m) => guides.push({ from: m, to: m, dir: dirH || [0, 1, 0], idx: list.length, ringOnly: true }));
-        list.push({ name: pt.n, label: pt.n + ' ' + numOf.get(pt0) + '번', type, mount: 'floor', pos: pos.slice(), quat: b.quat(rot), rot: rot.slice(), isNew, final: (isNew && dirH) || ex ? base.slice() : null, order: settling ? (pt.settleOrder || 1) : (pt.joinOrder || (ex && ex.order) || 1) }); // 합쳐지는 묶음(settle)은 모두 한꺼번에 내려온다 // ex: 14단계처럼 "결합 전"으로 띄운 부품도 제자리(결합 후)가 있다
+        list.push({ step: si + 1, eff: effStepOf(pt, si + 1, upTo), name: pt.n, label: pt.n + ' ' + numOf.get(pt0) + '번', type, mount: 'floor', pos: pos.slice(), quat: b.quat(rot), rot: rot.slice(), isNew, final: (isNew && dirH) || ex ? base.slice() : null, order: settling ? (pt.settleOrder || 1) : (pt.joinOrder || (ex && ex.order) || 1), arrowFrom: pt.arrowFrom || null }); // 합쳐지는 묶음(settle)은 모두 한꺼번에 내려온다 // ex: 14단계처럼 "결합 전"으로 띄운 부품도 제자리(결합 후)가 있다
       });
     });
     deferredShift.forEach((fn) => fn());
@@ -199,12 +234,39 @@
       guides.forEach((g) => { g.from = T(g.from); g.to = T(g.to); g.dir = mvec(xf.m, g.dir); });
     }
     const guidesOut = def.guideMode === 'mates' ? mateGuides(list) : guides;
-    return { list, guides: guidesOut, missing, stored, storedThumb, storedTypes, targets: list.map((d) => d.final || null), orders: list.map((d) => d.order || 1) };
+    return { list, guides: guidesOut, missing, stored, storedThumb, storedSlot: storedEff ? slotOfStep(storedEff) : 1, storedTypes, targets: list.map((d) => d.final || null), orders: list.map((d) => d.order || 1) };
   }
 
   // 단계 이름표: label 이 있는 단계(예: "창고")는 이름으로, 나머지는 label 없는 단계만 세어 번호를 붙인다
   function stepTag(i) { const st = def.steps[i - 1]; if (st && st.label) return st.label; let c = 0; for (let k = 0; k < i; k++) if (!(def.steps[k] && def.steps[k].label)) c++; return String(c); }
   // 1, 2, 3 … 단계 번호 버튼(+ 마지막 "완성") — 눌러서 그 단계로 바로 가고, 지금 단계는 진하게 보인다.
+  // 관리자 전용 단계 상태(수정중/완료): DB(ivs_assembly_status)에 단계별로 저장하고, 단계 번호 버튼에 ✓(완료)·🛠(수정중)로 표시한다.
+  let stepStatus = {};
+  const isAdm = () => !!(window.__ivsIsAdmin && window.__ivsIsAdmin());
+  const STATUS_LABEL = { done: '✅ 완료', edit: '🛠 수정중' };
+  function paintStatus() {
+    const adm = isAdm();
+    [$('asmSteps'), $('asmStageSteps')].forEach((box) => { if (!box) return;
+      box.querySelectorAll('button[data-step]').forEach((b) => { const i = Number(b.dataset.step), st = adm ? stepStatus[i] : null, tag = i === last() ? '완성' : stepTag(i);
+        b.textContent = tag + (st === 'done' ? ' ✓' : st === 'edit' ? ' 🛠' : ''); }); });
+    const sb = $('asmStatusBtn'); if (!sb) return;
+    sb.hidden = !adm || step < 1 || step >= last();
+    const st = stepStatus[step]; sb.textContent = STATUS_LABEL[st] || '⬜ 상태 없음';
+    sb.style.background = st === 'done' ? '#16a34a' : st === 'edit' ? '#f59e0b' : ''; sb.style.color = st ? '#fff' : '';
+    sb.title = '이 단계의 상태(관리자만 보여요): 누를 때마다 상태 없음 → 수정중 → 완료 → 상태 없음. DB에 저장돼요';
+  }
+  function ensureStatusBtn() {
+    if ($('asmStatusBtn') || !$('asmMarkMove2')) return;
+    const sb = document.createElement('button'); sb.type = 'button'; sb.id = 'asmStatusBtn'; sb.hidden = true;
+    sb.style.cssText = 'padding:6px 12px;font-size:12px;font-weight:600;border-radius:999px;background:var(--panel);border:1px solid var(--panel-border);color:var(--ink);';
+    $('asmMarkMove2').parentNode.insertBefore(sb, $('asmMarkMove2'));
+    sb.addEventListener('click', async () => {
+      const b2 = bridge(); if (!b2 || !b2.statusStore || !def) return;
+      const cur = stepStatus[step], next = !cur ? 'edit' : cur === 'edit' ? 'done' : null, mine = step;
+      try { await b2.statusStore.set(def.id, mine, next); if (next) stepStatus[mine] = next; else delete stepStatus[mine]; paintStatus(); }
+      catch (e) { b2.status('상태 저장 실패: ' + e.message + ' (supabase/assembly_status.sql 을 실행했는지 확인)', 'error'); }
+    });
+  }
   function buildStepButtons() {
     [$('asmSteps'), $('asmStageSteps')].forEach((box) => {
       box.innerHTML = '';
@@ -219,6 +281,7 @@
         box.appendChild(b);
       }
     });
+    paintStatus();
   }
   // 왼쪽 카드의 "조립 순서" 목록 — 조립 보기를 열기 전에도 항상 보이고, 누르면 그 단계로 간다.
   function buildOrderList() {
@@ -259,10 +322,10 @@
 
   function render() {
     const b = bridge();
-    const { list, guides, missing, stored, storedThumb, storedTypes, targets, orders } = buildList(step);
+    const { list, guides, missing, stored, storedThumb, storedSlot, storedTypes, targets, orders } = buildList(step);
     window.__asmStored = storedTypes; // design.html 의 사용 부품 목록이 읽는다
-    renderStorage(stored, storedThumb, Object.keys(storedTypes || {}).length);
-    b.show(list.map(({ isNew, name, final, order, ...d }) => d), targets, orders);
+    renderStorage(stored, storedThumb, Object.keys(storedTypes || {}).length, storedSlot);
+    b.show(list.map(({ isNew, name, final, order, ...d }) => d), targets, orders, def.guideMode === 'mates' ? mateComponents(list) : []);
     // 지금 단계에 보이는 부품(끼우기 직전 위치 포함)에 카메라를 맞춘다 — 처음부터 너무 멀리서 보이지 않게
     // 이번 단계에 끼우는 부품과 그 끼워지는 자리를 화면 가운데에 크게 보여준다(나머지 부품은 배경)
     const focus = list.filter((d) => d.isNew).map((d) => d.pos).concat(guides.filter((g) => g.to).map((g) => g.to)); // 맞물림 방식 안내는 좌표가 없다(연결점이 부품에 붙어 있다)
@@ -301,6 +364,9 @@
     markStepButtons();
     $('asmFirst').disabled = $('asmPrev').disabled = step === 0;
     $('asmNext').disabled = $('asmLast').disabled = step === last();
+    paintStatus();
+    curSlot = (step >= 1 && step < last() && def.steps[step - 1] && def.steps[step - 1].slot !== undefined) ? def.steps[step - 1].slot : -1; setStudioTitle(true); if (b.setSlot) b.setSlot(curSlot);
+    { const hs = step >= 1 && def.steps[step - 1] ? def.steps[step - 1].history : ''; if (hs) $('asmNote').textContent += '  ▸ ' + hs; } // 내역: 창고로 갔는지 불러왔는지(단계 번호에는 넣지 않는다)
     if (missing.length) $('asmNote').textContent += ' (부품을 못 찾았어요: ' + missing.join(', ') + ')';
   }
 
@@ -371,11 +437,12 @@
   }
 
   // 3D 작업 영역 제목: 평소엔 "스케치북". 큐보 조립도를 보는 동안만 "큐보 스튜디오"(다른 로봇은 이름이 달라서 바꾸지 않는다 - 사용자 지시 2026-10-03)
+  let curSlot = -1; // 지금 단계가 작업하는 창고 자리(단계 데이터의 slot)
   function setStudioTitle(on) {
     const el = document.querySelector('.scene-title');
     if (!el) return;
     if (el.dataset.orig === undefined) el.dataset.orig = el.textContent;
-    el.textContent = (on && def && def.category === '큐보') ? '큐보 스튜디오' : el.dataset.orig;
+    el.textContent = (on && def && def.category === '큐보') ? '큐보 스튜디오' + (curSlot >= 0 ? ' · 창고 ' + curSlot + '번' : '') : el.dataset.orig; // 지금 작업하는 창고 자리(사용자 지시 2026-10-04: 2번을 선택한 다음 조립한다)
   }
   // ── 큐보 부품 전체 리스트(사용자 지시 2026-10-03): 등록된 큐보 부품 전부를 한 화면에 펼쳐 둔다. 조립도 엔진을 그대로 써서(닫기·부품 창·번호·🟢 연결점) 단계 하나짜리 가짜 조립도로 연다.
   let catAny = null;
@@ -452,6 +519,7 @@
     $('asmSlider').max = String(last());
     buildStepButtons();
     savedCams = {};
+    ensureStatusBtn(); stepStatus = {}; if (isAdm() && b.statusStore) b.statusStore.load(def.id).then((m) => { stepStatus = m || {}; paintStatus(); });
     if (b.camStore) b.camStore.load(def.id).then((m) => { savedCams = m || {}; if (viewing) render(); }); // 관리자가 저장한 단계별 시점
     go(last()); // 처음엔 완성된 모습부터 보여준다
     pf.asmOpened = Math.round(performance.now());
