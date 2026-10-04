@@ -17,7 +17,7 @@
 //   - run_sql           : SQL 직접 실행 (위험 DDL 자동 차단, run_sql_query RPC 필요)
 //   - list_github_files : GitHub 저장소(mindaephow/invent_school) 경로별 파일 목록 조회
 //   - get_github_file   : GitHub 저장소 특정 파일 내용 조회
-// + 큐보 조립 도구 6개(app/lib/cubo-assembly-tools.js): get_assembly_guide / list_assemblies / get_assembly /
+// + 큐보 조립 도구(app/lib/cubo-assembly-tools.js): get_assembly_guide / get_assembly_reference / list_assemblies / get_assembly /
 //   validate_assembly / get_part_connectors / set_part_connectors — 설계 화면 "조립 보기" 작업용(조립 규칙·겹침 검사·돌기/구멍 연결점)
 //
 // 필요한 환경변수 (Vercel 프로젝트 설정 > Environment Variables, 메인 사이트와 같은 프로젝트):

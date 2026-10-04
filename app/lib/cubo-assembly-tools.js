@@ -5,7 +5,7 @@
 // 조립 규칙·단계 데이터·겹침 검사 코드는 배포된 public/design-assemblies.js·design-collision.js 를 읽어 온다 —
 // 화면과 같은 파일이 원본이라 둘이 어긋나지 않는다. (선택 환경변수 SITE_ORIGIN, 기본 https://invent-school-sigma.vercel.app)
 import { z } from 'zod'
-import { buildGuide, dimsOf } from './cubo-assembly-guide.js'
+import { buildGuide, buildReference, dimsOf } from './cubo-assembly-guide.js'
 import { autoAssemble, autoCamera } from './cubo-auto-assemble.js'
 import { stlFromDataUrl, measureModel, formatMeasure } from './cubo-part-measure.js'
 import { stepContext } from './cubo-step-context.js'
@@ -165,13 +165,23 @@ export function registerCuboAssemblyTools(server, getSupabase) {
       'get_assembly_guide',
       {
         title: '큐보 스튜디오 안내서 읽기',
-        description: '사용자가 "큐보 스튜디오"(교재를 보고 조립도를 만들고·고치고·검토하는 곳)를 말하거나 큐보 조립도(설계 화면 "조립 보기") 작업을 시작하기 전에 가장 먼저 읽을 것 - 만들기·수정·검토 절차가 맨 앞에 있다. 조립 규칙, 좌표계·단위, 3D 모델로 측정한 부품 사실(돌기 위치·방향), 교재 구조, 작업 절차, 데이터 형식, 코드 위치를 돌려준다.',
+        description: '사용자가 "큐보 스튜디오"(교재를 보고 조립도를 만들고·고치고·검토하는 곳)를 말하거나 큐보 조립도(설계 화면 "조립 보기") 작업을 시작하기 전에 가장 먼저 읽을 것 - 만들기·수정·검토 절차가 맨 앞에 있다. 조립 규칙, 좌표계·단위, 3D 모델로 측정한 부품 사실(돌기 위치·방향), 작업 흐름을 돌려준다. 수정·검토 절차, 새 PC 준비, 부품 DB 기록, 화면 기능 같은 참고 자료는 get_assembly_reference 에 따로 있다.',
         inputSchema: {},
       },
       async () => {
         try { const site = await loadSite(); return text(buildGuide(site.IVS_ASSEMBLY_RULES)) }
         catch (e) { return text(buildGuide(null) + `\n\n(화면 파일을 못 읽어 규칙은 생략: ${e.message})`) }
       }
+    )
+
+    server.registerTool(
+      'get_assembly_reference',
+      {
+        title: '큐보 스튜디오 참고 문서 읽기',
+        description: '조립할 때는 안 봐도 되는 참고 자료(get_assembly_guide 에서 분리): 조립도 수정·검토 절차, 새 PC 준비, 옛 작업 절차, 로봇팽이 사례, 자동 조립(auto_assemble), 부품 DB 연결점 기록 방법(7장), 부품 측정 계획과 안 쓰는 부품 메모, 화면·코드 위치, 화면 기능, 지난 조립도(토끼~비행기) 기록. 규칙이 아니라 필요할 때만 읽는 자료다.',
+        inputSchema: {},
+      },
+      async () => text(buildReference())
     )
 
     server.registerTool(
@@ -642,7 +652,7 @@ export function registerCuboAssemblyTools(server, getSupabase) {
       'set_part_connectors',
       {
         title: '부품 돌기·구멍 연결점 기록(이 부품을 쓰는 조립도 영향 검사 포함)',
-        description: '로봇 부품의 돌기(pegs)·구멍(holes) 연결점을 ivs_part_catalog.data.connectors 에 기록한다(다른 필드는 그대로). 좌표는 3D 모델 bbox 가운데를 원점으로 한 모델 로컬 좌표(y 위). 형식은 get_assembly_guide 7장 참고.',
+        description: '로봇 부품의 돌기(pegs)·구멍(holes) 연결점을 ivs_part_catalog.data.connectors 에 기록한다(다른 필드는 그대로). 좌표는 3D 모델 bbox 가운데를 원점으로 한 모델 로컬 좌표(y 위). 형식은 get_assembly_reference 7장 참고.',
         inputSchema: {
           partId: z.string().describe('ivs_part_catalog 행 id'),
           connectors: z.object({
