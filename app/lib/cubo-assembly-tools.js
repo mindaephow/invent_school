@@ -128,6 +128,38 @@ export function diffSummary(label, before, after) {
   return lines
 }
 
+// 작업 공간(창고) 규칙 검사(안내서 6-5): slot·history·보관(hideAt/store/storeThumb)·뼈대 단계. status = { 단계: 'done'|'edit' } (ivs_assembly_status)
+export function checkWorkspace(steps, status = {}) {
+  const issues = [], notes = [], noThumb = new Set()
+  const slots = steps.map((st) => st.slot)
+  const useSlots = slots.some((v) => v !== undefined && v !== null)
+  steps.forEach((st, i) => {
+    const k = i + 1
+    if ((st.note || '').includes('(채우는 중)')) issues.push(`${k}단계: 설명에 "(채우는 중)"이 남은 뼈대 단계`)
+    if (st.noPart && (st.parts || []).length) issues.push(`${k}단계: noPart 인데 부품이 ${st.parts.length}개 있어요`)
+    if (!st.noPart && !(st.parts || []).length && !(st.parts || []).length) {
+      const moved = steps.some((o) => (o.parts || []).some((pt) => (pt.move && pt.move.at === k) || (pt.side && pt.side.until === k)))
+      if (!moved) issues.push(`${k}단계: 부품이 하나도 없는데 noPart 도, 합치기(move.at/side.until)도 아니에요 — 단계 코드가 지워졌는지 확인`)
+    }
+    if (useSlots) {
+      if (st.slot === undefined || st.slot === null) issues.push(`${k}단계: slot(작업 창고 번호)이 없어요`)
+      else if (!Number.isInteger(st.slot) || st.slot < 0 || st.slot > 5) issues.push(`${k}단계: slot=${st.slot} 은 0~5 가 아니에요`)
+      else if (k > 1 && slots[i - 1] !== undefined && slots[i - 1] !== null && st.slot !== slots[i - 1] && !st.history) issues.push(`${k}단계: 작업 자리가 ${slots[i - 1]}→${st.slot} 로 바뀌는데 history(불러온/보관한 곳)가 없어요`)
+    }
+    ;(st.parts || []).forEach((pt) => {
+      ;(pt.hideAt || []).forEach((h) => {
+        if (!pt.store || !pt.store[String(h)]) issues.push(`${k}단계 ${pt.n}: ${h}단계에서 숨기는데 store(보관 설명)가 없어요`)
+        else if (!pt.storeThumb || !pt.storeThumb[String(h)]) noThumb.add(h)
+      })
+    })
+  })
+  if (noThumb.size) notes.push(`보관 사진(storeThumb)이 없는 단계: ${[...noThumb].sort((x, y) => x - y).join(', ')} (관리자 📷 썸네일 저장 — 사진이 필요한 곳만)`)
+  const done = Object.keys(status).filter((x) => status[x] === 'done').map(Number).sort((a, b) => a - b)
+  const edit = Object.keys(status).filter((x) => status[x] === 'edit').map(Number).sort((a, b) => a - b)
+  const none = steps.map((_, i) => i + 1).filter((k) => !status[k])
+  return { issues, notes: [...new Set(notes)], done, edit, none }
+}
+
 export function registerCuboAssemblyTools(server, getSupabase) {
     server.registerTool(
       'get_assembly_guide',
@@ -308,6 +340,36 @@ export function registerCuboAssemblyTools(server, getSupabase) {
             }
           }
           return text(out.join('\n'))
+        } catch (e) { return fail(e.message) }
+      }
+    )
+
+    server.registerTool(
+      'check_workspace',
+      {
+        title: '작업 공간(창고) 규칙 검사',
+        description: '큐보 스튜디오 작업 공간 규칙(안내서 6-5)을 검사한다: 모든 단계에 slot(작업 창고 0~5)이 있는지, 자리가 바뀌는 단계에 history(불러온/보관한 곳)가 있는지, 숨기는 부품에 store(보관 설명)·storeThumb(사진)이 있는지, "(채우는 중)" 뼈대·부품이 사라진 빈 단계가 없는지. 그리고 사용자가 ✅ 완료/🛠 수정중으로 체크한 단계(ivs_assembly_status)를 알려 준다 - 완료 단계는 사용자가 말하기 전에 고치지 말 것. 조립도 작업을 시작할 때와 끝낼 때 돌린다.',
+        inputSchema: { assemblyId: z.string().describe('list_assemblies 의 id. 예: cubo-1-airplane') },
+      },
+      async ({ assemblyId }) => {
+        try {
+          const site = await loadSite()
+          const a = (site.IVS_ASSEMBLIES || []).find((x) => x.id === assemblyId)
+          if (!a) return fail(`id="${assemblyId}" 조립 데이터를 찾을 수 없어요. list_assemblies 로 확인하세요.`)
+          const status = {}
+          let statusErr = ''
+          try {
+            const { data: rows, error } = await getSupabase().from('ivs_assembly_status').select('step, status').eq('assembly_id', assemblyId)
+            if (error) statusErr = error.message
+            ;(rows || []).forEach((r) => { status[r.step] = r.status })
+          } catch (e) { statusErr = e.message }
+          const r = checkWorkspace(a.steps, status)
+          const L = [r.issues.length ? `작업 공간 문제 ${r.issues.length}건:` : `✅ 작업 공간 규칙 통과(${a.steps.length}단계)`]
+          L.push(...r.issues.map((x) => `⚠ ${x}`))
+          if (r.notes.length) L.push('참고:', ...r.notes.map((x) => `· ${x}`))
+          if (statusErr) L.push(`(단계 상태 표를 못 읽었어요: ${statusErr})`)
+          else L.push(`사용자 체크 — ✅ 완료 ${r.done.length}개: ${r.done.join(', ') || '없음'} / 🛠 수정중: ${r.edit.join(', ') || '없음'} / 표시 없음: ${r.none.join(', ') || '없음'}`, '※ 완료 단계는 사용자가 고치라고 하기 전에는 내용(부품 위치·카메라·설명)을 바꾸지 않는다.')
+          return text(L.join(String.fromCharCode(10)))
         } catch (e) { return fail(e.message) }
       }
     )

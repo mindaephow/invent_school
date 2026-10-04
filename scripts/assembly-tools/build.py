@@ -31,6 +31,55 @@ if bad:
     print("\n❌ 문제 있음 — 고친 뒤 다시 돌릴 것:"); [print("  ", b) for b in bad]
     sys.exit(1)
 print("\n✅ 문제 0건 (겹침 경고는 위 목록에서 오탐인지 직접 확인)")
+# ───── 단계 계약 검사(계획이 조용히 사라지지 않게) ─────
+# <이름>_contract.json = 단계마다 부품 이름별 개수 + 부품 없는 단계 표시. 스크립트를 고친 뒤 이 값과 다르면 종료한다(30·31번 코드가 다른 수정에 지워졌는데 검사 0건이던 사고).
+# 일부러 바꾼 것이면 --accept-contract 로 새 값을 받아들인다. 설명에 "(채우는 중)"이 남은 단계도 막는다.
+_asm0 = json.load(open(files[0], encoding="utf-8"))["steps"]
+cur_contract = {}
+for _k, _st in enumerate(_asm0, 1):
+    _cnt = {}
+    for _pt in _st.get("parts", []): _cnt[_pt.get("n")] = _cnt.get(_pt.get("n"), 0) + 1
+    cur_contract[str(_k)] = {"parts": _cnt, "noPart": bool(_st.get("noPart"))}
+# 작업 공간(창고) 규칙: 창고 칸(slot)을 쓰는 조립도는 모든 단계에 slot 이 있어야 하고, 앞 단계와 자리가 바뀌면 history(불러온 곳·보관한 곳 글자)가 있어야 한다(안내서 6-5).
+_slots = [_st.get("slot") for _st in _asm0]
+_bad_slot = []
+if any(v is not None for v in _slots):
+    for _k, _st in enumerate(_asm0, 1):
+        if _st.get("slot") is None: _bad_slot.append("단계 %d: slot(작업 창고 번호)이 없음" % _k)
+        elif _k > 1 and _slots[_k - 2] is not None and _st["slot"] != _slots[_k - 2] and not _st.get("history"): _bad_slot.append("단계 %d: 작업 자리가 %s → %s 로 바뀌는데 history(불러온/보관한 곳)가 없음" % (_k, _slots[_k - 2], _st["slot"]))
+_cf = name + "_contract.json"
+_bad2 = _bad_slot + ["단계 %d 설명에 '(채우는 중)'이 남음 — 채우지 않은 뼈대 단계" % (_k) for _k, _st in enumerate(_asm0, 1) if "(채우는 중)" in (_st.get("note") or "")]
+if os.path.exists(_cf) and "--accept-contract" not in sys.argv:
+    _old = json.load(open(_cf, encoding="utf-8"))
+    for _k in sorted(set(_old) | set(cur_contract), key=int):
+        if _old.get(_k) != cur_contract.get(_k): _bad2.append("단계 %s 계약 불일치: 기대 %s / 지금 %s" % (_k, _old.get(_k), cur_contract.get(_k)))
+if _bad2:
+    print(chr(10) + "❌ 단계 계약 위반 — 계획한 단계가 사라졌거나 바뀌었다:"); [print("  ", b) for b in _bad2]
+    print("   (일부러 바꿨다면 --accept-contract 를 붙여 다시 돌린다)")
+    sys.exit(1)
+json.dump(cur_contract, open(_cf, "w", encoding="utf-8"), ensure_ascii=False, indent=0)
+print("단계 계약: 통과 (%d단계)" % len(cur_contract))
+# ───── 승인(✅ 완료) 단계 보호 ─────
+# <이름>_approved.json = {"steps": {단계: 내용 해시}} — 사용자가 ✅ 완료로 체크한 단계의 내용 지문. 그 단계 내용이 바뀌면 빌드를 막는다(사용자 승인 단계를 Claude 가 멋대로 고치는 사고 방지).
+# 작업 시작 전에 DB(ivs_assembly_status)에서 완료 단계 목록을 읽어 이 파일을 맞춘다. 사용자가 고치라고 한 단계만 --allow-steps 30,31 처럼 열어 준다.
+import hashlib
+_af = name + "_approved.json"
+def _fp(st): return hashlib.sha1(json.dumps(st, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()[:12]
+_allow = set()
+for _a in sys.argv:
+    if _a.startswith("--allow-steps="): _allow = {int(x) for x in _a.split("=", 1)[1].split(",") if x.strip()}
+if "--sync-approved" in sys.argv:
+    _steps_ok = [int(x) for x in sys.argv[sys.argv.index("--sync-approved") + 1].split(",")]
+    json.dump({"steps": {str(k): _fp(_asm0[k - 1]) for k in _steps_ok}}, open(_af, "w", encoding="utf-8"), indent=0)
+    print("승인 단계 지문 저장:", _steps_ok)
+if os.path.exists(_af):
+    _ap = json.load(open(_af, encoding="utf-8")).get("steps", {})
+    _chg = [int(k) for k, h in _ap.items() if int(k) <= len(_asm0) and _fp(_asm0[int(k) - 1]) != h and int(k) not in _allow]
+    if _chg:
+        print(chr(10) + "❌ 사용자가 ✅ 완료로 체크한 단계의 내용이 바뀜: " + str(sorted(_chg)))
+        print("   사용자가 고치라고 한 단계가 아니면 되돌릴 것. 고치라고 했다면 --allow-steps=" + ",".join(map(str, sorted(_chg))) + " 로 다시 돌린 뒤 --sync-approved 로 지문을 갱신한다.")
+        sys.exit(1)
+    print("승인 단계 보호: 통과 (%d단계 변경 없음)" % len(_ap))
 # ───── 규칙 준수 확인(가이드 6-1 체크리스트) ─────
 # 자동 검사로는 안 보이는 것을 단계별로 기록한다: <이름>_rules.json = {"view":[화면 확대로 본 단계], "count":[교재와 칸 수 대조한 단계], "camera":[교재와 카메라 확인한 단계]}
 # 눈으로 확인할 때마다 해당 단계 번호를 이 파일에 적는다. --write 는 모든 단계가 세 목록에 있어야 한다(아니면 --unverified 로 미확인임을 알고 넣는다).
