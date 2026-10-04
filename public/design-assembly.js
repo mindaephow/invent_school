@@ -74,12 +74,53 @@
     return o;
   }
 
+  // 창고 카드: 이 단계에서 카메라에 안 보이게 치워 둔 부품을 게임 창고처럼 따로 보여 준다(사용자 지시 2026-10-04)
+  function renderStorage(stored, thumb, kinds) {
+    const box = $('storageList'); if (!box) return;
+    const keys = Object.keys(stored || {});
+    box.hidden = !keys.length;
+    if (!keys.length) return;
+    $('storageCount').textContent = String(keys.length);
+    $('storageBody').innerHTML = keys.map((k) => (thumb ? '<img src="' + thumb + '" alt="" style="width:100%;border-radius:8px;display:block;margin-bottom:4px">' : '') + '<div class="required-summary">' + k + ' · 부품 ' + stored[k] + '개</div>').join('');
+  }
+
+  // 맞물림 방식 안내(def.guideMode === 'mates'): 연결점은 부품에 붙어 있는 고정된 자리(부품 DB 의 돌기·구멍)이고, 이번 단계에 결합할 자리일 때만 보인다.
+  // 제자리 자세로 돌기↔구멍이 맞물리는 쌍을 구하고, 그 쌍 중 지금 떨어져 있는(띄운 높이가 다른) 쌍만 안내한다. 마크·보정 값이 필요 없다.
+  function mateGuides(list) {
+    const b = bridge(), M = window.IVS_MATES;
+    if (!M || !M.check) return [];
+    const conn = {};
+    list.forEach((d) => { if (d.type && !conn[d.name]) { const c = b.connectors && b.connectors(d.type); if (c) conn[d.name] = c; } });
+    const keyed = list.map((d, i) => ({ key: '#' + i, n: d.name, p: d.final || d.pos, r: d.rot }));
+    const res = M.check(keyed, conn);
+    const off = (d) => (d.final ? [d.pos[0] - d.final[0], d.pos[1] - d.final[1], d.pos[2] - d.final[2]] : [0, 0, 0]);
+    const out = [], seen = new Set();
+    (res.mated || []).forEach((m) => {
+      const i = Number(String(m.part).slice(1)), j = Number(String(m.into).slice(1));
+      const a = list[i], c = list[j];
+      if (!a || !c || !(a.isNew || c.isNew)) return;
+      const oa = off(a), oc = off(c);
+      if (Math.hypot(oa[0] - oc[0], oa[1] - oc[1], oa[2] - oc[2]) < 2) return; // 이미 붙어 있는(같이 움직이는) 쌍은 안내하지 않는다
+      const key = i + ':' + m.peg + '>' + j + ':' + m.hole;
+      if (seen.has(key)) return; seen.add(key);
+      const la = Math.hypot(oa[0], oa[1], oa[2]), lc = Math.hypot(oc[0], oc[1], oc[2]);
+      // 움직이는 쪽 = 나중에 결합하는 부품(순서가 큰 쪽), 같으면 더 멀리 띄운 쪽, 그것도 같으면 이번 단계에 새로 놓인 쪽
+      const mover = (a.order || 1) !== (c.order || 1) ? ((a.order || 1) > (c.order || 1) ? i : j) : (Math.abs(la - lc) > 0.5 ? (la > lc ? i : j) : (a.isNew ? i : j));
+      out.push({ mate: true, pegIdx: i, pegId: m.peg, holeIdx: j, holeId: m.hole, moverIdx: mover, idx: mover });
+    });
+    return out;
+  }
+
   // target 단계까지의 부품 목록과, 이번 단계의 초록 안내(화살표·구멍 원)를 만든다.
   function buildList(target) {
     const b = bridge();
     const list = [];
     const guides = [];
     const missing = [];
+    let storedThumb = null;
+    const storedTypes = {}; // 창고에 들어간 부품도 이미 쓴 부품이다 → 사용 부품 숫자·목록에 넣는다(종류 → 개수)
+    const stored = {};
+    const deferredShift = []; // 화살표 시작점을 먼저 결합하는 부품(리벳)의 떠 있는 자리로 옮기는 일 — 목록이 다 만들어진 뒤에 한다 // 이 단계에서 화면에서 치워 창고에 넣어 둔 부품(이름 → 개수)
     const n = total();
     const upTo = Math.min(target, n);
     const flipOn = flipActive(target);
@@ -90,12 +131,14 @@
         const pt = flipOn && !pt0.noflip ? flipPt(pt0, target) : pt0; // 뒤집기 전 방향으로 보여 주는 단계(noflip: 로봇과 따로 만드는 손잡이는 그대로)
         const type = b.resolve(pt.n, catId);
         if (!type) { if (!missing.includes(pt.n)) missing.push(pt.n); return; }
+        if (pt.hideAt && pt.hideAt.includes(upTo)) { const pick = (v) => (v && typeof v === 'object' ? v[upTo] : v); const k = pick(pt.store) || '보관 중'; stored[k] = (stored[k] || 0) + 1; storedTypes[type] = (storedTypes[type] || 0) + 1; if (pick(pt.storeThumb)) storedThumb = pick(pt.storeThumb); return; } // store·storeThumb 는 글자 하나 또는 {단계번호: 값} // hideAt: 이 단계에서는 따로 보관해 두고 안 보여준다(예: 비행기 6번은 5번까지 만든 본체와 따로 만드는 조립품)
         const useSide = pt.side && upTo < pt.side.until;
         const moved = pt.move && upTo >= pt.move.at; // move: 옆자리에서 다 만든 뒤 다른 자리로 한 번 더 옮겨 붙는 단계(예: 풍차 상자를 몸체에 끼우기)
         // move: { at, by } 평행 이동 또는 { at, p, r } 새 자세로 옮기기(회전 포함 — 예: 3륜바이크 7단계 샌드위치를 뒤집어 올림)
         let base = useSide ? pt.side.p : (moved ? (pt.move.p || add(pt.p, pt.move.by || [0, 0, 0], 1)) : pt.p);
         // lift: 다 만든 묶음(총몸·기둥)이 받침 위에 띄워져 있다가(from~at 직전 단계) at 단계에 위에서 내려와 결합한다(교재 29) — { from, at, by, dir, hover, marks }
         if (pt.lift && !useSide && upTo >= (pt.lift.from || 0) && upTo < pt.lift.at) base = add(base, pt.lift.by || [0, 0, 0], 1);
+        if (pt.asideAt && pt.asideAt[upTo]) base = add(base, pt.asideAt[upTo], 1); // asideAt: 이 단계에서는 카메라 밖 옆자리에 치워 둔다(드라마 촬영처럼 화면엔 안 나오지만 옆에 있다) — 다음 단계에서 제자리
         const rot = useSide ? pt.side.r : (moved && pt.move.r ? pt.move.r : pt.r);
         // 이번 단계에 새로 놓이거나(또는 옆자리에서 제자리로 들어가는) 부품 — 완성 단계에선 없다
         const isNew = target <= n && (si + 1 === target || (pt.side && pt.side.until === target) || (pt.move && pt.move.at === target) || (pt.lift && pt.lift.at === target));
@@ -115,27 +158,35 @@
         if (isNew && pt.seated && !lowering) {
           // seated: 교재가 이미 꽂아 둔 모양으로 그리는 부품(리벳 등) — 떠서 내려오지 않고 제자리에 두고, 꽂힌 구멍에 초록 원만 칠한다(교재 23·25·27)
           (pt.marks || []).forEach((m) => guides.push({ from: m, to: m, dir: dirH || [0, 1, 0], idx: list.length, ringOnly: true }));
+        } else if (isNew && dirH && pt.noGuide) {
+          pos = add(base, dirH, pt.hover || HOVER); // noGuide: 받는 판과 함께 떠서 오는 부품(판에 이미 박힌 리벳) — 따로 안내 화살표·점이 없다
         } else if (isNew && dirH) {
           // 띄우는 거리·돌기가 들어가는 깊이·판 두께는 부품마다 정할 수 있다(T축처럼 길게 꽂히는 것, 두꺼운 부시)
-          const hv = moving ? (mvSrc.hover || HOVER) : settling ? HOVER : (pt.hover || (pt.recv ? HOVER_RECV : HOVER)); // 합쳐지는 묶음은 모두 같은 거리로 띄워야 모양이 흐트러지지 않는다
+          const hv = moving ? (mvSrc.hover || HOVER) : settling ? (pt.settleHover || HOVER) : (pt.hover || (pt.recv ? HOVER_RECV : HOVER)); // 합쳐지는 묶음은 모두 같은 거리로 띄워야 모양이 흐트러지지 않는다
           const depth = pt.pegDepth || PEG_DEPTH;
           pos = add(base, dirH, hv); // 끼우기 직전: 제자리에서 끼우는 방향으로 띄운다
           const targets = moving ? (mvSrc.marks || []) : settling ? (pt.settleMarks || []) : (pt.marks && pt.marks.length ? pt.marks : [base]);
           // 화살표는 띄워 놓은 부품의 돌기 끝(구멍에 들어갈 깊이만큼 아래)에서 시작해 구멍 위 원으로 들어간다
+          const myOrder = settling ? (pt.settleOrder || 1) : (pt.joinOrder || 1); // settleOrder: 합쳐지는 묶음이 같은 단계의 다른 부품(리벳)보다 나중에 내려올 때 2
+          // 받는 부품(호스트)이 이 점 근처인지: 끼우는 방향 축 위로 14 이내이고, 축에서 옆으로 4 이내(옆 구멍의 돌기를 잘못 잡지 않게)
+          const near = (f, m) => { const d = [f[0] - m[0], f[1] - m[1], f[2] - m[2]]; const u = dirH || [0, 1, 0]; const ul = Math.hypot(u[0], u[1], u[2]) || 1; const al = (d[0] * u[0] + d[1] * u[1] + d[2] * u[2]) / ul; return Math.abs(al) < 14 && Math.hypot(d[0] - al * u[0] / ul, d[1] - al * u[1] / ul, d[2] - al * u[2] / ul) < 4; };
+          const hostShift = pt.guideShift ? () => pt.guideShift : (m) => { const h = list.find((q) => q.isNew && q.final && (q.order || 1) < myOrder && near(q.final, m)); return h ? [h.pos[0] - h.final[0], h.pos[1] - h.final[1], h.pos[2] - h.final[2]] : null; };
           if (pt.recv && !pt.pegTarget) { // pegTarget: 구멍 받는 부품이 움직여도 교재처럼 화살표가 고정된 돌기 끝을 향하게 그린다(marks = 고정된 돌기 끝)
             // 구멍을 받는 부품(프레임 등)이 움직일 때: 원은 떠 있는 부품의 구멍에, 화살표는 고정된 돌기 끝에서 그 구멍 쪽으로
             // faceMarks: 돌기 끝이 판 바깥 면과 같은 높이가 아닐 때, 제자리에 끼운 뒤 판 바깥 면의 구멍 자리
             const faces = !settling && pt.faceMarks ? pt.faceMarks : targets;
-            targets.forEach((m, i) => guides.push({ from: m, to: add(faces[i] || m, dirH, hv), dir: dirH, idx: list.length, both: pt.thick || 5 }));
+            // 같은 단계에서 먼저 결합하는 부품(예: 리벳, joinOrder 가 더 작음)의 돌기에 끼우는 경우, 그 부품은 아직 떠 있으니 화살표는 떠 있는 돌기 끝에서 시작한다(사용자 지시 2026-10-04: 리벳이 중간에 보이고 위쪽 화살표는 리벳에서 끝난다)
+            targets.forEach((m, i) => { const g = { from: m, to: add(faces[i] || m, dirH, hv), dir: dirH, idx: list.length, both: pt.thick || 5 }; guides.push(g); deferredShift.push(() => { const sh = hostShift(m); if (sh) g.from = add(m, sh, 1); }); }); // 호스트(리벳)가 이 부품보다 뒤 단계 목록에 있어도 찾도록 목록을 다 만든 뒤 옮긴다
           } else {
-            targets.forEach((m) => guides.push({ from: add(m, dirH, hv - depth), to: m, dir: dirH, idx: list.length }));
+            targets.forEach((m) => { const sh = hostShift(m) || [0, 0, 0]; guides.push({ from: add(m, dirH, hv - depth), to: add(m, sh, 1), dir: dirH, idx: list.length, stop: hostShift(m) ? 2.5 : 0 }); }); // 받는 부품이 먼저 떠 있으면(예: 판 위 리벳) 점도 떠 있는 구멍에
           }
         }
         // holeMarks: 프레임 구멍에 고정된 결합 위치 원(교재처럼 판 구멍에 표시, 부품이 움직여도 그 자리)
         if (isNew && !moving && pt.holeMarks) pt.holeMarks.forEach((m) => guides.push({ from: m, to: m, dir: dirH || [0, 1, 0], idx: list.length, ringOnly: true }));
-        list.push({ name: pt.n, label: pt.n + ' ' + numOf.get(pt0) + '번', type, mount: 'floor', pos: pos.slice(), quat: b.quat(rot), rot: rot.slice(), isNew, final: (isNew && dirH) || ex ? base.slice() : null, order: settling ? 1 : (pt.joinOrder || (ex && ex.order) || 1) }); // 합쳐지는 묶음(settle)은 모두 한꺼번에 내려온다 // ex: 14단계처럼 "결합 전"으로 띄운 부품도 제자리(결합 후)가 있다
+        list.push({ name: pt.n, label: pt.n + ' ' + numOf.get(pt0) + '번', type, mount: 'floor', pos: pos.slice(), quat: b.quat(rot), rot: rot.slice(), isNew, final: (isNew && dirH) || ex ? base.slice() : null, order: settling ? (pt.settleOrder || 1) : (pt.joinOrder || (ex && ex.order) || 1) }); // 합쳐지는 묶음(settle)은 모두 한꺼번에 내려온다 // ex: 14단계처럼 "결합 전"으로 띄운 부품도 제자리(결합 후)가 있다
       });
     });
+    deferredShift.forEach((fn) => fn());
     // xform: 이 단계부터는 지금까지 만든 것 전체를 통째로 돌려서 놓는다(예: 풍차 몸체를 세워서 받침에 올리기). 부품 자리는 원래 좌표 그대로 두고 여기서 한꺼번에 변환한다.
     const xf = def.xform && target >= def.xform.at ? def.xform : null;
     if (xf) {
@@ -147,9 +198,12 @@
       });
       guides.forEach((g) => { g.from = T(g.from); g.to = T(g.to); g.dir = mvec(xf.m, g.dir); });
     }
-    return { list, guides, missing, targets: list.map((d) => d.final || null), orders: list.map((d) => d.order || 1) };
+    const guidesOut = def.guideMode === 'mates' ? mateGuides(list) : guides;
+    return { list, guides: guidesOut, missing, stored, storedThumb, storedTypes, targets: list.map((d) => d.final || null), orders: list.map((d) => d.order || 1) };
   }
 
+  // 단계 이름표: label 이 있는 단계(예: "창고")는 이름으로, 나머지는 label 없는 단계만 세어 번호를 붙인다
+  function stepTag(i) { const st = def.steps[i - 1]; if (st && st.label) return st.label; let c = 0; for (let k = 0; k < i; k++) if (!(def.steps[k] && def.steps[k].label)) c++; return String(c); }
   // 1, 2, 3 … 단계 번호 버튼(+ 마지막 "완성") — 눌러서 그 단계로 바로 가고, 지금 단계는 진하게 보인다.
   function buildStepButtons() {
     [$('asmSteps'), $('asmStageSteps')].forEach((box) => {
@@ -158,9 +212,10 @@
         const b = document.createElement('button');
         b.type = 'button';
         b.dataset.step = String(i);
-        b.textContent = i === last() ? '완성' : String(i);
-        b.title = i === last() ? '완성된 모습' : i + '단계: ' + (def.steps[i - 1].note || '');
-        b.style.cssText = i === last() ? 'padding:5px 10px; font-size:13px;' : 'min-width:32px; padding:5px 0; font-size:13px;';
+        const tag = i === last() ? '완성' : stepTag(i), wide = tag.length > 1;
+        b.textContent = tag;
+        b.title = i === last() ? '완성된 모습' : tag + (wide ? ': ' : '단계: ') + (def.steps[i - 1].note || '');
+        b.style.cssText = wide ? 'padding:5px 10px; font-size:13px;' : 'min-width:32px; padding:5px 0; font-size:13px;';
         box.appendChild(b);
       }
     });
@@ -177,7 +232,7 @@
       b.dataset.step = String(i + 1);
       b.className = 'ghost';
       b.style.cssText = 'width:100%; text-align:left; padding:3px 8px; border-radius:8px; font-size:12.5px; font-weight:400;';
-      b.textContent = (i + 1) + '. ' + (s.note || '');
+      b.textContent = stepTag(i + 1) + '. ' + (s.note || '');
       li.appendChild(b);
       ol.appendChild(li);
     });
@@ -204,11 +259,13 @@
 
   function render() {
     const b = bridge();
-    const { list, guides, missing, targets, orders } = buildList(step);
+    const { list, guides, missing, stored, storedThumb, storedTypes, targets, orders } = buildList(step);
+    window.__asmStored = storedTypes; // design.html 의 사용 부품 목록이 읽는다
+    renderStorage(stored, storedThumb, Object.keys(storedTypes || {}).length);
     b.show(list.map(({ isNew, name, final, order, ...d }) => d), targets, orders);
     // 지금 단계에 보이는 부품(끼우기 직전 위치 포함)에 카메라를 맞춘다 — 처음부터 너무 멀리서 보이지 않게
     // 이번 단계에 끼우는 부품과 그 끼워지는 자리를 화면 가운데에 크게 보여준다(나머지 부품은 배경)
-    const focus = list.filter((d) => d.isNew).map((d) => d.pos).concat(guides.map((g) => g.to));
+    const focus = list.filter((d) => d.isNew).map((d) => d.pos).concat(guides.filter((g) => g.to).map((g) => g.to)); // 맞물림 방식 안내는 좌표가 없다(연결점이 부품에 붙어 있다)
     const stc = (step > 0 && step < last()) ? def.steps[step - 1].cam : null; // cam.tight: 이번에 끼우는 부분만 크게(교재가 그 부분만 크게 그린 단계)
     { const axAt = stc && Array.isArray(stc.axes) ? stc.axes : null; const axKey = axAt ? axAt.join(',') : ''; // cam.axes: 이 단계의 기준점(방향선 원점)
       if (axKey !== lastAxKey) { lastAxKey = axKey; b.axes(true, axAt); } }
@@ -234,7 +291,8 @@
     { const myStep = step, myTh = sv ? sv.theta : th, myPh = sv ? sv.phi : ph, mySrc = sv ? 'admin' : (st && st.camSrc ? st.camSrc : ''); // 교재 시점 = 단계 데이터의 방향·높이각 + 화면에 맞춘 보는 중심·거리. 카메라가 자리 잡은 뒤(0.15초) 저장해 하단 표시줄이 지금 시점과 비교한다
       setTimeout(() => { if (step !== myStep || !b.camState) return; const cs = b.camState(); baseCam = { step: myStep, th: myTh, ph: myPh, target: cs.target, radius: cs.radius, src: mySrc }; }, 150); }
     const n = total();
-    $('asmLabel').textContent = step === 0 ? '시작 전' : (step === last() ? '완성!' : step + ' / ' + n + ' 단계');
+    const curSt = step >= 1 ? def.steps[step - 1] : null, realN = def.steps.filter((q) => !q.label).length; // 창고·불러오기 같은 label 단계는 단계 번호에 넣지 않는다(사용자 지시 2026-10-04)
+    $('asmLabel').textContent = step === 0 ? '시작 전' : (step === last() ? '완성!' : (curSt && curSt.label ? curSt.label : stepTag(step) + ' / ' + realN + ' 단계'));
     $('asmNote').textContent = step === 0 ? '빈 판에서 시작해요. ▶ 를 눌러 한 단계씩 만들어 봐요.'
       : (step === last() ? '완성! 부품이 모두 제자리에 끼워졌어요.' : (def.steps[step - 1].note || ''));
     { const adm2 = !!(window.__ivsIsAdmin && window.__ivsIsAdmin()); ['asmCamCopy', 'asmCamReset'].forEach((id) => { const e2 = $(id); if (e2) e2.hidden = !adm2; }); } // 📷(시점 맞춤)는 본사 관리자 로그인일 때만 보인다(사용자 지시 2026-10-03)
@@ -433,14 +491,14 @@
     };
     const shot = async () => {
       const b = bridge();
-      const header = (def ? def.chapter : '') + ' 조립도 · ' + (step === last() ? '완성' : step + '단계') + ' · 표시하기';
+      const header = (def ? def.chapter : '') + ' 조립도 · ' + (step === last() ? '완성' : stepTag(step) + '단계') + ' · 표시하기';
       let blob = null;
       try { blob = await b.markCapture(header); } catch (e) { toast('사진 만들기 실패: ' + (e && e.message || e), true); return; }
       if (!blob) { toast('표시가 없어요. 먼저 "📍 표시하기"를 누르고 화면의 부품을 눌러 주황 표시를 만든 뒤 눌러 주세요.', true); return; }
       let copied = false;
       try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); copied = true; } catch (e) { /* 복사 권한이 없으면 다운로드만 */ }
       const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob); a.download = '수정스샷_' + (def ? def.chapter : '') + '_' + (step === last() ? '완성' : step + '단계') + '.png';
+      a.href = URL.createObjectURL(blob); a.download = '수정스샷_' + (def ? def.chapter : '') + '_' + (step === last() ? '완성' : stepTag(step) + '단계') + '.png';
       document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
       toast(copied ? '📸 사진을 복사하고 내려받았어요 — Ctrl+V로 붙여넣어 보내 주세요' : '📸 사진을 내려받았어요(복사는 안 됐어요) — 파일을 보내 주세요');
       b.status(copied ? '사진을 복사하고 내려받았어요. 붙여넣기(Ctrl+V)로 보내 주세요.' : '사진을 내려받았어요(복사는 안 됐어요). 파일을 보내 주세요.', 'success');
@@ -502,7 +560,7 @@
           const line = (title, th, ph, pos, ctr, tail) => title + ' · 방향 ' + f0(wrap(deg(th))) + '° · 높이각 ' + f0(90 - deg(ph)) + '° · ' + sideOf(th) + ' 쪽에서 봄 · 카메라 x ' + f0(pos[0]) + ' y(높이) ' + f0(pos[1]) + ' z ' + f0(pos[2]) + ' / 보는 중심 x ' + f0(ctr[0]) + ' y ' + f0(ctr[1]) + ' z ' + f0(ctr[2]) + (tail || '');
           const lines = [];
           if (baseCam && baseCam.step === step) {
-            const srcTxt = { guess: '짐작', user: '사용자가 맞춤', fit: '교재 그림에서 계산', auto: '자동', admin: '관리자가 저장' }[baseCam.src] || '';
+            const srcTxt = ''; // 카메라 출처 문구(눈대중·계산 등)는 화면에 적지 않는다 — 모든 카메라는 당연히 교재와 비슷하게 맞춘 것이다(사용자 지시 2026-10-04)
             lines.push(line('교재 시점', baseCam.th, baseCam.ph, posOf(baseCam.th, baseCam.ph, baseCam.target, baseCam.radius), baseCam.target, srcTxt ? ' · ' + srcTxt : ''));
           }
           lines.push(line('지금 시점', c.theta, c.phi, d.pos, d.center, ' · ' + (d.toPart ? d.label + '까지 ' : '화면 중심까지 ') + f0(d.mm) + 'mm'));

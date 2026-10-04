@@ -295,6 +295,7 @@
     position:absolute; top:12px; right:12px; width:56px; height:56px;
     perspective:260px; z-index:20;
   }
+  .storage-box{ position:absolute; top:78px; right:12px; width:150px; z-index:20; } /* 큐브 바로 아래 창고 표시 */
   .viewcube{
     position:relative; width:100%; height:100%; transform-style:preserve-3d;
   }
@@ -602,6 +603,10 @@
             <div class="face bottom" data-face="bottom">아래</div>
           </div>
         </div>
+        <div class="part-list storage-box" id="storageList" hidden>
+            <button type="button" class="part-list-head" id="storageHead" aria-expanded="true"><span>📦 창고 <b id="storageCount">0</b></span><span id="storageArrow">▾</span></button>
+            <div class="part-list-body" id="storageBody"></div>
+          </div>
       </div>
 
       <div class="modal-backdrop" id="modalBackdrop" hidden></div>
@@ -746,6 +751,7 @@
 <script src="design-lessons.js"></script>
 <script src="design-assemblies.js"></script>
 <script src="design-faces.js"></script>
+<script src="design-mates.js"></script>
 <script src="design-assembly.js"></script>
 <script src="design-collision.js"></script>
 <script src="design-robot-categories.js"></script>
@@ -2478,9 +2484,11 @@
   try { if (localStorage.getItem('ivs-partlist-folded') === '1') setPartListFolded(true); } catch (e) {}
   const foldedSets = new Set(); // 접어 둔 세트 (세트 번호)
   function refreshPartList(){
-    document.getElementById('partListCount').textContent = String(new Set(parts.map(p => p.type)).size); // 놓은 부품의 "종류" 수(필요 부품 숫자와 같은 단위)
+    const stockedNow = (window.__ivsAssembly && window.__ivsAssembly.isViewing() && window.__asmStored) || {}; // 창고에 들어간 부품도 쓴 부품
+    const usedTypes = new Set(parts.map(p => p.type)); Object.keys(stockedNow).forEach(k => usedTypes.add(k));
+    document.getElementById('partListCount').textContent = String(usedTypes.size); // 놓은 부품의 "종류" 수(필요 부품 숫자와 같은 단위)
     partListBody.textContent = '';
-    if (!parts.length) {
+    if (!parts.length && !Object.keys(stockedNow).length) {
       const empty = document.createElement('p');
       empty.className = 'part-list-empty';
       empty.textContent = '아직 놓은 부품이 없어요';
@@ -2491,6 +2499,7 @@
     if (window.__ivsAssembly && window.__ivsAssembly.isViewing()) {
       const kinds = new Map();
       parts.forEach(part => kinds.set(part.type, (kinds.get(part.type) || 0) + 1));
+      Object.keys(stockedNow).forEach(k => kinds.set(k, (kinds.get(k) || 0) + stockedNow[k])); // 창고 부품 포함
       kinds.forEach((n, type) => {
         const row = document.createElement('div');
         row.className = 'required-row ok';
@@ -4645,6 +4654,17 @@
     if (!assemblyGuideGroup) return;
     assemblyGuideGroup.children.forEach(c => { c.traverse(o => { if (o.userData && o.userData.dot) o.visible = v; }); (c.userData.attached || []).forEach(m => { if (m.userData && m.userData.dot) m.visible = v; }); });
   }
+  // 화살표 하나를 지운다. 여러 화살표가 같이 쓰는 연결점(users)은 마지막 화살표가 지워질 때 함께 지운다.
+  function dropGuideArrow(c){
+    (c.userData.attached || []).forEach(m => {
+      const u = m.userData && m.userData.users;
+      if (u) { u.delete(c); if (u.size) return; }
+      if (m.parent) m.parent.remove(m);
+      if (m.geometry) m.geometry.dispose(); if (m.material) m.material.dispose();
+    });
+    if (assemblyGuideGroup) assemblyGuideGroup.remove(c);
+    c.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+  }
   function clearAssemblyGuides(){
     clearMarkMoves();
     if (!assemblyGuideGroup) return;
@@ -4660,6 +4680,7 @@
       const p = robotPartsCache.find(x => x.name === name && (!categoryId || x.category === categoryId));
       return p && PART_DEFS['robot:' + p.id] ? 'robot:' + p.id : null;
     },
+    connectors(type){ const info = robotPartsCache.find(x => 'robot:' + x.id === type); return info && info.connectors ? info.connectors : null; }, // 부품 종류의 돌기·구멍 정보(부품 DB) — 연결점은 항상 부품의 같은 자리
     quat(rot){ const q = quatFromRot({ x: rot[0], y: rot[1], z: rot[2] }); return [q.x, q.y, q.z, q.w].map(round5); },
     listParts(categoryId){ return robotPartsCache.filter(x => (!categoryId || x.category === categoryId) && PART_DEFS['robot:' + x.id]).map(x => { const m = robotModelCache.get(x.id), bb = m && m.bbox; return { name: x.name, type: 'robot:' + x.id, size: bb ? [bb.max[0] - bb.min[0], bb.max[1] - bb.min[1], bb.max[2] - bb.min[2]] : null }; }); }, // 큐보 부품 전체 리스트용: 이 카테고리의 3D 모델이 있는 부품과 실제 모델 크기(w,h,d)
     preload(names, categoryId){ return Promise.all(names.map(n => { const t = this.resolve(n, categoryId); return t ? ensureRobotModel(t.slice(6)) : null; })); },
@@ -4683,7 +4704,7 @@
         else { part.body.position.set(t[0], t[1], t[2]); setStatus('딱! 결합했어요.', 'success'); playSnap(); }
       })(t0);
       if (assemblyGuideGroup) {
-        assemblyGuideGroup.children.filter(c => c.userData.idx === idx).forEach(c => { (c.userData.attached || []).forEach(m => { if (m.parent) m.parent.remove(m); }); assemblyGuideGroup.remove(c); c.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); });
+        assemblyGuideGroup.children.filter(c => c.userData.idx === idx).forEach(dropGuideArrow);
       }
       return 'ok';
     },
@@ -4700,7 +4721,7 @@
       });
       // 결합하는 부품의 안내(화살표·점)만 지운다 — 아직 남은 부품의 안내는 그대로 둔다
       if (assemblyGuideGroup) {
-        assemblyGuideGroup.children.filter(c => idxs.includes(c.userData.idx)).forEach(c => { (c.userData.attached || []).forEach(m => { if (m.parent) m.parent.remove(m); }); assemblyGuideGroup.remove(c); c.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); });
+        assemblyGuideGroup.children.filter(c => idxs.includes(c.userData.idx)).forEach(dropGuideArrow);
       }
       (function step(now){
         const k = Math.min(1, (now - t0) / DUR), e = 1 - Math.pow(1 - k, 3);
@@ -4769,7 +4790,100 @@
       const mat = () => new THREE.MeshBasicMaterial({ color: 0x22c55e, depthTest: true, transparent: true }); // 화살표는 부품에 가려져야 한다(물리적으로 안 보이는 곳까지 보이면 구멍 위치가 오히려 헷갈린다 — 사용자 지적)
       const paint = () => new THREE.MeshBasicMaterial({ color: 0x22c55e, transparent: true, opacity: 0.95, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
       const Z = new THREE.Vector3(0, 0, 1);
-      list.forEach(({ from, to, idx, both, ringOnly, dir: gdir }) => {
+      const fixedDots = [];
+      // 같은 선 위에서 겹치는 화살표는 하나만 그린다(화살촉 하나 — 사용자 지시 2026-10-04): 긴 쪽을 남기고 짧은 쪽은 화살표만 뺀다(점은 그대로)
+      const skipArrow = new Set();
+      list.forEach((g1, i) => {
+        if (g1.ringOnly || g1.mate) return;
+        list.forEach((g2, j) => {
+          if (j === i || g2.ringOnly || g2.mate || skipArrow.has(j)) return;
+          const A1 = new THREE.Vector3(...g1.from), B1 = new THREE.Vector3(...g1.to), A2 = new THREE.Vector3(...g2.from), B2 = new THREE.Vector3(...g2.to);
+          const d1 = B1.clone().sub(A1), d2 = B2.clone().sub(A2), l1 = d1.length(), l2 = d2.length();
+          if (l1 < 1 || l2 < 1 || l2 > l1 + 0.01 || (l2 === l1 && j < i)) return; // g2 가 더 짧은(또는 뒤의) 쪽
+          d1.normalize();
+          const perp = (P) => P.clone().sub(A1).sub(d1.clone().multiplyScalar(P.clone().sub(A1).dot(d1))).length();
+          if (perp(A2) > 1.5 || perp(B2) > 1.5) return;
+          const t1 = A2.clone().sub(A1).dot(d1), t2 = B2.clone().sub(A1).dot(d1);
+          const lo = Math.max(0, Math.min(t1, t2)), hi = Math.min(l1, Math.max(t1, t2));
+          if (hi - lo > 0.5 * l2) skipArrow.add(j);
+        });
+      });
+      // ── 맞물림 방식(def.guideMode === 'mates', 사용자 지시 2026-10-04): 연결점은 부품에 붙어 있다 — 평소엔 안 보이고, 이번 단계에 결합할 자리일 때만 보인다.
+      //    구멍은 두께 가운데, 돌기는 끝(부품 DB 의 같은 연결점 정보). 부품이 어디에 있든 부품과 함께 움직이고, 화살표는 두 점을 매 프레임 이은 선이다.
+      const mateList = list.filter(e => e.mate);
+      if (mateList.length) {
+        const HEADM = 6;
+        const connDots = new Map();
+        const connDot = (pi, kind, id) => {
+          const key = pi + ':' + kind + ':' + id;
+          if (connDots.has(key)) return connDots.get(key);
+          const part = assemblyListParts[pi] || parts[pi];
+          const info = part && part.type && part.type.indexOf('robot:') === 0 ? robotPartsCache.find(x => x.id === part.type.slice(6)) : null;
+          const c = info && info.connectors && (kind === 'peg' ? info.connectors.pegs : info.connectors.holes).find(q => q.id === id);
+          if (!part || !part.mesh || !c) { connDots.set(key, null); return null; }
+          const m = new THREE.Mesh(new THREE.CircleGeometry(kind === 'peg' ? Math.min(2.6, Math.max(1.4, (c.r || 2.5) * 1.05)) : Math.min(3.3, Math.max(1.4, c.r || 3)), 32), paint());
+          m.renderOrder = 10; m.userData.dot = true; m.userData.users = new Set(); m.userData.connKey = key;
+          if (kind === 'hole') m.userData.ring = true;
+          const at = kind === 'peg' ? [c.pos[0] + c.dir[0] * (c.len || 0) / 2, c.pos[1] + c.dir[1] * (c.len || 0) / 2, c.pos[2] + c.dir[2] * (c.len || 0) / 2] : c.pos;
+          m.position.set(at[0], at[1], at[2]);
+          m.quaternion.setFromUnitVectors(Z, new THREE.Vector3(c.dir[0], c.dir[1], c.dir[2]).normalize());
+          part.mesh.add(m);
+          connDots.set(key, m);
+          return m;
+        };
+        const items = [];
+        mateList.forEach((e) => {
+          const dp = connDot(e.pegIdx, 'peg', e.pegId), dh = connDot(e.holeIdx, 'hole', e.holeId);
+          if (!dp || !dh) return;
+          const from = e.moverIdx === e.pegIdx ? dp : dh, to = e.moverIdx === e.pegIdx ? dh : dp;
+          const A = new THREE.Vector3(), B = new THREE.Vector3();
+          from.parent.updateWorldMatrix(true, false); to.parent.updateWorldMatrix(true, false);
+          from.updateWorldMatrix(true, false); to.updateWorldMatrix(true, false);
+          from.getWorldPosition(A); to.getWorldPosition(B);
+          items.push({ e, dp, dh, from, to, A, B, skip: false });
+        });
+        // 같은 선 위에서 겹치는 화살표는 하나만(화살촉 하나)
+        items.forEach((i1, i) => items.forEach((i2, j) => {
+          if (i === j || i2.skip) return;
+          const d1 = i1.B.clone().sub(i1.A), d2 = i2.B.clone().sub(i2.A), l1 = d1.length(), l2 = d2.length();
+          if (l1 < 1 || l2 < 1 || l2 > l1 + 0.01 || (l2 === l1 && j < i)) return;
+          d1.normalize();
+          const perp = (P) => P.clone().sub(i1.A).sub(d1.clone().multiplyScalar(P.clone().sub(i1.A).dot(d1))).length();
+          if (perp(i2.A) > 1.5 || perp(i2.B) > 1.5) return;
+          const t1 = i2.A.clone().sub(i1.A).dot(d1), t2 = i2.B.clone().sub(i1.A).dot(d1);
+          if (Math.min(l1, Math.max(t1, t2)) - Math.max(0, Math.min(t1, t2)) > 0.5 * l2) i2.skip = true;
+        }));
+        items.forEach(({ e, dp, dh, from, to, skip }) => {
+          const arrowGroup = new THREE.Group();
+          arrowGroup.userData.idx = e.moverIdx; arrowGroup.userData.attached = [dp, dh];
+          dp.userData.users.add(arrowGroup); dh.userData.users.add(arrowGroup);
+          if (!skip) {
+            const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 1, 8), mat());
+            const head = new THREE.Group(); const LEG = HEADM * 1.1, ANG = 30 * Math.PI / 180;
+            [1, -1].forEach(sg => { const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, LEG, 6), mat()); leg.position.set(sg * Math.sin(ANG) * LEG / 2, HEADM / 2 - Math.cos(ANG) * LEG / 2, 0); leg.rotation.z = sg * ANG; leg.renderOrder = 11; head.add(leg); });
+            shaft.renderOrder = head.renderOrder = 11;
+            const pa = new THREE.Vector3(), pb = new THREE.Vector3(), d = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+            arrowGroup.userData.update = () => {
+              from.getWorldPosition(pa); to.getWorldPosition(pb);
+              d.copy(pb).sub(pa); const L = d.length();
+              shaft.visible = head.visible = L > 8;
+              if (L <= 8) return;
+              d.multiplyScalar(1 / L);
+              const gap = Math.min(4, Math.max(0, (L - 10) / 2)), L2 = L - 2 * gap;
+              shaft.scale.set(1, Math.max(L2, 0.1), 1);
+              shaft.position.copy(pa).addScaledVector(d, gap + L2 / 2);
+              shaft.quaternion.setFromUnitVectors(up, d);
+              head.position.copy(pa).addScaledVector(d, gap + L2 - HEADM / 2);
+              head.quaternion.copy(shaft.quaternion);
+            };
+            arrowGroup.add(shaft); arrowGroup.add(head);
+            arrowGroup.userData.update();
+          }
+          g.add(arrowGroup);
+        });
+      }
+      list.forEach(({ from, to, idx, both, ringOnly, dir: gdir, stop, mate }, gi) => {
+        if (mate) return; // 맞물림 방식은 위에서 그렸다
         if (ringOnly) { // 프레임 구멍에 고정된 결합 위치 원(부품이 움직여도 그대로, 화살표 없음) — 교재의 구멍 표시
           const n = gdir ? new THREE.Vector3(gdir[0], gdir[1], gdir[2]).normalize() : new THREE.Vector3(0, 1, 0);
           const rm = new THREE.Mesh(new THREE.CircleGeometry(3.3, 32), paint());
@@ -4795,7 +4909,10 @@
             m.quaternion.setFromUnitVectors(Z, nl);
             moving.mesh.add(m); attached.push(m);
           } else {
-            m.position.copy(point); m.quaternion.setFromUnitVectors(Z, normal); g.add(m);
+            // 같은 자리에 이미 칠한 점이 있으면 또 칠하지 않는다(겹치는 점 금지 — 사용자 지시 2026-10-04): 그 점을 같이 쓴다
+            const dup = fixedDots.find((q) => q.position.distanceTo(point) < 1.5 && Math.abs(q.quaternion.angleTo(new THREE.Quaternion().setFromUnitVectors(Z, normal))) < 0.2);
+            if (dup) return dup;
+            m.position.copy(point); m.quaternion.setFromUnitVectors(Z, normal); g.add(m); fixedDots.push(m);
           }
           return m;
         };
@@ -4806,9 +4923,7 @@
         // 프레임이 움직이는 단계(recv): 결합 점은 허공이 아니라 프레임 구멍에 딱 맞춰, 양면에 따로 칠하지 않고 두께 가운데에 하나만 그린다(사용자 지시)
         const ring = dot(3.3, recv ? b.clone().addScaledVector(dir, -both / 2) : holeOut, dir, recv); // 판이 움직이는 단계의 점은 판에 붙여서 부품을 따라 움직이고 화살표가 늘어나게 한다(번호는 assemblyListParts 로 정확히 찾는다)
         ring.userData.ring = true; // 구멍 칠(표시하기 mark 모드에서는 일반 부품처럼 눌러 표시)
-        if (recv) { // 판 두께 가운데의 결합 점은 구멍 테두리에 가려 안 보이므로 항상 보이게 한다(사용자 지적: 프레임 중앙에 초록 점이 안 보인다)
-          ring.material.depthTest = false; ring.material.polygonOffset = false; ring.renderOrder = 40; ring.scale.setScalar(1.15);
-        }
+        // 움직이는 판의 결합 점도 다른 점처럼 깊이 검사를 켜 둔다: 판 두께 가운데(구멍 안)에 있으니 위에서 구멍 입구로 보일 때만 보이고, 판 몸통에 가려지는 각도에서는 안 보인다(사용자 지시 2026-10-04 — 예전의 '항상 보이게'는 없앴다)
         const ring2 = null;
         const HEAD = 6;
         const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 1, 8), mat()); // 화살표 줄은 얇게(사용자 지시 2026-10-03)
@@ -4829,8 +4944,10 @@
         // 화살표: 돌기 점과 구멍 점을 이은 선에서 양 끝을 조금씩 띄운다(점과 겹쳐 보이지 않게). 부품이 움직이면 매 프레임 다시 계산한다.
         const pa = new THREE.Vector3(), pb = new THREE.Vector3(), d = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
         arrowGroup.userData.update = () => {
-          cap.getWorldPosition(pa); (ring2 || ring).getWorldPosition(pb);
-          d.copy(pb).sub(pa); const L = d.length();
+          // 구멍을 받는 판이 내려오는 단계(recv)는 화살표도 내려오는 방향: 판의 구멍 → 고정된 돌기 끝(사용자 지시 2026-10-04). 그 밖에는 돌기 끝 → 구멍.
+          if (recv) { (ring2 || ring).getWorldPosition(pa); cap.getWorldPosition(pb); } else { cap.getWorldPosition(pa); (ring2 || ring).getWorldPosition(pb); }
+          d.copy(pb).sub(pa); if (stop && !recv) { const l0 = d.length(); if (l0 > stop) pb.addScaledVector(d, -stop / l0); d.copy(pb).sub(pa); } // stop: 떠 있는 판에 닿는 리벳 화살표는 판의 겉면에서 멈춘다(구멍 한가운데까지 뚫고 들어가지 않게)
+          const L = d.length();
           shaft.visible = head.visible = L > 8;
           if (L <= 8) return;
           d.multiplyScalar(1 / L);
@@ -4841,6 +4958,7 @@
           head.position.copy(pa).addScaledVector(d, gap + L2 - HEAD / 2);
           head.quaternion.copy(shaft.quaternion);
         };
+        if (skipArrow.has(gi)) { return; } // 겹치는 화살표 — 점만 남기고 화살표는 긴 쪽 하나만
         arrowGroup.add(shaft); arrowGroup.add(head);
         arrowGroup.userData.update();
         g.add(arrowGroup);

@@ -43,7 +43,7 @@ import numpy as np
 from asmlib import *
 
 A = Asm("cubo-{volume}-{id}", "{title}", "교재 ?~?쪽 · {title} (1~?단계)", camera={{"target": [60, 20, 0], "radius": 380, "theta": 0.9, "phi": 1.0}},
-        listNote="만드는 중 — 단계가 끝나기 전까지 LIST 개수는 안 맞는 것이 정상")
+        listNote="만드는 중 — 단계가 끝나기 전까지 LIST 개수는 안 맞는 것이 정상", guideMode="mates")   # 연결점은 부품에 붙어 있고 결합할 자리일 때만 보인다(맞물림 방식, 사용자 지시 2026-10-04)
 RELOCK = "--relock" in sys.argv   # 잠금 기록을 새로 만들 때(수정 지시는 이번 빌드에서 무시한다)
 if not RELOCK: A.load_fixes("{name}_fixes.json")   # 관리자 수정 지시(앞 단계 수정 → 뒤 단계가 따라온다). 파일이 없으면 아무 일도 안 한다
 A.load_links("{name}_links.json", relock=RELOCK)   # 좌표로 쓴 결합·절대 좌표로 놓은 판을 이름으로 잠가 두는 기록

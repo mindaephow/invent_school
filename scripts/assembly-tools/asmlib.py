@@ -60,6 +60,7 @@ class Part:
     def __init__(s, n, R, p, step, extra=None):
         s.n, s.R, s.p, s.step, s.extra = n, np.array(R, float), np.array(p, float), step, (extra or {})
         s.conn = partlib.get(n); s.side = None
+        s._base = None   # 그룹으로 옮겨지기 전의 (p, R) — 내보낼 때 원래 자세는 p·r, 옮긴 자세는 move 로 쓴다
     def world(s, kind, c):
         return {"id": c["id"], "pos": s.p + s.R @ np.array(c["pos"], float), "dir": s.R @ np.array(c["dir"], float), "len": c.get("len", 0), "r": c.get("r", 0), "through": c.get("through", False)}
     def peg(s, id):
@@ -91,6 +92,31 @@ class Part:
             g = s.world("peg", c); d = float(np.linalg.norm(g["pos"] - np.array(pt, float)))
             if d < bd: best, bd = g, d
         return best, bd
+
+def rot_x(deg):
+    a = np.radians(deg); c, sn = np.cos(a), np.sin(a); return np.array([[1, 0, 0], [0, c, -sn], [0, sn, c]], float)
+def rot_y(deg):
+    a = np.radians(deg); c, sn = np.cos(a), np.sin(a); return np.array([[c, 0, sn], [0, 1, 0], [-sn, 0, c]], float)
+def rot_z(deg):
+    a = np.radians(deg); c, sn = np.cos(a), np.sin(a); return np.array([[c, -sn, 0], [sn, c, 0], [0, 0, 1]], float)
+
+class Group:
+    """끝낸 조립품을 한 부품처럼 움직이게 묶는다 (사용자 지시 2026-10-04: 1번 완성품은 부품이 아니라 그룹이 하나처럼 움직인다).
+    g = A.group("1번 완성품", [부품…]);  단계.move_group(g, rot_x(90), floor=True) 처럼 돌리고 옮기면 묶음 전체가 같은 회전·이동을 받는다.
+    그 뒤 단계에서는 옮겨진 자세 기준으로 이름 결합(attach/recv)이 그대로 된다."""
+    def __init__(s, name, parts):
+        s.name, s.parts = name, list(parts)
+    def center(s):
+        return np.mean([pt.p for pt in s.parts], axis=0)
+    def lowest(s):
+        """묶음에서 가장 낮은 점의 y (부품 크기 상자를 자세대로 돌려서 잰다)."""
+        lo = 1e9
+        for pt in s.parts:
+            size = (pt.conn or {}).get("size")
+            if not size: continue
+            half = np.array(size, float) / 2; ext_y = float(np.abs(pt.R[1]) @ half)
+            lo = min(lo, float(pt.p[1]) - ext_y)
+        return lo if lo < 1e8 else 0.0
 
 class LazyMarks:
     """부품이 놓이는 자리(위치·방향)가 정해진 뒤에 계산하는 안내 위치. fn(part) -> 점 목록.
@@ -269,6 +295,8 @@ class Asm:
         bad = [f for i, f in enumerate(s.fixes) if i not in s.fix_used]
         for f in bad: s.log(f"수정 지시가 적용되지 않았다: {f}")
         return bad
+    def group(s, name, parts):
+        g = Group(name, parts); s.__dict__.setdefault('groups', []).append(g); return g
     def step(s, note, cam=None, camSrc="guess", **kw):
         st = Step(s, note, cam, camSrc, kw); s.steps.append(st); return st
     def log(s, msg): s.warn.append(msg); print("  [경고]", msg)
@@ -292,6 +320,26 @@ class Step:
         s.index = len(A.steps) + 1
     def _add(s, part):
         s.parts.append(part); s.A.parts.append(part); return part
+    def built(s):
+        """이 단계 직전까지 끝낸 조립품 전체 = 자동으로 만들어지는 그룹(사용자 지시 2026-10-04: 순서대로 1번이 완성되면 자동으로 그룹화)."""
+        return Group(f"{s.index - 1}단계까지 완성품", [pt for st in s.A.steps if st.index < s.index for pt in st.parts])
+    def move_built(s, R, pivot=None, shift=(0, 0, 0), floor=False):
+        """지금까지 끝낸 조립품 전체를 한 부품처럼 돌리고 옮긴다 (그룹을 따로 만들 필요 없음)."""
+        return s.move_group(s.built(), R, pivot, shift, floor)
+    def move_group(s, g, R, pivot=None, shift=(0, 0, 0), floor=False):
+        """그룹 g 를 한 덩어리로 돌리고(R: 회전행렬, pivot 둘레 — 생략하면 묶음 중심) shift 만큼 옮긴다. floor=True 면 가장 낮은 점이 바닥(y=0)에 닿게 올린다.
+        부품들의 새 자세는 move 로 내보내고(이 단계부터), 원래 자세는 그대로 p·r 에 남는다."""
+        R = np.array(R, float); pv = g.center() if pivot is None else np.array(pivot, float)
+        for pt in g.parts:
+            if pt._base is None: pt._base = (pt.p.copy(), pt.R.copy())
+            pt.p = R @ (pt.p - pv) + pv
+            pt.R = R @ pt.R
+        sh = np.array(shift, float)
+        if floor: sh = sh + np.array([0.0, -g.lowest(), 0.0])
+        for pt in g.parts:
+            pt.p = pt.p + sh
+            pt.extra["move"] = {"at": s.index, "p": rnd(pt.p), "r": R_to_euler(pt.R)}
+        return g
     def place(s, n, R, p, **extra):
         """위치가 정해진 부품(구멍에 끼우는 안내가 필요 없는 부품: 바닥판 등). 수정 파일에 shift 가 있으면 그만큼 옮긴다."""
         p = s._anchored(n, R, p)
@@ -587,7 +635,7 @@ def to_side(part, Rs, Cf, Cs, until, settle_dir, hosts=()):
 def js_value(v): return json.dumps(v, ensure_ascii=False, separators=(", ", ": "))
 
 def part_dict(pt, final_of=None):
-    p, R = pt.p, pt.R
+    p, R = pt._base if getattr(pt, "_base", None) else (pt.p, pt.R)
     d = {"n": pt.n, "p": rnd(p), "r": R_to_euler(R)}
     d.update(pt.extra)
     return d
