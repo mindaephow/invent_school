@@ -57,7 +57,7 @@ if (process.argv[3]) {
     }));
     const arrSet = new Set(arriving.map(a => a.key));
     arriving.forEach(({ key, pt, mode }) => {
-      if (pt.n === '리벳') return; // 리벳은 교재도 화살표 없이 꽂힌 채로 그린다(같이 도착하는 묶음 안의 결합도 제외)
+      if (pt.n === '리벳' || pt.noGuide) return; // noGuide = 우연히 맞닿아 보일 뿐 결합이 아닌 부품(안내 화살표 없음). 리벳은 교재도 화살표 없이 꽂힌 채로 그린다(같이 도착하는 묶음 안의 결합도 제외)
       const outside = (k) => prior.has(k) && !arrSet.has(k); // 같이 합쳐지는 묶음 안의 결합은 빼고, 이미 있던 부품과의 결합만 본다
       const hasPrior = res.mated.some(m => (m.part === key && outside(m.into)) || (m.into === key && outside(m.part)));
       if (!hasPrior) return;

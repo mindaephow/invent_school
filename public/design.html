@@ -261,6 +261,9 @@
   .required-row .req-count{flex:none; font-weight:700; font-variant-numeric:tabular-nums;}
   .required-row.ok .req-count{color:var(--success);}
   .required-row.short .req-count{color:var(--warn);}
+  .required-row{flex-wrap:wrap;}
+  .asm-stage-note, #asmNote{white-space:pre-line;} /* 단계 설명 안의 줄바꿈(사용 부품 줄)을 그대로 보여 준다 */
+  .required-row .req-diff{flex:0 0 100%; padding-left:14px; font-size:11.5px; font-weight:700; color:var(--warn);}
   .history-panel{background:var(--panel); border:1px solid var(--panel-border); border-radius:12px; box-shadow:var(--shadow); font-size:13px;}
   .history-head{display:flex; align-items:center; gap:6px; padding:6px 8px;}
   .history-title{flex:1; display:flex; align-items:center; justify-content:space-between; padding:4px 6px; border:0; background:transparent; font-weight:700; font-size:14px; color:var(--ink); cursor:pointer; text-align:left;}
@@ -347,7 +350,7 @@
     .app{height:calc(100vh - 24px); display:flex; flex-direction:column;}
     .layout{flex:1; min-height:0; grid-template-rows:minmax(0, 1fr); align-items:stretch;}
     .layout.no-side{grid-template-columns:1fr;}
-    .sidebar, .stage{min-height:0; overflow-y:auto; overscroll-behavior:contain; padding:2px 6px 2px 2px;}
+    .sidebar, .stage{min-height:0; overflow-y:auto; overflow-anchor:none; overscroll-behavior:contain; padding:2px 6px 2px 2px;}
   }
   button.primary{background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:700;}
   button.ghost{background:transparent;}
@@ -601,7 +604,7 @@
             <div class="part-list-body" id="partListBody"></div>
           </div>
           <div class="part-list" id="requiredList" hidden>
-            <button type="button" class="part-list-head" id="requiredListHead" aria-expanded="true"><span>필요 부품 <b id="requiredListCount">0</b></span><span id="requiredListArrow">▾</span></button>
+            <button type="button" class="part-list-head" id="requiredListHead" aria-expanded="true"><span>필요 부품 <b id="requiredListCount">0</b> <b id="requiredListWarn" style="color:var(--warn)"></b></span><span id="requiredListArrow">▾</span></button>
             <div class="part-list-body" id="requiredListBody"></div>
           </div>
         </div>
@@ -1425,6 +1428,7 @@
   function refreshRequiredList(categoryId, volume, session){
     const card = document.getElementById('requiredList');
     if (!card) return;
+    document.getElementById('requiredListWarn').textContent = ''; // 책과 개수가 다른 부품이 있을 때만 아래에서 ⚠ 를 켠다
     try { scheduleModelPreload(categoryId, volume, session); } catch (e) {}
     // 이 카테고리·권에 교재(차시별 필요 부품)가 등록돼 있으면, 그 차시 하나에 등록된 부품만이 기준이다
     // (사용자 지적: "1차시엔 0차시의 부품이 필요한게 아니야" / "0차시엔 0차시 등록 부품만, 1차시엔 1차시
@@ -1443,21 +1447,27 @@
       }
       let mismatchCount = 0;
       window.__requiredQty = {};
+      let bookDiff = 0;
+      const ovr = window.__asmQtyOverride || {};
       const rows = chapterParts.map(cp => {
         const p = robotPartsCache.find(x => x.id === cp.partId);
         if (!p) return '';
         const type = registerRobotPartDef(p);
-        window.__requiredQty[type] = cp.qty;
+        const qty = ovr[p.name] != null ? ovr[p.name] : cp.qty;      // 조립도 쪽 개수가 맞다고 확인된 부품은 그 개수가 기준, 책 개수는 괄호로만 알린다
+        const book = qty !== cp.qty ? cp.qty : null;
+        if (book != null) bookDiff++;
+        window.__requiredQty[type] = qty;
         const used = parts.filter(pt => pt.type === type).length;
-        const ok = used === cp.qty;
+        const ok = used === qty;
         if (!ok) mismatchCount++;
-        return '<div class="required-row ' + (ok ? 'ok' : 'short') + '"><span class="req-name">' + esc(p.name) + '</span><span class="req-count">' + used + '/' + cp.qty + '</span></div>';
+        return '<div class="required-row ' + (ok ? 'ok' : 'short') + '"><span class="req-name">' + esc(p.name) + '</span><span class="req-count">' + used + '/' + qty + '</span>' + (book != null ? '<span class="req-diff">⚠ (책 ' + book + '개)</span>' : '') + '</div>';
       }).join('');
       const summary = mismatchCount === 0
         ? '<div class="required-summary ok">✅ 필요한 부품을 다 썼어요!</div>'
         : '<div class="required-summary warn">⚠️ 아직 ' + mismatchCount + '종류가 안 맞아요</div>';
       // 부품 "종류" 수로 센다(사용 부품 숫자도 같은 종류 수)
       document.getElementById('requiredListCount').textContent = String(chapterParts.length);
+      { const w = document.getElementById('requiredListWarn'); w.textContent = bookDiff ? '⚠' : ''; w.title = bookDiff ? '책과 수량이 다른 부품이 ' + bookDiff + '종류 있어요' : ''; }
       document.getElementById('requiredListBody').innerHTML = summary + rows;
       return;
     }
@@ -4818,7 +4828,7 @@
     setViewSlot(n, label, thumb){ assemblyViewSlot = (n === null || n === undefined) ? null : n; assemblyViewLabel = label || ''; assemblyViewThumb = thumb || ''; refreshGroupChip(); },
     setStored(info){ assemblyStored = info; refreshGroupChip(); },
     // 그룹 번호는 화면에서 왼쪽에 있는 것부터 1번(사용자 지시 2026-10-04) — 단계를 열고 카메라가 자리 잡은 뒤 한 번 매긴다
-    relabelGroups(){
+    relabelGroups(swap23){
       if (!assemblyGroups.length) return;
       updateCamera(); camera.updateMatrixWorld(); camera.updateProjectionMatrix();
       const sx = (g) => { if (g.ghost || !g.parts.length) return 1e9; const v = new THREE.Vector3(); g.parts.forEach(m => v.add(m.body.position)); v.multiplyScalar(1 / Math.max(1, g.parts.length)); return v.project(camera).x; };
@@ -4826,6 +4836,7 @@
       // 작업 창고에 원래 있던 묶음이 먼저(그룹 1), 다른 창고에서 가져온 묶음은 그다음 — 같은 무리 안에서는 화면 왼쪽부터(사용자 지시 2026-10-04)
       const rank = (g) => (g.origin === assemblySlot ? 0 : 1);
       assemblyGroups.sort((a, b) => (rank(a) - rank(b)) || (key.get(a) - key.get(b)));
+      if (swap23 && assemblyGroups.length >= 3) { const t = assemblyGroups[1]; assemblyGroups[1] = assemblyGroups[2]; assemblyGroups[2] = t; } // 단계 데이터 groupSwap: 그룹 2 와 그룹 3 의 번호를 서로 바꾼다(관리자 지시)
       refreshGroupChip();
     },
     connectors(type){ const info = robotPartsCache.find(x => 'robot:' + x.id === type); return info && info.connectors ? info.connectors : null; }, // 부품 종류의 돌기·구멍 정보(부품 DB) — 연결점은 항상 부품의 같은 자리

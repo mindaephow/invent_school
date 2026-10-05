@@ -234,7 +234,7 @@
         }
         // holeMarks: 프레임 구멍에 고정된 결합 위치 원(교재처럼 판 구멍에 표시, 부품이 움직여도 그 자리)
         if (isNew && !moving && pt.holeMarks) pt.holeMarks.forEach((m) => guides.push({ from: m, to: m, dir: dirH || [0, 1, 0], idx: list.length, ringOnly: true }));
-        list.push({ step: si + 1, eff: effStepOf(pt, si + 1, upTo), name: pt.n, label: pt.n + ' ' + numOf.get(pt0) + '번', type, mount: 'floor', pos: pos.slice(), quat: b.quat(rot), rot: rot.slice(), isNew, final: (isNew && dirH) || ex ? base.slice() : null, order: settling ? (pt.settleOrder || 1) : (pt.joinOrder || (ex && ex.order) || 1), arrowFrom: pt.arrowFrom || null, skipMates: pt.skipMates || null, sideUntil: pt.side ? pt.side.until : null, fin: moved ? (pt.move.p || add(pt.p, pt.move.by || [0, 0, 0], 1)) : pt.p, finRot: (moved && pt.move.r) ? pt.move.r : pt.r }); // 합쳐지는 묶음(settle)은 모두 한꺼번에 내려온다 // ex: 14단계처럼 "결합 전"으로 띄운 부품도 제자리(결합 후)가 있다
+        list.push({ step: si + 1, eff: effStepOf(pt, si + 1, upTo), noFreeze: !!(pt.noFreeze && pt.noFreeze.includes(upTo)), name: pt.n, label: pt.n + ' ' + numOf.get(pt0) + '번', type, mount: 'floor', pos: pos.slice(), quat: b.quat(rot), rot: rot.slice(), isNew, final: (isNew && dirH) || ex ? base.slice() : null, order: settling ? (pt.settleOrder || 1) : (pt.joinOrder || (ex && ex.order) || 1), arrowFrom: pt.arrowFrom || null, skipMates: pt.skipMates || null, sideUntil: pt.side ? pt.side.until : null, fin: moved ? (pt.move.p || add(pt.p, pt.move.by || [0, 0, 0], 1)) : pt.p, finRot: (moved && pt.move.r) ? pt.move.r : pt.r }); // 합쳐지는 묶음(settle)은 모두 한꺼번에 내려온다 // ex: 14단계처럼 "결합 전"으로 띄운 부품도 제자리(결합 후)가 있다
       });
     });
     deferredShift.forEach((fn) => fn());
@@ -395,13 +395,14 @@
       b.type = 'button';
       b.dataset.step = String(i + 1);
       b.className = 'ghost';
-      b.style.cssText = 'width:100%; text-align:left; padding:3px 8px; border-radius:8px; font-size:12.5px; font-weight:400;';
+      b.style.cssText = 'width:100%; text-align:left; padding:3px 8px; border-radius:8px; font-size:12.5px; font-weight:400; white-space:pre-line;';
       b.textContent = stepTag(i + 1) + '. ' + (s.note || '');
       li.appendChild(b);
       ol.appendChild(li);
     });
   }
   function markStepButtons() {
+    const myStep = step;
     document.querySelectorAll('#asmOrderList button').forEach((b) => {
       const cur = Number(b.dataset.step) === step;
       b.style.fontWeight = cur ? '800' : '400';
@@ -416,6 +417,11 @@
       b.style.opacity = n < step ? '0.75' : '1'; // 이미 지나온 단계는 살짝 연하게
       b.setAttribute('aria-current', cur ? 'step' : 'false');
     });
+    // 왼쪽 "조립 순서" 목록: 지금 단계의 설명이 목록 맨 위에 오게 맞춘다(관리자 지시 2026-10-05)
+    { const ol = $('asmOrderList'), cb = ol && ol.querySelector('button[aria-current="step"]');
+      if (cb) ol.scrollTop += cb.getBoundingClientRect().top - ol.getBoundingClientRect().top; }
+    // 오른쪽 작업 화면은 단계가 바뀔 때마다 맨 위로 되돌려, 3D 화면과 버튼 줄이 항상 같은 자리에 오게 한다(스크롤이 남아 밀려 보이던 문제)
+    { const stg = document.querySelector('.stage'); if (stg) { stg.scrollTop = 0; [120, 500, 1200].forEach((ms) => setTimeout(() => { if (step === myStep) stg.scrollTop = 0; }, ms)); } }   // 화면이 늦게 자리 잡는 동안(모델·창고 카드) 밀려 올라가도 다시 맨 위로
     // 화면 위 단계 줄: 지금 단계가 가운데 오게 옆으로 밀어 준다
     const box = $('asmStageSteps'), curBtn = box.querySelector('button[aria-current="step"]');
     if (curBtn) box.scrollLeft = curBtn.offsetLeft - box.clientWidth / 2 + curBtn.offsetWidth / 2;
@@ -426,7 +432,7 @@
     const { list, guides, missing, stored, storedThumb, storedSlot, storedSlots, storedThumbBy, storedTypes, targets, orders, viewEff } = buildList(step);
     window.__asmStored = storedTypes; // design.html 의 사용 부품 목록이 읽는다
     { const sp = posesDB[step]; // ❄ 로 기록한 모습이 있으면 그 자리·자세로 보여 준다(제자리 target 은 그대로라 결합은 원래 자리로 된다)
-      if (sp) list.forEach((d) => { const o = sp[d.label]; if (o && Array.isArray(o.p)) { d.pos = o.p.slice(); if (Array.isArray(o.r)) d.rot = o.r.slice(); if (Array.isArray(o.q)) d.quat = o.q.slice(); } });
+      if (sp) list.forEach((d) => { const o = d.noFreeze ? null : sp[d.label]; if (o && Array.isArray(o.p)) { d.pos = o.p.slice(); if (Array.isArray(o.r)) d.rot = o.r.slice(); if (Array.isArray(o.q)) d.quat = o.q.slice(); } });
       lastLabels = list.map((d) => d.label); }
     // 다른 창고 화면을 보는 중에도 오른쪽 카드는 모든 창고의 내용을 그대로 보여 준다(화면에 그리는 것은 보는 창고뿐, 나머지 창고는 개수만 표시)
     const viewing0 = viewSlot !== null && viewSlot !== slotOfStep(step);
@@ -471,7 +477,7 @@
     if (b.turn && def.camera) { b.turn(th, ph); lastCamKey = camKey; } // 단계를 열 때마다 그 단계의 시점으로 — 돌려 놓은 각도는 다음 단계로 넘어가지 않는다(사용자 지시 2026-10-03)
     const sv = savedCams[camStep]; // 관리자가 저장한 시점(보는 중심·거리까지)이 있으면 그걸로 연다
     if (sv && b.camera && Array.isArray(sv.target)) b.camera({ target: sv.target, radius: sv.radius, theta: sv.theta, phi: sv.phi });
-    { const myStep0 = step; setTimeout(() => { if (step === myStep0 && b.relabelGroups) b.relabelGroups(); }, 120); } // 그룹 이름은 왼쪽부터 1번
+    { const myStep0 = step; setTimeout(() => { if (step === myStep0 && b.relabelGroups) b.relabelGroups(def.steps[myStep0 - 1] && def.steps[myStep0 - 1].groupSwap); }, 120); } // 그룹 이름은 왼쪽부터 1번
     { const myStep = step, myTh = sv ? sv.theta : th, myPh = sv ? sv.phi : ph, mySrc = sv ? 'admin' : (st && st.camSrc ? st.camSrc : ''); // 교재 시점 = 단계 데이터의 방향·높이각 + 화면에 맞춘 보는 중심·거리. 카메라가 자리 잡은 뒤(0.15초) 저장해 하단 표시줄이 지금 시점과 비교한다
       setTimeout(() => { if (step !== myStep || !b.camState) return; const cs = b.camState(); baseCam = { step: myStep, th: myTh, ph: myPh, target: cs.target, radius: cs.radius, src: mySrc }; }, 150); }
     const n = total();
@@ -836,6 +842,7 @@
       const found = (window.IVS_ASSEMBLIES || []).find((a) => a.category === cat.name && Number(a.volume) === Number(volume) && a.chapter === title) || null;
       if (viewing && found !== def) close();
       def = found;
+      window.__asmQtyOverride = (found && found.qtyOverride) || null; // 조립도 쪽 부품 개수가 책과 다를 때 {부품 이름: 개수}(design.html 의 필요 부품·사용 부품이 이 개수를 기준으로 하고 책 개수는 괄호로만 알린다)
       catId = found ? cat.id : null;
       catAny = cat;
       lessonFound = !!found;

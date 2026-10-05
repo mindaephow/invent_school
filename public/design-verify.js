@@ -125,6 +125,7 @@
         const outside = (k) => prior.has(k) && !arrSet.has(k) // 같이 합쳐지는 묶음 안의 결합은 뺀다
         const lack = arriving.filter((a) => {
           const q = a.ref
+          if (q.noGuide) return false // 우연히 맞닿아 보일 뿐 결합이 아닌 부품(안내 화살표 없음)
           if (!res.mated.some((m) => (m.part === a.key && outside(m.into)) || (m.into === a.key && outside(m.part)))) return false
           const got = q.move && q.move.at === si ? (q.move.marks || []) : q.side && q.side.until === si ? (q.settleMarks || []) : (q.marks || [])
           return !got.length
