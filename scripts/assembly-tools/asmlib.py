@@ -100,6 +100,26 @@ def rot_y(deg):
 def rot_z(deg):
     a = np.radians(deg); c, sn = np.cos(a), np.sin(a); return np.array([[c, -sn, 0], [sn, c, 0], [0, 0, 1]], float)
 
+# ── 부품 방향 보고(2026-10-05): 부품마다 구멍 면·돌기 면·끝돌기가 세계의 어느 방향을 보는지 적어 준다 → 교재 그림의 모양 특징과 나란히 비교한다
+def _dir_name(v):
+    v = np.array(v, float); k = int(np.argmax(np.abs(v)))
+    if abs(abs(v[k]) - 1) < 1e-3: return ("+" if v[k] > 0 else "-") + "XYZ"[k]
+    return "(%.2f,%.2f,%.2f)" % tuple(v)
+def part_orientation(pt):
+    """부품 하나: [(면 이름, 세계 방향)] — 홀면 ±축 = 구멍 입구가 보는 쪽, 돌기면 ±축 = 돌기가 나온 쪽."""
+    out = []
+    for f in faces.faces_of(pt.conn):
+        v = np.zeros(3); v[AX[f["axis"]]] = f["sign"]
+        out.append((f["key"], _dir_name(pt.R @ v), len(f["items"])))
+    return out
+def orient_report(A, steps=None):
+    """python <스크립트>.py --orient 2,4,5 처럼 부른다(steps 가 없으면 전 단계)."""
+    for st in A.steps:
+        if steps and st.index not in steps: continue
+        for pt in st.parts:
+            desc = " · ".join("%s(%d개) → %s" % (k, n, d) for k, d, n in part_orientation(pt))
+            print("%d단계 %s 중심 (%.0f, %.0f, %.0f): %s" % (st.index, pt.name, pt.p[0], pt.p[1], pt.p[2], desc))
+
 class Group:
     """끝낸 조립품을 한 부품처럼 움직이게 묶는다 (사용자 지시 2026-10-04: 1번 완성품은 부품이 아니라 그룹이 하나처럼 움직인다).
     g = A.group("1번 완성품", [부품…]);  단계.move_group(g, rot_x(90), floor=True) 처럼 돌리고 옮기면 묶음 전체가 같은 회전·이동을 받는다.

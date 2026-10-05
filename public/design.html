@@ -279,7 +279,8 @@
   /* 조립 보기 단계 줄: 3D 화면 위에 항상 떠 있어서 스크롤해도 순서가 보인다 */
   /* hidden 속성이 display:flex 에 눌려 조립 보기를 닫아도 바가 남던 문제 */
   #asmBar[hidden], .asm-stage-bar[hidden]{display:none !important;}
-  .asm-stage-bar{position:absolute; left:10px; right:10px; bottom:46px; z-index:4; background:var(--panel); border:1px solid var(--panel-border); border-radius:12px; padding:6px 8px; box-shadow:var(--shadow); display:flex; flex-direction:column; gap:5px;}
+  /* 설명 패널은 3D 화면(스케치북) 아래에 둔다 — 화면 위에 떠서 부품을 가리지 않게(관리자 지시 2026-10-04) */
+  .asm-stage-bar{position:relative; z-index:4; background:var(--panel); border:1px solid var(--panel-border); border-radius:12px; padding:6px 8px; box-shadow:var(--shadow); display:flex; flex-direction:column; gap:5px;}
   .asm-stage-note{font-size:12.5px; line-height:1.35; color:var(--ink); margin:0;}
   .asm-stage-row{display:flex; align-items:center; gap:6px;}
   .asm-stage-steps{display:flex; gap:4px; overflow-x:auto; flex:1; padding:1px 0; scrollbar-width:thin;}
@@ -604,14 +605,6 @@
             <div class="part-list-body" id="requiredListBody"></div>
           </div>
         </div>
-        <div class="asm-stage-bar" id="asmStageBar" hidden>
-          <p class="asm-stage-note" id="asmStageNote"></p>
-          <div class="asm-stage-row">
-            <button type="button" class="ghost asm-nav" id="asmStagePrev" title="이전 단계" aria-label="이전 단계">◀</button>
-            <div class="asm-stage-steps" id="asmStageSteps" aria-label="조립 단계 순서"></div>
-            <button type="button" class="ghost asm-nav" id="asmStageNext" title="다음 단계" aria-label="다음 단계">▶</button>
-          </div>
-        </div>
         <div class="scene-hint">빈 곳 드래그: 회전 · ✋이동/오른쪽 버튼/두 손가락: 화면 밀기 · 선택한 부품 드래그: 부품 이동 · 휠/핀치: 확대축소 · Ctrl+드래그: 여러 부품 한번에 고르기</div>
         <div class="viewcube-wrap">
           <div class="viewcube" id="viewCube">
@@ -631,6 +624,14 @@
           <div class="group-list" id="groupList" hidden></div>
         </div>
       </div>
+      <div class="asm-stage-bar" id="asmStageBar" hidden>
+        <p class="asm-stage-note" id="asmStageNote"></p>
+        <div class="asm-stage-row">
+          <button type="button" class="ghost asm-nav" id="asmStagePrev" title="이전 단계" aria-label="이전 단계">◀</button>
+          <div class="asm-stage-steps" id="asmStageSteps" aria-label="조립 단계 순서"></div>
+          <button type="button" class="ghost asm-nav" id="asmStageNext" title="다음 단계" aria-label="다음 단계">▶</button>
+        </div>
+      </div>
 
       <div class="modal-backdrop" id="modalBackdrop" hidden></div>
       <div class="selected-controls" id="selectedControls" hidden>
@@ -643,6 +644,10 @@
         <div id="asmNumLegend" hidden style="margin:-2px 0 6px; font-size:12px; font-weight:700;"></div>
         <div id="asmDemoBlock" hidden>
           <div style="display:flex; flex-direction:column; gap:6px; margin:6px 0 8px;">
+            <div class="asm-btn-row" style="display:flex; gap:6px;">
+              <button id="asmPlacePart" class="ghost" type="button" title="고른 부품 하나를 각도는 그대로 두고 바닥 평면에 놓아요">📥 부품 평면에 놓기</button>
+              <button id="asmPlaceGroup" class="ghost" type="button" title="고른 그룹을 통째로 각도는 그대로 두고 바닥 평면에 놓아요">📥 그룹 평면에 놓기</button>
+            </div>
             <div class="asm-btn-row" style="display:flex; gap:6px;">
               <button id="asmNumBtn" class="ghost" type="button" title="선택한 부품 한 면의 구멍·돌기에 번호를 붙여요" hidden>🔢 번호</button>
               <button id="asmCombine" class="primary" type="button" title="고른 부품 하나가 제자리 구멍으로 가서 딱 붙어요">🔗 부품 결합</button>
@@ -4863,6 +4868,27 @@
       if (assemblyGuideGroup) {
         assemblyGuideGroup.children.filter(c => idxs.includes(c.userData.idx)).forEach(dropGuideArrow);
       }
+      return 'ok';
+    },
+    // 평면에 놓기(부품 수리실의 "📥 평면에 놓기"와 같은 방식): 각도는 그대로 두고 y 위치만 가장 낮은 점이 바닥(0)에 닿게 옮긴다 — 떠 있으면 내리고 바닥 아래로 들어갔으면 올린다.
+    // 반환: 'ok' | 'none'(고른 것 없음) | 'wrong'(부품 하나용인데 그룹을 골랐거나 반대)
+    placeOnPlane(wantGroup){
+      if (!selected) return 'none';
+      if (!!selected.isGroup !== !!wantGroup) return 'wrong';
+      const list = wantGroup ? selected.members : [selected];
+      const box = new THREE.Box3();
+      // 모델 메쉬의 실제 모양 상자로만 잰다 — body 전체를 재면 안내 화살표·선택 상자·연결점 원판까지 들어가 엉뚱한 높이가 나온다
+      list.forEach((part) => {   // part.body 는 물리 몸통(position 만 있다) — 모양은 part.mesh 로 잰다
+        const mesh = part.mesh;
+        if (!mesh || !mesh.geometry) return;
+        mesh.updateMatrixWorld(true);
+        if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+        box.union(mesh.geometry.boundingBox.clone().applyMatrix4(mesh.matrixWorld));
+      });
+      if (!isFinite(box.min.y)) return 'none';
+      const dy = -box.min.y;
+      list.forEach((part) => { part.body.position.y += dy; });
+      setStatus((wantGroup ? '그룹을' : '부품을') + ' 바닥 평면에 놓았어요.', 'success');
       return 'ok';
     },
     // 이번 단계에 떠 있는 부품 전부를 제자리로 부드럽게 끼운다(재생용) — 안내(화살표·점)는 지운다.

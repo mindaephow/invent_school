@@ -272,6 +272,21 @@
     b.setSlotThumbs(m);
   }
   const isAdm = () => !!(window.__ivsIsAdmin && window.__ivsIsAdmin());
+  // 안내 모달(확인 버튼 하나): 모습·교재 샷을 저장했을 때 확실히 알려 준다(사용자 지시 2026-10-05)
+  function notice(msg, onClose) {
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;';
+    const bx = document.createElement('div');
+    bx.style.cssText = 'background:#fff;border-radius:16px;padding:22px 28px 18px;min-width:240px;max-width:80vw;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.3);font:700 15px sans-serif;color:#111827;';
+    const p = document.createElement('div'); p.textContent = msg; p.style.cssText = 'margin-bottom:16px;line-height:1.5;';
+    const ok = document.createElement('button'); ok.type = 'button'; ok.textContent = '확인';
+    ok.style.cssText = 'padding:8px 32px;border-radius:999px;border:0;background:#2563eb;color:#fff;font:700 14px sans-serif;cursor:pointer;';
+    const close = () => { ov.remove(); document.removeEventListener('keydown', onKey, true); if (onClose) onClose(); };
+    const onKey = (e) => { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); } };
+    ok.addEventListener('click', close); document.addEventListener('keydown', onKey, true);
+    bx.appendChild(p); bx.appendChild(ok); ov.appendChild(bx); document.body.appendChild(ov); ok.focus();
+  }
+  window.__ivsNotice = notice;   // design-notes.js(그리기·메모)도 같은 안내 모달을 쓴다
   const STATUS_LABEL = { done: '✅ 완료', edit: '🛠 수정중' };
   function paintStatus() {
     const adm = isAdm();
@@ -302,16 +317,31 @@
         const r1 = (v) => Math.round(v * 100) / 100, poses = {};
         ser.forEach((x, i) => { poses[lastLabels[i]] = { p: x.pos.map(r1), q: (x.quat || []).map((v) => Math.round(v * 100000) / 100000), r: (x.rot || []).map(r1) }; });
         const mine = step;
-        try { await b2.poseStore.save(def.id, mine, poses); posesDB[mine] = poses; paintStatus(); b2.status(mine + '단계 부품 모습을 기록했어요. 이제 이 단계를 열면 이 모습으로 보여요.', 'success'); }
+        try { await b2.poseStore.save(def.id, mine, poses); posesDB[mine] = poses; paintStatus(); b2.status(mine + '단계 부품 모습을 기록했어요. 이제 이 단계를 열면 이 모습으로 보여요.', 'success'); notice('모습이 저장되었습니다.'); }
         catch (e) { b2.status('모습 기록 실패: ' + e.message + ' (supabase/assembly_poses.sql 을 실행했는지 확인)', 'error'); }
       });
     }
     { const rb = document.createElement('button'); rb.type = 'button'; rb.id = 'asmReloadBtn'; rb.hidden = true; rb.textContent = '↻ 새로고침';
-      rb.style.cssText = sb.style.cssText; rb.title = '페이지를 새로 불러오고 지금 보던 차시·단계를 다시 열어요(관리자만)';
+      rb.style.cssText = sb.style.cssText; rb.title = '지금 보는 단계 하나만 데이터를 다시 불러와요(관리자만). Shift+클릭 = 페이지 전체 새로고침';
       sb.parentNode.insertBefore(rb, sb);
-      rb.addEventListener('click', () => { // 페이지 전체를 다시 불러온다(데이터·화면 코드 모두 새 것) — 보던 차시와 단계는 다시 열어 준다
-        try { sessionStorage.setItem('ivs-asm-restore', JSON.stringify({ sel: [...document.querySelectorAll('select')].slice(0, 3).map((x) => x.value), step })); } catch (e) { /* 저장 못 해도 새로고침은 한다 */ }
-        location.reload();
+      // 지금 보는 단계 하나만 다시 불러온다(사용자 지시 2026-10-05: 15번을 고치면 15번만) — 페이지·다른 단계·카메라는 그대로. Shift 를 누르고 누르면 예전처럼 페이지 전체를 새로 불러온다.
+      rb.addEventListener('click', async (ev) => {
+        const fullReload = () => {
+          try { sessionStorage.setItem('ivs-asm-restore', JSON.stringify({ sel: [...document.querySelectorAll('select')].slice(0, 3).map((x) => x.value), step })); } catch (e) { /* 저장 못 해도 새로고침은 한다 */ }
+          notice('페이지를 새로 불러옵니다. 보던 차시와 단계는 다시 열려요.', () => location.reload());
+        };
+        if (ev.shiftKey || !def || step < 1 || step > def.steps.length) { fullReload(); return; }
+        const mine = step;
+        try {
+          const res = await fetch('design-assemblies.js?ts=' + Date.now(), { cache: 'no-store' });
+          if (!res.ok) throw new Error('데이터 파일을 못 읽었어요(' + res.status + ')');
+          const fake = {}; new Function('window', await res.text())(fake); // 파일은 window.IVS_ASSEMBLIES 에 넣기만 한다 — 가짜 window 에 받아 이 단계만 꺼낸다
+          const nd = (fake.IVS_ASSEMBLIES || []).find((x) => x.id === def.id), ns = nd && nd.steps && nd.steps[mine - 1];
+          if (!ns) throw new Error('새 데이터에서 ' + mine + '단계를 못 찾았어요');
+          const old = def.steps[mine - 1]; Object.keys(old).forEach((k) => delete old[k]); Object.assign(old, ns);
+          go(mine);
+          notice(mine + '단계만 다시 불러왔어요. 다른 단계와 화면 위치는 그대로예요. (Shift 를 누르고 누르면 페이지 전체를 새로 불러와요)');
+        } catch (e) { notice(mine + '단계를 다시 불러오지 못했어요: ' + e.message); }
       });
     }
     { const tb = document.createElement('button'); tb.type = 'button'; tb.id = 'asmThumbBtn'; tb.hidden = true; tb.textContent = '📷 썸네일 저장';
@@ -321,15 +351,19 @@
         const b2 = bridge(); if (!b2 || !b2.thumbStore || !b2.snapshot || !def || curSlot < 0) return;
         const img = b2.snapshot(300); if (!img) { b2.status('사진을 만들지 못했어요.', 'error'); return; }
         const mine = step, mySlot = curSlot;
-        try { await b2.thumbStore.save(def.id, mine, mySlot, img); thumbsDB[mine + ':' + mySlot] = img; pushSlotThumbs(); b2.status(mine + '단계 · 창고 ' + mySlot + ' 썸네일을 저장했어요.', 'success'); }
-        catch (e) { b2.status('썸네일 저장 실패: ' + e.message + ' (supabase/assembly_thumbs.sql 을 실행했는지 확인)', 'error'); }
+        try { await b2.thumbStore.save(def.id, mine, mySlot, img); thumbsDB[mine + ':' + mySlot] = img; pushSlotThumbs(); b2.status(mine + '단계 · 창고 ' + mySlot + ' 썸네일을 저장했어요.', 'success'); notice('썸네일이 저장되었습니다. (' + mine + '단계 · 창고 ' + mySlot + ')'); }
+        catch (e) { b2.status('썸네일 저장 실패: ' + e.message + ' (supabase/assembly_thumbs.sql 을 실행했는지 확인)', 'error'); notice('썸네일 저장에 실패했습니다: ' + e.message); }
       });
+    }
+    { // 위 줄 버튼 순서(사용자 지시 2026-10-05): 체크(상태) → 카메라 → 모습 기록 → 나머지
+      const par = sb.parentNode, first = $('asmFreezeBtn');
+      if (par && first) { par.insertBefore(sb, first); const cam = $('asmCamCopy'); if (cam) par.insertBefore(cam, first); }
     }
     sb.addEventListener('click', async () => {
       const b2 = bridge(); if (!b2 || !b2.statusStore || !def) return;
       const cur = stepStatus[step], next = !cur ? 'edit' : cur === 'edit' ? 'done' : null, mine = step;
-      try { await b2.statusStore.set(def.id, mine, next); if (next) stepStatus[mine] = next; else delete stepStatus[mine]; paintStatus(); }
-      catch (e) { b2.status('상태 저장 실패: ' + e.message + ' (supabase/assembly_status.sql 을 실행했는지 확인)', 'error'); }
+      try { await b2.statusStore.set(def.id, mine, next); if (next) stepStatus[mine] = next; else delete stepStatus[mine]; paintStatus(); notice(mine + '단계를 "' + (next === 'done' ? '완료' : next === 'edit' ? '수정중' : '상태 없음') + '"(으)로 저장했습니다.' + (next === 'done' ? ' 이제 이 단계는 확인이 끝난 단계로 보호돼요.' : '')); }
+      catch (e) { b2.status('상태 저장 실패: ' + e.message + ' (supabase/assembly_status.sql 을 실행했는지 확인)', 'error'); notice('상태 저장에 실패했습니다: ' + e.message); }
     });
   }
   function buildStepButtons() {
@@ -642,7 +676,7 @@
     $('asmClose').addEventListener('click', close);
     if ($('asmAllParts')) $('asmAllParts').addEventListener('click', openAllParts);
     const mm2 = $('asmMarkMove2');
-    const toggleMark = () => { const on = mm2.dataset.on !== '1'; mm2.dataset.on = on ? '1' : '0'; mm2.style.background = on ? '#f97316' : ''; mm2.style.color = on ? '#fff' : ''; mm2.textContent = on ? '📍 끝내기' : '📍 표시하기'; bridge().markMove(on); };
+    const toggleMark = () => { const on = mm2.dataset.on !== '1'; mm2.dataset.on = on ? '1' : '0'; mm2.style.background = on ? '#f97316' : ''; mm2.style.color = on ? '#fff' : ''; mm2.textContent = on ? '📍 끝내기' : '📍 표시하기'; bridge().markMove(on); notice(on ? '표시 모드를 켰어요. 화면의 부품을 누르면 누른 자리에 주황 표시가 생기고, 다시 누르면 지워져요. 끝나면 [끝내기]를 누르세요.' : '표시 모드를 껐어요. 표시한 곳을 사진으로 남기려면 [수정스샷]을 누르세요.'); };
     // 📸 수정스샷: 화면+번호+이동 목록을 한 장의 그림으로 만들어 클립보드에 복사하고 PNG로 내려받는다(번호 = 옮긴 순서)
     // 안내는 화면 아래쪽 글줄이라 눈에 안 띄므로, 스케치북 한가운데 위에 잠깐 큼직하게도 띄운다
     const toast = (msg, bad) => {
@@ -655,14 +689,15 @@
       const b = bridge();
       const header = (def ? def.chapter : '') + ' 조립도 · ' + (step === last() ? '완성' : stepTag(step) + '단계') + ' · 표시하기';
       let blob = null;
-      try { blob = await b.markCapture(header); } catch (e) { toast('사진 만들기 실패: ' + (e && e.message || e), true); return; }
-      if (!blob) { toast('표시가 없어요. 먼저 "📍 표시하기"를 누르고 화면의 부품을 눌러 주황 표시를 만든 뒤 눌러 주세요.', true); return; }
+      try { blob = await b.markCapture(header); } catch (e) { toast('사진 만들기 실패: ' + (e && e.message || e), true); notice('사진 만들기에 실패했습니다: ' + (e && e.message || e)); return; }
+      if (!blob) { toast('표시가 없어요. 먼저 "📍 표시하기"를 누르고 화면의 부품을 눌러 주황 표시를 만든 뒤 눌러 주세요.', true); notice('표시가 없어요. 먼저 [표시하기]를 누르고 화면의 부품을 눌러 주황 표시를 만든 뒤 눌러 주세요.'); return; }
       let copied = false;
       try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); copied = true; } catch (e) { /* 복사 권한이 없으면 다운로드만 */ }
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob); a.download = '수정스샷_' + (def ? def.chapter : '') + '_' + (step === last() ? '완성' : stepTag(step) + '단계') + '.png';
       document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
       toast(copied ? '📸 사진을 복사하고 내려받았어요 — Ctrl+V로 붙여넣어 보내 주세요' : '📸 사진을 내려받았어요(복사는 안 됐어요) — 파일을 보내 주세요');
+      notice(copied ? '수정스샷이 복사되고 내려받아졌습니다. Ctrl+V로 붙여넣어 보내 주세요.' : '수정스샷이 내려받아졌습니다(복사는 안 됐어요). 파일을 보내 주세요.');
       b.status(copied ? '사진을 복사하고 내려받았어요. 붙여넣기(Ctrl+V)로 보내 주세요.' : '사진을 내려받았어요(복사는 안 됐어요). 파일을 보내 주세요.', 'success');
     };
 
@@ -697,6 +732,13 @@
       if (r === 'none') bridge().status('먼저 그룹을 눌러서 고르세요. 부품 하나는 [부품 결합] 을 쓰세요.', 'warn');
       else if (r === 'notTarget') bridge().status('이 그룹에는 이번 단계에서 끼우는 부품이 없어요. 떠 있는 그룹을 눌러 보세요.', 'warn');
     });
+    const placeOn = (wantGroup) => {
+      const r = bridge().placeOnPlane(wantGroup);
+      if (r === 'none') bridge().status('먼저 ' + (wantGroup ? '그룹' : '부품 하나') + '을(를) 눌러서 고르세요.', 'warn');
+      else if (r === 'wrong') bridge().status(wantGroup ? '그룹이 아니라 부품 하나를 골랐어요. 부품은 [부품 평면에 놓기] 를 쓰세요.' : '부품이 아니라 그룹을 골랐어요. 그룹은 [그룹 평면에 놓기] 를 쓰세요.', 'warn');
+    };
+    $('asmPlacePart').addEventListener('click', () => placeOn(false));
+    $('asmPlaceGroup').addEventListener('click', () => placeOn(true));
     $('asmReset').addEventListener('click', () => { stop(); go(step); });
     $('asmOrderList').addEventListener('click', async (e) => {
       const b = e.target.closest('button[data-step]');
@@ -741,7 +783,9 @@
       }
       if (row && !$('asmCamCopy')) { // 📷: 지금 보는 각도를 "카메라 N단계: theta … phi …"로 복사 — 교재와 같은 각도로 돌린 뒤 눌러 알려 주면 그 단계 카메라로 저장한다(camSrc user)
         const cb = document.createElement('button');
-        cb.type = 'button'; cb.className = 'ghost asm-nav'; cb.id = 'asmCamCopy'; cb.textContent = '📷'; cb.title = '지금 각도를 이 단계 카메라로 복사'; cb.setAttribute('aria-label', '지금 카메라 각도 복사');
+        cb.type = 'button'; cb.id = 'asmCamCopy'; cb.textContent = '📷 카메라';
+        cb.style.cssText = 'padding:6px 12px;font-size:12px;font-weight:600;border-radius:999px;background:var(--panel);border:1px solid var(--panel-border);color:var(--ink);'; // 위 줄 버튼들과 같은 모양
+        cb.title = '지금 각도를 이 단계 카메라로 복사'; cb.setAttribute('aria-label', '지금 카메라 각도 복사');
         cb.title = '지금 보이는 모습(방향·높이각·밀기·확대)을 이 단계의 시점으로 저장 — 관리자 전용';
         cb.addEventListener('click', async () => {
           const b2 = bridge(); if (!b2 || !b2.camState) return;
@@ -756,18 +800,14 @@
             savedCams[myStep] = cam;
             baseCam = { step: myStep, th: cam.theta, ph: cam.phi, target: cam.target, radius: cam.radius, src: 'admin' };
             b2.status(myStep + '단계 시점을 저장했습니다. 이제 이 단계를 열면 이 모습으로 보여요.', 'success');
+            notice('교재 샷이 저장되었습니다.');
           } catch (e) { b2.status('시점 저장에 실패했어요: ' + e.message, 'error'); }
         });
-        row.appendChild(cb);
-        const rb = document.createElement('button');
-        rb.type = 'button'; rb.className = 'ghost asm-nav'; rb.id = 'asmCamReset'; rb.textContent = '⟲'; rb.title = '이 단계에 저장한 시점을 지우고 기본 시점으로 — 관리자 전용'; rb.setAttribute('aria-label', '저장한 시점 지우기');
-        rb.addEventListener('click', async () => {
-          const b2 = bridge(); if (!b2 || !b2.camStore || !savedCams[step]) { if (b2) b2.status('이 단계에는 저장한 시점이 없어요.', 'info'); return; }
-          const myStep = step;
-          try { await b2.camStore.remove(def.id, myStep); delete savedCams[myStep]; render(); b2.status(myStep + '단계 저장 시점을 지웠어요. 기본 시점으로 보여요.', 'success'); }
-          catch (e) { b2.status('지우기에 실패했어요: ' + e.message, 'error'); }
-        });
-        row.appendChild(rb);
+        { // 📷 카메라는 위 줄(체크·모습 기록 버튼이 있는 줄)로 옮겼다 — 체크 → 카메라 → 모습 기록 순서
+          const host = $('asmMarkMove2'), fz = $('asmFreezeBtn'), st0 = $('asmStatusBtn');
+          if (host) host.parentNode.insertBefore(cb, fz && fz.parentNode === host.parentNode ? fz : host); else row.appendChild(cb);
+          if (st0 && fz && st0.parentNode === fz.parentNode) fz.parentNode.insertBefore(st0, cb);
+        }
       }
     }
     $('asmStageNext').addEventListener('click', stopPlayClick(() => go(step + 1)));

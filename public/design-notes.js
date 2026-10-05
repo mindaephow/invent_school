@@ -27,10 +27,10 @@
   new ResizeObserver(fit).observe(wrap); fit();
 
   // 버튼
-  // 스케치북 아래쪽 오른쪽 끝에 둔다(위쪽 버튼 줄은 "스케치북" 글자와 겹친다)
+  // (관리자 지시 2026-10-04) 버튼 줄은 3D 화면 위에 떠서 부품을 가리지 않도록 스케치북 바로 아래, 설명 패널 위에 둔다
   const dock = document.createElement('div');
-  dock.style.cssText = 'position:absolute;right:10px;bottom:10px;z-index:5;display:flex;gap:6px;';
-  wrap.appendChild(dock);
+  dock.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;';
+  { const bar0 = document.getElementById('asmStageBar'); if (bar0) bar0.parentNode.insertBefore(dock, bar0); else wrap.parentNode.insertBefore(dock, wrap.nextSibling); }   // 순서: 스케치북 → 버튼 줄 → 설명 패널
   function mkBtn(text, title) {
     const b = document.createElement('button');
     b.type = 'button'; b.textContent = text; b.title = title; b.setAttribute('aria-pressed', 'false');
@@ -77,13 +77,19 @@
     noteLayer.style.cursor = mode === 'memo' ? 'copy' : '';
     noteLayer.querySelectorAll('.ivs-note').forEach((n) => { n.style.pointerEvents = 'auto'; });
   }
-  function setMode(m) { mode = mode === m ? null : m; sync(); }
+  function setMode(m) {
+    mode = mode === m ? null : m; sync();
+    const say = window.__ivsNotice; if (!say) return;
+    if (m === 'draw') say(mode === 'draw' ? '그리기를 켰어요. 스케치북 위를 끌면 손으로 그려져요(저장되지 않아요). 오른쪽 줄에서 색·굵기·지우개를 고르고, 끝나면 [그리기]를 다시 누르세요.' : '그리기를 껐어요. 그림은 그대로 보이고, 이제 끌면 다시 3D가 돌아가요.');
+  }
   drawBtn.onclick = () => setMode('draw');
   // 메모 버튼을 누르면 바로 메모지가 스케치북 가운데쯤에 나온다(누를 때마다 하나씩, 조금씩 비껴서). 끌어서 옮기고 ✕로 지운다.
   let memoCount = 0;
   memoBtn.onclick = () => {
     const w = noteLayer.clientWidth || 300, h = noteLayer.clientHeight || 300, k = memoCount++ % 6;
     addNote(Math.max(8, w / 2 - 70 + k * 18), Math.max(8, h / 3 + k * 18));
+
+    if (window.__ivsNotice) window.__ivsNotice('메모지를 붙였어요. 끌어서 옮기고 글을 쓰며, ✕를 누르면 지워져요(저장되지 않아요).');
   };
 
   // 그리기
