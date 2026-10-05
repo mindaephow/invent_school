@@ -120,6 +120,34 @@ def orient_report(A, steps=None):
             desc = " · ".join("%s(%d개) → %s" % (k, n, d) for k, d, n in part_orientation(pt))
             print("%d단계 %s 중심 (%.0f, %.0f, %.0f): %s" % (st.index, pt.name, pt.p[0], pt.p[1], pt.p[2], desc))
 
+def floor_check(A, tol=0.5):
+    """바닥 아래로 내려가는 부품 검사(관리자 기본 규칙 2026-10-05: 조립도는 바닥 아래로 내려가지 않게).
+    부품마다 ① 제자리(앞으로 옮겨지는 단계가 있으면 건너뜀) ② 새로 놓일 때 띄운 자리(옆자리면 옆자리 자세, dir·hover 만큼) ③ 옆자리에서 합쳐질 때 띄운 자리의 가장 낮은 점이 y 0 보다 tol 넘게 낮으면 모은다.
+    반환: [(단계, 부품 이름, 가장 낮은 y, 어느 자리)]"""
+    out = []
+    def low(pt, p, R, off=(0, 0, 0)):
+        size = (pt.conn or {}).get("size")
+        if not size: return None
+        half = np.abs(np.array(R, float)[1]) @ (np.array(size, float) / 2)
+        return float(np.array(p, float)[1] + off[1] - half)
+    for st in A.steps:
+        for pt in st.parts:
+            ex = pt.extra; side = ex.get("side")
+            dirv = ex.get("dir"); hv = ex.get("hover") or (20 if ex.get("recv") else 22)
+            off = tuple(np.array(dirv, float) * hv) if dirv else (0, 0, 0)
+            checks = []
+            if side:
+                checks.append(("옆자리", side["p"], euler_to_R(side["r"]), off))
+                sd = ex.get("settleDir")
+                if sd: checks.append(("합쳐질 때", pt.p, pt.R, tuple(np.array(sd, float) * (ex.get("settleHover") or 22))))
+            else:
+                checks.append(("새로 놓일 때", pt.p, pt.R, off))
+                if "move" not in ex: checks.append(("제자리", pt.p, pt.R, (0, 0, 0)))
+            for where, p, R, o in checks:
+                y = low(pt, p, R, o)
+                if y is not None and y < -tol: out.append((st.index, pt.name, round(y, 1), where))
+    return out
+
 class Group:
     """끝낸 조립품을 한 부품처럼 움직이게 묶는다 (사용자 지시 2026-10-04: 1번 완성품은 부품이 아니라 그룹이 하나처럼 움직인다).
     g = A.group("1번 완성품", [부품…]);  단계.move_group(g, rot_x(90), floor=True) 처럼 돌리고 옮기면 묶음 전체가 같은 회전·이동을 받는다.
@@ -668,6 +696,9 @@ def part_dict(pt, final_of=None):
 
 def export_steps(A):
     out = []
+    _legacy = A.id in ('cubo-1-airplane', 'cubo-1-autogun', 'cubo-1-soccer', 'cubo-1-trike')   # 규칙(2026-10-05)보다 먼저 만든 조립도는 알림만
+    for _si, _nm, _y, _wh in floor_check(A):   # 관리자 기본 규칙: 조립도는 바닥 아래로 내려가지 않게 — 새 조립도는 build.py 가 [경고] 로 막는다
+        print('%s 바닥 아래로 내려가는 부품: %d단계 %s (가장 낮은 y %.1f, %s)' % ('[알림]' if _legacy else '[경고]', _si, _nm, _y, _wh))
     for st in A.steps:
         o = {"note": st.note}
         if st.cam:
