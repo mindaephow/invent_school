@@ -175,6 +175,7 @@
         const pt = flipOn && !pt0.noflip ? flipPt(pt0, target) : pt0; // 뒤집기 전 방향으로 보여 주는 단계(noflip: 로봇과 따로 만드는 손잡이는 그대로)
         const type = b.resolve(pt.n, catId);
         if (!type) { if (!missing.includes(pt.n)) missing.push(pt.n); return; }
+        if (pt.finalOnly && target <= n) return; // finalOnly: 완성 화면에서만 보이는 부품(예: 롤링봇 장전한 작은바퀴)
         if (viewS !== null) { // 창고 화면 보기: 보관 중이던 묶음 중 이 창고에 있는 것만 보이고, 지금 작업하던 부품은 숨긴다
           if (!(pt.hideAt && pt.hideAt.includes(upTo))) return;
           const k3 = (pt.store && typeof pt.store === 'object' ? pt.store[upTo] : pt.store) || '보관 중';
@@ -188,7 +189,8 @@
         // lift: 다 만든 묶음(총몸·기둥)이 받침 위에 띄워져 있다가(from~at 직전 단계) at 단계에 위에서 내려와 결합한다(교재 29) — { from, at, by, dir, hover, marks }
         if (pt.lift && !useSide && upTo >= (pt.lift.from || 0) && upTo < pt.lift.at) base = add(base, pt.lift.by || [0, 0, 0], 1);
         if (pt.asideAt && pt.asideAt[upTo]) base = add(base, pt.asideAt[upTo], 1); // asideAt: 이 단계에서는 카메라 밖 옆자리에 치워 둔다(드라마 촬영처럼 화면엔 안 나오지만 옆에 있다) — 다음 단계에서 제자리
-        const rot = useSide ? pt.side.r : (moved && pt.move.r ? pt.move.r : pt.r);
+        let rot = useSide ? pt.side.r : (moved && pt.move.r ? pt.move.r : pt.r);
+        if (pt.poseAt && pt.poseAt[target]) { base = pt.poseAt[target].p; rot = pt.poseAt[target].r; } // poseAt: 이 단계에서만 다른 자세(회전 포함)로 보여 준다(예: 롤링봇 27·28번은 팔 조립품을 눕혀서 조립 — 앞뒤 단계는 세운 자세)
         // 이번 단계에 새로 놓이거나(또는 옆자리에서 제자리로 들어가는) 부품 — 완성 단계에선 없다
         const isNew = target <= n && (si + 1 === target || (pt.side && pt.side.until === target) || (pt.move && pt.move.at === target) || (pt.lift && pt.lift.at === target));
         let pos = base;
@@ -294,7 +296,7 @@
       box.querySelectorAll('button[data-step]').forEach((b) => { const i = Number(b.dataset.step), st = adm ? stepStatus[i] : null, tag = i === last() ? '완성' : stepTag(i);
         b.textContent = tag + (st === 'done' ? ' ✓' : st === 'edit' ? ' 🛠' : ''); }); });
     const sb = $('asmStatusBtn'); if (!sb) return;
-    sb.hidden = !adm || step < 1 || step >= last();
+    sb.hidden = !adm || step < 1;   // 완성에도 체크·모습 기록 버튼을 보인다(사용자 지시 2026-10-05)
     { const tb = $('asmThumbBtn'); if (tb) tb.hidden = sb.hidden; }
     { const rb = $('asmReloadBtn'); if (rb) rb.hidden = !adm || step < 0; }
     { const fb = $('asmFreezeBtn'); if (fb) fb.hidden = sb.hidden; }
@@ -311,7 +313,7 @@
       fb.style.cssText = sb.style.cssText; fb.title = '지금 부품들의 위치·회전을 이 단계의 모습으로 기록해요(관리자만). 기록한 단계는 열 때 이 모습으로 보여요';
       sb.parentNode.insertBefore(fb, sb);
       fb.addEventListener('click', async () => {
-        const b2 = bridge(); if (!b2 || !b2.poseStore || !def || step < 1 || step >= last()) return;
+        const b2 = bridge(); if (!b2 || !b2.poseStore || !def || step < 1) return;
         const ser = b2.serialize();
         if (ser.length !== lastLabels.length) { b2.status('부품 수가 달라서 기록하지 못했어요. 단계를 다시 열고 눌러 주세요.', 'error'); return; }
         const r1 = (v) => Math.round(v * 100) / 100, poses = {};

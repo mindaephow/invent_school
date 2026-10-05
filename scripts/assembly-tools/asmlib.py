@@ -133,16 +133,20 @@ def floor_check(A, tol=0.5):
     for st in A.steps:
         for pt in st.parts:
             ex = pt.extra; side = ex.get("side")
+            p0, R0 = pt._base if getattr(pt, "_base", None) else (pt.p, pt.R)   # 나중에 한 덩어리로 옮겨진 부품(move)은 처음 놓인 자세로 잰다
             dirv = ex.get("dir"); hv = ex.get("hover") or (20 if ex.get("recv") else 22)
             off = tuple(np.array(dirv, float) * hv) if dirv else (0, 0, 0)
             checks = []
             if side:
                 checks.append(("옆자리", side["p"], euler_to_R(side["r"]), off))
                 sd = ex.get("settleDir")
-                if sd: checks.append(("합쳐질 때", pt.p, pt.R, tuple(np.array(sd, float) * (ex.get("settleHover") or 22))))
+                if sd: checks.append(("합쳐질 때", p0, R0, tuple(np.array(sd, float) * (ex.get("settleHover") or 22))))
             else:
-                checks.append(("새로 놓일 때", pt.p, pt.R, off))
-                if "move" not in ex: checks.append(("제자리", pt.p, pt.R, (0, 0, 0)))
+                checks.append(("새로 놓일 때", p0, R0, off))
+                if "move" not in ex: checks.append(("제자리", p0, R0, (0, 0, 0)))
+                else: checks.append(("옮긴 뒤 제자리", ex["move"]["p"], euler_to_R(ex["move"]["r"]), (0, 0, 0)))
+            for _stp, _po in (ex.get("poseAt") or {}).items():   # 단계마다 다른 자세로 보여 주는 부품(눕혀서 조립)
+                checks.append(("%s단계 자세" % _stp, _po["p"], euler_to_R(_po["r"]), (0, 0, 0)))
             for where, p, R, o in checks:
                 y = low(pt, p, R, o)
                 if y is not None and y < -tol: out.append((st.index, pt.name, round(y, 1), where))

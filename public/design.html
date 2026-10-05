@@ -2859,6 +2859,7 @@
     document.getElementById('asmDemoBlock').hidden = !demoMode; // 🔗 결합·움직임 방식·원위치는 이 창 안에
     if (p) {
       selectedLabel.textContent = p.isGroup ? `${p.set.label} 전체 · 부품 ${p.members.length}개` : (p.asmLabel ? p.asmLabel : `${PART_DEFS[p.type].label} · ${MOUNT_LABEL[p.mount]}`);
+      selectedLabel.textContent += groupTagOf(p);   // 조립 보기: 어느 창고·그룹의 부품인지 같이 보여 준다(관리자 지시 2026-10-05)
       const baseMount = p.mount.startsWith('wall') ? 'wall' : p.mount;
       document.querySelectorAll('#selectedMountSelect .mount-btn').forEach(b => b.classList.toggle('active', b.dataset.mount === baseMount));
       document.getElementById('connectToPanel').hidden = !isConnectorType(p.type);
@@ -4743,6 +4744,16 @@
   // 오른쪽 그룹 목록: 묶음마다 한 줄. 누르면 그 묶음을 해제(부품별로 움직임) ↔ 그룹(통째로 움직임). 저장은 바뀌지 않는다.
   const LOCK_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" style="vertical-align:-2px"><rect x="4.5" y="11" width="15" height="10.5" rx="2.2" fill="currentColor"/><path d="M7.8 11V8.2a4.2 4.2 0 0 1 8.4 0V11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>';
   const UNLOCK_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" style="vertical-align:-2px"><rect x="4.5" y="11" width="15" height="10.5" rx="2.2" fill="currentColor"/><path d="M7.8 11V8.2a4.2 4.2 0 0 1 8.2-1.4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>';
+  // 선택한 부품(또는 그룹)이 어느 창고의 몇 번째 그룹인지 — 오른쪽 창고 카드의 "그룹 N" 번호와 같은 규칙(창고마다 목록 순서)
+  function groupTagOf(p){
+    if (!assemblyPanelOn || !assemblyGroups.length) return '';
+    const m = p.isGroup ? (p.members && p.members[0]) : p;
+    if (!m) return '';
+    const g = assemblyGroups.find(x => !x.ghost && x.parts.includes(m));
+    if (!g) return ' · 묶인 그룹 없음';
+    const same = assemblyGroups.filter(x => x.slot === g.slot);
+    return ' · 창고 ' + g.slot + ' · 그룹 ' + (same.indexOf(g) + 1) + (g.on ? '' : ' (해제됨)');
+  }
   function refreshGroupChip(){
     const box = document.getElementById('groupList'); if (!box) return;
     box.hidden = !assemblyPanelOn;
