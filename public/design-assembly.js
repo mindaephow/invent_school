@@ -107,6 +107,7 @@
       const i = Number(String(m.part).slice(1)), j = Number(String(m.into).slice(1));
       const a = list[i], c = list[j];
       if (!a || !c || !(a.isNew || c.isNew)) return;
+      if (a.moveGroup && a.moveGroup === c.moveGroup) return; // moveGroup: 같은 단계에 한 덩어리로 같이 옮겨 붙는 부품끼리(머리·몸통 안쪽)는 안내하지 않는다 — 덩어리와 받는 판 사이만 안내(꼬마기사 14번)
       const skipM = (a.skipMates || []).concat(c.skipMates || []);
       if (skipM.length && (skipM.includes(a.name + '.' + m.peg) || skipM.includes(c.name + '.' + m.hole))) return; // skipMates: 교재가 안내 화살표를 그리지 않는 돌기(예: 3단블록 가운데 돌기)
       const oa = off(a), oc = off(c);
@@ -206,7 +207,7 @@
           pos = add(base, ex.offset, 1);
           (ex.marks || []).forEach((m) => guides.push({ from: ex.from, to: m, dir: [0, -1, 0], idx: list.length }));
         }
-        if (isNew && pt.seated && !lowering) {
+        if (isNew && pt.seated && !lowering && !(moving && pt.moveGuide)) { // moveGuide: seated 부품이 move 로 옮겨 붙는 단계에서는 링만 칠하지 않고 화살표도 그린다(꼬마기사 14번 모터)
           // seated: 교재가 이미 꽂아 둔 모양으로 그리는 부품(리벳 등) — 떠서 내려오지 않고 제자리에 두고, 꽂힌 구멍에 초록 원만 칠한다(교재 23·25·27)
           (pt.marks || []).forEach((m) => guides.push({ from: m, to: m, dir: dirH || [0, 1, 0], idx: list.length, ringOnly: true }));
         } else if (isNew && dirH && pt.noGuide) {
@@ -234,7 +235,7 @@
         }
         // holeMarks: 프레임 구멍에 고정된 결합 위치 원(교재처럼 판 구멍에 표시, 부품이 움직여도 그 자리)
         if (isNew && !moving && pt.holeMarks) pt.holeMarks.forEach((m) => guides.push({ from: m, to: m, dir: dirH || [0, 1, 0], idx: list.length, ringOnly: true }));
-        list.push({ step: si + 1, eff: effStepOf(pt, si + 1, upTo), noFreeze: !!(pt.noFreeze && pt.noFreeze.includes(upTo)), name: pt.n, label: pt.n + ' ' + numOf.get(pt0) + '번', type, mount: 'floor', pos: pos.slice(), quat: b.quat(rot), rot: rot.slice(), isNew, final: (isNew && dirH) || ex ? base.slice() : null, order: settling ? (pt.settleOrder || 1) : (pt.joinOrder || (ex && ex.order) || 1), arrowFrom: pt.arrowFrom || null, skipMates: pt.skipMates || null, sideUntil: pt.side ? pt.side.until : null, fin: moved ? (pt.move.p || add(pt.p, pt.move.by || [0, 0, 0], 1)) : pt.p, finRot: (moved && pt.move.r) ? pt.move.r : pt.r }); // 합쳐지는 묶음(settle)은 모두 한꺼번에 내려온다 // ex: 14단계처럼 "결합 전"으로 띄운 부품도 제자리(결합 후)가 있다
+        list.push({ step: si + 1, eff: effStepOf(pt, si + 1, upTo), noFreeze: !!(pt.noFreeze && pt.noFreeze.includes(upTo)), name: pt.n, label: pt.n + ' ' + numOf.get(pt0) + '번', type, mount: 'floor', pos: pos.slice(), quat: b.quat(rot), rot: rot.slice(), isNew, final: (isNew && dirH) || ex ? base.slice() : null, order: settling ? (pt.settleOrder || 1) : (pt.joinOrder || (ex && ex.order) || 1), moveGroup: (moving && pt.moveGroup) || null, arrowFrom: pt.arrowFrom || null, skipMates: pt.skipMates || null, sideUntil: pt.side ? pt.side.until : null, fin: moved ? (pt.move.p || add(pt.p, pt.move.by || [0, 0, 0], 1)) : pt.p, finRot: (moved && pt.move.r) ? pt.move.r : pt.r }); // 합쳐지는 묶음(settle)은 모두 한꺼번에 내려온다 // ex: 14단계처럼 "결합 전"으로 띄운 부품도 제자리(결합 후)가 있다
       });
     });
     deferredShift.forEach((fn) => fn());
