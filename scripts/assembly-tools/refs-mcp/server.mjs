@@ -55,7 +55,7 @@ server.registerTool('refs_fit', {
 
 server.registerTool('refs_render', {
   description: '③ refs_fit 으로 맞춘 판들을 써서, 부품만 잘라(crop) 글씨를 지우고(erase) 수평 기준 판(ref)의 가운데 줄이 가로선이 되게 돌린 뒤 2장을 만든다: NN_1 = 1차 격자(잘라 낸 원본 위), NN_2 = 2차 격자(돌린 그림 위 + 파란 수평 기준선). index.json 도 갱신(로컬 파일). 올리기는 refs_register.',
-  inputSchema: { name: z.string(), step: z.number().int(), plates: z.array(z.object({ label: z.string().describe('refs_fit 에서 쓴 label'), name: z.string().optional().describe('화면에 쓸 판 이름. 예: 위판 59프레임'), ref: z.boolean().optional().describe('수평 기준 판(단계마다 정확히 1개)') })).min(1), note: z.string().optional().describe('설명에 덧붙일 말'), crop: z.array(z.number()).length(4).optional().describe('부품만 남길 영역 [x0,y0,x1,y1](원본 좌표) — 쪽 테두리·글씨·쪽 번호를 빼고 잡는다'), erase: z.array(z.array(z.number()).length(4)).optional().describe('crop 안에 끼어 있는 글씨·이름표·아이콘 영역들 [[x0,y0,x1,y1],...] — 흰색으로 지운다') },
+  inputSchema: { name: z.string(), step: z.number().int(), plates: z.array(z.object({ label: z.string().describe('refs_fit 에서 쓴 label'), name: z.string().optional().describe('화면에 쓸 판 이름. 예: 위판 59프레임'), ref: z.boolean().optional().describe('수평 기준 판(단계마다 정확히 1개)') })).describe('판이 없는 단계(기어·축만 나오는 단계)는 빈 배열 [] — 격자 없이 부품만 잘라 낸 원본 1장(NN_1, 설명 ①)만 만든다'), note: z.string().optional().describe('설명에 덧붙일 말'), crop: z.array(z.number()).length(4).optional().describe('부품만 남길 영역 [x0,y0,x1,y1](원본 좌표) — 쪽 테두리·글씨·쪽 번호를 빼고 잡는다'), erase: z.array(z.array(z.number()).length(4)).optional().describe('crop 안에 끼어 있는 글씨·이름표·아이콘 영역들 [[x0,y0,x1,y1],...] — 흰색으로 지운다') },
 }, async (a) => {
   try {
     const plates = []

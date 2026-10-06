@@ -91,6 +91,17 @@ def level_alpha(H, cols, rows):
     if b[0] < a[0]: a, b = b, a
     return float(np.degrees(np.arctan2(-(b[1] - a[1]), b[0] - a[0]))), a, b
 
+def render_plain(name, step, d, im):
+    """판이 없는 단계: NN_1 = 부품만 잘라 낸 원본 1장(설명 앞 글자 ① = 화면에서 "교재 원본"으로 보인다). 2차 격자는 없다."""
+    cv2.imwrite(os.path.join(d, "%02d_1.jpg" % step), im, [cv2.IMWRITE_JPEG_QUALITY, 82])
+    for k in (2, 3):
+        pk = os.path.join(d, "%02d_%d.jpg" % (step, k))
+        if os.path.exists(pk): os.remove(pk)
+    ip = os.path.join(d, "index.json"); index = json.load(open(ip, encoding="utf-8")); index = [r for r in index if not (r["step"] == step and r["idx"] in (1, 2, 3))]
+    index.append({"step": step, "idx": 1, "file": "%02d_1.jpg" % step, "note": "① 단계 %d — 부품만 잘라 낸 교재 원본(판이 없는 단계라 격자 없음)" % step})
+    index.sort(key=lambda r: (r["step"], r["idx"])); json.dump(index, open(ip, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    return {"rotated_deg": 0, "files": ["%02d_1.jpg" % step], "preview": os.path.join(d, "%02d_1.jpg" % step), "original_preview": os.path.join(d, "%02d_1.jpg" % step)}
+
 def cmd_render(a):
     """plates = [{name, cols, rows, pts:[[칸,줄,x,y]...](원본 좌표, 4개 이상), ref:true(수평 기준 판 1개)}]
     crop = [x0,y0,x1,y1] 부품만 남길 영역(원본 좌표, 쪽 테두리·글씨를 빼고), erase = [[x0,y0,x1,y1],...] 영역 안에 끼어 있는 글씨·이름표를 흰색으로 지운다.
@@ -100,6 +111,7 @@ def cmd_render(a):
     for (ex0, ey0, ex1, ey1) in a.get("erase") or []: im[int(ey0):int(ey1), int(ex0):int(ex1)] = 255   # 글씨·이름표 지우기(가위로 부품만 추출)
     h0, w0 = im.shape[:2]; cx0, cy0, cx1, cy1 = [int(v) for v in (a.get("crop") or [0, 0, w0, h0])]; cx0, cy0, cx1, cy1 = max(0, cx0), max(0, cy0), min(w0, cx1), min(h0, cy1)
     im = im[cy0:cy1, cx0:cx1].copy(); h, w = im.shape[:2]
+    if not plates: return render_plain(name, step, d, im)   # 판이 없는 단계(기어·축 등): 격자 없이 부품만 잘라 낸 원본 1장
     def Hof(p):
         src = np.array([[c - 1, r - 1] for c, r, _, _ in p["pts"]], np.float32); dst = np.array([[x - cx0, y - cy0] for _, _, x, y in p["pts"]], np.float32); return cv2.findHomography(src, dst, 0)[0]
     ref = next((p for p in plates if p.get("ref")), None); alpha = 0.0; M = np.array([[1, 0, 0], [0, 1, 0]], np.float64); nw, nh = w, h
