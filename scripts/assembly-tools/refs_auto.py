@@ -174,6 +174,8 @@ def cmd_render(a):
     name, step = a["name"], int(a["step"]); d = refs_dir(name); im0 = load_orig(name, step); plates = a["plates"]
     im = im0.copy()
     for (ex0, ey0, ex1, ey1) in a.get("erase") or []: im[int(ey0):int(ey1), int(ex0):int(ex1)] = 255   # 글씨·이름표 지우기(가위로 부품만 추출)
+    if a.get("erase_blue"):   # 파란 이름표("리벳 위치 주의" 등)의 말꼬리처럼 사각형 지우기로 못 덮는 조각: 파란색 픽셀을 흰색으로(부품 중에 파란 것은 없다)
+        hsv = cv2.cvtColor(im, cv2.COLOR_BGR2HSV); im[cv2.inRange(hsv, (100, 90, 110), (130, 255, 255)) > 0] = 255
     h0, w0 = im.shape[:2]; cx0, cy0, cx1, cy1 = [int(v) for v in (a.get("crop") or [0, 0, w0, h0])]; cx0, cy0, cx1, cy1 = max(0, cx0), max(0, cy0), min(w0, cx1), min(h0, cy1)
     im = im[cy0:cy1, cx0:cx1].copy(); h, w = im.shape[:2]
     if not plates: return render_plain(name, step, d, im)   # 판이 없는 단계(기어·축 등): 격자 없이 부품만 잘라 낸 원본 1장
