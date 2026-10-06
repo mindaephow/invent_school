@@ -1,4 +1,4 @@
-# 큐보 1권 꼬마기사(교재 100~106쪽) — 조립 프로그램(asmlib)으로 만든다.  ← 쪽 번호를 채운다 (교재 PDF 쪽 번호 = 교재 쪽 번호)
+﻿# 큐보 1권 꼬마기사(교재 100~106쪽) — 조립 프로그램(asmlib)으로 만든다.  ← 쪽 번호를 채운다 (교재 PDF 쪽 번호 = 교재 쪽 번호)
 # 순서대로 만든다: 1단계 → 확인 → 2단계 → 확인 …  (뒤에서부터 만들거나 중간부터 시작하지 않는다)
 # 각 단계: 교재 그림을 왼쪽→오른쪽, 위→아래로 읽고(부품·초록 원·화살표), get_step_context 로 직전 상태(쓴 부품·남은 부품·빈 구멍)를 본 뒤 적는다.
 # 교재 LIST(부품 목록, 24개 종류):
@@ -209,25 +209,28 @@ _xa = leg[1]["x0"]                                                   # 14번에�
 _pegx = [float(mB.peg(_id)["pos"][0]) for _id in ("p1", "p2")]       # 모터 B 바깥 면 돌기 2개의 x(간격 40)
 _XC, _XB = _xa - 50.0, _xa - min(_pegx)                              # 머리: 블록 열(x ±20)이 판 열5·열1 에, 몸통: 큰 쪽 돌기가 열8, 작은 쪽 돌기가 열12
 _RF = np.eye(3)                                                    # 그 끝이 판(−Z)을 향하게 돌린다: x → −x, z → −z
-def _to14(_q, _xo, _zref):                                         # (x,y,z) → (_xo − x, YC + (y − 20), ZL + (_zref − z)), 방향은 y 축으로 180° 돌림
-    _p0, _R0 = (_q._base if getattr(_q, "_base", None) else (_q.p, _q.R)); _p0 = np.array(_p0, float)
-    return np.array([_xo + _p0[0], YC + (_p0[1] - 20.0), ZL - (_zref - _p0[2])], float), _RF @ np.array(_R0, float)
+_RY180 = np.diag([-1.0, 1.0, -1.0])                                   # y 축 180° 돌림: x → −x, z → −z
+def _to14(_q, _xo, _zref, _spin=False, _zc=0.0):                                         # (x,y,z) → (_xo − x, YC + (y − 20), ZL + (_zref − z)), 방향은 y 축으로 180° 돌림
+    _p0, _R0 = (_q._base if getattr(_q, "_base", None) else (_q.p, _q.R)); _p0 = np.array(_p0, float); _R0 = np.array(_R0, float)
+    if _spin: _p0 = np.array([-_p0[0], _p0[1], 2.0 * _zc - _p0[2]], float); _R0 = _RY180 @ _R0   # 그 덩어리 가운데(x=0, z=_zc)를 지나는 y 축으로 180° 돌린 뒤 놓는다(관리자 지시 2026-10-06: 몸통은 케이블 연결부가 아래(+X)로, 머리도 y 축 180°)
+    return np.array([_xo + _p0[0], YC + (_p0[1] - 20.0), ZL - (_zref - _p0[2])], float), _RF @ _R0
 _head = s3.parts + s4.parts + s5.parts + s6.parts + s7.parts + s8.parts
 _body = s1.parts + s2.parts
-for _grp, _xo, _zref in ((_head, _XC, ZH + 47.5), (_body, _XB, 47.5)):
+for _grp, _xo, _zref, _sp, _zc in ((_head, _XC, ZH + 47.5, True, ZH), (_body, _XB, 47.5, True, 0.0)):
     for _q in _grp:
-        _pp, _RR = _to14(_q, _xo, _zref)
+        _pp, _RR = _to14(_q, _xo, _zref, _sp, _zc)
         _q.extra["move"] = {"at": 14, "p": rnd(_pp), "r": R_to_euler(_RR), "dir": [0, 0, -1], "hover": 0.5}
         _q.extra["hideAt"] = [h for h in _q.extra.get("hideAt", []) if h != 14]
+        if _sp: _q.extra["noFreeze"] = sorted(set(_q.extra.get("noFreeze", [])) | {14})   # 14번에 저장된 ❄ 모습 기록이 y 축 180° 돌린 새 몸통 자세를 덮지 않게(13번 리벳과 같은 방식)
         if _q.extra.get("seated"):                                 # 이미 꽂힌 모양(seated)의 리벳·모터도 머리·몸통과 함께 옆(+Z)에서 들어온다 — 안 그러면 제자리에 남아 위아래로 선 리벳처럼 보인다(관리자 지시 2026-10-06)
             _q.extra.setdefault("poseAt", {})["14"] = {"p": rnd(np.array(_pp, float) + np.array([0.0, 0.0, 0.0])), "r": R_to_euler(_RR)}
 _zf = ZL - 2.5                                                     # 판 앞면(+Z) 구멍 입구
-bf2.extra["move"]["marks"] = [[_xa - 70.0, YC + 10.0, _zf], [_xa - 70.0, YC - 10.0, _zf]]
-bw2.extra["move"]["marks"] = [[_xa - 30.0, YC + 10.0, _zf], [_xa - 30.0, YC - 10.0, _zf]]
-mB.extra["move"]["marks"] = [[_xa, YC, _zf], [_xa + 40.0, YC, _zf]]
+bf1.extra["move"]["marks"] = [[_xa - 30.0, YC + 10.0, _zf], [_xa - 30.0, YC - 10.0, _zf]]            # 머리도 y 축 180° 돌려서 판(−Z 쪽 끝)에 닿는 블록은 1번 쪽(앞 줄 블록 bf1 은 칸5, 벽 블록 bw1 은 칸1)
+bw1.extra["move"]["marks"] = [[_xa - 70.0, YC + 10.0, _zf], [_xa - 70.0, YC - 10.0, _zf]]
+mA.extra["move"]["marks"] = [[_xa, YC, _zf], [_xa + 40.0, YC, _zf]]            # 몸통을 y 축 180° 돌려서 판에 닿는 모터는 A(원래 −Z 쪽 모터)
 for _q in _head + _body: _q.extra["moveGroup"] = 14                      # 한 덩어리로 옮겨 붙는 머리·몸통 부품끼리의 안쪽 화살표는 안 그린다(판과 닿는 화살표만 남김)
-mB.extra["moveGuide"] = True                                  # 14번에 옮겨 붙는 모터(seated)에도 화살표가 나오게(뷰어는 seated 부품에 링만 칠한다)
-mB.extra.get("poseAt", {}).pop("14", None)                       # moveGuide 로 뷰어가 직접 띄우므로 14번 별도 자세(poseAt)는 쓰지 않는다(이중으로 떠서 멀어짐)
+mA.extra["moveGuide"] = True                                  # 14번에 옮겨 붙는 모터(seated)에도 화살표가 나오게(뷰어는 seated 부품에 링만 칠한다)
+mA.extra.get("poseAt", {}).pop("14", None)                       # moveGuide 로 뷰어가 직접 띄우므로 14번 별도 자세(poseAt)는 쓰지 않는다(이중으로 떠서 멀어짐)
 _RX = rot_x(180); _c14 = np.array([_xa, YC, ZL], float)                  # 관리자 지시: 14번 세트를 x 축으로 180° 돌린다(판 가운데 기준)
 for _q in [leg[1][_k] for _k in ("gear", "t1", "t2", "pl", "bu", "b1", "b2", "p35", "f27")] + leg[1]["rv13"]:
     _q.extra.setdefault("poseAt", {})["14"] = {"p": rnd(_c14 + _RX @ (np.array(_q.p, float) - _c14)), "r": R_to_euler(_RX @ np.array(_q.R, float))}
@@ -255,6 +258,8 @@ for _q in _L0:
     _q.extra["moveGroup"] = "leg15"; _q.extra["moveGuide"] = True
 _zf15 = ZL - 95.0 + 2.5                                               # 판(−Z 벽) 안쪽 면(+Z) 구멍 입구
 leg[0]["pl"].extra["move"]["marks"] = [[260.0 + 10.0 * (_c - 8), YC + 10.0 * (2 - _r), _zf15] for _c, _r in ((1, 1), (1, 3), (5, 1), (5, 3), (8, 2), (12, 2))]   # 머리 끝 블록 돌기 4곳(열1·열5 줄1·줄3)과 모터 돌기 2곳(열8·열12 줄2)
+# 15번: 14번에서 돌린 머리·몸통(y 축 180°)을 그대로 이어받는다 — 15번에 저장된 ❄ 모습 기록(옛 자세)이 덮지 않게 noFreeze 15 를 단다(추가로 또 돌리지 않는다: 두 번 돌리면 옛 자세로 돌아간다)
+for _q in _head + _body: _q.extra["noFreeze"] = sorted(set(_q.extra.get("noFreeze", [])) | {15})
 A.steps[14].cam = (2.64, 1.0, False, None, None, None)                # −Z 쪽에서 비스듬히(14번 카메라를 180° 돌린 것, 눈대중 guess)
 
 # ── 16~19 ── 교재 103쪽 16~19: 로봇을 세워 놓고(교재 16부터 서 있는 모습) 양쪽 벽(315프레임 바깥 면)에 팔(37프레임)과 작은기어를 단다.
@@ -391,3 +396,8 @@ if __name__ == "__main__":
     json.dump({"steps": steps}, open("kidknight_asm.json", "w", encoding="utf-8"), ensure_ascii=False)
     open("kidknight_entry.js", "w", encoding="utf-8").write(js_entry(A))
     print(len(steps), "단계,", len(A.parts), "부품", "경고", len(A.warn))
+
+
+
+
+
