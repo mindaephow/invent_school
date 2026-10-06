@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "refs-grid": {
+      "command": "node",
+      "args": ["scripts/assembly-tools/refs-mcp/server.mjs"]
+    }
+  }
+}

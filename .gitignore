@@ -4,3 +4,5 @@ node_modules/
 *.log
 .claude/
 scripts/assembly-tools/models/
+.env.local
+scripts/assembly-tools/refs/
