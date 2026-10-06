@@ -402,6 +402,62 @@
       ol.appendChild(li);
     });
   }
+  // 교재 참고 그림(관리자 전용, 표 ivs_assembly_refs): "조립 순서" 제목 오른쪽 "🖼 완성 사진"(교재 맨 앞 완성품 사진 = 앞·뒤·정면 기준)과, 그림이 있는 단계마다 목록 오른쪽 "🖼".
+  // 단계 그림은 교재 쪽에서 잘라 낸 것(필요하면 돌리거나 확대해 칸을 센 그림도)이다. 그림 자체는 단계를 눌러 열 때만 받는다.
+  let refsMeta = {}, refsFor = null;
+  function refModal(title, rows) {
+    const old = $('asmRefModal'); if (old) old.remove();
+    const ov = document.createElement('div'); ov.id = 'asmRefModal';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(15,23,42,.62);display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:16px;';
+    const box = document.createElement('div');
+    box.style.cssText = 'background:var(--panel,#fff);color:var(--ink,#111);border-radius:14px;max-width:min(1100px,100%);width:100%;padding:14px 16px 18px;box-shadow:0 12px 40px rgba(0,0,0,.35);';
+    const hd = document.createElement('div'); hd.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:8px;margin:0 0 10px;';
+    const h = document.createElement('b'); h.textContent = title; h.style.fontSize = '15px';
+    const x = document.createElement('button'); x.type = 'button'; x.textContent = '✕ 닫기'; x.className = 'ghost'; x.style.cssText = 'padding:4px 10px;font-size:12.5px;';
+    hd.appendChild(h); hd.appendChild(x); box.appendChild(hd);
+    if (!rows.length) { const p = document.createElement('p'); p.textContent = '등록된 그림이 없어요.'; box.appendChild(p); }
+    rows.forEach((r) => {
+      const fig = document.createElement('figure'); fig.style.cssText = 'margin:0 0 14px;';
+      if (r.label) { const lb = document.createElement('div'); lb.textContent = r.label; lb.style.cssText = 'font-weight:700;font-size:13px;margin:0 0 4px;'; fig.appendChild(lb); }
+      const im = document.createElement('img'); im.src = r.img; im.alt = r.label || '교재 그림'; im.style.cssText = 'display:block;max-width:100%;height:auto;border:1px solid var(--panel-border,#d6dce8);border-radius:8px;background:#fff;'; fig.appendChild(im);
+      if (r.note) { const cp = document.createElement('figcaption'); cp.textContent = r.note; cp.style.cssText = 'font-size:12.5px;line-height:1.4;margin:6px 0 0;color:var(--ink-soft,#445);white-space:pre-line;'; fig.appendChild(cp); }
+      box.appendChild(fig);
+    });
+    ov.appendChild(box); document.body.appendChild(ov);
+    const closeIt = () => { ov.remove(); document.removeEventListener('keydown', onKey); };
+    const onKey = (e) => { if (e.key === 'Escape') closeIt(); };
+    document.addEventListener('keydown', onKey);
+    x.addEventListener('click', closeIt); ov.addEventListener('click', (e) => { if (e.target === ov) closeIt(); });
+  }
+  async function showRefs(steps, title) {
+    const b = bridge(); if (!b || !b.refStore || !def) return;
+    refModal(title, [{ img: 'data:image/gif;base64,R0lGODlhAQABAAAAACw=', label: '불러오는 중…' }]);
+    try {
+      const rows = await b.refStore.get(def.id, steps);
+      rows.sort((a, c) => (a.step - c.step) || (String(a.note) < String(c.note) ? -1 : String(a.note) > String(c.note) ? 1 : 0)); // 설명 앞 ①②③④ 순서: 원본 → 1차 격자(원본 위) → 돌린 그림 → 2차 격자(돌린 그림 + 수평 기준선)
+      const KIND = { '①': '① 교재 원본', '②': '② 1차 격자(원본 위, 원근 그대로)', '③': '③ 수평으로 돌린 그림', '④': '④ 2차 격자(돌린 그림 위 + 수평 기준선)' };
+      refModal(title, rows.map((r) => ({ img: r.img, note: String(r.note || '').replace(/^[①②③④]\s*/, ''), label: r.step === 0 ? '교재 맨 앞 완성품 사진' : r.step === 99 ? '교재 마지막 쪽 "완성" 그림' : (KIND[String(r.note || '').charAt(0)] || (r.idx ? '그림 ' + (r.idx + 1) : '교재 그림')) })));
+    } catch (e) { refModal(title, []); const p = document.querySelector('#asmRefModal p'); if (p) p.textContent = '불러오지 못했어요: ' + e.message; }
+  }
+  function paintRefButtons() { // 관리자일 때만, 그림이 등록된 곳에만 버튼을 단다
+    const head = $('asmOrderHead'), ol = $('asmOrderList');
+    if (head) { const old = head.querySelector('.asm-ref-head'); if (old) old.remove(); head.style.cssText = 'margin:0 0 4px;display:flex;align-items:center;justify-content:space-between;gap:6px;'; }
+    if (ol) ol.querySelectorAll('.asm-ref-btn').forEach((e) => e.remove());
+    if (!def || !isAdm() || refsFor !== def.id) return;
+    const mk = (txt, title, fn, cls) => { const bt = document.createElement('button'); bt.type = 'button'; bt.className = 'ghost ' + cls; bt.textContent = txt; bt.title = title; bt.style.cssText = 'flex:none;padding:2px 8px;font-size:12px;font-weight:600;border-radius:999px;'; bt.addEventListener('click', (e) => { e.stopPropagation(); fn(); }); return bt; };
+    if (head && (refsMeta[0] || refsMeta[99])) head.appendChild(mk('🖼 완성 사진', '교재 맨 앞 완성품 사진과 마지막 "완성" 그림 보기(관리자 전용) — 앞·뒤·정면은 여기서 확인', () => showRefs([0, 99], '교재 완성품 사진'), 'asm-ref-head'));
+    if (ol) ol.querySelectorAll('li').forEach((li, i) => {
+      const n = i + 1; if (!refsMeta[n]) return;
+      li.style.cssText = 'display:flex;align-items:flex-start;gap:4px;'; const bb = li.querySelector('button'); if (bb) bb.style.flex = '1 1 auto';
+      li.appendChild(mk('🖼' + (refsMeta[n].length > 1 ? refsMeta[n].length : ''), n + '단계 교재 그림 보기(관리자 전용)', () => showRefs([n], n + '단계 교재 그림'), 'asm-ref-btn'));
+    });
+  }
+  function loadRefs() { // 조립도가 정해지면 어느 단계에 그림이 있는지만 받아 온다(그림은 누를 때 받는다)
+    const b = bridge(); refsMeta = {}; refsFor = null;
+    if (!def || !isAdm() || !b || !b.refStore) { paintRefButtons(); return; }
+    const mine = def.id;
+    b.refStore.meta(mine).then((m) => { if (!def || def.id !== mine) return; refsMeta = m || {}; refsFor = mine; paintRefButtons(); });
+  }
   function markStepButtons() {
     const myStep = step;
     document.querySelectorAll('#asmOrderList button').forEach((b) => {
@@ -658,6 +714,7 @@
     savedCams = {};
     ensureStatusBtn(); posesDB = {}; if (b.poseStore) b.poseStore.load(def.id).then((m) => { posesDB = m || {}; paintStatus(); if (Object.keys(posesDB).length && viewing) render(); }); thumbsDB = {}; if (b.thumbStore) b.thumbStore.load(def.id).then((m) => { thumbsDB = m || {}; pushSlotThumbs(); }); stepStatus = {}; if (isAdm() && b.statusStore) b.statusStore.load(def.id).then((m) => { stepStatus = m || {}; paintStatus(); });
     if (b.camStore) b.camStore.load(def.id).then((m) => { savedCams = m || {}; if (viewing) render(); }); // 관리자가 저장한 단계별 시점
+    if (refsFor !== def.id) loadRefs();
     go(last()); // 처음엔 완성된 모습부터 보여준다
     pf.asmOpened = Math.round(performance.now());
     b.status('조립 보기 중이에요. 닫으면 하던 작업으로 돌아가요.', 'success');
@@ -850,6 +907,7 @@
       syncAllPartsBtn();
       ['asmOrderHead', 'asmOrderList', 'asmSteps'].forEach((id) => { if ($(id)) $(id).style.display = found ? '' : 'none'; });
       buildOrderList();
+      loadRefs(); // 관리자 전용 교재 참고 그림 버튼(🖼) — 로그인 정보가 늦게 오면 조립 보기를 열 때 한 번 더 시도한다
       if (def) buildStepButtons(); // 번호 줄도 조립 보기를 열기 전부터 보인다
       $('asmRules').innerHTML = (window.IVS_ASSEMBLY_RULES || []).map((r) => '<li>' + r + '</li>').join('');
     },

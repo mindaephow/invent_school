@@ -93,27 +93,44 @@
 },
 "15": {
 "parts": {},
-"noPart": true
+"noPart": false
 },
 "16": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 4,
+"37프레임": 1
+},
+"noPart": false
 },
 "17": {
-"parts": {},
-"noPart": true
+"parts": {
+"작은기어": 1,
+"T축": 1
+},
+"noPart": false
 },
 "18": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 4,
+"37프레임": 1
+},
+"noPart": false
 },
 "19": {
-"parts": {},
-"noPart": true
+"parts": {
+"작은기어": 1,
+"T축": 1
+},
+"noPart": false
 },
 "20": {
-"parts": {},
-"noPart": true
+"parts": {
+"39프레임": 1,
+"3단블록": 2,
+"15프레임": 1,
+"리벳": 1
+},
+"noPart": false
 },
 "21": {
 "parts": {},
