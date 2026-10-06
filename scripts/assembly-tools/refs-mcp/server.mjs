@@ -6,7 +6,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import { execFile } from 'node:child_process'
-import { readFile, writeFile, mkdir } from 'node:fs/promises'
+import { readFile, writeFile, mkdir, copyFile, rm } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -77,13 +77,20 @@ async function env(key) {
 }
 
 server.registerTool('refs_register', {
-  description: '⑤ refs/<이름>/ 의 격자 그림(idx 1~3)을 표 ivs_assembly_refs 에 올린다(같은 단계·idx 는 덮어씀). 바깥에 올라가는 작업이라 먼저 dryRun:true 로 올릴 목록을 확인하고, 사용자 확인 뒤 dryRun:false 로 실행한다.',
-  inputSchema: { name: z.string(), assemblyId: z.string().describe('조립도 id. 예: cubo-1-kidknight'), steps: z.array(z.number().int()).min(1).describe('올릴 단계 번호들'), dryRun: z.boolean().default(true) },
+  description: '⑤ refs/<이름>/ 의 격자 그림(idx 1~3)을 표 ivs_assembly_refs 에 올린다(같은 단계·idx 는 덮어씀). 바깥에 올라가는 작업이라 먼저 dryRun:true 로 목록을 확인하고, 사용자 확인 뒤 dryRun:false. via=browser(기본): 관리자로 로그인한 브라우저(/design.html?subject=robot, 조립 보기 화면)로 올린다 — 그림을 public/_refs_tmp 에 잠깐 놓고 브라우저에서 실행할 코드를 돌려준다(올린 뒤 refs_unstage). via=key: SUPABASE_SERVICE_ROLE_KEY 로 바로 올린다.',
+  inputSchema: { name: z.string(), assemblyId: z.string().describe('조립도 id. 예: cubo-1-kidknight'), steps: z.array(z.number().int()).min(1).describe('올릴 단계 번호들'), via: z.enum(['browser', 'key']).default('browser'), dryRun: z.boolean().default(true) },
 }, async (a) => {
   try {
     const index = JSON.parse(await readFile(path.join(REFS(a.name), 'index.json'), 'utf8')); const rows = index.filter((r) => a.steps.includes(r.step) && r.idx >= 1)
     if (!rows.length) throw new Error('올릴 그림이 index.json 에 없어요.')
     if (a.dryRun) return { content: [text({ dryRun: true, assemblyId: a.assemblyId, items: rows.map((r) => `단계 ${r.step} · idx ${r.idx} · ${r.file}`) })] }
+    if (a.via === 'browser') {
+      const dir = path.join(ROOT, 'public', '_refs_tmp', a.name); await mkdir(dir, { recursive: true })
+      for (const r of rows) await copyFile(path.join(REFS(a.name), r.file), path.join(dir, r.file))
+      await writeFile(path.join(dir, 'index.json'), JSON.stringify(rows), 'utf8')
+      const js = await readFile(path.join(TOOLS_DIR, 'refs_upload.js'), 'utf8')
+      return { content: [text({ staged: rows.length, next: ['개발 서버(npm run dev -- -p 3178)가 떠 있어야 해요.', '브라우저에서 관리자로 로그인해 /design.html?subject=robot 의 해당 조립 보기를 연다.', 'javascript_tool 로 아래 코드를 실행한다: ' + js + ' ;; await window.__ivsRefsUpload("' + a.name + '", "' + a.assemblyId + '", ' + JSON.stringify(a.steps) + ')', '끝나면 refs_unstage 로 임시 폴더를 지운다(커밋 금지).'] })] }
+    }
     const url = await env('SUPABASE_URL'), key = await env('SUPABASE_SERVICE_ROLE_KEY'); if (!url || !key) throw new Error('SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 가 없어요(환경변수 또는 프로젝트 루트 .env.local).')
     const body = []
     for (const r of rows) body.push({ assembly_id: a.assemblyId, step: r.step, idx: r.idx, note: r.note || '', img: 'data:image/jpeg;base64,' + (await readFile(path.join(REFS(a.name), r.file))).toString('base64'), updated_at: new Date().toISOString() })
@@ -92,6 +99,11 @@ server.registerTool('refs_register', {
     return { content: [text({ uploaded: body.length, items: rows.map((r) => `단계 ${r.step} · idx ${r.idx}`) })] }
   } catch (e) { return fail(e) }
 })
+
+server.registerTool('refs_unstage', {
+  description: 'refs_register(via=browser)가 public/_refs_tmp 에 잠깐 놓은 그림을 지운다. 브라우저 업로드가 끝난 뒤 꼭 실행한다.',
+  inputSchema: {},
+}, async () => { try { await rm(path.join(ROOT, 'public', '_refs_tmp'), { recursive: true, force: true }); return { content: [text('임시 폴더를 지웠어요.')] } } catch (e) { return fail(e) } })
 
 server.registerTool('refs_pull', {
   description: '다른 PC에서 이어 작업할 때: 표 ivs_assembly_refs 의 그림을 refs/<이름>/ 로 내려받는다(NN.jpg·NN_k.jpg 와 index.json 갱신). 이미 있는 같은 이름 파일은 덮어쓰므로 먼저 dryRun:true 로 목록을 확인한다. 격자 좌표(grids_orig.json)는 올라가지 않아서 그림만 복원된다.',

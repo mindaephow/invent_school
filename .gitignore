@@ -6,3 +6,4 @@ node_modules/
 scripts/assembly-tools/models/
 .env.local
 scripts/assembly-tools/refs/
+public/_refs_tmp/
