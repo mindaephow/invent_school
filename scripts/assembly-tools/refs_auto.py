@@ -46,12 +46,12 @@ def detect(im, bbox=None, lo=90, hi=200, amin=250, amax=2500):
 
 def lattice(cols, rows): return np.array([[c, r] for c in range(cols) for r in range(rows)], np.float32)
 
-def fit_grid(im, cols, rows, corners, lo=90, hi=200, pad=45):
+def fit_grid(im, cols, rows, corners, lo=90, hi=200, pad=45, amin=250):
     """corners = [(칸1·줄1), (끝 칸·줄1), (끝 칸·끝 줄), (칸1·끝 줄)] 의 대략적인 구멍 중심. 반환: H(격자→그림), 맞은 점 수, 평균 오차."""
     C = np.array(corners, np.float32); src = np.array([[0, 0], [cols - 1, 0], [cols - 1, rows - 1], [0, rows - 1]], np.float32)
     H = cv2.getPerspectiveTransform(src, C)
     bb = [C[:, 0].min() - pad, C[:, 1].min() - pad, C[:, 0].max() + pad, C[:, 1].max() + pad]
-    P = detect(im, bb, lo, hi); lat = lattice(cols, rows); used = 0; err = None
+    P = detect(im, bb, lo, hi, amin); lat = lattice(cols, rows); used = 0; err = None
     if len(P) < 6: return H, 0, None, P
     for it in range(14):
         q = cv2.perspectiveTransform(lat[None], H)[0]; D = np.linalg.norm(q[:, None, :] - P[None, :, :], axis=2); j = D.argmin(1); d = D.min(1)
@@ -75,7 +75,7 @@ def draw_fit(im, H, cols, rows, P=None):
 
 def cmd_fit(a):
     im = load_orig(a["name"], a["step"]); cols, rows = int(a["cols"]), int(a["rows"])
-    H, used, err, P = fit_grid(im, cols, rows, a["corners"], a.get("lo", 90), a.get("hi", 200))
+    H, used, err, P = fit_grid(im, cols, rows, a["corners"], a.get("lo", 90), a.get("hi", 200), amin=a.get("amin", 250))
     q = project(H, cols, rows); o = draw_fit(im, H, cols, rows, P)
     xs, ys = q[:, 0], q[:, 1]; x0, y0, x1, y1 = int(max(0, xs.min() - 40)), int(max(0, ys.min() - 40)), int(xs.max() + 40), int(ys.max() + 40)
     crop = cv2.resize(o[y0:y1, x0:x1], None, fx=1.3, fy=1.3, interpolation=cv2.INTER_CUBIC)
