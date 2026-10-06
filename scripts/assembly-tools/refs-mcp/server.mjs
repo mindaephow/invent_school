@@ -42,10 +42,10 @@ server.registerTool('refs_view', {
 
 server.registerTool('refs_fit', {
   description: '② 판의 모서리 구멍 4곳(대략)에서 시작해, 그림에서 자동으로 찾은 구멍 중심에 맞게 칸 격자(원근)를 반복 보정한다. 결과 미리보기를 보고 빨강 점이 구멍 한가운데에 앉았는지 눈으로 확인한다(어긋나면 corners 를 고쳐 다시). 맞춘 좌표는 label 이름으로 저장돼 refs_render 가 쓴다.',
-  inputSchema: { name: z.string(), step: z.number().int(), label: z.string().describe('이 판의 이름표(저장 키). 예: top, left-arm'), cols: z.number().int().describe('칸(가로 구멍) 수'), rows: z.number().int().describe('줄(세로 구멍) 수'), corners: z.array(z.array(z.number()).length(2)).length(4).describe('[[칸1·줄1],[끝칸·줄1],[끝칸·끝줄],[칸1·끝줄]] 구멍 중심 대략 좌표(원본 픽셀)'), lo: z.number().optional().describe('구멍 안쪽 밝기 하한(기본 90) — 검은 판이면 낮춘다'), hi: z.number().optional().describe('구멍 안쪽 밝기 상한(기본 200)') },
+  inputSchema: { name: z.string(), step: z.number().int(), label: z.string().describe('이 판의 이름표(저장 키). 예: top, left-arm'), cols: z.number().int().describe('칸(가로 구멍) 수'), rows: z.number().int().describe('줄(세로 구멍) 수'), corners: z.array(z.array(z.number()).length(2)).length(4).optional().describe('(선택) [[칸1·줄1],[끝칸·줄1],[끝칸·끝줄],[칸1·끝줄]] 구멍 중심 대략 좌표. 주면 이 모서리에서 시작해 보정한다. 안 주면 bbox 안의 구멍을 자동으로 격자에 잇는다(권장)'), bbox: z.array(z.number()).length(4).optional().describe('corners 가 없을 때 필수: 이 판의 구멍이 든 대략 영역 [x0,y0,x1,y1](원본 좌표, 다른 판 구멍이 적게 들어가게)'), col_start: z.number().int().optional().describe('자동 연결 시 검출된 가장 왼쪽 구멍이 판의 몇 번째 칸인지(기본 1; 블록에 가려 1번 칸이 안 보이면 2…)'), row_start: z.number().int().optional().describe('가장 위 구멍이 몇 번째 줄인지(기본 1)'), flip_cols: z.boolean().optional().describe('칸 번호가 오른쪽→왼쪽으로 늘어나면 true'), flip_rows: z.boolean().optional().describe('줄 번호가 아래→위로 늘어나면 true'), lo: z.number().optional().describe('구멍 안쪽 밝기 하한(기본 90) — 검은 판이면 낮춘다'), hi: z.number().optional().describe('구멍 안쪽 밝기 상한(기본 200)') },
 }, async (a) => {
   try {
-    const { label, ...rest } = a; const r = await py('fit', rest)
+    const { label, ...rest } = a; if (!rest.corners && !rest.bbox) throw new Error('corners 또는 bbox 중 하나는 있어야 해요.'); const r = await py('fit', rest); if (r.ok === false) throw new Error(r.note)
     await mkdir(path.dirname(fitFile(a.name, a.step, label)), { recursive: true })
     await writeFile(fitFile(a.name, a.step, label), JSON.stringify({ cols: a.cols, rows: a.rows, pts: r.pts, corners: r.corners }))
     const { pts, image, ...info } = r
