@@ -522,6 +522,61 @@ export function registerCuboAssemblyTools(server, getSupabase) {
       }
     )
 
+    // ── 교재 참고 그림(관리자와 Claude 만 본다): 표 ivs_assembly_refs(supabase/assembly_refs.sql). step 0 = 교재 맨 앞 완성품 사진, 99 = 교재의 "완성" 그림 ──
+    server.registerTool(
+      'get_step_refs',
+      {
+        title: '교재 참고 그림 보기(완성품 사진·단계 그림, 돌리거나 확대한 그림 포함)',
+        description: '조립도(assemblyId)에 등록해 둔 교재 그림을 이미지로 돌려준다. step 0 = 교재 맨 앞 완성품 사진(앞·뒤·정면·팔·방패가 어느 쪽인지 기준 — 조립도를 만들거나 검토하기 전에 먼저 본다), 99 = 교재 마지막 쪽 "완성" 그림, 1~ = 그 단계 그림(교재 쪽에서 잘라 낸 것, 칸을 세려고 돌리거나 확대한 그림은 설명과 함께 따로). step 을 생략하면 어느 단계에 그림이 있는지 목록만 준다. 같은 그림 파일은 scripts/assembly-tools/refs/<이름>/ 에도 있다(refs_make.py).',
+        inputSchema: {
+          assemblyId: z.string().describe('조립 데이터 id (list_assemblies). 예: cubo-1-kidknight'),
+          step: z.number().int().optional().describe('보려는 단계(0 = 완성품 사진, 99 = 교재 "완성" 그림). 생략하면 목록만'),
+        },
+      },
+      async ({ assemblyId, step }) => {
+        try {
+          const sb = getSupabase()
+          if (step === undefined || step === null) {
+            const { data, error } = await sb.from('ivs_assembly_refs').select('step, idx, note').eq('assembly_id', assemblyId).order('step').order('idx')
+            if (error) return fail(error.message + ' — 표가 없으면 supabase/assembly_refs.sql 을 Supabase SQL 에디터에서 실행해야 해요.')
+            if (!data || !data.length) return text('등록된 교재 그림이 없어요. scripts/assembly-tools/refs_make.py 로 만들고 화면(관리자)에서 올려요.')
+            return text(data.map((r) => (r.step === 0 ? '완성품 사진' : r.step === 99 ? '교재 "완성" 그림' : r.step + '단계') + (r.idx ? ' 그림' + (r.idx + 1) : '') + (r.note ? ' — ' + r.note : '')).join('\n'))
+          }
+          const { data, error } = await sb.from('ivs_assembly_refs').select('step, idx, note, img').eq('assembly_id', assemblyId).eq('step', step).order('idx')
+          if (error) return fail(error.message)
+          if (!data || !data.length) return fail(assemblyId + ' ' + step + '번 그림이 없어요(목록은 step 을 빼고 부른다).')
+          const content = []
+          data.forEach((r) => {
+            const m = /^data:(image\/[a-z]+);base64,(.+)$/.exec(r.img || '')
+            content.push({ type: 'text', text: (step === 0 ? '교재 맨 앞 완성품 사진' : step === 99 ? '교재 마지막 쪽 "완성" 그림' : step + '단계 그림' + (r.idx ? ' ' + (r.idx + 1) : '')) + (r.note ? ' — ' + r.note : '') })
+            if (m) content.push({ type: 'image', data: m[2], mimeType: m[1] })
+          })
+          return { content }
+        } catch (e) { return fail(e.message) }
+      }
+    )
+
+    server.registerTool(
+      'set_step_ref',
+      {
+        title: '교재 참고 그림 올리기(한 장)',
+        description: '교재 그림 한 장(JPEG base64)을 조립도·단계·순서(idx)에 등록한다. 이미 있으면 덮어쓴다. 보통은 scripts/assembly-tools/refs/<이름>/ 의 파일을 화면(관리자 로그인)에서 올리므로 직접 부를 일은 거의 없다.',
+        inputSchema: {
+          assemblyId: z.string(), step: z.number().int().describe('0 = 완성품 사진, 99 = 교재 "완성" 그림, 1~ = 단계'), idx: z.number().int().optional().describe('같은 단계의 그림 순서(0 = 교재에서 잘라 낸 그림, 1~ = 돌리거나 확대한 그림). 기본 0'),
+          jpegBase64: z.string().describe('JPEG 의 base64(작게: 가로 1000px 안팎)'), note: z.string().optional().describe('그림 설명'),
+        },
+      },
+      async ({ assemblyId, step, idx = 0, jpegBase64, note = '' }) => {
+        try {
+          const buf = Buffer.from(jpegBase64, 'base64')
+          if (buf.length < 1000 || buf[0] !== 0xff || buf[1] !== 0xd8) return fail('JPEG 가 아니에요.')
+          const { error } = await getSupabase().from('ivs_assembly_refs').upsert({ assembly_id: assemblyId, step, idx, img: 'data:image/jpeg;base64,' + jpegBase64, note, updated_at: new Date().toISOString() }, { onConflict: 'assembly_id,step,idx' })
+          if (error) return fail(error.message)
+          return text('✅ ' + assemblyId + ' ' + step + '단계 그림 ' + idx + ' 저장(' + Math.round(buf.length / 1024) + 'KB)')
+        } catch (e) { return fail(e.message) }
+      }
+    )
+
     server.registerTool(
       'get_step_context',
       {
