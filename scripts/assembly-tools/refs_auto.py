@@ -92,33 +92,44 @@ def level_alpha(H, cols, rows):
     return float(np.degrees(np.arctan2(-(b[1] - a[1]), b[0] - a[0]))), a, b
 
 def cmd_render(a):
-    """plates = [{name, cols, rows, pts:[[칸,줄,x,y]...](원본 좌표, 4개 이상), ref:true(수평 기준 판 1개)}]"""
-    name, step = a["name"], int(a["step"]); d = refs_dir(name); im = load_orig(name, step); h, w = im.shape[:2]; plates = a["plates"]
+    """plates = [{name, cols, rows, pts:[[칸,줄,x,y]...](원본 좌표, 4개 이상), ref:true(수평 기준 판 1개)}]
+    crop = [x0,y0,x1,y1] 부품만 남길 영역(원본 좌표, 쪽 테두리·글씨를 빼고), erase = [[x0,y0,x1,y1],...] 영역 안에 끼어 있는 글씨·이름표를 흰색으로 지운다.
+    저장: NN_1 = 1차 격자(잘라 낸 원본 위), NN_2 = 2차 격자(잘라 낸 그림을 수평으로 돌리고 위에 격자 + 파란 수평선). 둘 다 부품만 있다."""
+    name, step = a["name"], int(a["step"]); d = refs_dir(name); im0 = load_orig(name, step); plates = a["plates"]
+    im = im0.copy()
+    for (ex0, ey0, ex1, ey1) in a.get("erase") or []: im[int(ey0):int(ey1), int(ex0):int(ex1)] = 255   # 글씨·이름표 지우기(가위로 부품만 추출)
+    h0, w0 = im.shape[:2]; cx0, cy0, cx1, cy1 = [int(v) for v in (a.get("crop") or [0, 0, w0, h0])]; cx0, cy0, cx1, cy1 = max(0, cx0), max(0, cy0), min(w0, cx1), min(h0, cy1)
+    im = im[cy0:cy1, cx0:cx1].copy(); h, w = im.shape[:2]
     def Hof(p):
-        src = np.array([[c - 1, r - 1] for c, r, _, _ in p["pts"]], np.float32); dst = np.array([[x, y] for _, _, x, y in p["pts"]], np.float32); return cv2.findHomography(src, dst, 0)[0]
-    ref = next((p for p in plates if p.get("ref")), None); alpha = 0.0; M = np.array([[1, 0, 0], [0, 1, 0]], np.float64)
+        src = np.array([[c - 1, r - 1] for c, r, _, _ in p["pts"]], np.float32); dst = np.array([[x - cx0, y - cy0] for _, _, x, y in p["pts"]], np.float32); return cv2.findHomography(src, dst, 0)[0]
+    ref = next((p for p in plates if p.get("ref")), None); alpha = 0.0; M = np.array([[1, 0, 0], [0, 1, 0]], np.float64); nw, nh = w, h
     if ref:
         alpha, _, _ = level_alpha(Hof(ref), ref["cols"], ref["rows"]); M = cv2.getRotationMatrix2D((w / 2, h / 2), -alpha, 1.0)
-    rot = cv2.warpAffine(im, M, (w, h), borderValue=(255, 255, 255)) if ref else im.copy()
-    def rpts(p): return [(c, r, float(M[0, 0] * x + M[0, 1] * y + M[0, 2]), float(M[1, 0] * x + M[1, 1] * y + M[1, 2])) for c, r, x, y in p["pts"]]
-    cv2.imwrite(os.path.join(d, "%02d_1.jpg" % step), rot, [cv2.IMWRITE_JPEG_QUALITY, 78])
+        cs, sn = abs(M[0, 0]), abs(M[0, 1]); nw, nh = int(h * sn + w * cs) + 1, int(h * cs + w * sn) + 1; M[0, 2] += nw / 2 - w / 2; M[1, 2] += nh / 2 - h / 2   # 돌려도 잘리지 않게 캔버스를 키운다
+    rot = cv2.warpAffine(im, M, (nw, nh), borderValue=(255, 255, 255)) if ref else im.copy()
+    ys, xs = np.where(cv2.cvtColor(rot, cv2.COLOR_BGR2GRAY) < 245); pad = 16   # 가장자리 흰 여백은 잘라낸다
+    tx0, ty0, tx1, ty1 = (max(0, xs.min() - pad), max(0, ys.min() - pad), min(rot.shape[1], xs.max() + pad), min(rot.shape[0], ys.max() + pad)) if len(xs) else (0, 0, rot.shape[1], rot.shape[0])
+    rot = rot[ty0:ty1, tx0:tx1].copy(); rh, rw = rot.shape[:2]
+    def rpts(p): return [(c, r, float(M[0, 0] * (x - cx0) + M[0, 1] * (y - cy0) + M[0, 2]) - tx0, float(M[1, 0] * (x - cx0) + M[1, 1] * (y - cy0) + M[1, 2]) - ty0) for c, r, x, y in p["pts"]]
     o2 = rot.copy(); o3 = im.copy(); names = []
     for p in plates:
-        o2 = grid(o2, None, p["cols"], p["rows"], None, rpts(p)); o3 = grid(o3, None, p["cols"], p["rows"], None, [tuple(t) for t in p["pts"]]); names.append("%s %d칸×%d줄" % (p.get("name") or "판", p["cols"], p["rows"]))
+        o2 = grid(o2, None, p["cols"], p["rows"], None, rpts(p)); o3 = grid(o3, None, p["cols"], p["rows"], None, [(c, r, x - cx0, y - cy0) for c, r, x, y in p["pts"]]); names.append("%s %d칸×%d줄" % (p.get("name") or "판", p["cols"], p["rows"]))
     if ref:
-        _, ra, rb = level_alpha(Hof(ref), ref["cols"], ref["rows"]); pa = M @ np.array([ra[0], ra[1], 1.0]); pb = M @ np.array([rb[0], rb[1], 1.0]); y0 = int(round((pa[1] + pb[1]) / 2))
-        cv2.line(o2, (0, y0), (w, y0), (255, 140, 0), 2, cv2.LINE_AA); cv2.putText(o2, "horizontal", (w - 130, y0 - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 140, 0), 2)
-    cv2.imwrite(os.path.join(d, "%02d_2.jpg" % step), o2, [cv2.IMWRITE_JPEG_QUALITY, 80]); cv2.imwrite(os.path.join(d, "%02d_3.jpg" % step), o3, [cv2.IMWRITE_JPEG_QUALITY, 80])
+        _, ra, rb = level_alpha(Hof(ref), ref["cols"], ref["rows"]); pa = M @ np.array([ra[0], ra[1], 1.0]); pb = M @ np.array([rb[0], rb[1], 1.0]); y0 = int(round((pa[1] + pb[1]) / 2 - ty0))
+        cv2.line(o2, (0, y0), (rw, y0), (255, 140, 0), 2, cv2.LINE_AA); cv2.putText(o2, "horizontal", (rw - 130, y0 - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 140, 0), 2)
+    # 등록은 2장만(관리자 지시 2026-10-06): NN_1 = 1차 격자(원본 위, ②), NN_2 = 2차 격자(돌린 그림 위 + 파란 수평선, ④). 돌리기만 한 그림·순수 원본은 만들지도 올리지도 않는다(원본 NN.jpg 는 작업 재료로만 둔다).
+    cv2.imwrite(os.path.join(d, "%02d_1.jpg" % step), o3, [cv2.IMWRITE_JPEG_QUALITY, 82]); cv2.imwrite(os.path.join(d, "%02d_2.jpg" % step), o2, [cv2.IMWRITE_JPEG_QUALITY, 82])
+    p3 = os.path.join(d, "%02d_3.jpg" % step)
+    if os.path.exists(p3): os.remove(p3)
     ip = os.path.join(d, "index.json"); index = json.load(open(ip, encoding="utf-8")); index = [r for r in index if not (r["step"] == step and r["idx"] in (1, 2, 3))]
     nm = " / ".join(names); extra = a.get("note", "")
-    index += [{"step": step, "idx": 1, "file": "%02d_1.jpg" % step, "note": "③ 단계 %d — 판의 긴 방향이 수평이 되게 %.1f° 돌린 그림(구멍 칸 세기용)" % (step, alpha)},
-              {"step": step, "idx": 2, "file": "%02d_2.jpg" % step, "names": names, "note": "④ 단계 %d — 칸 격자(빨강 = 구멍 중심, 위 숫자 = 칸, 왼쪽 숫자 = 줄): %s. 파란 가로선 = 판 가운데 줄을 수평으로 맞춘 기준선. 그림 속 구멍을 찾아 맞춘 좌표라 추정이다. %s" % (step, nm, extra)},
-              {"step": step, "idx": 3, "file": "%02d_3.jpg" % step, "note": "② 단계 %d — 원본 그림(돌리기 전, 원근 그대로) 위에 같은 칸 격자를 그린 1차 격자. %s" % (step, extra)}]
+    index += [{"step": step, "idx": 1, "file": "%02d_1.jpg" % step, "note": "② 단계 %d — 부품만 잘라 낸 원본 그림(돌리기 전, 원근 그대로) 위의 1차 격자(빨강 = 구멍 중심, 위 숫자 = 칸, 왼쪽 숫자 = 줄): %s. %s" % (step, nm, extra)},
+              {"step": step, "idx": 2, "file": "%02d_2.jpg" % step, "names": names, "note": "④ 단계 %d — 판의 긴 방향이 수평이 되게 %.1f° 돌린 그림 위의 2차 격자: %s. 파란 가로선 = 판 가운데 줄을 수평으로 맞춘 기준선. 그림 속 구멍을 찾아 맞춘 좌표라 추정이다. %s" % (step, alpha, nm, extra)}]
     index.sort(key=lambda r: (r["step"], r["idx"])); json.dump(index, open(ip, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     gp = os.path.join(d, "grids_orig.json"); G = json.load(open(gp, encoding="utf-8")) if os.path.exists(gp) else []
-    G = [g for g in G if g["step"] != step] + [{"step": step, "name": p.get("name") or "판", "cols": p["cols"], "rows": p["rows"], "pts": p["pts"], "ref": bool(p.get("ref"))} for p in plates]
+    G = [g for g in G if g["step"] != step] + [{"step": step, "name": p.get("name") or "판", "cols": p["cols"], "rows": p["rows"], "pts": p["pts"], "ref": bool(p.get("ref")), "crop": [cx0, cy0, cx1, cy1], "erase": a.get("erase") or []} for p in plates]
     json.dump(G, open(gp, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-    return {"rotated_deg": round(alpha, 2), "files": ["%02d_1.jpg" % step, "%02d_2.jpg" % step, "%02d_3.jpg" % step], "preview": os.path.join(d, "%02d_2.jpg" % step), "original_preview": os.path.join(d, "%02d_3.jpg" % step)}
+    return {"rotated_deg": round(alpha, 2), "files": ["%02d_1.jpg" % step, "%02d_2.jpg" % step], "preview": os.path.join(d, "%02d_2.jpg" % step), "original_preview": os.path.join(d, "%02d_1.jpg" % step)}
 
 if __name__ == "__main__":
     sys.stdout.reconfigure(encoding="utf-8"); a = json.loads(sys.stdin.read() or "{}")
