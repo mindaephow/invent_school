@@ -94,7 +94,7 @@
   function effStepOf(pt, madeStep, upTo) { return pt.side && pt.side.until && upTo >= pt.side.until ? pt.side.until : madeStep; }
   // 맞물림 방식 안내(def.guideMode === 'mates'): 연결점은 부품에 붙어 있는 고정된 자리(부품 DB 의 돌기·구멍)이고, 이번 단계에 결합할 자리일 때만 보인다.
   // 제자리 자세로 돌기↔구멍이 맞물리는 쌍을 구하고, 그 쌍 중 지금 떨어져 있는(띄운 높이가 다른) 쌍만 안내한다. 마크·보정 값이 필요 없다.
-  function mateGuides(list) {
+  function mateGuides(list, target) {
     const b = bridge(), M = window.IVS_MATES;
     if (!M || !M.check) return [];
     const conn = {};
@@ -121,7 +121,7 @@
     });
     // 교재처럼 돌기·구멍 맞물림이 아닌 안내 화살표: 부품 데이터의 arrowFrom {name, hole, myHole} = 그 이름 부품의 hole 에서 출발해 이 부품의 myHole 로 도착(예: 1열브라켓 팔 구멍 → 부시)
     list.forEach((d, i) => {
-      if (!d.arrowFrom || !d.isNew) return;
+      if (!d.arrowFrom || !d.isNew || (target !== undefined && d.step !== target)) return; // arrowFrom 은 그 부품이 놓이는 단계에서만(나중에 move 로 옮겨 붙는 단계에서 다시 나오지 않게 — 꼬마기사 21번)
       const j = list.findIndex((x, k) => k !== i && x.name === d.arrowFrom.name && (d.arrowFrom.step === undefined || x.step === d.arrowFrom.step)); // step: 같은 이름 부품이 여럿일 때 그 단계에서 만든 것
       if (j < 0) return;
       out.push({ mate: true, pegKind: 'hole', pegIdx: j, pegId: d.arrowFrom.hole, holeIdx: i, holeId: d.arrowFrom.myHole, moverIdx: j, idx: i });
@@ -250,7 +250,8 @@
       });
       guides.forEach((g) => { g.from = T(g.from); g.to = T(g.to); g.dir = mvec(xf.m, g.dir); });
     }
-    const guidesOut = def.guideMode === 'mates' ? mateGuides(list) : guides;
+    { const lf = def.lift && Number(def.lift[target]); if (lf) list.forEach((d) => { d.pos = [d.pos[0], d.pos[1] + lf, d.pos[2]]; if (d.final) d.final = [d.final[0], d.final[1] + lf, d.final[2]]; }); } // lift: 단계 번호 → 그 단계에서만 화면 전체를 y 로 띄운다(바닥 아래에서 올라와야 하는 새 부품이 있는 단계, 꼬마기사 23번)
+    const guidesOut = def.guideMode === 'mates' ? mateGuides(list, target) : guides;
     return { list, guides: guidesOut, missing, stored, storedThumb, storedSlot: storedEff ? slotOfStep(storedEff) : 1, viewEff, storedSlots: Object.fromEntries(Object.keys(storedEffBy).map((k) => [k, slotOfStep(storedEffBy[k])])), storedThumbBy, storedTypes, targets: list.map((d) => d.final || null), orders: list.map((d) => d.order || 1) };
   }
 
@@ -318,7 +319,8 @@
         const ser = b2.serialize();
         if (ser.length !== lastLabels.length) { b2.status('부품 수가 달라서 기록하지 못했어요. 단계를 다시 열고 눌러 주세요.', 'error'); return; }
         const r1 = (v) => Math.round(v * 100) / 100, poses = {};
-        ser.forEach((x, i) => { poses[lastLabels[i]] = { p: x.pos.map(r1), q: (x.quat || []).map((v) => Math.round(v * 100000) / 100000), r: (x.rot || []).map(r1) }; });
+        const lfS = (def.lift && Number(def.lift[step])) || 0; // 기록은 띄우기(def.lift) 전 자리로 저장한다 — 열 때 다시 띄운다
+        ser.forEach((x, i) => { poses[lastLabels[i]] = { p: [x.pos[0], x.pos[1] - lfS, x.pos[2]].map(r1), q: (x.quat || []).map((v) => Math.round(v * 100000) / 100000), r: (x.rot || []).map(r1) }; });
         const mine = step;
         try { await b2.poseStore.save(def.id, mine, poses); posesDB[mine] = poses; paintStatus(); b2.status(mine + '단계 부품 모습을 기록했어요. 이제 이 단계를 열면 이 모습으로 보여요.', 'success'); notice('모습이 저장되었습니다.'); }
         catch (e) { b2.status('모습 기록 실패: ' + e.message + ' (supabase/assembly_poses.sql 을 실행했는지 확인)', 'error'); }
@@ -489,7 +491,7 @@
     const { list, guides, missing, stored, storedThumb, storedSlot, storedSlots, storedThumbBy, storedTypes, targets, orders, viewEff } = buildList(step);
     window.__asmStored = storedTypes; // design.html 의 사용 부품 목록이 읽는다
     { const sp = posesDB[step]; // ❄ 로 기록한 모습이 있으면 그 자리·자세로 보여 준다(제자리 target 은 그대로라 결합은 원래 자리로 된다)
-      if (sp) list.forEach((d) => { const o = d.noFreeze ? null : sp[d.label]; if (o && Array.isArray(o.p)) { d.pos = o.p.slice(); if (Array.isArray(o.r)) d.rot = o.r.slice(); if (Array.isArray(o.q)) d.quat = o.q.slice(); } });
+      if (sp) list.forEach((d) => { const o = d.noFreeze ? null : sp[d.label]; if (o && Array.isArray(o.p)) { d.pos = o.p.slice(); { const lf = def.lift && Number(def.lift[step]); if (lf) d.pos[1] += lf; } /* 화면 전체를 띄우는 단계(def.lift)는 ❄ 기록 자리도 같이 띄운다(안 띄우면 기록된 부품만 아래에 남아 연결이 끊겨 보인다) */ if (Array.isArray(o.r)) d.rot = o.r.slice(); if (Array.isArray(o.q)) d.quat = o.q.slice(); } });
       lastLabels = list.map((d) => d.label); }
     // 다른 창고 화면을 보는 중에도 오른쪽 카드는 모든 창고의 내용을 그대로 보여 준다(화면에 그리는 것은 보는 창고뿐, 나머지 창고는 개수만 표시)
     const viewing0 = viewSlot !== null && viewSlot !== slotOfStep(step);

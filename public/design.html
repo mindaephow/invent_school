@@ -4732,6 +4732,64 @@
     if (!assemblyGuideGroup) return;
     assemblyGuideGroup.children.forEach(c => { c.traverse(o => { if (o.userData && o.userData.dot) o.visible = v; }); (c.userData.attached || []).forEach(m => { if (m.userData && m.userData.dot) m.visible = v; }); });
   }
+  // 화살표를 누르면 그 화살표의 정보(어느 부품의 어느 돌기 → 어느 부품의 어느 구멍, 움직이는 쪽, 거리)를 따로 창으로 보여 준다(사용자 지시 2026-10-07).
+  //  화살표는 가늘어서 3D 맞춤 대신 화면에서 선분까지의 거리(10px 이내)로 고른다. 맞물림 방식(mates) 화살표만 해당.
+  function arrowInfoOf(info){
+    const partOf = (pi) => assemblyListParts[pi] || parts[pi];
+    const conn = (pi, kind, id) => { const p = partOf(pi); const inf = p && p.type && p.type.indexOf('robot:') === 0 ? robotPartsCache.find(x => x.id === p.type.slice(6)) : null; const c = inf && inf.connectors && (kind === 'peg' ? inf.connectors.pegs : inf.connectors.holes).find(q => q.id === id); return { name: inf ? inf.name : '', c }; };
+    const label = (pi) => { const p = partOf(pi); const nm = conn(pi, 'hole', '').name; return p ? (p.asmLabel || nm || '부품') : '부품'; };
+    const pegC = conn(info.pegIdx, info.pegKind, info.pegId), holeC = conn(info.holeIdx, 'hole', info.holeId);
+    const A = new THREE.Vector3(), B = new THREE.Vector3(); info.from.getWorldPosition(A); info.to.getWorldPosition(B);
+    return { pegLabel: label(info.pegIdx), pegName: pegC.name, peg: pegC.c, holeLabel: label(info.holeIdx), holeName: holeC.name, hole: holeC.c, moverLabel: label(info.moverIdx), mm: A.distanceTo(B), A, B };
+  }
+  function showArrowInfo(info, n, total){
+    const d = arrowInfoOf(info);
+    let box = document.getElementById('arrowInfoModal');
+    if (!box) {
+      box = document.createElement('div'); box.id = 'arrowInfoModal';
+      box.style.cssText = 'position:fixed; z-index:60; right:24px; top:90px; width:310px; background:#fff; color:#111827; border:2px solid #22c55e; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.25); font:13px/1.55 sans-serif; padding:12px 14px;';
+      document.body.appendChild(box);
+    }
+    // 시작 = 화살표가 출발하는 쪽(움직이는 부품), 끝 = 도착하는 쪽
+    const pegIsStart = info.moverIdx === info.pegIdx;
+    const pegTxt = (info.pegKind === 'hole' ? '구멍 ' : '돌기 ') + info.pegId, holeTxt = '구멍 ' + info.holeId;
+    const S = pegIsStart ? { name: d.pegLabel, hole: pegTxt } : { name: d.holeLabel, hole: holeTxt };
+    const E = pegIsStart ? { name: d.holeLabel, hole: holeTxt } : { name: d.pegLabel, hole: pegTxt };
+    const side = (t, o) => '<div style="flex:1; min-width:0; background:#f0fdf4; border-radius:8px; padding:8px 10px"><div style="color:#6b7280; font-size:11px">' + t + '</div><b style="display:block">' + o.name + '</b><span style="color:#15803d; font-weight:700">' + o.hole + '</span></div>';
+    box.innerHTML = '<div style="display:flex; align-items:center; justify-content:space-between"><b style="font-size:14px; color:#15803d">화살표 ' + n + ' / ' + total + '</b><button id="arrowInfoClose" style="border:0; background:#f3f4f6; border-radius:6px; width:26px; height:26px; cursor:pointer; font-size:15px">✕</button></div>'
+      + '<div style="display:flex; align-items:center; gap:6px; margin-top:8px">' + side('시작', S) + '<span style="font-size:18px; color:#22c55e">→</span>' + side('끝', E) + '</div>'
+      + '<button id="arrowInfoCopy" style="display:block; margin:10px auto 0; border:0; background:#22c55e; color:#fff; font:700 13px sans-serif; border-radius:8px; padding:6px 16px; cursor:pointer">복사</button>';
+    box.querySelector('#arrowInfoClose').onclick = () => { box.remove(); };
+    const copyTxt = '화살표 ' + n + '/' + total + ' — 시작: ' + S.name + ' ' + S.hole + ' → 끝: ' + E.name + ' ' + E.hole; // 복사한 글을 Claude 에게 그대로 붙여 넣어 전달한다
+    const cb = box.querySelector('#arrowInfoCopy');
+    cb.onclick = async () => {
+      let ok = false;
+      try { await navigator.clipboard.writeText(copyTxt); ok = true; } catch (e) {
+        const ta = document.createElement('textarea'); ta.value = copyTxt; ta.style.cssText = 'position:fixed; opacity:0'; document.body.appendChild(ta); ta.select();
+        try { ok = document.execCommand('copy'); } catch (e2) {} ta.remove();
+      }
+      cb.textContent = ok ? '복사됨 ✓' : '복사 실패'; setTimeout(() => { cb.textContent = '복사'; }, 1500);
+    };
+  }
+  canvas.addEventListener('pointerdown', (e) => {
+    if (markMoveOn || e.button !== 0 || e.ctrlKey || e.shiftKey || !assemblyGuideGroup) return;
+    const arrows = assemblyGuideGroup.children.filter(c => c.userData.info && c.userData.info.shown);
+    if (!arrows.length) return;
+    const rc = canvas.getBoundingClientRect(), px = e.clientX - rc.left, py = e.clientY - rc.top;
+    const scr = (v) => { const s = v.clone().project(camera); return [(s.x + 1) / 2 * rc.width, (1 - s.y) / 2 * rc.height, s.z]; };
+    let best = null;
+    arrows.forEach((c, i) => {
+      const inf = c.userData.info, A = new THREE.Vector3(), B = new THREE.Vector3(); inf.from.getWorldPosition(A); inf.to.getWorldPosition(B);
+      const a = scr(A), b = scr(B); if (a[2] > 1 || b[2] > 1) return;
+      const vx = b[0] - a[0], vy = b[1] - a[1], L2 = vx * vx + vy * vy || 1;
+      const t = Math.max(0, Math.min(1, ((px - a[0]) * vx + (py - a[1]) * vy) / L2));
+      const dist = Math.hypot(px - (a[0] + t * vx), py - (a[1] + t * vy));
+      if (dist <= 10 && (!best || dist < best.dist)) best = { dist, i, inf };
+    });
+    if (!best) return;
+    e.stopImmediatePropagation(); e.preventDefault();
+    showArrowInfo(best.inf, best.i + 1, arrows.length);
+  }, true);
   // 화살표 하나를 지운다. 여러 화살표가 같이 쓰는 연결점(users)은 마지막 화살표가 지워질 때 함께 지운다.
   function dropGuideArrow(c){
     (c.userData.attached || []).forEach(m => {
@@ -4745,6 +4803,7 @@
   }
   function clearAssemblyGuides(){
     clearMarkMoves();
+    const aim = document.getElementById('arrowInfoModal'); if (aim) aim.remove(); // 화살표가 새로 그려지면 지난 화살표 정보 창은 닫는다
     if (!assemblyGuideGroup) return;
     assemblyGuideGroup.children.forEach(c => (c.userData.attached || []).forEach(m => { if (m.parent) m.parent.remove(m); if (m.geometry) m.geometry.dispose(); if (m.material) m.material.dispose(); }));
     scene.remove(assemblyGuideGroup);
@@ -5070,6 +5129,7 @@
         items.forEach(({ e, dp, dh, from, to, skip }) => {
           const arrowGroup = new THREE.Group();
           arrowGroup.userData.idx = e.moverIdx; arrowGroup.userData.attached = [dp, dh];
+          arrowGroup.userData.info = { pegIdx: e.pegIdx, pegKind: e.pegKind || 'peg', pegId: e.pegId, holeIdx: e.holeIdx, holeId: e.holeId, moverIdx: e.moverIdx, from, to, shown: !skip }; // 화살표를 누르면 정보 창(showArrowInfo)에 쓴다
           dp.userData.users.add(arrowGroup); dh.userData.users.add(arrowGroup);
           if (!skip) {
             const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 1, 8), mat());

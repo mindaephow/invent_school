@@ -120,16 +120,22 @@ def orient_report(A, steps=None):
             desc = " · ".join("%s(%d개) → %s" % (k, n, d) for k, d, n in part_orientation(pt))
             print("%d단계 %s 중심 (%.0f, %.0f, %.0f): %s" % (st.index, pt.name, pt.p[0], pt.p[1], pt.p[2], desc))
 
+def euler_p(po): return po["p"]
+
 def floor_check(A, tol=0.5):
     """바닥 아래로 내려가는 부품 검사(관리자 기본 규칙 2026-10-05: 조립도는 바닥 아래로 내려가지 않게).
     부품마다 ① 제자리(앞으로 옮겨지는 단계가 있으면 건너뜀) ② 새로 놓일 때 띄운 자리(옆자리면 옆자리 자세, dir·hover 만큼) ③ 옆자리에서 합쳐질 때 띄운 자리의 가장 낮은 점이 y 0 보다 tol 넘게 낮으면 모은다.
     반환: [(단계, 부품 이름, 가장 낮은 y, 어느 자리)]"""
     out = []
-    def low(pt, p, R, off=(0, 0, 0)):
+    xf = A.meta.get("xform")
+    def low(pt, p, R, off=(0, 0, 0), lift=0.0):
         size = (pt.conn or {}).get("size")
         if not size: return None
-        half = np.abs(np.array(R, float)[1]) @ (np.array(size, float) / 2)
-        return float(np.array(p, float)[1] + off[1] - half)
+        p, R, off = np.array(p, float), np.array(R, float), np.array(off, float)
+        if xf and pt.step.index >= xf["at"]:   # xform(16번부터 전체를 세워 놓는 변환)이 걸린 단계는 변환한 서 있는 세계 좌표로 잰다
+            Mx = np.array(xf["m"], float); p = Mx @ p + np.array(xf["t"], float); R = Mx @ R; off = Mx @ off
+        half = np.abs(R[1]) @ (np.array(size, float) / 2)
+        return float(p[1] + off[1] + lift - half)
     for st in A.steps:
         for pt in st.parts:
             ex = pt.extra; side = ex.get("side")
@@ -142,13 +148,15 @@ def floor_check(A, tol=0.5):
                 sd = ex.get("settleDir")
                 if sd: checks.append(("합쳐질 때", p0, R0, tuple(np.array(sd, float) * (ex.get("settleHover") or 22))))
             else:
-                checks.append(("새로 놓일 때", p0, R0, off))
+                _own = (ex.get("poseAt") or {}).get(str(st.index))   # 이 부품이 놓이는 단계에 별도 자세(poseAt)가 있으면 그 자세에서 띄운다(23번처럼 로봇 전체를 띄워 보여 주는 단계)
+                _lf = float(((A.meta.get("lift") or {}).get(str(st.index))) or 0)   # def.lift: 이 단계는 화면 전체를 띄워 보여 준다
+                checks.append(("새로 놓일 때", euler_p(_own) if _own else p0, euler_to_R(_own["r"]) if _own else R0, off, _lf))
                 if "move" not in ex: checks.append(("제자리", p0, R0, (0, 0, 0)))
                 else: checks.append(("옮긴 뒤 제자리", ex["move"]["p"], euler_to_R(ex["move"]["r"]), (0, 0, 0)))
             for _stp, _po in (ex.get("poseAt") or {}).items():   # 단계마다 다른 자세로 보여 주는 부품(눕혀서 조립)
-                checks.append(("%s단계 자세" % _stp, _po["p"], euler_to_R(_po["r"]), (0, 0, 0)))
-            for where, p, R, o in checks:
-                y = low(pt, p, R, o)
+                checks.append(("%s단계 자세" % _stp, _po["p"], euler_to_R(_po["r"]), (0, 0, 0), float(((A.meta.get("lift") or {}).get(str(_stp))) or 0)))   # def.lift 가 있는 단계는 띄운 값까지 더해서 잰다
+            for where, p, R, o, *_lfx in checks:
+                y = low(pt, p, R, o, _lfx[0] if _lfx else 0.0)
                 if y is not None and y < -tol: out.append((st.index, pt.name, round(y, 1), where))
     return out
 

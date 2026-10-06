@@ -260,6 +260,7 @@ _zf15 = ZL - 95.0 + 2.5                                               # 판(−Z
 leg[0]["pl"].extra["move"]["marks"] = [[260.0 + 10.0 * (_c - 8), YC + 10.0 * (2 - _r), _zf15] for _c, _r in ((1, 1), (1, 3), (5, 1), (5, 3), (8, 2), (12, 2))]   # 머리 끝 블록 돌기 4곳(열1·열5 줄1·줄3)과 모터 돌기 2곳(열8·열12 줄2)
 # 15번: 14번에서 돌린 머리·몸통(y 축 180°)을 그대로 이어받는다 — 15번에 저장된 ❄ 모습 기록(옛 자세)이 덮지 않게 noFreeze 15 를 단다(추가로 또 돌리지 않는다: 두 번 돌리면 옛 자세로 돌아간다)
 for _q in _head + _body: _q.extra["noFreeze"] = sorted(set(_q.extra.get("noFreeze", [])) | {15})
+for _q in [_x for _x in A.parts if _x.step.index <= 15]: _q.extra["noFreeze"] = sorted(set(_q.extra.get("noFreeze", [])) | {16})   # 관리자: 14·15번에서 수정한 머리·몸통 자세가 16번에 이어지게 — 16번에 저장된 ❄ 모습 기록(07:28, 수정 전 자세)을 무시하고 15번 자세를 그대로 세운다(DB 는 건드리지 않음)
 A.steps[14].cam = (2.64, 1.0, False, None, None, None)                # −Z 쪽에서 비스듬히(14번 카메라를 180° 돌린 것, 눈대중 guess)
 
 # ── 16~19 ── 교재 103쪽 16~19: 로봇을 세워 놓고(교재 16부터 서 있는 모습) 양쪽 벽(315프레임 바깥 면)에 팔(37프레임)과 작은기어를 단다.
@@ -318,14 +319,248 @@ s20 = SKEL[19]; s20.kw.pop("noPart", None)
 s20.note = "[교재 20] 몸을 창고에 넣어 두고 새로 만들어요: 검은 판(39프레임)에 3단블록 2개를 눕혀 꽂고, 빨간 판(15프레임) 끝 구멍에 리벳을 꽂아요(리벳 위치 주의)."
 for _q in [_x for _x in A.parts if _x.step.index <= 19]: _addhide(_q, [20], "19번까지 만든 몸")   # 20번은 창고 2 에서 작업 → 몸(창고 1)은 보관 중
 XS = 300.0                                                                # 20번 조립품 자리(서 있는 세계 좌표, 로봇 옆 +X)
-P20 = s20.place("39프레임", np.eye(3), (XS, 2.5, 0.0), holeMarks=[[XS - 40.0, 5.0, 10.0]])   # 판 위(열 → +X, 줄 → +Z): 칸1·줄3 구멍에 빨간 판의 리벳이 들어갈 자리
+P20 = s20.place("39프레임", np.eye(3), (XS, 32.5, 0.0), holeMarks=[[XS - 40.0, 35.0, 10.0]])   # 검은 판(+블록)을 30 띄워 올린다: 리벳이 빨간 판에서 위로(수직으로) 검은 판 구멍에 들어가야 한다(관리자 지시 2026-10-06 — 옆으로 조립되면 안 됨)   # 판 위(열 → +X, 줄 → +Z): 칸1·줄3 구멍에 빨간 판의 리벳이 들어갈 자리
 R_B20 = np.array([[0, 1, 0], [0, 0, 1], [1, 0, 0]], float)                # 3단블록을 눕힘: 돌기면 −z 가 아래(판 구멍으로), 돌기면 +z 가 위, 큰 구멍 면 +y 는 +X
 b20a = s20.attach("3단블록", R_B20, {"돌기면 -z 1": (P20, "홀면 +y 열3·줄1"), "돌기면 -z 3": (P20, "홀면 +y 열3·줄3")}, hover=40)
 b20b = s20.attach("3단블록", R_B20, {"돌기면 -z 1": (P20, "홀면 +y 열9·줄1"), "돌기면 -z 3": (P20, "홀면 +y 열9·줄3")}, hover=40)
-RED20 = s20.place("15프레임", np.eye(3), (XS - 60.0, 2.5, 35.0), holeMarks=[])   # 빨간 판: 검은 판 칸1 쪽 바깥(−X)에 놓고, 오른쪽 끝(5번째) 구멍이 검은 판 칸1 과 같은 자리
+RED20 = s20.place("15프레임", np.eye(3), (XS - 60.0, 2.5, 10.0), holeMarks=[])   # 빨간 판: 검은 판 칸1 쪽 바깥(−X)에 놓고, 오른쪽 끝(5번째) 구멍이 검은 판 칸1 과 같은 자리
 rv20 = s20.attach("리벳", np.eye(3), {"돌기면 -y 1": (RED20, "홀면 +y 5")}, rivet=True, seated=True); rv20.extra["openEnd"] = True
+P20.extra["arrowFrom"] = {"name": "15프레임", "hole": "h5", "myHole": "h3"}   # 교재 20: 빨간 판 끝 구멍(리벳)에서 검은 판 칸1·줄3 구멍으로 가는 초록 화살표(맞물림 아닌 구멍→구멍 안내)
 for _q in (P20, b20a, b20b, RED20, rv20): _to_pre(_q)
 A.steps[19].cam = (0.79, 1.1, False, None, None, None)
+
+# ── 21 ── 교재 104쪽 21 (읽은 것 2026-10-06, 등록 그림 21_1·원본을 읽음): 20번에서 만든 검은 판(+블록 2·빨간 15프레임)을 서 있는 로봇의 한쪽 옆(그림 왼쪽 = 로봇의 +Z 쪽)에 세워 댄다 —
+#   ① 판 구멍(칸6·줄2)이 큰기어 아래 구멍을 지나 바깥으로 나온 T축 끝에 끼워지고, 그 끝에 빨간 부시를 끼운다(화살표: 판 구멍 → T축 끝, 부시 → T축 끝).
+#   ② 판 위쪽 끝(칸1)에서 리벳으로 달린 빨간 15프레임이 팔(37프레임)의 칸6·줄1 구멍에 새 리벳(1)을 꽂아 이어진다("리벳 위치 주의"). 그림의 번호 (1) = 이 리벳.
+#   좌표(서 있는 세계 좌표): 판 가운데 (0,55,67.5), 판 칸 → −Y(칸1 이 위), 판 줄 → −X, 판 위쪽 면(블록 돌기)이 바깥 +Z. 빨간 판은 판 안쪽(+Z 안쪽 면 5mm 아래)에서 리벳을 축으로 기울어 팔 리벳 쪽으로 간다.
+s21 = SKEL[20]; s21.kw.pop("noPart", None)
+s21.note = "[교재 21] 20번에서 만든 팔을 로봇 옆에 달아요: 검은 판 구멍을 큰기어 쪽 T축 끝에 끼우고 빨간 부시로 고정한 뒤, 빨간 판 끝 구멍을 팔(37프레임)의 리벳에 끼워요(리벳 위치 주의)."
+_RG = np.array([[0, 0, -1], [-1, 0, 0], [0, 1, 0]], float)                # 검은 판을 세운 자세: 모델 x → −Y(칸1 이 위), 모델 y(블록 돌기 면) → +Z(바깥), 모델 z → −X(줄)
+_C21 = np.array([0.0, 55.0, 67.5])                                          # 판 가운데: T축(x 0, y 35)이 칸7·줄2 구멍을 지나게(칸7 y 35, 칸9 y 15 → 23번의 작은 판(리벳)이 들어갈 틈) / 판 안쪽 면 z 65 = T축 머리 바깥
+def _wp(q): return _M_ST @ np.array(q.p, float) + _T_ST, _M_ST @ np.array(q.R, float)   # 지금(20번 자세, 변환 전 좌표) 부품의 서 있는 세계 자세
+_Pp, _Rp = _wp(P20)
+def _pre_move(q, pw, Rw, hover, dirw=(0.0, 0.0, 1.0)):
+    q.extra["move"] = {"at": 21, "p": rnd(_w2p(pw)), "r": R_to_euler(_M_ST.T @ Rw), "dir": rnd(_M_ST.T @ np.array(dirw, float)), "hover": hover}
+    q.extra["moveGroup"] = "arm21"; q.extra["moveGuide"] = True
+_pre_move(P20, _C21, _RG, 40.0)
+P20.extra["recv"] = True; P20.extra["noMarkCheck"] = True; P20.extra["move"]["marks"] = [rnd(_w2p([10.0, 45.0, 80.0]))]               # 판은 구멍을 받는 쪽: 고정된 T축 끝(10,45,80)이 칸6·줄2 구멍을 지난다
+for _b in (b20a, b20b):                                                      # 블록: 판에 붙은 채 같이(판 기준 상대 자세를 그대로)
+    _pb, _Rb = _wp(_b)
+    _pre_move(_b, _C21 + _RG @ (_Pb_rel := (_pb - _Pp)), _RG @ _Rb, 40.0)
+_RIV_C = np.array([-10.0, 95.0, 65.0])                                       # 판 칸1·줄3 구멍(−10, 95): 리벳이 빨간 판(z 60~65)과 검은 판(z 65~70)을 함께 꿴다
+_pre_move(rv20, _RIV_C, _RG, 40.0)
+# 관리자 지시 2026-10-07: 책(21_1)처럼 빨간 판 끝(1번) 구멍을 팔 리벳에 연결 — 판 모서리 리벳은 빨간 판 5번(끝) 구멍에 그대로(20번과 같은 연결), 판 전체는 기울어 1번 구멍이 새 리벳(팔 칸4·줄1 쪽)에 닿는다(모서리 리벳→새 리벳 42.3, 1~5번 구멍 간격 40 → 양 끝 각 1.17mm 어긋남, 검사 허용 1.2mm 안).
+_tgt = np.array([19.9, 124.9, 62.5]); _cor = np.array([-10.0, 95.0, 62.5]); _un = (_tgt - _cor) / np.linalg.norm(_tgt - _cor)
+_kk = (np.linalg.norm(_tgt - _cor) - 40.0) / 2.0; _hole1 = _tgt - _kk * _un; _hole5 = _cor + _kk * _un
+_ux = (_hole5 - _hole1) / np.linalg.norm(_hole5 - _hole1)                  # 빨간 판 긴 방향(1번 → 5번 구멍)
+_Rred = np.column_stack([_ux, [0.0, 0.0, 1.0], np.cross(_ux, [0.0, 0.0, 1.0])])
+_pre_move(RED20, _hole5 - 20.0 * _ux, _Rred, 40.0)
+RED20.extra["noFreeze"] = list(range(21, 37))                                  # 21~36번에 저장된 ❄ 모습 기록(예전 기울어진 빨간 판 자세)이 20번과 똑같이 맞춘 이 자세를 덮지 않게 — 로컬 값이 이기게(DB 는 건드리지 않음)
+RIV21 = s21._add(Part("리벳", _RG, (19.9, 124.9, 58.0), s21, dict(rivet=True, seated=True, joinOrder=1, openEnd=True, noMarkCheck=True, marks=[[19.9, 124.9, 58.0]])))   # 교재 21 그림: 빨간 판 끝(1번) 구멍이 팔 리벳에 닿는다(모서리 리벳에서 구멍 4칸 = 40mm, 그림에서 130px = 40mm 로 잼) → 팔 칸4·줄1(42.4)에 꽂는다(구멍 중심에서 0.14mm 안쪽)
+_to_pre(RIV21)
+BUSH21 = s21._add(Part("부시", _RG, (10.0, 45.0, 72.75), s21, dict(dir=[0, 0, 1], hover=80, recv=True, noMarkCheck=True, loose=True, marks=[[10.0, 45.0, 80.0]])))
+_to_pre(BUSH21)
+A.steps[20].cam = (0.79, 1.2, False, None, None, None)                      # 로봇 얼굴이 보이는 앞쪽(+X)에서 +Z 쪽으로 비스듬히(눈대중, guess)
+
+# 21번부터: 큰기어를 +Z 축으로 90° 돌려 T축 끝이 팔 판 칸6·줄1 구멍(x 10, y 45)을 지나게 한다(관리자 지시 2026-10-07: "큰기어가 +z 축으로 90도 돌아가서 T축 부분이 39프레임 1줄 6열을 통과"). 기어와 그 구멍에 꽂힌 T축이 같이 돈다(기어 가운데 (0,45) 기준).
+def _gear_turn(gear, tax, steps, zsign):
+    for _q in (gear, tax):
+        _mv = _q.extra.get("move"); _use = _mv and _mv.get("at", 99) <= 21 and "p" in _mv
+        _p = np.array(_mv["p"] if _use else _q.p, float); _R = euler_to_R(_mv["r"]) if _use and "r" in _mv else np.array(_q.R, float)
+        _pw = _M_ST @ _p + _T_ST; _Rw = _M_ST @ _R
+        _c = np.array([0.0, 45.0, _pw[2]]); _Rz = rot_z(90)
+        _pn = _c + _Rz @ (_pw - _c); _Rn = _Rz @ _Rw
+        for _st in steps: _q.extra.setdefault("poseAt", {})[str(_st)] = {"p": rnd(_w2p(_pn)), "r": R_to_euler(_M_ST.T @ _Rn)}
+
+# ── 22 ── 교재 104쪽 22 (읽은 것 2026-10-06, 등록 그림 22_1): 팔 판의 3단블록 2개(칸3·칸9)가 판 양옆으로 내민 끝 돌기에 빨간 17프레임(7구멍)을 한 장씩 끼운다 — 1번·7번 구멍이 위·아래 블록의 끝 돌기에(구멍 간격 60 = 칸3~칸9 간격).
+#   빨간 판 2장은 판의 양옆(±X)에서 옆으로 들어가 판과 나란히 선다(그림: 한 장은 판 바깥쪽, 한 장은 판과 큰기어 사이쪽).
+s22 = SKEL[21]; s22.kw.pop("noPart", None)
+s22.note = "[교재 22] 팔 판의 3단블록 두 개 양옆 끝 돌기에 빨간 판(17프레임) 두 장을 끼워요(위·아래 블록에 각각 구멍 한 개씩)."
+_R17 = {+1: np.array([[0, 1, 0], [-1, 0, 0], [0, 0, 1]], float), -1: np.array([[0, -1, 0], [-1, 0, 0], [0, 0, -1]], float)}   # 빨간 판 긴 방향(1번→7번 구멍) = −Y(위→아래), 판 면 법선 = ±X
+RED22 = {}
+for _sg in (+1, -1):
+    _tips = [[20.0 * _sg, 75.0, 75.0], [20.0 * _sg, 15.0, 75.0]]                   # 위·아래 블록의 끝 돌기 끝(x 20 = 블록 끝)
+    RED22[_sg] = s22._add(Part("17프레임", _R17[_sg], (17.5 * _sg, 45.0, 75.0), s22, dict(dir=[float(_sg), 0, 0], hover=40, recv=True, marks=_tips)))
+    _to_pre(RED22[_sg])
+A.steps[21].cam = (0.79, 1.2, False, None, None, None)
+
+# ── 23 ── 교재 104쪽 23 (읽은 것 2026-10-06, 등록 그림 23_1): 팔 아래 끝의 3단블록(칸9)에 작은 판(35프레임)을 단다 — 판 구멍(칸2·칸4, 줄2) 두 곳에 리벳(2)을 꽂아 두고 그 리벳 윗돌기를 블록의 바깥 구멍 두 곳(구멍 간격 20)에 끼운다.
+#   교재 그림은 로봇 뒤쪽(−X)에서 본다(전원선이 보인다). 팔 판 아래 끝이 바닥 가까이라 작은 판은 바닥 아래에서 올라와야 하지만 조립도는 바닥 아래로 내려가면 안 되므로(관리자 규칙) 이 단계에서만 로봇 전체를 62mm 띄워 보여 준다(def.lift).
+s23 = SKEL[22]; s23.kw.pop("noPart", None)
+s23.note = "[교재 23] 팔 아래 끝에 작은 판(35프레임)을 달아요: 먼저 리벳 두 개를 팔 아래 3단블록의 바깥 구멍 두 곳에 끼우고, 그 리벳 아랫돌기에 작은 판을 끼워요."
+FOOT23 = s23._add(Part("35프레임", np.eye(3), (0.0, 2.5, 75.0), s23, dict(dir=[0, -1, 0], hover=60, recv=True, joinOrder=2, marks=[[10.0, 2.0, 75.0], [-10.0, 2.0, 75.0]])))   # 판은 리벳을 다 끼운 뒤(순서 2)에 올라온다
+RIV23 = [s23._add(Part("리벳", np.eye(3), (_x, 6.5, 75.0), s23, dict(dir=[0, -1, 0], hover=28, joinOrder=1, openEnd=True, marks=[[_x, 15.0, 75.0]]))) for _x in (10.0, -10.0)]   # 판 윗면(y 5)에 아랫돌기가 꽂혀 윗돌기가 블록 구멍(블록 y 10~20)으로 올라간다
+for _q in [FOOT23] + RIV23: _to_pre(_q)
+A.meta["lift"] = {"22": 10.0, "23": 66.0}                                           # 22번은 기울인 다리가 공중에 떠 보이게 화면 전체를 y +10(관리자 지시 2026-10-07: "전체적으로 공중으로 좀 띄워야"), 23번은 화면 전체(로봇+새 부품)를 y +62 띄워 보여 준다(뷰어 def.lift; 다리를 기울여서 작은 판 모서리가 더 내려가 62→66): 작은 판이 바닥 위에서 올라온다
+A.steps[22].cam = (-0.79, 1.2, False, None, None, None)                      # 교재 23 은 뒤쪽(−X)에서 +Z(팔 쪽)로 비스듬히(눈대중, guess)
+
+# ── 24 ── 교재 104쪽 24 (읽은 것 2026-10-06, 등록 그림 24_1): 팔 판의 3단블록 2개 바깥 돌기(블록마다 바깥 두 개)에 회색 37프레임(3줄×7칸)을 얹는다 — 칸1·칸7 이 위·아래 블록(간격 60)에 닿는다.
+s24 = SKEL[23]; s24.kw.pop("noPart", None)
+s24.note = "[교재 24] 팔의 3단블록 두 개 바깥 돌기에 회색 판(37프레임)을 얹어요(블록마다 바깥 돌기 두 개씩 구멍에 들어가요)."
+_tips24 = [[_sx * 10.0, _y, 85.0] for _y in (75.0, 15.0) for _sx in (1, -1)]
+G24 = s24._add(Part("37프레임", _RG, (0.0, 45.0, 82.5), s24, dict(dir=[0, 0, 1], hover=40, recv=True, marks=_tips24)))
+_to_pre(G24)
+A.steps[23].cam = (0.79, 1.2, False, None, None, None)
+
+# ── 25 ── 교재 104쪽 25 (읽은 것 2026-10-07, 등록 그림 25_1): 20번과 같은 모양을 한 번 더 — 반대쪽 팔 조립품(검은 39프레임 + 눕힌 3단블록 2 + 빨간 15프레임, 리벳 "(1)")을 창고 2 에서 따로 만든다. 20번과 같은 위치·배치(칸3·칸9 블록, 빨간 판 끝 구멍 리벳 → 판 칸1·줄3).
+s25 = SKEL[24]; s25.kw.pop("noPart", None)
+s25.note = "[교재 25] 반대쪽 팔도 같은 방법으로 따로 만들어요: 검은 판(39프레임)에 3단블록 2개를 눕혀 꽂고, 빨간 판(15프레임) 끝 구멍에 리벳을 꽂아요(리벳 위치 주의)."
+for _q in [_x for _x in A.parts if _x.step.index <= 24]: _addhide(_q, [25], "24번까지 만든 몸")   # 25번은 창고 2 에서 작업 → 몸(창고 1)은 보관 중
+XS25 = XS + 120.0                                                         # 25번 조립품 자리(서 있는 세계 좌표): 20번 자리와 겹치지 않게 +X 로 120 더 옆
+# 교재 25 그림(등록 25_1)을 33° 돌려 수평으로 만들고 격자를 그려 읽은 값(2026-10-07, 20_1 도 같은 방법으로 읽음): 블록 2개가 칸1(왼쪽 끝)·칸7, 빨간 판이 오른쪽 끝(칸9 바깥), 초록 원이 가까운(아래) 가장자리 줄3 의 칸9 구멍. 20번(블록 칸3·칸9, 빨간 판 왼쪽 끝, 원 칸1·줄3)과 가까운 가장자리(줄3)는 그대로이고 길이 방향만 뒤집힌 거울 모양이다(왼팔·오른팔).
+P25 = s25.place("39프레임", np.eye(3), (XS25, 32.5, 0.0), holeMarks=[[XS25 + 40.0, 35.0, 10.0]])
+b25a = s25.attach("3단블록", R_B20, {"돌기면 -z 1": (P25, "홀면 +y 열7·줄1"), "돌기면 -z 3": (P25, "홀면 +y 열7·줄3")}, hover=40)
+b25b = s25.attach("3단블록", R_B20, {"돌기면 -z 1": (P25, "홀면 +y 열1·줄1"), "돌기면 -z 3": (P25, "홀면 +y 열1·줄3")}, hover=40)
+RED25 = s25.place("15프레임", rot_y(180), (XS25 + 60.0, 2.5, 10.0), holeMarks=[])      # 빨간 판: 검은 판 오른쪽(칸9쪽) 바깥에 놓고, 판 쪽 끝(5번) 구멍이 검은 판 칸9 모서리 구멍과 같은 자리
+rv25 = s25.attach("리벳", rot_y(180), {"돌기면 -y 1": (RED25, "홀면 +y 5")}, rivet=True, seated=True); rv25.extra["openEnd"] = True
+P25.extra["arrowFrom"] = {"name": "15프레임", "hole": "h5", "myHole": "h27", "step": 25}   # 교재 25: 빨간 판 끝 구멍(리벳)에서 검은 판 칸9·줄3 구멍(DB 구멍 번호 h27)으로
+for _q in (P25, b25a, b25b, RED25, rv25): _to_pre(_q)
+A.steps[24].cam = (0.79, 1.1, False, None, None, None)
+
+# ── 26 ── 교재 104쪽 26 (읽은 것 2026-10-06, 등록 그림 26_1): 21번과 같은 모양을 반대쪽(−Z, 그림 오른쪽) 팔에 — 25번의 조립품을 로봇 −Z 옆에 세워 T축 끝(큰기어 아래 구멍)에 끼우고 빨간 부시로 고정, 빨간 판 끝을 팔(37프레임) 리벳(1)에 잇는다.
+#   21번 자세를 Z 가운데 평면(z=0)에 대해 거울로 옮겨 놓는다(오른팔 ↔ 왼팔).
+s26 = SKEL[25]; s26.kw.pop("noPart", None)
+s26.note = "[교재 26] 반대쪽 팔을 로봇 옆에 달아요: 25번에서 만든 팔의 검은 판 구멍을 큰기어 쪽 T축 끝에 끼우고 빨간 부시로 고정한 뒤, 빨간 판 끝 구멍을 팔(37프레임)의 리벳에 끼워요(리벳 위치 주의)."
+_S = np.diag([1.0, 1.0, -1.0])
+def _mir(pw, Rw): return _S @ np.array(pw, float), _S @ np.array(Rw, float) @ _S
+def _mv26(dst, src, hover=40.0):
+    _m = src.extra["move"]; _pw = _M_ST @ np.array(_w2p_inv(_m["p"]) if False else _m["p"], float) + _T_ST; _Rw = _M_ST @ euler_to_R(_m["r"])
+    _pm, _Rm = _mir(_pw, _Rw)
+    dst.extra["move"] = {"at": 26, "p": rnd(_w2p(_pm)), "r": R_to_euler(_M_ST.T @ _Rm), "dir": rnd(_M_ST.T @ np.array([0.0, 0.0, -1.0])), "hover": hover}
+    dst.extra["moveGroup"] = "arm26"; dst.extra["moveGuide"] = True
+for _dst, _src in ((P25, P20), (b25a, b20a), (b25b, b20b), (RED25, RED20), (rv25, rv20)): _mv26(_dst, _src)
+# 25번 조립품은 20번의 거울 모양이라(블록 칸7·칸1) 26번에서 판을 판 면 법선 둘레로 180° 돌려 놓아야 판 기준 부품 위치가 25번과 같다(안 돌리면 26번에서 블록이 칸3·칸9 쪽으로 옮겨 앉은 것처럼 바뀐다 — 관리자 확인 2026-10-07). 판은 구멍 배치가 좌우 대칭이라 모양은 그대로다.
+_mp = P25.extra["move"]; _mp["r"] = R_to_euler(euler_to_R(_mp["r"]) @ np.diag([-1.0, 1.0, -1.0]))
+RED25.extra["noFreeze"] = list(range(26, 37))                                 # 26번 이후에 저장된 ❄ 기록의 옛 빨간 판 자세가 덮지 않게(21번과 같은 이유)
+P25.extra["skipMates"] = ["39프레임.h10"]                                       # 26번 화살표 1/2(39프레임 구멍 h10 → T축 p1)는 지운다(관리자 지시 2026-10-07) — 남는 화살표는 T축 → 큰기어 쪽 하나
+P25.extra["recv"] = True; P25.extra["noMarkCheck"] = True; P25.extra["move"]["marks"] = [rnd(_w2p([10.0, 45.0, -80.0]))]
+def _newpart(step, name, src, extra):                                             # 21번의 새 부품(리벳·부시)을 거울로 옮겨 만든다
+    _pw = _M_ST @ np.array(src.p, float) + _T_ST; _Rw = _M_ST @ np.array(src.R, float)
+    _pm, _Rm = _mir(_pw, _Rw)
+    _q = step._add(Part(name, _Rm, _pm, step, extra)); _to_pre(_q); return _q
+RIV26 = _newpart(s26, "리벳", RIV21, dict(rivet=True, seated=True, joinOrder=1, openEnd=True, noMarkCheck=True, marks=[[0.0, 125.0, -58.0]]))
+BUSH26 = _newpart(s26, "부시", BUSH21, dict(dir=[0, 0, -1], hover=80, recv=True, noMarkCheck=True, loose=True, marks=[[10.0, 45.0, -80.0]]))
+A.steps[25].cam = (2.36, 1.2, False, None, None, None)                           # 반대쪽(−Z) 팔은 (+X,−Z) 쪽에서 비스듬히(눈대중, guess)
+
+# ── 27~29 ── 교재 105쪽 27~29 (관리자 지시 2026-10-07: 21~24번에서 고친 것을 반대쪽(−Z)에 그대로 적용) — 22·23·24번을 z=0 평면에 대해 거울로 옮긴 모양이다: 27 빨간 17프레임 2장 / 28 리벳 2개를 먼저, 그다음 작은 판(35프레임) / 29 회색 37프레임.
+s27 = SKEL[26]; s27.kw.pop("noPart", None)
+s27.note = "[교재 27] 반대쪽 팔 판의 3단블록 두 개 양옆 끝 돌기에 빨간 판(17프레임) 두 장을 끼워요(위·아래 블록에 각각 구멍 한 개씩)."
+RED27 = {}
+for _sg in (+1, -1):
+    _src = RED22[_sg]
+    _q = RED27[_sg] = _newpart(s27, "17프레임", _src, dict(dir=[float(_sg), 0, 0], hover=40, recv=True, marks=[[20.0 * _sg, 75.0, -75.0], [20.0 * _sg, 15.0, -75.0]]))
+A.steps[26].cam = (2.36, 1.2, False, None, None, None)
+s28 = SKEL[27]; s28.kw.pop("noPart", None)
+s28.note = "[교재 28] 반대쪽 팔 아래 끝에도 작은 판(35프레임)을 달아요: 먼저 리벳 두 개를 팔 아래 3단블록의 바깥 구멍 두 곳에 끼우고, 그 리벳 아랫돌기에 작은 판을 끼워요."
+FOOT28 = _newpart(s28, "35프레임", FOOT23, dict(dir=[0, -1, 0], hover=60, recv=True, joinOrder=2, marks=[[10.0, 2.0, -75.0], [-10.0, 2.0, -75.0]]))
+RIV28 = [_newpart(s28, "리벳", _r, dict(dir=[0, -1, 0], hover=28, joinOrder=1, openEnd=True, marks=[[_x, 15.0, -75.0]])) for _r, _x in zip(RIV23, (10.0, -10.0))]
+A.meta["lift"]["28"] = 66.0                                                      # 28번도 23번처럼 화면 전체를 66 띄워 작은 판이 바닥 위에서 올라오게(다리를 기울여 62→66)
+A.steps[27].cam = (-2.36, 1.2, False, None, None, None)
+s29 = SKEL[28]; s29.kw.pop("noPart", None)
+s29.note = "[교재 29] 반대쪽 팔의 3단블록 두 개 바깥 돌기에 회색 판(37프레임)을 얹어요(블록마다 바깥 돌기 두 개씩 구멍에 들어가요)."
+G29 = _newpart(s29, "37프레임", G24, dict(dir=[0, 0, -1], hover=40, recv=True, marks=[[_sx * 10.0, _y, -85.0] for _y in (75.0, 15.0) for _sx in (1, -1)]))
+A.steps[28].cam = (2.36, 1.2, False, None, None, None)
+
+_gear_turn(leg[1]["gear"], leg[1]["t1"], range(21, 37), +1)                      # +Z 쪽 큰기어(큰기어 2번)·T축 4번: 21번부터
+_gear_turn(leg[0]["gear"], leg[0]["t1"], range(26, 37), -1)                      # −Z 쪽 큰기어(큰기어 1번)·T축 2번: 26번부터(21번과 같은 모양을 반대쪽에)
+
+def _riv_x0(q, zsign, steps):                                                  # 21번 화면의 새 리벳 자리(팔 칸6·줄1: x 0)로 뒤 단계 화면을 맞춘다(관리자 지시 2026-10-07: 21번에 맞춰 뒤를 모두 수정) — 코드 값(19.9)은 21번 화살표 계산용으로 그대로 둔다
+    _pw = np.array([0.0, 125.0, 58.0 * zsign]); _Rw = _RG if zsign > 0 else _S @ _RG @ _S
+    for _st in steps: q.extra.setdefault("poseAt", {})[str(_st)] = {"p": rnd(_w2p(_pw)), "r": R_to_euler(_M_ST.T @ _Rw)}
+    q.extra["noFreeze"] = sorted(set(q.extra.get("noFreeze", [])) | set(steps))
+_riv_x0(RIV21, +1, range(22, 37))                                              # 왼팔 새 리벳: 22~36번
+_riv_x0(RIV26, -1, range(27, 37))                                              # 오른팔 새 리벳(21번의 거울): 27~36번(21번과 같이 26번은 코드 값 — 안 그러면 빨간 판 1번 구멍→리벳 화살표가 빠진다, 관리자 확인 2026-10-07)
+
+# ── 22번만 다리 기울이기 시험(관리자 지시 2026-10-07: "그냥 22번만 해봐"): 검은 판 조립품은 로봇의 "다리". 21번에서 결합한 뒤 22번 화면에서 다리가 큰기어 T축(판 6열·1줄 구멍, x 10·y 45)을 중심으로 기울어 발바닥 앞부분이 뜬다 —
+#   모서리 리벳(판 칸1·줄3)이 새 리벳(0,125)에서 정확히 40(빨간 판 1~5번 구멍 간격)이 되는 각도(약 +11.4°): 판·블록·빨간 판의 연결은 그대로 같이 돈다, 빨간 판 5번 구멍 = 모서리 리벳, 1번 구멍 = 새 리벳(어긋남 0). 21번과 23번 이후 화면은 그대로.
+_AXC = np.array([10.0, 45.0]); _V0 = np.array([-20.0, 50.0]); _RV = np.array([0.0, 125.0])
+def _corner(t): c, sn = np.cos(t), np.sin(t); return _AXC + np.array([c * _V0[0] - sn * _V0[1], sn * _V0[0] + c * _V0[1]])
+_ts = np.linspace(-np.pi, np.pi, 72001); _fs = [np.linalg.norm(_corner(t) - _RV) - 40.0 for t in _ts]
+_sols = [_ts[k] - _fs[k] * (_ts[k + 1] - _ts[k]) / (_fs[k + 1] - _fs[k]) for k in range(len(_ts) - 1) if _fs[k] * _fs[k + 1] < 0]
+_TH = min(_sols, key=abs); _RZ = rot_z(float(np.degrees(_TH)))
+def _swp(pw): pw = np.array(pw, float); c = np.array([_AXC[0], _AXC[1], pw[2]]); return c + _RZ @ (pw - c)
+def _swR(Rw): return _RZ @ np.array(Rw, float)
+for _q in (P20, b20a, b20b, rv20):                                              # 결합한 다리 조립품: 22번 화면에서만 기울인 자세(poseAt 22), 21번은 그대로
+    _mv = _q.extra["move"]; _pw = _M_ST @ np.array(_mv["p"], float) + _T_ST; _Rw = _M_ST @ euler_to_R(_mv["r"])
+    _q.extra.setdefault("poseAt", {})["22"] = {"p": rnd(_w2p(_swp(_pw))), "r": R_to_euler(_M_ST.T @ _swR(_Rw))}
+    _q.extra["noFreeze"] = sorted(set(_q.extra.get("noFreeze", [])) | {22})
+_cor = _swp(np.array([-10.0, 95.0, 62.5])); _tg = np.array([0.0, 125.0, 62.5]); _u = (_cor - _tg) / np.linalg.norm(_cor - _tg)   # 빨간 판: 1번 구멍 = 새 리벳, 5번 구멍 = 기울인 모서리 리벳
+_Rr = np.column_stack([_u, [0.0, 0.0, 1.0], np.cross(_u, [0.0, 0.0, 1.0])])
+RED20.extra.setdefault("poseAt", {})["22"] = {"p": rnd(_w2p(_tg + 20.0 * _u)), "r": R_to_euler(_M_ST.T @ _Rr)}
+for _sg, _q in RED22.items():                                                    # 22번에 들어오는 빨간 17프레임 두 장도 같이 기울인 자리에서(22번 화면만)
+    _pw = _M_ST @ np.array(_q.p, float) + _T_ST; _Rw = _M_ST @ np.array(_q.R, float)
+    _q.extra.setdefault("poseAt", {})["22"] = {"p": rnd(_w2p(_swp(_pw))), "r": R_to_euler(_M_ST.T @ _swR(_Rw))}
+    _q.extra["noFreeze"] = sorted(set(_q.extra.get("noFreeze", [])) | {22})
+    _q.extra["dir"] = [round(float(v), 4) for v in _RZ @ np.array(_q.extra["dir"], float)] if False else _q.extra["dir"]
+
+# ── 23번 다리 기울이기(관리자 지시 2026-10-07: 22번 다음 "23번 해봐"): 22번과 같은 기울기(T축 중심 11.39°)로 23번 화면에도 — 결합한 다리 조립품·빨간 17프레임 두 장은 같은 자리에 두고, 23번에 들어오는 작은 판(35프레임)·리벳도 기울어진 다리에 맞춰 기울어진 방향으로 올라온다.
+for _q in (P20, b20a, b20b, rv20, RED20):
+    _q.extra.setdefault("poseAt", {})["23"] = dict(_q.extra["poseAt"]["22"])             # 22번의 기울인 자세 그대로(결합 상태 유지)
+for _q in RED22.values():
+    _q.extra.setdefault("poseAt", {})["23"] = dict(_q.extra["poseAt"]["22"])
+for _q in [FOOT23] + RIV23:                                                      # 23번에 새로 들어오는 부품: 기울인 자리 + 기울인 방향으로 띄운다
+    _pw = _M_ST @ np.array(_q.p, float) + _T_ST; _Rw = _M_ST @ np.array(_q.R, float)
+    _sw = _swp(_pw)
+    if _q in RIV23: _sw = _sw + 0.1 * (_RZ @ np.array([0.0, 1.0, 0.0]))                 # 리벳 윗돌기가 블록 구멍에 들어간 깊이가 검사 한계(1.0mm)와 정확히 같아 한쪽(85번)만 화살표가 빠졌다 → 23번 화면에서만 0.1mm 더 깊이 꽂는다
+    _q.extra.setdefault("poseAt", {})["23"] = {"p": rnd(_w2p(_sw)), "r": R_to_euler(_M_ST.T @ _swR(_Rw))}
+    _q.extra["dir"] = rnd(_M_ST.T @ (_RZ @ (_M_ST @ np.array(_q.extra["dir"], float))))      # 다리와 같이 기울어진 "아래" 방향(구멍 축)
+    _q.extra["explode"] = {"step": 23, "offset": [0, 0, 0]}                      # 방향 검사는 기울이기 전(서 있는) 좌표라 건너뛴다(13번과 같은 방식)
+    _q.extra["noMarkCheck"] = True
+for _q in A.parts:                                                               # 23번도 화면 전체를 띄우므로(def.lift 23) 모든 부품이 코드 값으로 그려져야 한다
+    if _q.step.index <= 23 and 23 not in (_q.extra.get("hideAt") or []): _q.extra["noFreeze"] = sorted(set(_q.extra.get("noFreeze", [])) | {23})
+
+# ── 24번 다리 기울이기(관리자 지시 2026-10-07: 23번 다음 "24번 수정해봐"): 22·23번과 같은 기울기. 다리 조립품·빨간 판·17프레임은 22번 자세 그대로, 23번에서 끼운 작은 판·리벳도 기울어진 자리에 박힌 채로, 24번에 새로 얹는 회색 37프레임이 기울어진 다리의 블록 바깥 돌기 위로(기울어진 자리) 내려온다. 37프레임의 끼우는 방향은 z 축이라 기울여도 그대로.
+for _q in (P20, b20a, b20b, rv20, RED20):
+    _q.extra.setdefault("poseAt", {})["24"] = dict(_q.extra["poseAt"]["22"])
+for _q in RED22.values():
+    _q.extra.setdefault("poseAt", {})["24"] = dict(_q.extra["poseAt"]["22"])
+for _q in [FOOT23] + RIV23 + [G24]:                                               # 23번에 끼운 판·리벳(리벳 0.1mm 깊이 보정은 23번 화면에서만)과 24번 새 판
+    _pw = _M_ST @ np.array(_q.p, float) + _T_ST; _Rw = _M_ST @ np.array(_q.R, float)
+    _sw = _swp(_pw) + (0.1 * (_RZ @ np.array([0.0, 1.0, 0.0])) if _q in RIV23 else 0.0)   # 리벳은 23번과 같은 0.1mm 깊이(안 하면 85번 리벳 윗돌기가 블록에서 '결합 아님'으로 판정)
+    _q.extra.setdefault("poseAt", {})["24"] = {"p": rnd(_w2p(_sw)), "r": R_to_euler(_M_ST.T @ _swR(_Rw))}
+G24.extra["explode"] = {"step": 24, "offset": [0, 0, 0]}                         # 방향 검사는 기울이기 전(서 있는) 좌표라 건너뛴다(23번과 같은 방식)
+G24.extra["noMarkCheck"] = True
+A.meta["lift"]["24"] = 10.0                                                      # 22번과 같이 화면 전체를 y +10(작은 판 모서리가 기울어서 바닥 아래로 내려가지 않게)
+for _q in A.parts:
+    if _q.step.index <= 24 and 24 not in (_q.extra.get("hideAt") or []): _q.extra["noFreeze"] = sorted(set(_q.extra.get("noFreeze", [])) | {24})
+
+# ── 27~29번 반대쪽(−Z) 다리 기울이기(관리자 지시 2026-10-07: "26번부터 반대쪽 해줘봐"): 22·23·24번 기울인 자세를 z=0 평면에 대해 거울로 옮긴다(27=22, 28=23, 29=24). 기울기는 z 축 둘레라 거울을 해도 같은 +11.39° 이고, 26번(=21번)은 그대로 둔다.
+def _mirpose(po):                                                                 # 변환 전 좌표의 자세 → 거울 자세
+    _pw = _M_ST @ np.array(po["p"], float) + _T_ST; _Rw = _M_ST @ euler_to_R(po["r"])
+    _pm, _Rm = _mir(_pw, _Rw); return {"p": rnd(_w2p(_pm)), "r": R_to_euler(_M_ST.T @ _Rm)}
+_PAIRS = ((22, 27), (23, 28), (24, 29))
+for _dst, _src in ((P25, P20), (b25a, b20a), (b25b, b20b), (rv25, rv20), (RED25, RED20)):          # 결합한 오른쪽 다리 조립품
+    for _sl, _sr in _PAIRS:
+        _po = _mirpose(_src.extra["poseAt"][str(_sl)])
+        if _dst is P25: _po["r"] = R_to_euler(euler_to_R(_po["r"]) @ np.diag([-1.0, 1.0, -1.0]))    # 25번 판은 26번에서 판 면 법선 둘레로 180° 돌려 놓았다(위 _mp)
+        _dst.extra.setdefault("poseAt", {})[str(_sr)] = _po
+for _sg in (+1, -1):                                                                              # 27번 빨간 17프레임 두 장: 27·28·29번
+    for _sl, _sr in _PAIRS: RED27[_sg].extra.setdefault("poseAt", {})[str(_sr)] = _mirpose(RED22[_sg].extra["poseAt"][str(_sl)])
+for _dst, _src, _steps in [(FOOT28, FOOT23, ((23, 28), (24, 29)))] + [(_d, _s, ((23, 28), (24, 29))) for _d, _s in zip(RIV28, RIV23)] + [(G29, G24, ((24, 29),))]:
+    for _sl, _sr in _steps: _dst.extra.setdefault("poseAt", {})[str(_sr)] = _mirpose(_src.extra["poseAt"][str(_sl)])
+for _q, _s in [(FOOT28, 28)] + [(_r, 28) for _r in RIV28] + [(G29, 29)]:                         # 새 부품: 기울어진 방향으로 내려오고(23번과 같은 방식) 방향 검사는 건너뛴다
+    _q.extra["dir"] = rnd(_M_ST.T @ (_RZ @ (_M_ST @ np.array(_q.extra["dir"], float))))
+    _q.extra["explode"] = {"step": _s, "offset": [0, 0, 0]}; _q.extra["noMarkCheck"] = True
+A.meta["lift"]["27"] = 10.0; A.meta["lift"]["29"] = 10.0                                         # 22·24번과 같이(28번은 위에서 66)
+# ── 왼쪽(+Z) 다리의 24번 완성 모양을 26번부터 끝까지 유지(관리자 지시 2026-10-07: "24번에 완료된 것을 26번에서부터 적용을 안 해놨어, 반대편 말이야"): 기울인 다리 조립품·빨간 판·17프레임·작은 판·리벳·회색 판이 25번(창고 작업) 뒤 26번부터는 서 있는 자세로 돌아가 있었다. 24번 자세(poseAt 24)를 26~36번에 그대로 쓴다.
+_LEFT_LEG = [P20, b20a, b20b, rv20, RED20, FOOT23, G24] + list(RED22.values()) + list(RIV23)
+for _q in _LEFT_LEG:
+    for _s in range(26, 37): _q.extra.setdefault("poseAt", {})[str(_s)] = dict(_q.extra["poseAt"]["24"])
+_RIGHT_LEG = [P25, b25a, b25b, rv25, RED25, FOOT28, G29] + list(RED27.values()) + list(RIV28)   # 오른쪽(−Z) 다리도 같게: 29번 완성 모양을 30~36번에 그대로 유지
+for _q in _RIGHT_LEG:
+    for _s in range(30, 37): _q.extra.setdefault("poseAt", {})[str(_s)] = dict(_q.extra["poseAt"]["29"])
+for _s in (26, 30, 31, 32, 33, 34, 35, 36): A.meta["lift"][str(_s)] = 10.0             # 기울인 작은 판 모서리가 바닥 아래로 가지 않게 화면 전체를 y +10(22·24번과 같은 값)
+for _q in _LEFT_LEG: _q.extra["noFreeze"] = sorted(set(_q.extra.get("noFreeze", [])) | {26})      # 26번: 왼쪽 다리만 코드 값(기울인 자세)으로 — 저장된 ❄ 기록은 서 있는 자세. 나머지(오른쪽 팔·새 리벳 등)는 저장된 ❄ 기록 그대로(뷰어가 띄우기를 같이 적용)
+for _s in (27, 28, 29, 30, 31, 32, 33, 34, 35, 36):                                              # 화면 전체를 띄우므로 저장된 ❄ 기록이 덮지 않게(왼쪽 다리와 몸이 같은 코드 값으로 그려져야 한다)
+    for _q in A.parts:
+        if _q.step.index <= _s and _s not in (_q.extra.get("hideAt") or []): _q.extra["noFreeze"] = sorted(set(_q.extra.get("noFreeze", [])) | {_s})
+for _s in (27, 28, 29):                                                                          # 화면 전체를 띄우므로 저장된 ❄ 기록이 덮지 않게
+    for _q in A.parts:
+        if _q.step.index <= _s and _s not in (_q.extra.get("hideAt") or []): _q.extra["noFreeze"] = sorted(set(_q.extra.get("noFreeze", [])) | {_s})
+
+# 22번 화면 전체를 띄우므로(def.lift 22) 모든 부품이 같은 코드 값으로 그려져야 한다 — 저장된 ❄ 기록은 띄우기를 무시해서 몸·T축·기어가 제자리(안 띄운 값)에 남고 다리만 떠서 T축 연결이 끊어졌다(관리자 확인 2026-10-07). 22번에서 이 부품들의 ❄ 기록을 막는다(DB 는 건드리지 않음).
+for _q in A.parts:
+    if _q.step.index <= 22 and 22 not in (_q.extra.get("hideAt") or []): _q.extra["noFreeze"] = sorted(set(_q.extra.get("noFreeze", [])) | {22})
 
 # ── 번호마다 쓰는 부품(작업 흐름 단계 3, 2026-10-06 교재 100~106쪽 그림을 한 장씩 보고 적음) ──
 # 리벳은 그림 옆 "(n)" 표시 숫자 그대로. 나머지는 그림에서 센 값이고, 확정 못 한 것은 줄 끝 주석에 "추정"으로 적었다. 합치는 단계(번호표뿐, 새 부품 없음)는 {}.
@@ -349,15 +584,15 @@ USED = {
     18: {"37프레임": 1, "리벳": 4},                           # 103쪽 읽음: 그림 옆 "(4)"
     19: {"작은기어": 1, "T축": 1},
     20: {"39프레임": 1, "3단블록": 2, "15프레임": 1, "리벳": 1},   # 103쪽 읽음: 검은 판 3줄×9칸·눕힌 3단블록 2·빨간 5구멍 판·"(1)"
-    21: {"리벳": 1},
-    22: {"17프레임": 2},                                     # 추정: 빨간 긴 프레임 2
-    23: {"리벳": 2},                                         # 추정: 작은 판 1장(종류 미확정)
-    24: {"37프레임": 1},                                     # 추정: 회색 큰 판 1장
-    25: {"39프레임": 1, "3단블록": 2, "15프레임": 1, "리벳": 1},   # 20번과 같은 모양(검은 판 + 블록 2 + 빨간 막대). 추정: 종류
-    26: {"리벳": 1},
-    27: {"17프레임": 2},
-    28: {"리벳": 2},
-    29: {"37프레임": 1},                                     # 추정: 회색 큰 판 1장(24번과 같은 모양)
+    21: {"리벳": 1, "부시": 1},                            # 104쪽 읽음: 그림 옆 "(1)" = 팔(37프레임) 리벳, 빨간 둥근 부품 = 부시(교재 LIST 부시 4 = 10번 2 + 21번 1 + 26번 1)
+    22: {"17프레임": 2},                                     # 104쪽 읽음: 빨간 긴 판 2(7구멍, 교재 LIST 17프레임 4 = 22번 2 + 27번 2)
+    23: {"35프레임": 1, "리벳": 2},                            # 104쪽 읽음: "(2)" 리벳 + 작은 판(3줄×5칸 = 35프레임, 교재 LIST 35프레임 4 = 12번 2 + 23번 1 + 28번 1)
+    24: {"37프레임": 1},                                     # 104쪽 읽음: 회색 판 3줄×7칸(교재 LIST 37프레임 4 = 16번 1 + 18번 1 + 24번 1 + 29번 1)
+    25: {"39프레임": 1, "3단블록": 2, "15프레임": 1, "리벳": 1},   # 104쪽 읽음: 20번과 같은 모양(검은 판 3줄×9칸 + 눕힌 3단블록 2 + 빨간 5구멍 판, "(1)")
+    26: {"리벳": 1, "부시": 1},                            # 104쪽 읽음: 21번과 같은 모양(리벳 "(1)" + 빨간 부시)
+    27: {"17프레임": 2},                                     # 105쪽: 22번과 같은 모양(반대쪽 팔)
+    28: {"35프레임": 1, "리벳": 2},                            # 105쪽: 23번과 같은 모양(반대쪽 팔) — 작은 판 1 + 리벳 2
+    29: {"37프레임": 1},                                     # 105쪽: 24번과 같은 모양(반대쪽 팔) — 회색 3줄×7칸
     30: {"반원프레임": 1, "115프레임": 1, "3단블록": 1},     # 추정
     31: {},
     32: {"2단블록": 2, "25프레임": 1},
