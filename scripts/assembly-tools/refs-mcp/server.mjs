@@ -54,8 +54,8 @@ server.registerTool('refs_fit', {
 })
 
 server.registerTool('refs_render', {
-  description: '③ refs_fit 으로 맞춘 판들을 써서, 수평 기준 판(ref)의 가운데 줄이 가로선이 되게 그림을 돌리고 ④ 돌린 그림(NN_1)·돌린 그림+격자+파란 수평 기준선(NN_2)·원본+격자(NN_3)와 index.json 을 만든다(로컬 파일). 올리기는 refs_register.',
-  inputSchema: { name: z.string(), step: z.number().int(), plates: z.array(z.object({ label: z.string().describe('refs_fit 에서 쓴 label'), name: z.string().optional().describe('화면에 쓸 판 이름. 예: 위판 59프레임'), ref: z.boolean().optional().describe('수평 기준 판(단계마다 정확히 1개)') })).min(1), note: z.string().optional().describe('설명에 덧붙일 말') },
+  description: '③ refs_fit 으로 맞춘 판들을 써서, 부품만 잘라(crop) 글씨를 지우고(erase) 수평 기준 판(ref)의 가운데 줄이 가로선이 되게 돌린 뒤 2장을 만든다: NN_1 = 1차 격자(잘라 낸 원본 위), NN_2 = 2차 격자(돌린 그림 위 + 파란 수평 기준선). index.json 도 갱신(로컬 파일). 올리기는 refs_register.',
+  inputSchema: { name: z.string(), step: z.number().int(), plates: z.array(z.object({ label: z.string().describe('refs_fit 에서 쓴 label'), name: z.string().optional().describe('화면에 쓸 판 이름. 예: 위판 59프레임'), ref: z.boolean().optional().describe('수평 기준 판(단계마다 정확히 1개)') })).min(1), note: z.string().optional().describe('설명에 덧붙일 말'), crop: z.array(z.number()).length(4).optional().describe('부품만 남길 영역 [x0,y0,x1,y1](원본 좌표) — 쪽 테두리·글씨·쪽 번호를 빼고 잡는다'), erase: z.array(z.array(z.number()).length(4)).optional().describe('crop 안에 끼어 있는 글씨·이름표·아이콘 영역들 [[x0,y0,x1,y1],...] — 흰색으로 지운다') },
 }, async (a) => {
   try {
     const plates = []
@@ -64,8 +64,8 @@ server.registerTool('refs_render', {
       const j = JSON.parse(await readFile(f, 'utf8')); plates.push({ name: p.name || p.label, cols: j.cols, rows: j.rows, pts: j.pts, ref: !!p.ref })
     }
     if (plates.filter((p) => p.ref).length > 1) throw new Error('수평 기준 판(ref)은 하나만 정할 수 있어요.')
-    const r = await py('render', { name: a.name, step: a.step, plates, note: a.note || '' })
-    return { content: [await img(r.preview, 'image/jpeg'), await img(r.original_preview, 'image/jpeg'), text({ rotated_deg: r.rotated_deg, files: r.files, note: '첫 그림 = 돌린 그림(2차 격자), 둘째 그림 = 원본(1차 격자).' })] }
+    const r = await py('render', { name: a.name, step: a.step, plates, note: a.note || '', crop: a.crop, erase: a.erase })
+    return { content: [await img(r.preview, 'image/jpeg'), await img(r.original_preview, 'image/jpeg'), text({ rotated_deg: r.rotated_deg, files: r.files, note: '첫 그림 = 2차 격자(돌린 그림), 둘째 그림 = 1차 격자(원본). 글씨·테두리가 남았으면 crop·erase 를 고쳐 다시 한다.' })] }
   } catch (e) { return fail(e) }
 })
 
