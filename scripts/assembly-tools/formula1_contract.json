@@ -49,16 +49,24 @@
 "noPart": false
 },
 "9": {
-"parts": {},
-"noPart": true
+"parts": {
+"데코바퀴": 1,
+"부시": 1
+},
+"noPart": false
 },
 "10": {
-"parts": {},
-"noPart": true
+"parts": {
+"데코바퀴": 1,
+"부시": 1
+},
+"noPart": false
 },
 "11": {
-"parts": {},
-"noPart": true
+"parts": {
+"2단블록": 2
+},
+"noPart": false
 },
 "12": {
 "parts": {},
