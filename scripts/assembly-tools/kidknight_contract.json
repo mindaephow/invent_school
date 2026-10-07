@@ -194,28 +194,41 @@
 "noPart": false
 },
 "30": {
-"parts": {},
-"noPart": true
+"parts": {
+"115프레임": 1,
+"반원프레임": 1,
+"3단블록": 1
+},
+"noPart": false
 },
 "31": {
 "parts": {},
-"noPart": true
+"noPart": false
 },
 "32": {
-"parts": {},
-"noPart": true
+"parts": {
+"2단블록": 2,
+"25프레임": 1
+},
+"noPart": false
 },
 "33": {
-"parts": {},
-"noPart": true
+"parts": {
+"59프레임": 1,
+"리벳": 2,
+"15프레임": 1
+},
+"noPart": false
 },
 "34": {
 "parts": {},
-"noPart": true
+"noPart": false
 },
 "35": {
-"parts": {},
-"noPart": true
+"parts": {
+"메인보드": 1
+},
+"noPart": false
 },
 "36": {
 "parts": {},
