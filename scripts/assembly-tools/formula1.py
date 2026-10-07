@@ -227,8 +227,8 @@ def _stand_of(q):                                   # 3~5번에서 옆 작업대
     return Part(q.n, _R, _p, s11, {})
 _fA, _fB = _stand_of(frA), _stand_of(frB)
 R_BLK11 = np.array([[0, 0, -1], [0, 1, 0], [1, 0, 0]], float)   # 블록 긴 축(모델 x) → +Z
-blk11A = s11.attach("2단블록", R_BLK11, {"p2": (_fA, "h1")}, hover=40)     # 끝돌기 p2(−x → −Z)가 판 A 프레임 끝 구멍에
-blk11B = s11.attach("2단블록", R_BLK11, {"p1": (_fB, "h1")}, hover=40)     # 끝돌기 p1(+x → +Z)이 판 B 프레임 끝 구멍에
+blk11A = s11.attach("2단블록", R_BLK11, {"p2": (_fA, "h1")}, hover=22)     # 끝돌기 p2(−x → −Z)가 판 A 프레임 끝 구멍에
+blk11B = s11.attach("2단블록", R_BLK11, {"p1": (_fB, "h1")}, hover=22)     # 끝돌기 p1(+x → +Z)이 판 B 프레임 끝 구멍에
 for _q in (blk11A, blk11B): _q.extra["loose"] = True; _q.extra["noMarkCheck"] = True   # 프레임은 7번부터 poseAt(세운 자세)로 이어져서 자동 검사(옮긴 뒤 자세만 봄)는 프레임을 6번 자리로 본다 — 화면의 결합 계산(맞물림)에서는 프레임 h1 에 끼워진다
 A.steps[10].cam = (3.35, 1.05, False, None, None)
 # ── 번호별 사용 부품(작업 흐름 단계 3, 2026-10-07): 교재 110~116쪽 그림에서 읽은 값. 리벳은 그림 옆 "(n)" 표시 그대로, 나머지는 그림에서 센 값.

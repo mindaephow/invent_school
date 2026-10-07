@@ -108,6 +108,26 @@ for key, label in (("view", "화면 확대 확인"), ("count", "교재와 칸 �
     unver = unver or bool(miss)
     print(f"{label}: {n_steps - len(miss)}/{n_steps} 단계" + (f" — 안 한 단계 {miss}" if miss else ""))
 if unver: print("⚠ 위 '안 한 단계'는 보고할 때 안 했다고 말해야 한다.")
+# ───── 책 이미지 작업 게이트(관리자 지시 2026-10-07: 수평선·격자·부품 배치가 이 작업의 전부 — 기억이 없는 Claude 도 이 검사로 강제된다) ─────
+# 부품이 있는 단계마다 refs/<이름>/index.json 에 그 단계의 격자 그림이 있어야 한다: 1차(idx 1)와 2차(idx 2, 수평선을 긋고 돌린 그림 위의 격자). 판이 없는 단계는 설명이 ① 로 시작하는 원본 1장(idx 1)만 인정한다.
+# 이 검사는 --unverified 로 건너뛸 수 없다. 옛 조립도(아래 목록)만 면제. 정말 못 만드는 단계는 --grid-skip=3,5 로 이유를 보고하고 관리자 확인을 받은 뒤에만 쓴다.
+LEGACY_NO_GRID = {"rabbit", "balance", "windmill", "spinner", "trike", "soccer", "autogun", "airplane", "rollingbot", "battlerobot"}
+_skip = set()
+for _a in sys.argv:
+    if _a.startswith("--grid-skip="): _skip = {int(x) for x in _a.split("=", 1)[1].split(",") if x.strip()}
+_idxf = os.path.join("refs", name, "index.json")
+_idx = json.load(open(_idxf, encoding="utf-8")) if os.path.exists(_idxf) else []
+_have = {}
+for _r in _idx: _have.setdefault(_r["step"], {})[_r["idx"]] = _r.get("note", "")
+_nogrid = []
+for _k, _st in enumerate(asm, 1):
+    if not _st.get("parts") or _k in _skip: continue
+    _h = _have.get(_k, {})
+    ok = (1 in _h and 2 in _h) or (1 in _h and str(_h[1]).lstrip().startswith("①"))
+    if not ok: _nogrid.append(_k)
+print("책 이미지 작업(수평선·격자) 단계별 그림:", "면제(옛 조립도)" if name in LEGACY_NO_GRID else (f"{len([1 for k, st in enumerate(asm, 1) if st.get('parts')]) - len(_nogrid)}단계 있음" + (f" — ❌ 격자가 없는 단계 {_nogrid}" if _nogrid else "")))
+if write and _nogrid and name not in LEGACY_NO_GRID:
+    sys.exit("❌ 책 이미지 작업(수평선을 긋고 돌린 그림 위의 격자 1차·2차)이 없는 단계가 있어 --write 를 하지 않는다: " + str(_nogrid) + "\n   안내서 '★★★ 최우선 규칙'대로 그 단계의 격자를 먼저 만든다(refs_make → refs_cli/refs-grid). 이 검사는 --unverified 로 건너뛸 수 없다.")
 if write and unver and "--unverified" not in sys.argv:
     sys.exit("❌ 규칙 확인이 끝나지 않아 --write 를 하지 않는다. 확인하고 " + rf + " 에 적거나, 미확인을 알고 넣으려면 --unverified 를 붙인다.")
 if write:  # (규칙 확인은 위에서 이미 검사)

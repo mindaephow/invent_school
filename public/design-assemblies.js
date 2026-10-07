@@ -1736,8 +1736,8 @@ window.IVS_ASSEMBLIES = [
           { n: "부시", p: [70.0, 38.5, 32.25], r: [90.0, 0.0, 0.0], dir: [0, 0, -1.0], hover: 50, joinOrder: 3, noFreeze: [10] },
         ] },
         { note: "[교재 11] 2단블록 2개를 판 사이에서 각 프레임 짧은 팔 끝 구멍에 끼워요. 두 블록은 서로 붙지 않아요.\n▣ 사용 부품: 2단블록 2", cam: {"theta": 3.35, "phi": 1.05}, camSrc: "guess", slot: 1, parts: [
-          { n: "2단블록", p: [121.0, 39.5, -35.0], r: [0.0, -90.0, 0.0], dir: [0.0, 0.0, 1.0], marks: [[121.0, 39.5, -45.0]], hover: 40, loose: true, noMarkCheck: true },
-          { n: "2단블록", p: [121.0, 39.5, 35.0], r: [0.0, -90.0, 0.0], dir: [0.0, 0.0, -1.0], marks: [[121.0, 39.5, 45.0]], hover: 40, loose: true, noMarkCheck: true },
+          { n: "2단블록", p: [121.0, 39.5, -35.0], r: [0.0, -90.0, 0.0], dir: [0.0, 0.0, 1.0], marks: [[121.0, 39.5, -45.0]], hover: 22, loose: true, noMarkCheck: true },
+          { n: "2단블록", p: [121.0, 39.5, 35.0], r: [0.0, -90.0, 0.0], dir: [0.0, 0.0, -1.0], marks: [[121.0, 39.5, 45.0]], hover: 22, loose: true, noMarkCheck: true },
         ] },
         { note: "[교재 12] (작성 전) 교재 112쪽 — 번호만 등록한 뼈대. 쪽 작업 때 채운다.\n▣ 사용 부품: 29프레임 1", cam: {"theta": -0.79, "phi": 0.95}, camSrc: "guess", noPart: true, slot: 1, parts: [
         ] },
