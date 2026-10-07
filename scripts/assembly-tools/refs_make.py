@@ -15,6 +15,19 @@ GRID = [("L", 1), ("R", 1), ("L", 2), ("R", 2), ("L", 3), ("R", 3)]   # 쪽마�
 
 # 차시 정의: 쪽 → [(단계 번호(0=완성품, 99=완성), 상자(1430px 판 좌표), 설명)]
 BOOKS = {
+    "formula1": {
+        "volume": 1,
+        "pages": {
+            110: [(0, (130, 490, 1020, 1300), "교재 110쪽 맨 앞 완성품 사진 — 앞·뒤·바퀴·날개 방향은 여기서 확인"), (1, (78, 1324, 706, 1870), ""), (2, (721, 1324, 1355, 1870), "")],
+            111: [(3 + i, box(*g), "") for i, g in enumerate(GRID)],
+            112: [(9 + i, box(*g), "") for i, g in enumerate(GRID)],
+            113: [(15 + i, box(*g), "") for i, g in enumerate(GRID)],
+            114: [(21 + i, box(*g), "") for i, g in enumerate(GRID)],
+            115: [(27 + i, box(*g), "") for i, g in enumerate(GRID)],
+            116: [(33, box("L", 1), ""), (99, box("R", 1), "완성")],
+        },
+        "extra": [],
+    },
     "kidknight": {
         "volume": 1,
         "pages": {
