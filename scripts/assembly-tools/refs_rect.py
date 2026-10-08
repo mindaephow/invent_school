@@ -45,8 +45,14 @@ def side(vals_by_idx, axis):
     pass
 def process(step):
     nm='%02d'%step
+    if not os.path.exists(D+nm+'_lv.json'):   # 새 번호: 쪽 테두리를 뺀 기본 자르기(글씨·배지는 crop 을 고쳐 다시)
+        _h,_w=cv2.imread(D+nm+'.jpg').shape[:2]; json.dump({'M':[[1,0,0],[0,1,0]],'size':[_w-50,_h-50],'angle':0.0,'crop':[25,25,_w-25,_h-25],'erase':[['c',_w,_h,150]]},open(D+nm+'_lv.json','w'))   # 오른쪽 아래 번호 배지 지움
     Mj=json.load(open(D+nm+'_lv.json')); cx0,cy0,cx1,cy1=Mj['crop']
-    crop=cv2.imread(D+nm+'.jpg')[cy0:cy1,cx0:cx1]; h,w=crop.shape[:2]
+    full=cv2.imread(D+nm+'.jpg')
+    for e in Mj.get('erase',[]):   # 글씨·번호 배지·아이콘 지우기: ['r',x0,y0,x1,y1] 사각형 / ['c',cx,cy,r] 원(원본 좌표)
+        if e[0]=='r': full[int(e[2]):int(e[4]),int(e[1]):int(e[3])]=255
+        else: cv2.circle(full,(int(e[1]),int(e[2])),int(e[3]),(255,255,255),-1)
+    crop=full[cy0:cy1,cx0:cx1]; h,w=crop.shape[:2]
     fits=[]
     for f in sorted(glob.glob(D+'fits/%s_*.json'%nm)):
         j=json.load(open(f,encoding='utf-8')); fits.append((os.path.basename(f)[3:-5],j))
@@ -73,6 +79,7 @@ def process(step):
         if max(W,H)>1800: sc=1800.0/max(W,H)
         A2=A.copy(); A2[:,2]-=mn; A2*=sc; W,H=int(W*sc),int(H*sc)
         out=cv2.warpAffine(crop,A2,(W,H),flags=cv2.INTER_CUBIC,borderValue=(255,255,255))
+        MASK=cv2.warpAffine(np.full((h,w),255,np.uint8),A2,(W,H),flags=cv2.INTER_LINEAR,borderValue=0)   # 그림이 있는 영역(다른 평면 판의 점이 그림 밖에 찍히지 않게)
         T=lambda x,y: A2@np.array([x-cx0,y-cy0,1.0])
         pa=(A2[:,:2]@src.T).T+A2[:,2]; err=float(np.sqrt(((pa-dst*sc-(-mn*sc))**2).sum(1)).mean())
         # 가운데 열(수직선)·가운데 줄(수평선): 격자 가운데 칸/줄
@@ -100,15 +107,30 @@ def process(step):
     lines(base)
     if g is not None:
         g=base.copy()
-        for lab,j in fits:
+        gray=cv2.cvtColor(out,cv2.COLOR_BGR2GRAY)
+        def on_picture(j):   # 다른 평면에 있어 이 보정에서는 그림 밖 빈 곳에 찍히는 판은 그리지 않는다(구멍 점 주변이 판 색이어야 한다)
+            ok=0
             for p in j['pts']:
-                x,y=T(p[2],p[3]); cv2.circle(g,(int(x),int(y)),3,(0,0,255),-1)
+                x,y=T(p[2],p[3]); x,y=int(x),int(y)
+                if 0<=x<W and 0<=y<H and MASK[y,x]>128 and gray[max(0,y-6):y+7,max(0,x-6):x+7].min()<225: ok+=1
+            return ok>=0.6*len(j['pts'])
+        for lab,j in fits:
+            if lab!=rl and not on_picture(j): continue
+            P_={(q[0],q[1]):T(q[2],q[3]) for q in j['pts']}   # 격자선: 이웃한 칸·줄 점을 잇는다
+            for (c_,r_),v_ in P_.items():
+                for nb in ((c_+1,r_),(c_,r_+1)):
+                    if nb in P_: cv2.line(g,(int(v_[0]),int(v_[1])),(int(P_[nb][0]),int(P_[nb][1])),(0,0,255),1,cv2.LINE_AA)
+            for p in j['pts']:
+                x,y=T(p[2],p[3])
+                if not (0<=int(x)<W and 0<=int(y)<H and MASK[int(y),int(x)]>128): continue
+                cv2.circle(g,(int(x),int(y)),3,(0,0,255),-1)
                 if p[1]==1: cv2.putText(g,str(p[0]),(int(x)-6,int(y)-9),cv2.FONT_HERSHEY_SIMPLEX,0.42,(255,0,0),1)
                 if p[0]==1: cv2.putText(g,'j%d'%p[1],(int(x)+7,int(y)+4),cv2.FONT_HERSHEY_SIMPLEX,0.42,(0,140,0),1)
     else: g=base.copy()
     cv2.imwrite(D+nm+'_1.jpg',base,[cv2.IMWRITE_JPEG_QUALITY,88]); cv2.imwrite(D+nm+'_2.jpg',g,[cv2.IMWRITE_JPEG_QUALITY,88])
     return info,names
 def sentence(step,info,names):
+    if not names and info.get('cols'): names=['%d칸×%d줄 판'%(info['cols'],info['rows'])]
     nm=' / '.join(names) if names else '판'
     if info['ref']=='(점 없음)':
         n1="③ 단계 %d — 로봇(부품)은 똑바로 세운 채, 한 줄 막대의 축이 수직·수평이 되도록 기울임만 %.1f° 보정한 그림 + 파란 수직선·수평선(점 없음)."%(step,info['res'])
@@ -123,8 +145,10 @@ if __name__=='__main__':
     for s in steps:
         info,names=process(s); print(s,info)
         n1,n2=sentence(s,info,names)
+        for _i,_f in ((1,'%02d_1.jpg'%s),(2,'%02d_2.jpg'%s)):
+            if not any(r['step']==s and r['idx']==_i for r in INDEX): INDEX.append({'step':s,'idx':_i,'file':_f,'note':''})
         for r in INDEX:
             if r['step']==s and r['idx']==0 and not str(r.get('note','')).startswith('①'): r['note']='① '+str(r.get('note',''))
             if r['step']==s and r['idx']==1: r['note']=n1
             if r['step']==s and r['idx']==2: r['note']=n2
-    json.dump(INDEX,open(D+'index.json','w',encoding='utf-8'),ensure_ascii=False,indent=1)
+    INDEX.sort(key=lambda r:(r['step'],r['idx'])); json.dump(INDEX,open(D+'index.json','w',encoding='utf-8'),ensure_ascii=False,indent=1)
