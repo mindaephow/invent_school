@@ -28,6 +28,20 @@ BOOKS = {
         },
         "extra": [],
     },
+    "dog": {
+        "volume": 1,
+        "pages": {
+            120: [(0, (130, 490, 1030, 1320), "교재 120쪽 맨 앞 완성품 사진 — 앞(머리·귀 쪽)·뒤(케이블)·다리 방향은 여기서 확인"), (1, (78, 1324, 706, 1870), ""), (2, (721, 1324, 1355, 1870), "")],
+            121: [(3 + i, box(*g), "") for i, g in enumerate(GRID)],
+            122: [(9 + i, box(*g), "") for i, g in enumerate(GRID)],
+            123: [(15 + i, box(*g), "") for i, g in enumerate(GRID)],
+            124: [(21 + i, box(*g), "") for i, g in enumerate(GRID)],
+            125: [(27 + i, box(*g), "") for i, g in enumerate(GRID)],
+            126: [(33 + i, box(*g), "") for i, g in enumerate(GRID)],
+            127: [(39 + i, box(*g), "") for i, g in enumerate(GRID[:5])] + [(99, box("R", 3), "완성")],
+        },
+        "extra": [],
+    },
     "kidknight": {
         "volume": 1,
         "pages": {

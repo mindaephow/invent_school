@@ -5,10 +5,11 @@
 // 조립 규칙·단계 데이터·겹침 검사 코드는 배포된 public/design-assemblies.js·design-collision.js 를 읽어 온다 —
 // 화면과 같은 파일이 원본이라 둘이 어긋나지 않는다. (선택 환경변수 SITE_ORIGIN, 기본 https://invent-school-sigma.vercel.app)
 import { z } from 'zod'
-import { buildGuide, buildReference, dimsOf } from './cubo-assembly-guide.js'
+import { buildGuide, buildGuideParts, buildReferenceParts, buildReference, dimsOf } from './cubo-assembly-guide.js'
 import { autoAssemble, autoCamera } from './cubo-auto-assemble.js'
 import { stlFromDataUrl, measureModel, formatMeasure } from './cubo-part-measure.js'
 import { stepContext } from './cubo-step-context.js'
+import { ASSEMBLY_NOTES } from './cubo-assembly-notes.js'
 
 const text = (t) => ({ content: [{ type: 'text', text: t }] })
 const fail = (t) => ({ content: [{ type: 'text', text: `❌ ${t}` }], isError: true })
@@ -179,9 +180,25 @@ export function registerCuboAssemblyTools(server, getSupabase) {
       {
         title: '큐보 스튜디오 참고 문서 읽기',
         description: '조립할 때는 안 봐도 되는 참고 자료(get_assembly_guide 에서 분리): 조립도 수정·검토 절차, 새 PC 준비, 옛 작업 절차, 로봇팽이 사례, 자동 조립(auto_assemble), 부품 DB 연결점 기록 방법(7장), 부품 측정 계획과 안 쓰는 부품 메모, 화면·코드 위치, 화면 기능, 지난 조립도(토끼~비행기) 기록. 규칙이 아니라 필요할 때만 읽는 자료다.',
-        inputSchema: {},
+        inputSchema: { part: z.string().optional().describe('생략하면 머리글과 절 메뉴만. 필요한 절은 메뉴 번호 또는 절 제목 앞부분("5-3", "B·C")으로 읽는다. "all" = 전체') },
       },
-      async () => text(buildReference())
+      async ({ part }) => text(buildReferenceParts(part))
+    )
+
+    server.registerTool(
+      'get_assembly_notes',
+      {
+        title: '작품별 작업 기록 읽기',
+        description: '한 작품(조립도)의 작업 기록 — 만들며 알게 된 구조·좌표 기준·추정 목록·상태. 그 작품을 이어서 만들거나 고칠 때만 읽는다(안내서에서 분리). assemblyId 를 생략하면 기록이 있는 작품 목록만 준다. id 예: cubo-1-formula1, legacy(옛 방식 규칙).',
+        inputSchema: { assemblyId: z.string().optional().describe('list_assemblies 의 id. 생략하면 목록') },
+      },
+      async ({ assemblyId }) => {
+        if (!assemblyId) return text('작업 기록이 있는 작품:
+' + Object.entries(ASSEMBLY_NOTES).map(([k, v]) => `- ${k} (${v.length}자)`).join('
+'))
+        const n = ASSEMBLY_NOTES[assemblyId]
+        return n ? text(n) : fail(`${assemblyId} 의 작업 기록이 없다. get_assembly_notes 를 인자 없이 불러 목록을 본다.`)
+      }
     )
 
     server.registerTool(

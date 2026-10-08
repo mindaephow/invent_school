@@ -111,10 +111,9 @@ if unver: print("⚠ 위 '안 한 단계'는 보고할 때 안 했다고 말해�
 # ───── 책 이미지 작업 게이트(관리자 지시 2026-10-07: 수평선·격자·부품 배치가 이 작업의 전부 — 기억이 없는 Claude 도 이 검사로 강제된다) ─────
 # 부품이 있는 단계마다 refs/<이름>/index.json 에 그 단계의 격자 그림이 있어야 한다: 1차(idx 1)와 2차(idx 2, 수평선을 긋고 돌린 그림 위의 격자). 판이 없는 단계는 설명이 ① 로 시작하는 원본 1장(idx 1)만 인정한다.
 # 이 검사는 --unverified 로 건너뛸 수 없다. 옛 조립도(아래 목록)만 면제. 정말 못 만드는 단계는 --grid-skip=3,5 로 이유를 보고하고 관리자 확인을 받은 뒤에만 쓴다.
-LEGACY_NO_GRID = {"rabbit", "balance", "windmill", "spinner", "trike", "soccer", "autogun", "airplane", "rollingbot", "battlerobot"}
-_skip = set()
-for _a in sys.argv:
-    if _a.startswith("--grid-skip="): _skip = {int(x) for x in _a.split("=", 1)[1].split(",") if x.strip()}
+LEGACY_NO_GRID = {"formula1", "rabbit", "balance", "windmill", "spinner", "trike", "soccer", "autogun", "airplane", "rollingbot", "battlerobot"}
+_skip = set()   # --grid-skip 는 없앴다(2026-10-08): 격자를 "못 만든다/불필요하다"고 Claude 가 혼자 정하던 일을 막는다
+if any(_a.startswith("--grid-skip") for _a in sys.argv): sys.exit("❌ --grid-skip 은 쓸 수 없다. 격자를 만든다(가려지면 보이는 구멍으로 맞추고 그 사실을 note 에 적는다).")
 _idxf = os.path.join("refs", name, "index.json")
 _idx = json.load(open(_idxf, encoding="utf-8")) if os.path.exists(_idxf) else []
 _have = {}
@@ -123,11 +122,27 @@ _nogrid = []
 for _k, _st in enumerate(asm, 1):
     if not _st.get("parts") or _k in _skip: continue
     _h = _have.get(_k, {})
-    ok = (1 in _h and 2 in _h) or (1 in _h and str(_h[1]).lstrip().startswith("①"))
+    _plate = any(("프레임" in str(_p.get("n", "")) and "브라켓" not in str(_p.get("n", ""))) for _p in _st.get("parts", [])) or any("프레임" in str(_p.get("n", "")) for _p in _st.get("parts", []))
+    ok = (1 in _h and 2 in _h) or (1 in _h and not _plate and str(_h[1]).lstrip().startswith("①"))   # 프레임(판)이 있는 단계는 반드시 회전·수평선·격자(idx 2) — 원본 한 장으로 때우지 못한다
     if not ok: _nogrid.append(_k)
 print("책 이미지 작업(수평선·격자) 단계별 그림:", "면제(옛 조립도)" if name in LEGACY_NO_GRID else (f"{len([1 for k, st in enumerate(asm, 1) if st.get('parts')]) - len(_nogrid)}단계 있음" + (f" — ❌ 격자가 없는 단계 {_nogrid}" if _nogrid else "")))
 if write and _nogrid and name not in LEGACY_NO_GRID:
     sys.exit("❌ 책 이미지 작업(수평선을 긋고 돌린 그림 위의 격자 1차·2차)이 없는 단계가 있어 --write 를 하지 않는다: " + str(_nogrid) + "\n   안내서 '★★★ 최우선 규칙'대로 그 단계의 격자를 먼저 만든다(refs_make → refs_cli/refs-grid). 이 검사는 --unverified 로 건너뛸 수 없다.")
+
+# ───── 번호별 읽기 표 게이트(관리자 지시 2026-10-08, 우회 불가): <이름>_read.json = {"번호": {"면": "카메라가 보는 면", "링": "초록 링이 있는 칸·줄(센 근거)", "부품": "쓴 부품"}} — 부품이 있는 단계마다 세 칸이 모두 채워져야 --write 한다.
+#   격자를 만들고 점이 구멍 위에 앉았는지 확인한 뒤 센 값을 적는다. 건너뛰고 "나중에"가 안 되게 하는 장치다. --unverified 로도 못 건너뛴다. 옛 조립도는 면제.
+_rdf = name + "_read.json"; _rd = json.load(open(_rdf, encoding="utf-8")) if os.path.exists(_rdf) else {}
+_noread = [_k for _k, _st in enumerate(asm, 1) if _st.get("parts") and not all(str((_rd.get(str(_k)) or {}).get(_f, "")).strip() for _f in ("면", "링", "부품"))]
+print("번호별 읽기 표(" + _rdf + "):", "면제(옛 조립도)" if name in LEGACY_NO_GRID else (f"{len([1 for k, st in enumerate(asm, 1) if st.get('parts')]) - len(_noread)}단계 있음" + (f" — ❌ 안 적은 단계 {_noread}" if _noread else "")))
+if write and _noread and name not in LEGACY_NO_GRID:
+    sys.exit("❌ 번호별 읽기 표가 비어 있는 단계가 있어 --write 를 하지 않는다: " + str(_noread) + " — " + _rdf + " 에 그 번호의 면·링·부품을 적는다(격자를 만든 뒤 구멍을 센 결과). 묻지 말고 적고 계속한다.")
+
+# ───── 번호별 점검 게이트(관리자 지시 2026-10-08, 우회 불가): <이름>_checks.json 의 blocking(격자 없음·읽기 표 빈칸·읽기 표 부품≠모델·LIST 초과)이 있으면 --write 하지 않는다.
+_ckf = name + "_checks.json"
+if os.path.exists(_ckf) and name not in LEGACY_NO_GRID:
+    _ck = json.load(open(_ckf, encoding="utf-8")); _bl = _ck.get("blocking", [])
+    print("번호별 점검(" + _ckf + "):", "통과" if not _bl else "❌ 막힌 항목 %d개" % len(_bl)); [print("   ☐", b_) for b_ in _bl]
+    if write and _bl: sys.exit("❌ 번호별 점검에서 막힌 항목이 있어 --write 를 하지 않는다 — 항목을 채우고(허락을 받지 말고) 계속한다.")
 if write and unver and "--unverified" not in sys.argv:
     sys.exit("❌ 규칙 확인이 끝나지 않아 --write 를 하지 않는다. 확인하고 " + rf + " 에 적거나, 미확인을 알고 넣으려면 --unverified 를 붙인다.")
 if write:  # (규칙 확인은 위에서 이미 검사)
