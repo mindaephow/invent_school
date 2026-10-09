@@ -597,6 +597,8 @@
           <button id="viewHome" type="button" title="처음 화면으로">⌂ 처음</button>
           <button id="connToggle" type="button" aria-pressed="false" hidden title="부품의 돌기(끝의 초록 원판)와 구멍(두께 가운데를 막는 초록 원판) 연결점을 보여요">🟢 연결점</button>
           <button id="clearBtn" type="button" class="ghost" title="스케치북을 싹 비우고 새로 시작해요">🔄 초기화</button>
+          <button id="edgeToggle" type="button" class="on" aria-pressed="true" title="부품 테두리 선을 켜고 꺼요">▭ 테두리</button>
+          <button id="arBtn" type="button" title="지금 만든 모양을 태블릿 카메라 화면 위에 올려서 책상 위에 실제 크기로 놓고 볼 수 있어요(AR)">📱 AR 보기</button>
         </div>
         <div class="side-cards">
           <div class="part-list" id="partList">
@@ -1662,7 +1664,7 @@
     return out;
   }
   const robotEdgeCache = new WeakMap(); // 모델 데이터 → 윤곽선 모양
-  const robotEdgeMaterial = new THREE.LineBasicMaterial({ color: 0x000000 }); // 모든 부품의 테두리 선이 같이 쓰는 검은색
+  const robotEdgeMaterial = new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.28 }); // 모든 부품의 테두리 선이 같이 쓰는 연한 검정(너무 진하다는 지적 2026-10-09). material.visible 로 한 번에 켜고 끈다
   const robotGeomCache = new WeakMap(); // 모델 데이터 → 가운데 맞춘 지오메트리 — 같은 종류 부품 여러 개(리벳 12개 등)가 하나를 같이 쓴다(매번 복사·변환하지 않음)
   function makeRobotModelMesh(data){
     let g = robotGeomCache.get(data);
@@ -4193,6 +4195,137 @@
   document.getElementById('viewHome').addEventListener('click', () => {
     orbit.theta = Math.PI / 4; orbit.phi = 1.05; orbit.radius = 1800;
     target.set(0, 400, 0);
+  });
+  // 테두리 켜기/끄기 — 고른 상태는 이 브라우저에 기억해 둔다(저장 못 하는 환경이면 그냥 켜진 채로)
+  (function(){
+    const btn = document.getElementById('edgeToggle');
+    let on = true;
+    try { if (localStorage.getItem('ivs-part-edges') === 'off') on = false; } catch (e) {}
+    const apply = () => { robotEdgeMaterial.visible = on; btn.classList.toggle('on', on); btn.setAttribute('aria-pressed', String(on)); };
+    btn.addEventListener('click', () => { on = !on; try { localStorage.setItem('ivs-part-edges', on ? 'on' : 'off'); } catch (e) {} apply(); });
+    apply();
+  })();
+  // ===== AR 보기: 지금 스케치북의 부품을 3D 파일(GLB)로 만들어 model-viewer 로 보여 준다 =====
+  // 태블릿에서 "AR로 책상에 올리기"를 누르면 카메라 화면 위에 실제 크기(mm → m)로 놓인다.
+  //  · 안드로이드 크롬: WebXR / 아이패드(사파리): Quick Look(model-viewer 가 GLB 에서 USDZ 를 자동으로 만든다)
+  // 모양은 부품마다 한 번만 담고(같은 종류 부품끼리 공유), 부품마다 놓인 자리(행렬)만 따로 담는다.
+  function sceneToGLB(){
+    const mats = new Map();    // 색 → 재질 번호
+    const meshesOut = [];      // 모양+색 조합 { geo, matIndex }
+    const nodes = [];          // 부품 조각마다 { meshIndex, matrix }
+    const meshKey = new Map();
+    const srgb2lin = (c) => Math.pow(Math.min(1, Math.max(0, c)), 2.2);
+    const vmin = [1e9, 1e9, 1e9], vmax = [-1e9, -1e9, -1e9];
+    const geoBox = new Map();
+    const boxOf = (geo) => {
+      let b = geoBox.get(geo.uuid);
+      if (!b) { geo.computeBoundingBox(); b = geo.boundingBox.clone(); geoBox.set(geo.uuid, b); }
+      return b;
+    };
+    const corner = new THREE.Vector3();
+    const visit = (o) => {
+      if (!o.visible) return;
+      const u = o.userData || {};
+      if (u.arrow || u.connMarks || u.dot || u.edgeLine) return;
+      if (o.isMesh && o.geometry && o.geometry.getAttribute('position') && o.material && o.material.color) {
+        o.updateWorldMatrix(true, false);
+        const colorKey = o.material.color.getHexString();
+        const key = o.geometry.uuid + '|' + colorKey;
+        let mi = meshKey.get(key);
+        if (mi === undefined) {
+          mi = meshesOut.length; meshKey.set(key, mi);
+          if (!mats.has(colorKey)) mats.set(colorKey, mats.size);
+          meshesOut.push({ geo: o.geometry, matIndex: mats.get(colorKey) });
+        }
+        nodes.push({ meshIndex: mi, matrix: o.matrixWorld.toArray() });
+        const b = boxOf(o.geometry);
+        for (let i = 0; i < 8; i++) {
+          corner.set(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z).applyMatrix4(o.matrixWorld);
+          for (let d = 0; d < 3; d++) { const v = d === 0 ? corner.x : d === 1 ? corner.y : corner.z; if (v < vmin[d]) vmin[d] = v; if (v > vmax[d]) vmax[d] = v; }
+        }
+      }
+      o.children.forEach(visit);
+    };
+    parts.forEach((p) => { if (p.mesh) visit(p.mesh); });
+    if (!nodes.length) return null;
+    // 바이너리 조각 쌓기
+    const chunks = []; let byteLen = 0;
+    const bufferViews = [], accessors = [];
+    const addView = (typedArray, target) => {
+      const bytes = new Uint8Array(typedArray.buffer, typedArray.byteOffset, typedArray.byteLength);
+      const pad = (4 - (byteLen % 4)) % 4;
+      if (pad) { chunks.push(new Uint8Array(pad)); byteLen += pad; }
+      bufferViews.push(Object.assign({ buffer: 0, byteOffset: byteLen, byteLength: bytes.byteLength }, target ? { target } : {}));
+      chunks.push(bytes); byteLen += bytes.byteLength;
+      return bufferViews.length - 1;
+    };
+    const gMeshes = meshesOut.map((m) => {
+      const pos = m.geo.getAttribute('position'), nor = m.geo.getAttribute('normal'), idx = m.geo.index;
+      const posArr = new Float32Array(pos.count * 3), norArr = nor ? new Float32Array(nor.count * 3) : null;
+      for (let i = 0; i < pos.count; i++) { posArr[3 * i] = pos.getX(i); posArr[3 * i + 1] = pos.getY(i); posArr[3 * i + 2] = pos.getZ(i); }
+      if (nor) for (let i = 0; i < nor.count; i++) { norArr[3 * i] = nor.getX(i); norArr[3 * i + 1] = nor.getY(i); norArr[3 * i + 2] = nor.getZ(i); }
+      const bb = boxOf(m.geo);
+      accessors.push({ bufferView: addView(posArr, 34962), componentType: 5126, count: pos.count, type: 'VEC3', min: [bb.min.x, bb.min.y, bb.min.z], max: [bb.max.x, bb.max.y, bb.max.z] });
+      const posAcc = accessors.length - 1;
+      let norAcc = -1;
+      if (norArr) { accessors.push({ bufferView: addView(norArr, 34962), componentType: 5126, count: nor.count, type: 'VEC3' }); norAcc = accessors.length - 1; }
+      let idxAcc = -1;
+      if (idx) { const ia = new Uint32Array(idx.count); for (let i = 0; i < idx.count; i++) ia[i] = idx.getX(i); accessors.push({ bufferView: addView(ia, 34963), componentType: 5125, count: idx.count, type: 'SCALAR' }); idxAcc = accessors.length - 1; }
+      const attrs = { POSITION: posAcc }; if (norAcc >= 0) attrs.NORMAL = norAcc;
+      return { primitives: [Object.assign({ attributes: attrs, material: m.matIndex }, idxAcc >= 0 ? { indices: idxAcc } : {})] };
+    });
+    // 색 → 재질. 화면 조명이 색을 밝게 만들어 0.72배로 낮춰 칠했으니 되돌려 원래 등록된 색으로 담는다(AR 은 자체 조명).
+    const matList = []; mats.forEach((i, hex) => {
+      const c = new THREE.Color('#' + hex);
+      matList[i] = { pbrMetallicRoughness: { baseColorFactor: [srgb2lin(c.r / 0.72), srgb2lin(c.g / 0.72), srgb2lin(c.b / 0.72), 1], metallicFactor: 0, roughnessFactor: 0.95 } };
+    });
+    // 가운데로 모으고 바닥(최저점)을 0 으로 맞춘 뒤 mm → m
+    const S = 0.001, cx = (vmin[0] + vmax[0]) / 2, cz = (vmin[2] + vmax[2]) / 2;
+    const gltfNodes = nodes.map((n) => ({ mesh: n.meshIndex, matrix: n.matrix }));
+    gltfNodes.push({ name: 'robot', children: nodes.map((_, i) => i), scale: [S, S, S], translation: [-cx * S, -vmin[1] * S, -cz * S] });
+    const json = { asset: { version: '2.0', generator: 'invent-school' }, scene: 0, scenes: [{ nodes: [gltfNodes.length - 1] }], nodes: gltfNodes, meshes: gMeshes, materials: matList, accessors, bufferViews, buffers: [{ byteLength: 0 }] };
+    const pad4 = (n) => (n + 3) & ~3;
+    const binLen = pad4(byteLen); json.buffers[0].byteLength = binLen;
+    const jsonBytes = new TextEncoder().encode(JSON.stringify(json));
+    const jsonLen = pad4(jsonBytes.length);
+    const total = 12 + 8 + jsonLen + 8 + binLen;
+    const out = new Uint8Array(total), dv = new DataView(out.buffer);
+    dv.setUint32(0, 0x46546C67, true); dv.setUint32(4, 2, true); dv.setUint32(8, total, true);
+    dv.setUint32(12, jsonLen, true); dv.setUint32(16, 0x4E4F534A, true);
+    out.set(jsonBytes, 20); for (let i = jsonBytes.length; i < jsonLen; i++) out[20 + i] = 0x20;
+    const binStart = 20 + jsonLen;
+    dv.setUint32(binStart, binLen, true); dv.setUint32(binStart + 4, 0x004E4942, true);
+    let off = binStart + 8; chunks.forEach((c) => { out.set(c, off); off += c.byteLength; });
+    return { blob: new Blob([out], { type: 'model/gltf-binary' }), size: [vmax[0] - vmin[0], vmax[1] - vmin[1], vmax[2] - vmin[2]], nodes: nodes.length };
+  }
+  window.__ivsSceneToGLB = sceneToGLB; // 확인용
+  let arOverlay = null, arUrl = '', arScriptLoaded = false;
+  function closeAR(){ if (arOverlay) { arOverlay.remove(); arOverlay = null; } if (arUrl) { URL.revokeObjectURL(arUrl); arUrl = ''; } }
+  document.getElementById('arBtn').addEventListener('click', () => {
+    closeAR();
+    const glb = sceneToGLB();
+    if (!glb) { alert('스케치북에 부품이 없어요. 부품을 놓은 뒤에 눌러 주세요.'); return; }
+    arUrl = URL.createObjectURL(glb.blob);
+    if (!arScriptLoaded) {
+      arScriptLoaded = true;
+      const sc = document.createElement('script'); sc.type = 'module';
+      sc.src = 'https://unpkg.com/@google/model-viewer@3.5.0/dist/model-viewer.min.js';
+      document.head.appendChild(sc);
+    }
+    const mm = glb.size.map((v) => Math.round(v));
+    arOverlay = document.createElement('div');
+    arOverlay.id = 'arOverlay';
+    arOverlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:#cdd5e3;display:flex;flex-direction:column;';
+    arOverlay.innerHTML =
+      '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#fff;border-bottom:1px solid #d6dbe6;">'
+      + '<b style="font-size:15px;">📱 AR 보기</b><span style="font-size:12px;color:#556;">크기 가로 ' + mm[0] + ' × 높이 ' + mm[1] + ' × 세로 ' + mm[2] + 'mm · 부품 ' + glb.nodes + '개</span>'
+      + '<button id="arClose" type="button" style="margin-left:auto;padding:6px 14px;border-radius:999px;border:1px solid #c5ccdb;background:#fff;font-weight:600;">닫기 ✕</button></div>'
+      + '<model-viewer id="arViewer" src="' + arUrl + '" ar ar-modes="webxr quick-look scene-viewer" ar-scale="fixed" camera-controls touch-action="pan-y" auto-rotate shadow-intensity="1" exposure="0.8" tone-mapping="commerce" environment-image="neutral" style="flex:1;width:100%;--poster-color:transparent;">'
+      + '<button slot="ar-button" type="button" style="position:absolute;left:50%;bottom:22px;transform:translateX(-50%);padding:14px 26px;border-radius:999px;border:0;background:#2f6bff;color:#fff;font-size:16px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.25);">📱 AR로 책상에 올리기</button>'
+      + '</model-viewer>'
+      + '<div style="padding:8px 14px;font-size:12px;color:#556;background:#fff;border-top:1px solid #d6dbe6;">손가락으로 돌려 볼 수 있어요. 아래 파란 버튼을 누르면 카메라 화면에 실제 크기로 나타나요(태블릿에서만 눌려요).</div>';
+    document.body.appendChild(arOverlay);
+    document.getElementById('arClose').addEventListener('click', closeAR);
   });
   canvas.addEventListener('contextmenu', (e) => e.preventDefault()); // 오른쪽 버튼 끌기를 쓰려고 메뉴는 끔
   function pinchMid(){
