@@ -255,7 +255,7 @@ function stripSpecFileData(spec) {
   })
 }
 function mapPartRow(r, { light = false, stripSpecFiles = false } = {}) {
-  const base = { id: r.id, name: r.data?.name || '', icon: r.data?.icon || '', subject: r.data?.subject || '', category: r.data?.category || '', volumes: Array.isArray(r.data?.volumes) ? r.data.volumes : [], color: r.data?.color || '', size: r.data?.size || '', createdAt: r.created_at }
+  const base = { id: r.id, name: r.data?.name || '', icon: r.data?.icon || '', subject: r.data?.subject || '', category: r.data?.category || '', volumes: Array.isArray(r.data?.volumes) ? r.data.volumes : [], color: r.data?.color || '', size: r.data?.size || '', thumbKey: r.data?.thumbKey || '', createdAt: r.created_at }
   // 교재관리처럼 이름·과목만 필요한 화면용 — 부품마다 수십 KB인 SVG/스냅샷/spec은 빼서 응답을 가볍게 한다.
   if (light) return base
   const spec = stripSpecFiles ? stripSpecFileData(r.data?.spec || null) : (r.data?.spec || null)
@@ -266,12 +266,12 @@ async function listParts(sb, light = false, stripSpecFiles = false) {
   // DB→서버로 24MB가 넘어와서 목록이 3초 넘게 걸렸다(실측: 필요한 열만 읽으면 367KB). 그래서 DB에서 필요한
   // 항목만 골라 읽고, spec은 "3D 모양 있음" 표시(첫 도형의 type)만 받는다. 실제 도형은 get_part로 따로 받는다.
   if (light || stripSpecFiles) {
-    const base = 'id, created_at, name:data->>name, icon:data->>icon, subject:data->>subject, category:data->>category, volumes:data->volumes, color:data->>color, size:data->>size'
+    const base = 'id, created_at, name:data->>name, icon:data->>icon, subject:data->>subject, category:data->>category, volumes:data->volumes, color:data->>color, size:data->>size, thumb_key:data->>thumbKey'
     const extra = ', image_svg:data->>image_svg, image_svg_diagonal:data->>image_svg_diagonal, primary_image:data->>primary_image, snapshot:data->snapshot, snapshots:data->snapshots, thumbnail3d:data->thumbnail3d, spec_type:data->spec->shapes->0->>type'
     const { data, error } = await sb.from('ivs_part_catalog').select(light ? base : base + extra).order('created_at', { ascending: true })
     if (error) throw new Error(error.message)
     return (data || []).map((r) => {
-      const out = { id: r.id, name: r.name || '', icon: r.icon || '', subject: r.subject || '', category: r.category || '', volumes: Array.isArray(r.volumes) ? r.volumes : [], color: r.color || '', size: r.size || '', createdAt: r.created_at }
+      const out = { id: r.id, name: r.name || '', icon: r.icon || '', subject: r.subject || '', category: r.category || '', volumes: Array.isArray(r.volumes) ? r.volumes : [], color: r.color || '', size: r.size || '', thumbKey: r.thumb_key || '', createdAt: r.created_at }
       if (light) return out
       return Object.assign(out, { imageSvg: r.image_svg || '', imageSvgDiagonal: r.image_svg_diagonal || '', primaryImage: r.primary_image === 'diagonal' ? 'diagonal' : 'front', spec: r.spec_type ? { shapes: [{ type: r.spec_type }], partial: true } : null, snapshot: r.snapshot || null, snapshots: r.snapshots || null, thumbnail3d: r.thumbnail3d || null })
     })
@@ -491,6 +491,7 @@ export async function POST(request) {
       if (!name) return json({ error: '부품 이름을 입력해주세요.' }, 400)
       if (!PART_SUBJECTS.includes(subject)) return json({ error: '과목을 선택해주세요.' }, 400)
       if (volErr) return json({ error: volErr }, 400)
+      const thumbKey = typeof body.thumbKey === 'string' ? body.thumbKey.slice(0, 64) : '' // 썸네일을 그릴 때의 도형 지문 — 도형이 바뀌었는지 비교하는 데 쓴다
       const { data: existing, error: fetchErr } = await sb.from('ivs_part_catalog').select('data').eq('id', partId).maybeSingle()
       if (fetchErr) throw new Error(fetchErr.message)
       if (!existing) return json({ error: '부품을 찾을 수 없어요.' }, 404)
@@ -512,8 +513,9 @@ export async function POST(request) {
       // volumes도 안 보내면(예: 부품 수리실에서 스펙만 저장) 기존 권 배정을 그대로 유지한다.
       const nextVolumes = Array.isArray(body.volumes) ? volumes : (Array.isArray(existing.data?.volumes) ? existing.data.volumes : [])
       // connectors(돌기·구멍 연결점)는 body.connectors 로 주면 기록하고, 안 주면 기존 값을 그대로 이어 붙인다 — 안 그러면 부품을 수정할 때마다 지워진다.
-      const { error } = await sb.from('ivs_part_catalog').update({ data: { name, icon, subject, category: category || null, volumes: nextVolumes, color: color || null, size: size || null, image_svg: imageSvg || null, image_svg_diagonal: imageSvgDiagonal || null, primary_image: primaryImage, spec: nextSpec, snapshot: nextSnapshot, snapshots: nextSnapshots, thumbnail3d: nextThumbnail3d, createdAt, ...((body.connectors && typeof body.connectors === 'object') ? { connectors: body.connectors } : (existing.data?.connectors ? { connectors: existing.data.connectors } : {})) } }).eq('id', partId)
+      const { error } = await sb.from('ivs_part_catalog').update({ data: { name, icon, subject, category: category || null, volumes: nextVolumes, color: color || null, size: size || null, image_svg: imageSvg || null, image_svg_diagonal: imageSvgDiagonal || null, primary_image: primaryImage, spec: nextSpec, snapshot: nextSnapshot, snapshots: nextSnapshots, thumbnail3d: nextThumbnail3d, createdAt, ...(thumbKey ? { thumbKey } : (existing.data?.thumbKey ? { thumbKey: existing.data.thumbKey } : {})), ...((body.connectors && typeof body.connectors === 'object') ? { connectors: body.connectors } : (existing.data?.connectors ? { connectors: existing.data.connectors } : {})) } }).eq('id', partId)
       if (error) throw new Error(error.message)
+      if (body.skipList === true) return json({ ok: true }) // 썸네일을 여러 개 연달아 저장할 때: 응답으로 전체 부품 목록(26MB)을 매번 다시 만들지 않는다(DB 시간 초과 원인)
       return json({ ok: true, parts: await listParts(sb) })
     }
 

@@ -412,6 +412,8 @@
       </div>
       <div class="crumbs" id="partCategoryTabs" hidden style="margin-top:6px;"></div>
       <div style="display:flex; align-items:center; gap:8px; margin:8px 0;">
+        <button type="button" class="ghost" id="regenChangedThumbsBtn">🔍 바뀐 것만 그리기</button>
+        <button type="button" class="ghost" id="regenPickThumbsBtn">✅ 골라서 그리기</button>
         <button type="button" class="ghost" id="regenMissingThumbsBtn">🖼 안 그려진 것만 그리기</button>
         <button type="button" class="ghost" id="regenThumbsBtn">🔄 3D 썸네일 전체 다시 그리기</button>
         <span class="note" id="regenThumbsMsg" style="margin:0;"></span>
@@ -1730,36 +1732,93 @@
   // 안 담아 보낸 필드(spec 등)는 기존 값을 그대로 유지하지만, image_svg 등 몇몇 필드는 안 보내면 빈 값으로
   // 덮어써지므로 allParts에 이미 있는 값을 전부 그대로 다시 실어 보낸다(사용자 데이터 유실 방지).
   // onlyMissing: 저장된 thumbnail3d가 아직 없는 부품만 그린다(사용자 지시: "매번 다 그리지 말고 안그려진것만").
-  async function regenThumbs(onlyMissing){
-    const msg = document.getElementById('regenThumbsMsg');
-    const btn = document.getElementById('regenThumbsBtn');
-    const btn2 = document.getElementById('regenMissingThumbsBtn');
-    const targets = allParts.filter((p) => p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.length && (!onlyMissing || !p.thumbnail3d));
-    if (!targets.length) { msg.textContent = onlyMissing ? '안 그려진 부품이 없어요.' : '3D 모델이 있는 부품이 없어요.'; return; }
-    if (!window.__partsLabViewer) { msg.textContent = '3D 모듈이 아직 로딩 중이에요 — 잠시 후 다시 시도해주세요.'; return; }
-    btn.disabled = true; btn2.disabled = true;
-    let done = 0, failed = 0;
-    for (const p of targets) {
-      msg.textContent = `다시 그리는 중... (${done + failed + 1}/${targets.length})`;
+  // 도형 내용의 지문 — 썸네일을 그릴 때 같이 저장해 두었다가, 다음에 도형이 바뀐 부품만 골라 다시 그리는 데 쓴다.
+  // 3D 원본 파일(fileDataUrl)은 길이와 끝 48자만 본다(통째로 해시하면 느리다).
+  function shapesKey(shapes){
+    const slim = shapes.map((sh) => {
+      if (!sh || typeof sh.fileDataUrl !== 'string') return sh;
+      const { fileDataUrl, ...rest } = sh;
+      return Object.assign(rest, { _f: fileDataUrl.length + ':' + fileDataUrl.slice(-48) });
+    });
+    const str = JSON.stringify(slim);
+    let h = 0x811c9dc5;
+    for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+    return (h >>> 0).toString(16) + '-' + str.length.toString(16);
+  }
+  // 썸네일 한 개 저장. skipList: 저장 응답으로 전체 부품 목록(26MB)을 매번 다시 만들지 않게 한다 — 48개를 연달아 저장하다
+  // DB 시간 초과(statement timeout)가 난 원인이었다. 그래도 시간 초과가 나면 잠깐 쉬고 두 번까지 다시 시도한다.
+  async function saveThumb(p, dataUrl, key){
+    for (let attempt = 0; ; attempt++) {
       try {
-        // 목록엔 3D 모양 원본이 없다 — 그대로 그리면 기본 큐브가 나오고 그 큐브가 thumbnail3d로 저장돼 버린다.
-        const shapes = await getPartShapes(p);
-        const dataUrl = await window.__partsLabViewer.renderShapesThumbnail(shapes, 88);
         await adminApi({
           action: 'update_part', partId: p.id, name: p.name, icon: p.icon, subject: p.subject,
           category: p.category || '', color: p.color || '', size: p.size || '',
           imageSvg: p.imageSvg || '', imageSvgDiagonal: p.imageSvgDiagonal || '',
-          primaryImage: p.primaryImage || 'front', volumes: p.volumes || [], thumbnail3d: dataUrl,
+          primaryImage: p.primaryImage || 'front', volumes: p.volumes || [], thumbnail3d: dataUrl, thumbKey: key, skipList: true,
         });
-        done++;
-      } catch (e) { failed++; console.error('썸네일 재생성 실패: ' + p.name, e); }
+        return;
+      } catch (e) {
+        if (attempt >= 2 || !/timeout|시간/i.test(e.message || '')) throw e;
+        await new Promise((r) => setTimeout(r, 2000));
+      }
     }
-    msg.textContent = `완료 — ${done}개 갱신${failed ? `, ${failed}개 실패` : ''}.`;
-    btn.disabled = false; btn2.disabled = false;
+  }
+  // mode: 'all' 전부 / 'missing' 썸네일이 없는 것만 / 'changed' 도형이 바뀐 것만(저장해 둔 지문과 비교) / 'pick' pickIds 로 고른 것만
+  async function regenThumbs(mode, pickIds){
+    const msg = document.getElementById('regenThumbsMsg');
+    const btns = ['regenThumbsBtn', 'regenMissingThumbsBtn', 'regenChangedThumbsBtn', 'regenPickThumbsBtn'].map((id) => document.getElementById(id)).filter(Boolean);
+    let targets = allParts.filter((p) => p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.length);
+    if (mode === 'missing') targets = targets.filter((p) => !p.thumbnail3d);
+    if (mode === 'pick') targets = targets.filter((p) => (pickIds || []).includes(p.id));
+    if (!targets.length) { msg.textContent = mode === 'missing' ? '안 그려진 부품이 없어요.' : mode === 'pick' ? '고른 부품이 없어요.' : '3D 모델이 있는 부품이 없어요.'; return; }
+    if (!window.__partsLabViewer) { msg.textContent = '3D 모듈이 아직 로딩 중이에요 — 잠시 후 다시 시도해주세요.'; return; }
+    btns.forEach((b) => { b.disabled = true; });
+    let done = 0, same = 0; const failedNames = [];
+    for (let i = 0; i < targets.length; i++) {
+      const p = targets[i];
+      msg.textContent = `${mode === 'changed' ? '바뀐 것 찾는 중' : '다시 그리는 중'}... (${i + 1}/${targets.length}) ${p.name}`;
+      try {
+        // 목록엔 3D 모양 원본이 없다 — 그대로 그리면 기본 큐브가 나오고 그 큐브가 thumbnail3d로 저장돼 버린다.
+        const shapes = await getPartShapes(p);
+        const key = shapesKey(shapes);
+        if (mode === 'changed' && p.thumbnail3d && p.thumbKey === key) { same++; continue; }
+        const dataUrl = await window.__partsLabViewer.renderShapesThumbnail(shapes, 88);
+        await saveThumb(p, dataUrl, key);
+        p.thumbKey = key; p.thumbnail3d = dataUrl;
+        done++;
+      } catch (e) { failedNames.push(p.name); console.error('썸네일 재생성 실패: ' + p.name, e); }
+    }
+    msg.textContent = `완료 — ${done}개 갱신` + (mode === 'changed' ? `, ${same}개는 바뀐 게 없어 건너뜀` : '') + (failedNames.length ? `, ${failedNames.length}개 실패(${failedNames.slice(0, 5).join(', ')}${failedNames.length > 5 ? ' …' : ''})` : '') + '.';
+    btns.forEach((b) => { b.disabled = false; });
     loadParts();
   }
-  document.getElementById('regenThumbsBtn').addEventListener('click', () => regenThumbs(false));
-  document.getElementById('regenMissingThumbsBtn').addEventListener('click', () => regenThumbs(true));
+  // 골라서 그리기: 부품 이름 체크 목록을 열고, 고른 것만 다시 그린다
+  function togglePickBox(){
+    const old = document.getElementById('regenPickBox');
+    if (old) { old.remove(); return; }
+    const list = allParts.filter((p) => p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.length);
+    const box = document.createElement('div');
+    box.id = 'regenPickBox';
+    box.style.cssText = 'margin:6px 0 10px;padding:10px;border:1px solid #d6dbe6;border-radius:10px;background:#fff;';
+    box.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:6px 14px;max-height:200px;overflow:auto;">'
+      + list.map((p) => `<label style="font-size:13px;white-space:nowrap;"><input type="checkbox" value="${escapeHtml(p.id)}"> ${escapeHtml(p.name)}</label>`).join('')
+      + '</div><div style="margin-top:8px;display:flex;gap:8px;"><button type="button" class="ghost" id="regenPickGo">고른 것 그리기</button><button type="button" class="ghost" id="regenPickToggleAll">전체 선택/해제</button></div>';
+    document.getElementById('regenThumbsMsg').parentElement.after(box);
+    document.getElementById('regenPickGo').addEventListener('click', () => {
+      const ids = Array.from(box.querySelectorAll('input[type=checkbox]:checked')).map((c) => c.value);
+      box.remove();
+      regenThumbs('pick', ids);
+    });
+    document.getElementById('regenPickToggleAll').addEventListener('click', () => {
+      const cbs = Array.from(box.querySelectorAll('input[type=checkbox]'));
+      const all = cbs.every((c) => c.checked);
+      cbs.forEach((c) => { c.checked = !all; });
+    });
+  }
+  document.getElementById('regenThumbsBtn').addEventListener('click', () => regenThumbs('all'));
+  document.getElementById('regenMissingThumbsBtn').addEventListener('click', () => regenThumbs('missing'));
+  document.getElementById('regenChangedThumbsBtn').addEventListener('click', () => regenThumbs('changed'));
+  document.getElementById('regenPickThumbsBtn').addEventListener('click', togglePickBox);
   // 교재관리 탭용 — 이름·과목만 받아서(SVG/스냅샷 제외) 빠르게 allParts만 채운다. 부품 탭은 열 때마다
   // loadParts로 전체를 다시 받으니 여기서 가벼운 목록으로 덮어써도 문제없다.
   async function loadPartsLite(){
