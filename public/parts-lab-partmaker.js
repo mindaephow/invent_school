@@ -1702,7 +1702,7 @@ function initPartMaker() {
   });
   // 자주 쓰는 색 10개 — 이 부품 체계에서 실제로 쓰는 아이보리(1열브라켓)·회색(90도 프레임)에, 팔레트
   // 기본색 몇 가지와 무채색(흰/검)을 더함.
-  const COLOR_PRESETS = ['#f2ead9', '#c7cbd1', '#ffffff', '#777777', '#666666', '#555555', '#222222', '#5b8def', '#ff9f43', '#51cf66', '#e03b2b', '#fcc419'];
+  const COLOR_PRESETS = ['#f2ead9', '#c7cbd1', '#adb2b9', '#ffffff', '#777777', '#666666', '#555555', '#222222', '#5b8def', '#ff9f43', '#51cf66', '#e03b2b', '#fcc419'];
   document.getElementById('partMakerColorPresets').innerHTML = COLOR_PRESETS.map((hex) =>
     '<button type="button" data-hex="' + hex + '" title="' + hex + '" style="width:22px;height:22px;padding:0;border-radius:5px;border:1px solid #ccc;background:' + hex + ';cursor:pointer;"></button>'
   ).join('');
