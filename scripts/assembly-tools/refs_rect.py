@@ -1,7 +1,7 @@
-# 책 이미지 작업(새 방식, 관리자 지시 2026-10-09): 로봇은 똑바로 세운 채, 기준 판의 칸 열이 수직선·줄이 수평선과 나란한 직사각형 격자가 되도록 기울임(어파인)만 보정하고
+# 책 이미지 작업(새 방식, 관리자 지시 2026-10-09): 로봇은 똑바로 세운 채 회전만(늘이기·펴기 없음) 한 그림이고
 # 파란 수직선(판 가운데 열)·수평선(판 가운데 줄)을 긋는다. 그림 전체를 옆으로 눕히지(90° 돌리지) 않는다. 방향은 원본의 위·아래·좌·우를 최대한 유지(거울 금지).
 #   python refs_rect.py <이름> [번호 ...]   번호를 안 주면 fits 가 있는 모든 번호.  입력: refs/<이름>/NN.jpg(원본), NN_lv.json(자르기 영역 crop), fits/NN_<라벨>.json(구멍 점, 원본 좌표)
-#   출력: refs/<이름>/NN_1.jpg(보정한 그림 + 수직·수평선), NN_2.jpg(+ 격자 점·칸·줄 번호), index.json 의 ③·④ 설명 갱신. 점이 없는 번호(한 줄 막대)는 막대 축이 수직/수평이 되게 기울임만 보정.
+#   출력: refs/<이름>/NN_1.jpg(보정한 그림 + 수직·수평선), NN_2.jpg(+ 격자 점·칸·줄 번호), index.json 의 ③·④ 설명 갱신. 점이 없는 번호(한 줄 막대)는 막대 축이 수직/수평이 되게 회전만 한다.
 import json, os, glob, re, sys, math
 import cv2, numpy as np
 sys.stdout.reconfigure(encoding='utf-8')
@@ -57,7 +57,7 @@ def process(step):
     for f in sorted(glob.glob(D+'fits/%s_*.json'%nm)):
         j=json.load(open(f,encoding='utf-8')); fits.append((os.path.basename(f)[3:-5],j))
     names=oldnames(step)
-    if not fits:   # 점이 없는 단계(32번 한 줄 막대): 막대 축이 수직/수평이 되도록 기울임만 보정
+    if not fits:   # 점이 없는 단계(32번 한 줄 막대): 막대 축이 수직/수평이 되도록 회전만
         ang=Mj['angle']; res=ang-90.0*round(ang/90.0)
         Mx=cv2.getRotationMatrix2D((w/2,h/2),res,1.0); cs,sn=abs(Mx[0,0]),abs(Mx[0,1]); W,H=int(h*sn+w*cs)+1,int(h*cs+w*sn)+1
         Mx[0,2]+=W/2-w/2; Mx[1,2]+=H/2-h/2
@@ -66,37 +66,32 @@ def process(step):
         base=out.copy(); g=None
     else:
         ref=max(fits,key=lambda t:len(t[1]['pts'])); rl,rj=ref; pts=rj['pts']; cols,rows=rj['cols'],rj['rows']
-        key,swap,fa,fb=pick_orientation(pts,cols,rows)
-        P=pitch(pts)
-        def dstof(p,cols=cols,rows=rows):
-            c=(cols-1-(p[0]-1)) if fa else p[0]-1; r=(rows-1-(p[1]-1)) if fb else p[1]-1
-            return [r*P,c*P] if swap else [c*P,r*P]
-        src=np.array([[p[2]-cx0,p[3]-cy0] for p in pts],np.float32); dst=np.array([dstof(p) for p in pts],np.float32)
-        A,_=cv2.estimateAffine2D(src,dst,method=cv2.LMEDS)
-        corn=np.array([[0,0],[w,0],[w,h],[0,h]],np.float32); tc=(A[:,:2]@corn.T).T+A[:,2]
-        mn=tc.min(0)-5; mx=tc.max(0)+5; W,H=[int(v) for v in np.ceil(mx-mn)]
-        sc=1.0
-        if max(W,H)>1800: sc=1800.0/max(W,H)
-        A2=A.copy(); A2[:,2]-=mn; A2*=sc; W,H=int(W*sc),int(H*sc)
+        if not names: names=[rj.get('name') or '기준 판']   # fits 파일에 name 을 적어 두면 설명에 그 이름을 쓴다(판이 아닌 L 브래킷 등)
+        # ★ 회전만(관리자 지시 2026-10-09 — "회전을 하라고 했는데 왜 이미지를 뭉개 놓았나"): 판의 칸 방향(구멍이 늘어선 방향)이 수평(또는 수직)에 가장 가까워지도록 작은 각도만 돌린다. 늘이거나 기울여 펴지 않아 화질이 그대로다. 그림 전체를 90° 눕히지도 않는다.
+        swap=False; fa=fb=False
+        _P={(q[0],q[1]):(q[2],q[3]) for q in pts}; _vs=[(_P[(c+1,r)][0]-_P[(c,r)][0],_P[(c+1,r)][1]-_P[(c,r)][1]) for (c,r) in _P if (c+1,r) in _P]; _off=0.0
+        if not _vs: _vs=[(_P[(c,r+1)][0]-_P[(c,r)][0],_P[(c,r+1)][1]-_P[(c,r)][1]) for (c,r) in _P if (c,r+1) in _P]; _off=90.0
+        _a=math.degrees(math.atan2(np.mean([v[1] for v in _vs]),np.mean([v[0] for v in _vs]))) - _off
+        _res=_a-90.0*round(_a/90.0)                     # 가장 가까운 수평·수직까지의 작은 각도
+        Mr=cv2.getRotationMatrix2D((w/2.0,h/2.0),_res,1.0); _cs,_sn=abs(Mr[0,0]),abs(Mr[0,1]); W,H=int(h*_sn+w*_cs)+1,int(h*_cs+w*_sn)+1
+        Mr[0,2]+=W/2.0-w/2.0; Mr[1,2]+=H/2.0-h/2.0
+        A2=Mr.astype(np.float32); sc=1.0
         out=cv2.warpAffine(crop,A2,(W,H),flags=cv2.INTER_CUBIC,borderValue=(255,255,255))
         MASK=cv2.warpAffine(np.full((h,w),255,np.uint8),A2,(W,H),flags=cv2.INTER_LINEAR,borderValue=0)   # 그림이 있는 영역(다른 평면 판의 점이 그림 밖에 찍히지 않게)
         T=lambda x,y: A2@np.array([x-cx0,y-cy0,1.0])
-        pa=(A2[:,:2]@src.T).T+A2[:,2]; err=float(np.sqrt(((pa-dst*sc-(-mn*sc))**2).sum(1)).mean())
+        err=0.0; _ov=False
         # 가운데 열(수직선)·가운데 줄(수평선): 격자 가운데 칸/줄
-        cc=(cols+1)//2; rc=(rows+1)//2
+        _cv=sorted({q[0] for q in pts}); _rv=sorted({q[1] for q in pts}); cc=_cv[(len(_cv)-1)//2]; rc=_rv[(len(_rv)-1)//2]   # 있는 칸·줄 번호 중 가운데(일부 칸만 있는 판도 된다)
         tp={ (p[0],p[1]):T(p[2],p[3]) for p in pts }
-        # x축 방향 격자축 = (swap? 줄 : 칸), y축 = 반대
-        if not swap: xax,yax=0,1   # x ← 칸, y ← 줄
-        else: xax,yax=1,0
-        mid=[(cc,rc)[xax],(cc,rc)[yax]]
-        vx=float(np.mean([v[0] for (c,r),v in tp.items() if (c,r)[xax]==mid[0]]))
-        hy=float(np.mean([v[1] for (c,r),v in tp.items() if (c,r)[yax]==mid[1]]))
+        _cn=min(tp.items(),key=lambda kv: abs(kv[0][0]-cc)+abs(kv[0][1]-rc))[1]   # 가운데 칸·줄에 가장 가까운 노드
+        vx=float(_cn[0]); hy=float(_cn[1])                                          # 수직선 = 그 노드의 x, 수평선 = 그 노드의 y
+        xax,yax=0,1
         # 칸1·줄1 위치(위/아래/왼/오른)
         def where(ax):  # ax 0=칸 1=줄
-            v1=np.mean([vv for (c,r),vv in tp.items() if (c,r)[ax]==1],axis=0); vm=np.mean([vv for (c,r),vv in tp.items()],axis=0)
+            _m=min((c,r)[ax] for (c,r) in tp); v1=np.mean([vv for (c,r),vv in tp.items() if (c,r)[ax]==_m],axis=0); vm=np.mean([vv for (c,r),vv in tp.items()],axis=0)
             dx,dy=v1[0]-vm[0],v1[1]-vm[1]
             return ('왼쪽' if dx<0 else '오른쪽')+' 끝' if abs(dx)>=abs(dy) else ('위' if dy<0 else '아래')+' 끝'
-        info={'err':round(err/sc,2),'canvas':(W,H),'c1':where(0),'r1':where(1),'ref':rl,'res':None,'cols':cols,'rows':rows}
+        info={'err':round(err/sc,2),'canvas':(W,H),'c1':where(0),'r1':where(1),'ref':rl,'res':None,'cols':cols,'rows':rows,'overlay':_ov}
         base=out.copy()
         g=base.copy()
     # 선 긋기(수평·수직)
@@ -116,16 +111,19 @@ def process(step):
             return ok>=0.6*len(j['pts'])
         for lab,j in fits:
             if lab!=rl and not on_picture(j): continue
-            P_={(q[0],q[1]):T(q[2],q[3]) for q in j['pts']}   # 격자선: 이웃한 칸·줄 점을 잇는다
-            for (c_,r_),v_ in P_.items():
-                for nb in ((c_+1,r_),(c_,r_+1)):
-                    if nb in P_: cv2.line(g,(int(v_[0]),int(v_[1])),(int(P_[nb][0]),int(P_[nb][1])),(0,0,255),1,cv2.LINE_AA)
+            P_={(q[0],q[1]):T(q[2],q[3]) for q in j['pts']}   # 격자선: 같은 칸끼리·같은 줄끼리 번호 순서로 이웃한 점을 잇는다(번호가 건너뛰어도, 줄 번호가 소수여도 된다)
+            for key_,idx_ in ((0,1),(1,0)):
+                grp_={}
+                for k_ in P_: grp_.setdefault(k_[key_],[]).append(k_)
+                for ks_ in grp_.values():
+                    ks_.sort(key=lambda k: k[idx_])
+                    for a_,b_ in zip(ks_,ks_[1:]): cv2.line(g,(int(P_[a_][0]),int(P_[a_][1])),(int(P_[b_][0]),int(P_[b_][1])),(0,0,255),1,cv2.LINE_AA)
             for p in j['pts']:
                 x,y=T(p[2],p[3])
                 if not (0<=int(x)<W and 0<=int(y)<H and MASK[int(y),int(x)]>128): continue
                 cv2.circle(g,(int(x),int(y)),3,(0,0,255),-1)
-                if p[1]==1: cv2.putText(g,str(p[0]),(int(x)-6,int(y)-9),cv2.FONT_HERSHEY_SIMPLEX,0.42,(255,0,0),1)
-                if p[0]==1: cv2.putText(g,'j%d'%p[1],(int(x)+7,int(y)+4),cv2.FONT_HERSHEY_SIMPLEX,0.42,(0,140,0),1)
+                if p[1]==1: cv2.putText(g,str(p[0]),(int(x)-7,int(y)-10),cv2.FONT_HERSHEY_SIMPLEX,0.6,(255,0,0),2)
+                if p[0]==1: cv2.putText(g,'j%d'%p[1],(int(x)-30,int(y)+5),cv2.FONT_HERSHEY_SIMPLEX,0.55,(0,140,0),2)
     else: g=base.copy()
     cv2.imwrite(D+nm+'_1.jpg',base,[cv2.IMWRITE_JPEG_QUALITY,88]); cv2.imwrite(D+nm+'_2.jpg',g,[cv2.IMWRITE_JPEG_QUALITY,88])
     return info,names
@@ -133,10 +131,14 @@ def sentence(step,info,names):
     if not names and info.get('cols'): names=['%d칸×%d줄 판'%(info['cols'],info['rows'])]
     nm=' / '.join(names) if names else '판'
     if info['ref']=='(점 없음)':
-        n1="③ 단계 %d — 로봇(부품)은 똑바로 세운 채, 한 줄 막대의 축이 수직·수평이 되도록 기울임만 %.1f° 보정한 그림 + 파란 수직선·수평선(점 없음)."%(step,info['res'])
+        n1="③ 단계 %d — 로봇(부품)은 똑바로 세운 채, 한 줄 막대의 축이 수직·수평이 되도록 회전만 %.1f° 한 그림 + 파란 수직선·수평선(점 없음)."%(step,info['res'])
         n2="④ 단계 %d — 한 줄 프레임은 구멍 점이 일직선이라 격자 점을 만들지 않았다(③과 같은 그림)."%step
     else:
-        n1="③ 단계 %d — 로봇(부품)은 똑바로 세운 채, %s 의 칸 열이 수직선·줄이 수평선과 나란하도록 기울임만 보정한 그림(구멍 흰 틈 점으로 맞춤, 평균 오차 %.1fpx). 파란 수직선 = 판 가운데 열, 파란 수평선 = 판 가운데 줄. 칸1 = %s, 줄1 = %s."%(step,names[0] if names else '기준 판',info['err'],info['c1'],info['r1'])
+        if info.get('overlay'):
+            n1="③ 단계 %d — 판을 아주 비스듬히 본 그림이라 펴지 않고(보정하면 뭉개짐) 원본 그대로 두고 수직선·수평선(화면 기준선)을 그은 그림. 칸1 = %s, 줄1 = %s (격자 번호는 ④ 에서)."%(step,info['c1'],info['r1'])
+            n2="④ 단계 %d — 원본 위의 격자: %s. 빨강 점 = 구멍 중심, 초록 숫자 = 칸, j1~ = 줄(구멍 중심을 검출해 맞춘 점, 칸·줄 번호가 점 옆에 적힘)."%(step,nm)
+            return n1,n2
+        n1="③ 단계 %d — 로봇(부품)은 똑바로 세운 채, %s 의 구멍 줄이 수평에 가깝도록 회전만 한 그림(늘이거나 펴지 않음)(구멍 흰 틈 점으로 맞춤, 평균 오차 %.1fpx). 파란 수직선 = 판 가운데 열, 파란 수평선 = 판 가운데 줄. 칸1 = %s, 줄1 = %s."%(step,names[0] if names else '기준 판',info['err'],info['c1'],info['r1'])
         n2="④ 단계 %d — 같은 그림 위의 격자: %s. 빨강 점 = 구멍 중심, 초록 숫자 = 칸, j1~ = 줄. 칸1 = %s, 줄1 = %s."%(step,nm,info['c1'],info['r1'])
     return n1,n2
 if __name__=='__main__':

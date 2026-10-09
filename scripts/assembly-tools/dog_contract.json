@@ -70,135 +70,218 @@
 "noPart": false
 },
 "11": {
-"parts": {},
-"noPart": true
+"parts": {
+"37프레임": 1,
+"27프레임": 1
+},
+"noPart": false
 },
 "12": {
-"parts": {},
-"noPart": true
+"parts": {
+"59프레임": 1,
+"29프레임": 1
+},
+"noPart": false
 },
 "13": {
-"parts": {},
-"noPart": true
+"parts": {
+"T축": 1,
+"작은기어": 1,
+"리벳": 1
+},
+"noPart": false
 },
 "14": {
-"parts": {},
-"noPart": true
+"parts": {
+"T축": 1,
+"작은기어": 1,
+"리벳": 1
+},
+"noPart": false
 },
 "15": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 4,
+"27프레임": 1
+},
+"noPart": false
 },
 "16": {
-"parts": {},
-"noPart": true
+"parts": {
+"27프레임": 1
+},
+"noPart": false
 },
 "17": {
-"parts": {},
-"noPart": true
+"parts": {
+"3단블록": 2,
+"리벳": 4,
+"35프레임": 1
+},
+"noPart": false
 },
 "18": {
-"parts": {},
-"noPart": true
+"parts": {
+"59프레임": 1
+},
+"noPart": false
 },
 "19": {
-"parts": {},
-"noPart": true
+"parts": {
+"37프레임": 2,
+"2단블록": 4
+},
+"noPart": false
 },
 "20": {
 "parts": {},
 "noPart": true
 },
 "21": {
-"parts": {},
-"noPart": true
+"parts": {
+"2단블록": 2
+},
+"noPart": false
 },
 "22": {
-"parts": {},
-"noPart": true
+"parts": {
+"35프레임": 1
+},
+"noPart": false
 },
 "23": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 2,
+"39프레임": 1,
+"눈블록": 1
+},
+"noPart": false
 },
 "24": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 2,
+"39프레임": 1,
+"눈블록": 1
+},
+"noPart": false
 },
 "25": {
 "parts": {},
-"noPart": true
+"noPart": false
 },
 "26": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 4,
+"1열브라켓": 2
+},
+"noPart": false
 },
 "27": {
-"parts": {},
-"noPart": true
+"parts": {
+"29프레임": 2,
+"리벳": 4,
+"2열브라켓": 2
+},
+"noPart": false
 },
 "28": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 1,
+"19프레임": 1
+},
+"noPart": false
 },
 "29": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 2,
+"39프레임": 1
+},
+"noPart": false
 },
 "30": {
-"parts": {},
-"noPart": true
+"parts": {
+"부시": 1
+},
+"noPart": false
 },
 "31": {
-"parts": {},
-"noPart": true
+"parts": {
+"3단블록": 2
+},
+"noPart": false
 },
 "32": {
-"parts": {},
-"noPart": true
+"parts": {
+"15프레임": 2
+},
+"noPart": false
 },
 "33": {
-"parts": {},
-"noPart": true
+"parts": {
+"35프레임": 1
+},
+"noPart": false
 },
 "34": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 1,
+"19프레임": 1
+},
+"noPart": false
 },
 "35": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 2,
+"39프레임": 1
+},
+"noPart": false
 },
 "36": {
-"parts": {},
-"noPart": true
+"parts": {
+"부시": 1
+},
+"noPart": false
 },
 "37": {
-"parts": {},
-"noPart": true
+"parts": {
+"3단블록": 2
+},
+"noPart": false
 },
 "38": {
-"parts": {},
-"noPart": true
+"parts": {
+"15프레임": 2
+},
+"noPart": false
 },
 "39": {
-"parts": {},
-"noPart": true
+"parts": {
+"35프레임": 1
+},
+"noPart": false
 },
 "40": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 4,
+"25프레임": 2
+},
+"noPart": false
 },
 "41": {
-"parts": {},
-"noPart": true
+"parts": {
+"2단블록": 1,
+"90도 프레임": 2
+},
+"noPart": false
 },
 "42": {
 "parts": {},
 "noPart": true
 },
 "43": {
-"parts": {},
-"noPart": true
+"parts": {
+"메인보드": 1
+},
+"noPart": false
 }
 }

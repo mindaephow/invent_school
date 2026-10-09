@@ -166,6 +166,7 @@
         if (bx) { if (bx.min < lo) { lo = bx.min; loPart = a.key } if (bx.max > hi) hi = bx.max }
       })
       if (lo > 1e8) return
+      { const lf = def.lift ? Number(def.lift[sg.end]) || 0 : 0; lo += lf; hi += lf } // def.lift: 그 단계는 화면 전체를 띄워 보여 준다(꼬마기사·강아지로봇처럼 발바닥이 바닥 아래로 내려가는 보행 로봇)
       const tag = `${sg.start ? sg.start : 1}~${sg.end}단계${sg.flip ? '(뒤집은 방향)' : ''}`
       report.push(`바닥 기준 ${tag}: 가장 낮은 부품 바닥 y=${Math.round(lo * 10) / 10} (${loPart}), 가장 높은 곳 y=${Math.round(hi * 10) / 10}`)
       if (lo < -1) issues.push(`바닥 기준 ${tag}: ${loPart} 이 바닥(y=0) 아래로 ${Math.round(-lo * 10) / 10}mm 내려가 있음 — 그 방향에서 가장 낮은 부품이 y=0이 되게 맞출 것`)

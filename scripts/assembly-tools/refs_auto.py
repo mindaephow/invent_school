@@ -210,6 +210,31 @@ def cmd_render(a):
     json.dump(G, open(gp, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     return {"rotated_deg": round(alpha, 2), "files": ["%02d_1.jpg" % step, "%02d_2.jpg" % step], "preview": os.path.join(d, "%02d_2.jpg" % step), "original_preview": os.path.join(d, "%02d_1.jpg" % step)}
 
+
+def render_lv(a):
+    """철칙 순서(관리자 2026-10-08: 잘라내기 → 수평선 → 회전 → 격자). refs_cli.py level 이 만든 NN_lv.jpg/json(잘라내고 수평선으로 돌린 그림)을 쓴다.
+    plates = [{name, cols, rows, pts:[[칸,줄,x,y]...](원본 좌표), label}] — pts 는 lfit 가 원본 좌표로 되돌려 저장한 값이라 같은 변환으로 돌린 그림 좌표로 옮겨 그린다.
+    저장: NN_1 = 돌린 그림 + 파란 수평선(격자 없음), NN_2 = 같은 돌린 그림 + 수평선 + 격자."""
+    name, step = a["name"], int(a["step"]); d = refs_dir(name)
+    base = os.path.join(d, "%02d_lv" % step); rot = cv2.imread(base + ".jpg"); Mj = json.load(open(base + ".json", encoding="utf-8")); M = np.array(Mj["M"], np.float64); ox, oy = Mj["crop"][0], Mj["crop"][1]
+    line = cv2.imread(base + "_line.jpg"); plates = a.get("plates") or []
+    def tp(x, y): return float(M[0, 0] * (x - ox) + M[0, 1] * (y - oy) + M[0, 2]), float(M[1, 0] * (x - ox) + M[1, 1] * (y - oy) + M[1, 2])
+    o2 = line.copy(); names = []
+    for p in plates:
+        o2 = grid(o2, None, p["cols"], p["rows"], None, [(c, r) + tp(x, y) for c, r, x, y in p["pts"]]); names.append("%s %d칸×%d줄" % (p.get("name") or "판", p["cols"], p["rows"]))
+    cv2.imwrite(os.path.join(d, "%02d_1.jpg" % step), line, [cv2.IMWRITE_JPEG_QUALITY, 85]); cv2.imwrite(os.path.join(d, "%02d_2.jpg" % step), o2, [cv2.IMWRITE_JPEG_QUALITY, 85])
+    p3 = os.path.join(d, "%02d_3.jpg" % step)
+    if os.path.exists(p3): os.remove(p3)
+    ip = os.path.join(d, "index.json"); index = json.load(open(ip, encoding="utf-8")); index = [r for r in index if not (r["step"] == step and r["idx"] in (1, 2, 3))]
+    nm = " / ".join(names); ang = -Mj["angle"]; extra = a.get("note", "")
+    index += [{"step": step, "idx": 1, "file": "%02d_1.jpg" % step, "note": "① 단계 %d — 잘라내고(부품만) 판의 긴 방향이 수평이 되게 %.1f° 돌린 그림 + 파란 수평선(격자 없음). 철칙 순서: 잘라내기 → 수평선 → 회전 → 격자." % (step, ang)},
+              {"step": step, "idx": 2, "file": "%02d_2.jpg" % step, "names": names, "note": "② 단계 %d — 같은 돌린 그림 위의 격자: %s. 빨강 = 구멍 중심, 위 숫자 = 칸, 왼쪽 숫자 = 줄, 파란 가로선 = 수평선. %s" % (step, nm or "격자 없음", extra)}]
+    index.sort(key=lambda r: (r["step"], r["idx"])); json.dump(index, open(ip, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    gp = os.path.join(d, "grids_orig.json"); G = json.load(open(gp, encoding="utf-8")) if os.path.exists(gp) else []
+    G = [g for g in G if g["step"] != step] + [{"step": step, "name": p.get("name") or "판", "cols": p["cols"], "rows": p["rows"], "pts": p["pts"], "ref": True, "crop": Mj["crop"]} for p in plates]
+    json.dump(G, open(gp, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    return {"rotated_deg": round(ang, 2), "files": ["%02d_1.jpg" % step, "%02d_2.jpg" % step], "preview": os.path.join(d, "%02d_2.jpg" % step)}
+
 if __name__ == "__main__":
     sys.stdout.reconfigure(encoding="utf-8"); a = json.loads(sys.stdin.read() or "{}")
     print(json.dumps({"view": cmd_view, "fit": cmd_fit, "render": cmd_render}[sys.argv[1]](a), ensure_ascii=False))

@@ -151,8 +151,8 @@ def floor_check(A, tol=0.5):
                 _own = (ex.get("poseAt") or {}).get(str(st.index))   # 이 부품이 놓이는 단계에 별도 자세(poseAt)가 있으면 그 자세에서 띄운다(23번처럼 로봇 전체를 띄워 보여 주는 단계)
                 _lf = float(((A.meta.get("lift") or {}).get(str(st.index))) or 0)   # def.lift: 이 단계는 화면 전체를 띄워 보여 준다
                 checks.append(("새로 놓일 때", euler_p(_own) if _own else p0, euler_to_R(_own["r"]) if _own else R0, off, _lf))
-                if "move" not in ex: checks.append(("제자리", p0, R0, (0, 0, 0)))
-                else: checks.append(("옮긴 뒤 제자리", ex["move"]["p"], euler_to_R(ex["move"]["r"]), (0, 0, 0)))
+                if "move" not in ex: checks.append(("제자리", p0, R0, (0, 0, 0), _lf))   # 그 단계가 화면 전체를 띄우면(def.lift) 띄운 값까지 더해서 잰다
+                else: checks.append(("옮긴 뒤 제자리", ex["move"]["p"], euler_to_R(ex["move"]["r"]), (0, 0, 0), float(((A.meta.get("lift") or {}).get(str(ex["move"]["at"]))) or 0)))   # def.lift 가 있는 단계는 띄운 값까지 더해서 잰다
             for _stp, _po in (ex.get("poseAt") or {}).items():   # 단계마다 다른 자세로 보여 주는 부품(눕혀서 조립)
                 checks.append(("%s단계 자세" % _stp, _po["p"], euler_to_R(_po["r"]), (0, 0, 0), float(((A.meta.get("lift") or {}).get(str(_stp))) or 0)))   # def.lift 가 있는 단계는 띄운 값까지 더해서 잰다
             for where, p, R, o, *_lfx in checks:

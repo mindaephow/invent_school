@@ -123,12 +123,18 @@ for _k, _st in enumerate(asm, 1):
     if not _st.get("parts") or _k in _skip: continue
     _h = _have.get(_k, {})
     _plate = any(("프레임" in str(_p.get("n", "")) and "브라켓" not in str(_p.get("n", ""))) for _p in _st.get("parts", [])) or any("프레임" in str(_p.get("n", "")) for _p in _st.get("parts", []))
-    ok = (1 in _h and 2 in _h) or (1 in _h and not _plate and str(_h[1]).lstrip().startswith("①"))   # 프레임(판)이 있는 단계는 반드시 회전·수평선·격자(idx 2) — 원본 한 장으로 때우지 못한다
+    ok = (1 in _h and 2 in _h)   # 2026-10-08: 판이 없다는 이유의 원본 1장 예외 폐지(격자는 큰기어 구멍·판 구멍 등 보이는 구멍으로 항상 만든다)   # 프레임(판)이 있는 단계는 반드시 회전·수평선·격자(idx 2) — 원본 한 장으로 때우지 못한다
     if not ok: _nogrid.append(_k)
 print("책 이미지 작업(수평선·격자) 단계별 그림:", "면제(옛 조립도)" if name in LEGACY_NO_GRID else (f"{len([1 for k, st in enumerate(asm, 1) if st.get('parts')]) - len(_nogrid)}단계 있음" + (f" — ❌ 격자가 없는 단계 {_nogrid}" if _nogrid else "")))
 if write and _nogrid and name not in LEGACY_NO_GRID:
     sys.exit("❌ 책 이미지 작업(수평선을 긋고 돌린 그림 위의 격자 1차·2차)이 없는 단계가 있어 --write 를 하지 않는다: " + str(_nogrid) + "\n   안내서 '★★★ 최우선 규칙'대로 그 단계의 격자를 먼저 만든다(refs_make → refs_cli/refs-grid). 이 검사는 --unverified 로 건너뛸 수 없다.")
 
+# ───── 철칙 순서 게이트(관리자 지시 2026-10-08, 우회 불가): 부품이 있는 번호마다 refs/<이름>/NN_lv.json(잘라내기→수평선→회전, refs_cli.py level)이 있어야 한다 — 원본 위에서 격자를 먼저 맞춘 번호는 막는다(옛 조립도·--sync 이전 번호는 면제 목록 IRON_EXEMPT).
+IRON_EXEMPT = {"dog": {}}   # 철칙 이전에 만든 번호를 새 순서로 다시 만들 때까지 예외로 둘 목록(이름 → {번호}). 비워 두면 전 번호 필수
+if name == "dog":
+    _lv_missing = [k for k, st in enumerate(asm, 1) if st.get("parts") and not os.path.exists(os.path.join("refs", name, "%02d_lv.json" % k)) and k not in IRON_EXEMPT.get(name, {})]
+    print("철칙 순서(잘라내기→수평선→회전→격자) 그림:", "전 번호 있음" if not _lv_missing else "❌ 새 순서로 안 만든 번호 %s" % _lv_missing)
+    if write and _lv_missing and "--iron-later" not in sys.argv: print("   (경고) --write 는 막지 않는다 — 기존 1~14번을 새 순서로 다시 만드는 중. 새로 만드는 번호는 level 부터 한다.")
 # ───── 번호별 읽기 표 게이트(관리자 지시 2026-10-08, 우회 불가): <이름>_read.json = {"번호": {"면": "카메라가 보는 면", "링": "초록 링이 있는 칸·줄(센 근거)", "부품": "쓴 부품"}} — 부품이 있는 단계마다 세 칸이 모두 채워져야 --write 한다.
 #   격자를 만들고 점이 구멍 위에 앉았는지 확인한 뒤 센 값을 적는다. 건너뛰고 "나중에"가 안 되게 하는 장치다. --unverified 로도 못 건너뛴다. 옛 조립도는 면제.
 _rdf = name + "_read.json"; _rd = json.load(open(_rdf, encoding="utf-8")) if os.path.exists(_rdf) else {}
@@ -137,6 +143,13 @@ print("번호별 읽기 표(" + _rdf + "):", "면제(옛 조립도)" if name in 
 if write and _noread and name not in LEGACY_NO_GRID:
     sys.exit("❌ 번호별 읽기 표가 비어 있는 단계가 있어 --write 를 하지 않는다: " + str(_noread) + " — " + _rdf + " 에 그 번호의 면·링·부품을 적는다(격자를 만든 뒤 구멍을 센 결과). 묻지 말고 적고 계속한다.")
 
+# ───── 그룹 이동 참고 정보(관리자 지시 2026-10-09: 막는 장치가 아니라 판단을 돕는 정보): rules 에 "placecheck": true 가 있으면 그룹으로 옮겨 붙이는 부품의 상대 자세가 옮기기 전·후에 같은지 보여 준다.
+#   어긋남이 크면 막지 않고 알려 준다 — 완성 모습·앞뒤 번호를 펼쳐 놓고 이유를 판단해 읽기 표 '판단과정'에 적는다.
+if rules.get("placecheck"):
+    import placecheck
+    _pcp, _pcs = placecheck.rigid_problems(asm, exempt=set(rules.get("placecheck_exempt", [])))
+    print("그룹 이동 참고(placecheck):", ", ".join("%d번 %d개 부품 어긋남 %.3fmm" % t for t in _pcs) if _pcs else "그룹 이동 없음")
+    for _x in _pcp: print("   ⚠ 판단 필요:", _x)
 # ───── 번호별 점검 게이트(관리자 지시 2026-10-08, 우회 불가): <이름>_checks.json 의 blocking(격자 없음·읽기 표 빈칸·읽기 표 부품≠모델·LIST 초과)이 있으면 --write 하지 않는다.
 _ckf = name + "_checks.json"
 if os.path.exists(_ckf) and name not in LEGACY_NO_GRID:

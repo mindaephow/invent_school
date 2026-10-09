@@ -276,6 +276,8 @@
     b.setSlotThumbs(m);
   }
   const isAdm = () => !!(window.__ivsIsAdmin && window.__ivsIsAdmin());
+  // 단계 설명 끝의 "━ 작업 점검 ━" 블록(번호마다 한 일 체크박스)은 관리자에게만 보인다(관리자 지시 2026-10-09). 일반 사용자에게는 그 앞까지만.
+  const noteView = (n) => { n = n || ''; if (isAdm()) return n; const i = n.indexOf(String.fromCharCode(10) + '━ 작업 점검 ━'); return i >= 0 ? n.slice(0, i) : n; };
   // 안내 모달(확인 버튼 하나): 모습·교재 샷을 저장했을 때 확실히 알려 준다(사용자 지시 2026-10-05)
   function notice(msg, onClose) {
     const ov = document.createElement('div');
@@ -380,7 +382,7 @@
         b.dataset.step = String(i);
         const tag = i === last() ? '완성' : stepTag(i), wide = tag.length > 1;
         b.textContent = tag;
-        b.title = i === last() ? '완성된 모습' : tag + (wide ? ': ' : '단계: ') + (def.steps[i - 1].note || '');
+        b.title = i === last() ? '완성된 모습' : tag + (wide ? ': ' : '단계: ') + noteView(def.steps[i - 1].note);
         b.style.cssText = wide ? 'padding:5px 10px; font-size:13px;' : 'min-width:32px; padding:5px 0; font-size:13px;';
         box.appendChild(b);
       }
@@ -399,7 +401,7 @@
       b.dataset.step = String(i + 1);
       b.className = 'ghost';
       b.style.cssText = 'width:100%; text-align:left; padding:3px 8px; border-radius:8px; font-size:12.5px; font-weight:400; white-space:pre-line;';
-      b.textContent = stepTag(i + 1) + '. ' + (s.note || '');
+      b.textContent = stepTag(i + 1) + '. ' + noteView(s.note);
       li.appendChild(b);
       ol.appendChild(li);
     });
@@ -543,7 +545,7 @@
     const curSt = step >= 1 ? def.steps[step - 1] : null, realN = def.steps.filter((q) => !q.label).length; // 창고·불러오기 같은 label 단계는 단계 번호에 넣지 않는다(사용자 지시 2026-10-04)
     $('asmLabel').textContent = step === 0 ? '시작 전' : (step === last() ? '완성!' : (curSt && curSt.label ? curSt.label : stepTag(step) + ' / ' + realN + ' 단계'));
     $('asmNote').textContent = step === 0 ? '빈 판에서 시작해요. ▶ 를 눌러 한 단계씩 만들어 봐요.'
-      : (step === last() ? '완성! 부품이 모두 제자리에 끼워졌어요.' : (def.steps[step - 1].note || ''));
+      : (step === last() ? '완성! 부품이 모두 제자리에 끼워졌어요.' : noteView(def.steps[step - 1].note));
     { const adm2 = !!(window.__ivsIsAdmin && window.__ivsIsAdmin()); ['asmCamCopy', 'asmCamReset'].forEach((id) => { const e2 = $(id); if (e2) e2.hidden = !adm2; }); } // 📷(시점 맞춤)는 본사 관리자 로그인일 때만 보인다(사용자 지시 2026-10-03)
     $('asmSlider').value = String(step);
     $('asmStageNote').textContent = step === last() ? $('asmNote').textContent : $('asmLabel').textContent + ' · ' + $('asmNote').textContent;
