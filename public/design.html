@@ -1602,7 +1602,66 @@
       if (total) showPreloadToast('✅ 부품 준비가 끝났어요', true);
     }, 50);
   }
-  const robotEdgeCache = new WeakMap(); // 모델 데이터 → 모서리 선 모양(EdgesGeometry)
+  // 부품의 "가장 바깥 윤곽선"만 남긴 선 모양(사용자 지시 2026-10-09: 35프레임이면 35프레임의 가장 테두리만 — 구멍·돌기 테두리는 그리지 않는다).
+  // 40° 이상 꺾인 모서리를 모두 구한 뒤, 서로 이어진 모서리끼리 한 덩어리로 묶어서 덩어리 크기가 부품 전체 크기의 절반 이상인 것(바깥 윤곽)만 남긴다.
+  // 구멍 테두리·돌기 밑동 같은 작은 고리는 따로 떨어진 작은 덩어리라서 빠진다. 부품 모양마다 한 번만 계산한다.
+  function outerEdgeGeometry(g){
+    const eg = new THREE.EdgesGeometry(g, 40);
+    const pos = eg.getAttribute('position');
+    const n = Math.floor(pos.count / 2);
+    if (!n) return eg;
+    g.computeBoundingBox();
+    const bb = g.boundingBox, partDiag = bb.min.distanceTo(bb.max);
+    const idOf = new Map(), parent = [];
+    const find = (a) => { while (parent[a] !== a) { parent[a] = parent[parent[a]]; a = parent[a]; } return a; };
+    const vid = (i) => {
+      const k = Math.round(pos.getX(i) * 400) + ',' + Math.round(pos.getY(i) * 400) + ',' + Math.round(pos.getZ(i) * 400);
+      let v = idOf.get(k);
+      if (v === undefined) { v = parent.length; parent.push(v); idOf.set(k, v); }
+      return v;
+    };
+    const ends = new Int32Array(n * 2);
+    for (let s = 0; s < n; s++) {
+      const a = vid(2 * s), b = vid(2 * s + 1);
+      ends[2 * s] = a; ends[2 * s + 1] = b;
+      const ra = find(a), rb = find(b);
+      if (ra !== rb) parent[ra] = rb;
+    }
+    const box = new Map(); // 덩어리 번호 → 범위
+    for (let s = 0; s < n; s++) {
+      const r = find(ends[2 * s]);
+      let c = box.get(r);
+      if (!c) { c = { min: [1e9, 1e9, 1e9], max: [-1e9, -1e9, -1e9] }; box.set(r, c); }
+      for (let e = 0; e < 2; e++) {
+        const i = 2 * s + e, p = [pos.getX(i), pos.getY(i), pos.getZ(i)];
+        for (let d = 0; d < 3; d++) { if (p[d] < c.min[d]) c.min[d] = p[d]; if (p[d] > c.max[d]) c.max[d] = p[d]; }
+      }
+    }
+    const diagOf = new Map();
+    let biggest = -1, biggestRoot = -1;
+    box.forEach((c, r) => { const d = Math.hypot(c.max[0] - c.min[0], c.max[1] - c.min[1], c.max[2] - c.min[2]); diagOf.set(r, d); if (d > biggest) { biggest = d; biggestRoot = r; } });
+    // 큰 덩어리 안에서도 안쪽 홈·단 경계선은 빼고 "덩어리를 감싸는 상자의 모서리"에 놓인 선만 남긴다(바깥 직사각형 테두리).
+    // 선의 양 끝이 모두 상자의 두 면 이상에 닿아 있으면 상자 모서리 위의 선이다. 둥근 부품처럼 그런 선이 거의 없으면 덩어리 전체를 쓴다.
+    const EPS = 0.15;
+    const planes = (i, c) => { let k = 0; for (let d = 0; d < 3; d++) { const v = d === 0 ? pos.getX(i) : d === 1 ? pos.getY(i) : pos.getZ(i); if (Math.abs(v - c.min[d]) < EPS || Math.abs(v - c.max[d]) < EPS) k++; } return k; };
+    const strictOf = new Map();
+    for (let s = 0; s < n; s++) {
+      const r = find(ends[2 * s]), c = box.get(r);
+      if (planes(2 * s, c) >= 2 && planes(2 * s + 1, c) >= 2) strictOf.set(r, (strictOf.get(r) || 0) + 1);
+    }
+    const keep = [];
+    for (let s = 0; s < n; s++) {
+      const r = find(ends[2 * s]), d = diagOf.get(r), c = box.get(r);
+      if (!(d >= partDiag * 0.5 || (r === biggestRoot && biggest < partDiag * 0.5))) continue; // 큰 덩어리가 하나도 없으면(작은 부품) 가장 큰 덩어리를 남긴다
+      if ((strictOf.get(r) || 0) >= 12 && !(planes(2 * s, c) >= 2 && planes(2 * s + 1, c) >= 2)) continue;
+      for (let e = 0; e < 2; e++) { const i = 2 * s + e; keep.push(pos.getX(i), pos.getY(i), pos.getZ(i)); }
+    }
+    const out = new THREE.BufferGeometry();
+    out.setAttribute('position', new THREE.Float32BufferAttribute(keep, 3));
+    eg.dispose();
+    return out;
+  }
+  const robotEdgeCache = new WeakMap(); // 모델 데이터 → 윤곽선 모양
   const robotEdgeMaterial = new THREE.LineBasicMaterial({ color: 0x000000 }); // 모든 부품의 테두리 선이 같이 쓰는 검은색
   const robotGeomCache = new WeakMap(); // 모델 데이터 → 가운데 맞춘 지오메트리 — 같은 종류 부품 여러 개(리벳 12개 등)가 하나를 같이 쓴다(매번 복사·변환하지 않음)
   function makeRobotModelMesh(data){
@@ -1633,7 +1692,7 @@
     // 부품 테두리: 부품끼리 붙으면 어디까지가 한 부품인지 안 보여서(사용자 지시 2026-10-09) 꺾인 모서리(40° 이상)에 검은 선을 긋는다.
     // 선 모양은 부품 모양마다 한 번만 계산해 같은 종류 부품이 같이 쓴다. 클릭·끌기는 선이 가로채지 않게 막는다.
     let eg = robotEdgeCache.get(data);
-    if (!eg) { eg = new THREE.EdgesGeometry(g, 40); robotEdgeCache.set(data, eg); }
+    if (!eg) { eg = outerEdgeGeometry(g); robotEdgeCache.set(data, eg); }
     const edge = new THREE.LineSegments(eg, robotEdgeMaterial);
     edge.raycast = () => {};
     edge.userData.edgeLine = true;
