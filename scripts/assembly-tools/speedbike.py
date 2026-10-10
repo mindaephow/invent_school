@@ -277,6 +277,205 @@ for _f in F27_14:
         BLK14.append(s14.attach("2단블록", R_BLK, {"p3": (_f, "홀면 +y 열%d·줄1" % _c), "p4": (_f, "홀면 +y 열%d·줄2" % _c)}, hover=40))
 A.steps[13].cam = (0.9, 1.0, False, None, None, None); A.steps[13].camSrc = "guess"
 
+# ── 15 ── 교재 16쪽 15 (읽은 것 2026-10-10, 격자 15_1·15_2 — 가까운 215프레임(둘째 조립품) 15칸×2줄, 링 4개 = 칸9 줄1·줄2, 칸15 줄1·줄2)
+#   카메라가 보는 면(책): 713프레임 위에 눕힌 몸(두 DC모터가 판 가장자리, 사이에 캐터필러 띠). 카메라 쪽 215프레임의 리벳 끝이 보이는 면(몸 바깥쪽 면)에 14번에서 만든 27프레임 조립품(양 끝 2단블록)이 오른쪽 아래에서, 반대쪽(먼 215프레임)에는 같은 조립품이 왼쪽 위에서 다가온다.
+#   화살표(초록 링): 블록의 돌기 2개씩 → 215프레임 칸9 줄1·줄2, 칸15 줄1·줄2 (블록 간격 6칸 = 27프레임 칸1·칸7). 먼 쪽 링은 트랙에 가려 안 보인다 — 가까운 쪽과 몸의 가운데 면을 기준으로 좌우 대칭이라고 판단(추정).
+s15 = SKEL[14]   # 새 부품 없음(noPart 유지) — 14번 조립품을 옮겨 붙이는 단계
+s15.note = "[교재 15] 14번에서 만든 27프레임 조립품 2벌을 몸 양쪽 215프레임 바깥 면에 끼워요(블록 돌기 2개씩, 칸9·칸15의 두 줄 구멍)."
+_CONN = json.load(open("conn.json", encoding="utf-8"))
+def _hole_w(plate_D, c, r):   # plate_D = (p, R) 눕힌 세계, 215프레임 구멍 h{c}_{r} 의 (위치, 방향)
+    h = next(x for x in _CONN["215프레임"]["holes"] if x["id"] == "h%d_%d" % (c, r))
+    return plate_D[0] + plate_D[1] @ np.array(h["pos"], float), plate_D[1] @ np.array(h["dir"], float)
+def _D(q):
+    pp, RR = _cur_pose(q); return RG13 @ pp + _T13, RG13 @ RR
+_PL_NEAR, _PL_FAR = _D(P9), _D(P1)
+_BP = {x["id"]: x for x in _CONN["2단블록"]["pegs"]}
+_BP_ALL = _BP
+_BP3 = {x["id"]: x for x in _CONN["3단블록"]["pegs"]}
+def _fit_asm(asm_parts, plate_D, want_cols, outer_sign):
+    """조립품(프레임+블록 2개)을 눕힌 세계에서 돌려 블록 돌기 p5·p6 가 plate 의 want_cols 칸 두 줄 구멍에 들어가게 하는 변환 (R_g, t) 을 구한다."""
+    blocks = [q for q in asm_parts if q.n == "2단블록"]
+    W0 = {id(q): (_RS @ np.array(q.p, float) + _T9S, _RS @ np.array(q.R, float)) for q in asm_parts}
+    cands = []
+    for ax in (+1, -1):
+        Rx = np.array([[1, 0, 0], [0, 0, -ax], [0, ax, 0]], float)
+        for zr in (0, 1):
+            Rz = np.diag([-1.0, -1.0, 1.0]) if zr else np.eye(3)
+            cands.append(Rx @ Rz)
+    best = None
+    for Rg in cands:
+        peg_w = lambda q, pid: (Rg @ (W0[id(q)][0] + W0[id(q)][1] @ np.array(_BP[pid]["pos"], float)), Rg @ (W0[id(q)][1] @ np.array(_BP[pid]["dir"], float)))
+        for rr0 in (1, 2):
+            tgt, hd = _hole_w(plate_D, want_cols[0], rr0)
+            t = tgt - peg_w(blocks[0], "p5")[0]
+            err = 0.0; ok = True
+            for q in blocks:
+                for pid in ("p5", "p6"):
+                    pw, dw = peg_w(q, pid); pw = pw + t
+                    dmin = 1e9
+                    for c in want_cols:
+                        for r in (1, 2):
+                            hw, hdv = _hole_w(plate_D, c, r)
+                            d = float(np.linalg.norm(pw - hw))
+                            if d < dmin and abs(float(dw @ hdv)) > 0.98: dmin = d
+                    err += dmin; ok = ok and dmin < 1.5
+                bc = Rg @ W0[id(q)][0] + t   # 블록 몸이 plate 의 바깥쪽에 있어야 한다
+                n_out = outer_sign * np.array(_hole_w(plate_D, want_cols[0], 1)[1], float)
+                ok = ok and float((bc - plate_D[0]) @ n_out) > 0
+            if ok and (best is None or err < best[0]): best = (err, Rg, t)
+    return best, W0
+_NEARX = (9, 15)
+_ASM_W = {}   # 조립품 이름 → {부품 id: (눕힌 세계 위치, 회전)} — 16번 빨간 프레임 자리 계산용
+for _name, _asm, _plate, _cols in (("가까운 쪽", [F27_14[0]] + BLK14[0:2], _PL_NEAR, _NEARX), ("먼 쪽", [F27_14[1]] + BLK14[2:4], _PL_FAR, None)):
+    if _cols is None:   # 먼 쪽: 가까운 쪽과 같은 x 의 칸(몸 가운데 면 기준 대칭)
+        _xs = [float(_hole_w(_PL_NEAR, c, 1)[0][0]) for c in _NEARX]
+        _cols = tuple(next(c for c in range(1, 16) if abs(float(_hole_w(_PL_FAR, c, 1)[0][0]) - x) < 1.0) for x in _xs)
+    _out = 1 if _name == "가까운 쪽" else -1
+    _res, _W0 = _fit_asm(_asm, _plate, _cols, 1)
+    if _res is None: _res, _W0 = _fit_asm(_asm, _plate, _cols, -1)
+    print("15번 %s: 칸 %s 오차 합 %s" % (_name, _cols, None if _res is None else round(_res[0], 2)))
+    if _res is None: continue
+    _, _Rg, _t = _res
+    _ASM_W[_name] = {}
+    for _q in _asm:
+        _wp, _wR = _W0[id(_q)]
+        _ASM_W[_name][id(_q)] = (_Rg @ _wp + _t, _Rg @ _wR)
+        _fp, _fR = _pre(_Rg @ _wp + _t, _Rg @ _wR)
+        _q.extra["move"] = {"at": 15, "p": rnd(_fp), "r": R_to_euler(_fR), "dir": list(rnd(_RS.T @ (_Rg @ np.array([0.0, -1.0, 0.0])))), "hover": 60}
+        _q.extra["moveGroup"] = 15; _q.extra["loose"] = True; _q.extra["noMarkCheck"] = True
+A.steps[14].cam = (-0.45, 0.85, False, [[20.0, 0.0, -190.0], [230.0, 60.0, -20.0]], None, None); A.steps[14].camSrc = "eye"   # 책 15번: 713프레임이 왼쪽·몸이 오른쪽, 위에서 앞쪽(+z)으로 비스듬히
+
+# ── 16 ── 교재 16쪽 16 (읽은 것 2026-10-10, 격자 16_1·16_2 — 빨간 17프레임 7칸 한 줄 2장(링 두 개 = 칸1·칸7에서 읽은 연장 격자))
+#   카메라가 보는 면(책): 15번 결과(713프레임 위에 눕힌 몸, 양쪽 215프레임 바깥 끝에 27프레임 조립품이 붙음). 각 조립품의 2단블록 윗돌기(회색 돌기, 초록 링) 2개 위로 빨간 17프레임이 위에서 내려온다 — 먼 쪽(그림 위)은 왼쪽 블록 쌍, 가까운 쪽(그림 오른쪽 아래)은 오른쪽 블록 쌍.
+#   화살표(링): 빨간 17프레임 칸1 → 왼쪽 블록 윗돌기, 칸7 → 오른쪽 블록 윗돌기(블록 간격 6칸 = 프레임 칸1~칸7).
+s16 = SKEL[15]; s16.kw.pop("noPart", None)
+s16.note = "[교재 16] 빨간 17프레임 2개를 각 조립품의 2단블록 윗돌기 2개 위에 끼워요(프레임 칸1·칸7)."
+RED16 = []
+_by_id = {id(q): q for q in BLK14}
+for _name in ("가까운 쪽", "먼 쪽"):
+    _pegs = []
+    for _qid, (_wp, _wR) in _ASM_W[_name].items():
+        _q = _by_id.get(_qid)
+        if _q is None: continue
+        _best = max((_BP_ALL[_pid] for _pid in ("p1", "p2")), key=lambda pg: float((_wR @ np.array(pg["dir"], float))[1]))
+        _pegs.append((_wp + _wR @ np.array(_best["pos"], float), _wR @ np.array(_best["dir"], float)))
+    (_pa, _da), (_pb, _db) = sorted(_pegs, key=lambda t: float(t[0][0]))
+    _u = (_pb - _pa) / np.linalg.norm(_pb - _pa); _n = _da / np.linalg.norm(_da)
+    _Rf = np.column_stack([_u, _n, np.cross(_u, _n)])
+    _cw = _pa + 30.0 * _u
+    print("16번 %s: 블록 돌기 간격 %.1f, 돌기 방향 %s" % (_name, np.linalg.norm(_pb - _pa), rnd(_n)))
+    _rp, _RR = _pre(_cw, _Rf)
+    _fq = s16.place("17프레임", _RR, tuple(_rp), dir=list(rnd(_RS.T @ _n)), hover=40)
+    _fq.extra["loose"] = True; _fq.extra["noMarkCheck"] = True
+    _fq.extra["marks"] = [rnd(_pre(_pa)), rnd(_pre(_pb))]   # 안내점 = 블록 윗돌기 2개(xform 이전 좌표)
+    RED16.append(_fq)
+A.steps[15].cam = (-0.45, 0.85, False, [[20.0, 0.0, -190.0], [230.0, 60.0, -20.0]], None, None); A.steps[15].camSrc = "eye"
+
+# ── 17 ── 교재 17쪽 17 (읽은 것 2026-10-10, 격자 17_1·17_2 — 39프레임 9칸×3줄(구멍 27곳 자동 맞춤, 오차 0.7px), 링 4개 = 칸1 줄1·줄3, 칸9 줄1·줄3)
+#   카메라가 보는 면(책): 검은 39프레임이 홀면 위로 눕고(칸1 왼쪽, 줄1 위쪽), 그 위에 회색 3단블록 2개가 구멍 면(큰 구멍 3개)을 왼쪽 앞으로 두고 떠 있다. 블록 돌기 면(위에서 보이지 않는 아래쪽 3개)이 프레임을 향한다.
+#   화살표: 왼쪽 블록 돌기 → 칸1 의 줄1·줄3(가운데 줄2 구멍에도 가운데 돌기가 들어간다), 오른쪽 블록 돌기 → 칸9 의 줄1·줄3. 블록 길이 40 = 줄 3개(30) + 5씩 밖으로 나온다.
+s17 = SKEL[16]; s17.kw.pop("noPart", None)
+s17.note = "[교재 17] 검은 39프레임 양 끝(칸1·칸9)에 3단블록의 아래 돌기 3개씩을 끼워요(블록 2개)."
+ZF17 = -480.0   # 둘째 새 조립품(창고 4) — 몸(창고 2)·14번 판(창고 3)과 겹치지 않는 자리
+F39 = s17._add(Part("39프레임", _RS.T @ R_FL, tuple(_pre((0.0, 3.5, ZF17))), s17, {}))
+BLK17 = [s17.attach("3단블록", _RS.T @ R_BLK_W, {"p3": (F39, "홀면 +y 열%d·줄3" % _c), "p4": (F39, "홀면 +y 열%d·줄2" % _c), "p5": (F39, "홀면 +y 열%d·줄1" % _c)}, hover=40) for _c in (1, 9)]
+A.steps[16].cam = (0.3, 1.0, False, None, None, None); A.steps[16].camSrc = "eye"
+
+# ── 18 ── 교재 17쪽 18 (읽은 것 2026-10-10, 격자 18_1·18_2 — 713프레임 13칸×7줄(구멍 37곳 자동 맞춤 + 연장), 링 2개 = 칸3 줄1, 칸11 줄1)
+#   카메라가 보는 면(책): 15·16번과 같은 몸(713프레임 위 두 모터, 215프레임 사이 캐터필러, 빨간 17프레임 2장) 왼쪽에, 17번의 39프레임 조립품이 프레임을 세운 채 713프레임 바깥 줄(줄1) 위로 내려온다 — 블록 한쪽 끝 돌기가 판 구멍으로 들어간다.
+#   화살표(링 2개): 위쪽 블록 끝 돌기 → 713프레임 칸3 줄1, 아래쪽 블록 끝 돌기 → 칸11 줄1 (간격 8칸 = 블록 간격).
+s18 = SKEL[17]   # 새 부품 없음(noPart 유지) — 17번 조립품을 옮겨 붙이는 단계
+s18.note = "[교재 18] 17번에서 만든 39프레임 조립품을 세워서 두 블록의 끝 돌기를 713프레임 바깥 줄(줄1) 칸3·칸11 구멍에 끼워요."
+_PL713_W = (C713.copy(), R_713.copy())
+_asm18 = [F39] + BLK17
+_W17 = {id(q): (_RS @ np.array(q.p, float) + _T9S, _RS @ np.array(q.R, float)) for q in _asm18}
+def _fit18():
+    import itertools
+    best = None
+    perms = [np.array(m) for m in itertools.product([-1, 0, 1], repeat=9) if False]
+    mats = []
+    for perm in itertools.permutations(range(3)):
+        for sg in itertools.product((1, -1), repeat=3):
+            M = np.zeros((3, 3))
+            for i, j in enumerate(perm): M[i, j] = sg[i]
+            if abs(np.linalg.det(M) - 1.0) < 1e-6: mats.append(M)
+    hole = lambda c, r: (_PL713_W[0] + _PL713_W[1] @ np.array([(c - 7) * 10.0, 0.0, (r - 4) * 10.0]))
+    target = [hole(3, 1), hole(11, 1)]
+    for Rg in mats:
+        for pid in ("p1", "p2"):
+            pg = []
+            for q in BLK17:
+                wp, wR = _W17[id(q)]
+                pg.append((Rg @ (wp + wR @ np.array(_BP3[pid]["pos"], float)), Rg @ (wR @ np.array(_BP3[pid]["dir"], float))))
+            if not all(abs(float(d @ np.array([0.0, -1.0, 0.0])) - 1.0) < 1e-6 for _, d in pg): continue   # 끝 돌기가 아래를 향해야 한다
+            for order in ((0, 1), (1, 0)):
+                t = target[0] - pg[order[0]][0]
+                err = np.linalg.norm(pg[order[1]][0] + t - target[1])
+                if err > 1.0: continue
+                c = Rg @ (_W17[id(F39)][0]) + t   # 프레임 가운데: 판 안쪽(줄 번호가 늘어나는 +x)에 있어야 한다
+                if c[0] <= target[0][0] + 1.0: continue
+                key = (err, abs(c[1] - target[0][1]))
+                if best is None or key < best[0]: best = (key, Rg, t, pid)
+    return best
+_b18 = _fit18()
+_fit18_holes = [(_PL713_W[0] + _PL713_W[1] @ np.array([(c - 7) * 10.0, 0.0, 0.0 + (1 - 4) * 10.0])) for c in (3, 11)]
+print("18번 조립품 자리 풀이:", None if _b18 is None else ("오차 %.2f" % _b18[0][0], _b18[3]))
+if _b18 is not None:
+    _, _Rg18, _t18, _pid18 = _b18
+    for _q in _asm18:
+        _wp, _wR = _W17[id(_q)]
+        _fp, _fR = _pre(_Rg18 @ _wp + _t18, _Rg18 @ _wR)
+        _q.extra["move"] = {"at": 18, "p": rnd(_fp), "r": R_to_euler(_fR), "dir": list(rnd(_RS.T @ np.array([0.0, 1.0, 0.0]))), "hover": 60}
+        _q.extra["moveGroup"] = 18; _q.extra["loose"] = True; _q.extra["noMarkCheck"] = True
+    for _q, _h in zip(BLK17, _fit18_holes):   # 화살표: 블록 끝 돌기 → 판 구멍 입구(위 면, xform 이전 좌표)
+        _q.extra["moveGuide"] = True; _q.extra["move"]["marks"] = [rnd(_pre(_h + np.array([0.0, 2.5, 0.0])))]
+A.steps[17].cam = (-0.45, 0.85, False, [[20.0, 0.0, -190.0], [230.0, 80.0, -20.0]], None, None); A.steps[17].camSrc = "eye"
+
+# ── 19 ── 교재 17쪽 19 (읽은 것 2026-10-10 — 새 713프레임을 몸 위(두 모터 옆돌기 4개 + 39프레임 조립품 블록 끝 돌기 2개)로 내려 끼운다)
+#   카메라가 보는 면(책): 18번 결과 위로 검은 713프레임(13칸×7줄)이 눕힌 채 내려온다. 링 6개(판 위): 두 모터의 위쪽 옆돌기(모터마다 2개)와 39프레임 조립품 두 블록의 위쪽 끝 돌기 → 판 구멍.
+#   자세는 판 구멍 91곳 중 6개 돌기가 오차 0 으로 들어가는 위치를 수치로 구했다(유일 해).
+s19 = SKEL[18]; s19.kw.pop("noPart", None)
+s19.note = "[교재 19] 새 713프레임을 위에서 내려 두 DC모터 위쪽 옆돌기 4개와 39프레임 조립품 두 블록의 위쪽 끝 돌기 2개에 끼워요."
+def _final_W(q):   # 18번 이후 눕힌 세계 자세
+    if id(q) in _W17 and _b18 is not None:
+        wp, wR = _W17[id(q)]; return _Rg18 @ wp + _t18, _Rg18 @ wR
+    return _D(q)
+_UP = np.array([0.0, 1.0, 0.0])
+_pegs19 = []
+for _mq in (M11, M4):
+    _Mp, _MR = _final_W(_mq)
+    for _pg in _CONN["DC모터"]["pegs"]:
+        _dw = _MR @ np.array(_pg["dir"], float)
+        if float(_dw @ _UP) > 0.98: _pegs19.append((_mq.n + "." + _pg["id"], _Mp + _MR @ np.array(_pg["pos"], float)))
+for _q in BLK17:
+    _wp, _wR = _final_W(_q)
+    for _pid in ("p1", "p2"):
+        _dw = _wR @ np.array(_BP3[_pid]["dir"], float)
+        if float(_dw @ _UP) > 0.98: _pegs19.append((_q.n + "." + _pid, _wp + _wR @ np.array(_BP3[_pid]["pos"], float)))
+print("19번 위쪽 돌기:", len(_pegs19), [n for n, _ in _pegs19])
+_H713 = [(x["id"], np.array(x["pos"], float)) for x in _CONN["713프레임"]["holes"]]
+_best19 = None
+for _k in range(4):
+    _a = np.deg2rad(90 * _k); _Ry = np.array([[np.cos(_a), 0, np.sin(_a)], [0, 1, 0], [-np.sin(_a), 0, np.cos(_a)]])
+    _R19 = _Ry @ R_713
+    for _hid, _hp in _H713:
+        _t = _pegs19[0][1] - _R19 @ _hp
+        _t[1] = 0.0
+        _n = 0; _err = 0.0
+        for _nm, _pp in _pegs19:
+            _d = min(float(np.linalg.norm((_pp - _t - _R19 @ hp)[[0, 2]])) for _, hp in _H713)
+            if _d < 1.5: _n += 1; _err += _d
+        if _best19 is None or (_n, -_err) > (_best19[0], -_best19[1]): _best19 = (_n, _err, _R19, _t.copy(), _k)
+print("19번 판 풀이: 맞은 돌기 %d/%d, 오차 %.2f, 회전 %d°" % (_best19[0], len(_pegs19), _best19[1], 90 * _best19[4]))
+_ytop = max(float(pp[1]) for _, pp in _pegs19)
+_R19, _t19 = _best19[2], _best19[3]
+_c19 = _t19.copy(); _c19[1] = _ytop
+_pp19, _RR19 = _pre(_c19, _R19)
+P713B = s19.place("713프레임", _RR19, tuple(_pp19), dir=list(rnd(_RS.T @ np.array([0.0, 1.0, 0.0]))), hover=60)
+P713B.extra["loose"] = True; P713B.extra["noMarkCheck"] = True
+P713B.extra["marks"] = [rnd(_pre(pp)) for _, pp in _pegs19]
+A.steps[18].cam = (-0.45, 0.85, False, [[20.0, 0.0, -190.0], [230.0, 100.0, -20.0]], None, None); A.steps[18].camSrc = "eye"
+
 def _addhide(pt, steps_, label):   # 새 창고에서 만드는 번호에서는 앞 창고 부품을 숨긴다(hideAt·store, 안내서 6-5절)
     ex = pt.extra; ex["hideAt"] = sorted(set(ex.get("hideAt", [])) | set(steps_)); st_ = ex.setdefault("store", {})
     for k_ in steps_: st_[str(k_)] = label
@@ -317,6 +516,11 @@ for _k in (5, 6, 7, 8):
             _q.extra["marks"] = [rnd(_RF @ (np.array(m, float) - _CF) + _CF + _SF) for m in _q.extra["marks"]]
 for _k in (5, 6, 7, 8): A.steps[_k - 1].cam = (-0.4, 1.3, False, None, None, None); A.steps[_k - 1].camSrc = "guess"
 NT3.extra["marks"] = [rnd(np.array(BO3.p, float) + np.array([0.0, -6.9, 0.0]))]; NT3.extra["noMarkCheck"] = True; NT3.extra["loose"] = True   # 축·부시처럼: 너트 화살표는 12볼트 끝(돌린 자세)에 닿는다
+A.steps[16].kw["slot"] = 4
+A.steps[16].kw["history"] = "📦 몸(1~16번)을 창고 2에 두고, 창고 4에서 39프레임 조립품을 새로 시작"
+A.steps[17].kw["history"] = "창고 4의 17번(블록 붙인 39프레임)을 가져와 몸에 합쳐요(그림으로 판단)"
+for _q in A.parts:
+    if _q.step.index <= 16: _addhide(_q, [17], "창고 2")
 A.meta["finalSlot"] = 0
 
 for _k in (6, 7, 8): A.meta["lift"][str(_k)] = 1.0   # 뒤집어 세운 자세(+40)라 따로 띄울 필요 없다 — 바닥 검사가 막으면 다시 올린다

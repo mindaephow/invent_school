@@ -98,20 +98,27 @@
 "noPart": true
 },
 "16": {
-"parts": {},
-"noPart": true
+"parts": {
+"17프레임": 2
+},
+"noPart": false
 },
 "17": {
-"parts": {},
-"noPart": true
+"parts": {
+"39프레임": 1,
+"3단블록": 2
+},
+"noPart": false
 },
 "18": {
 "parts": {},
 "noPart": true
 },
 "19": {
-"parts": {},
-"noPart": true
+"parts": {
+"713프레임": 1
+},
+"noPart": false
 },
 "20": {
 "parts": {},
