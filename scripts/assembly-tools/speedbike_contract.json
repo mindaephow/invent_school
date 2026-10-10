@@ -121,28 +121,42 @@
 "noPart": false
 },
 "20": {
-"parts": {},
-"noPart": true
+"parts": {
+"315프레임": 1,
+"2단블록": 2
+},
+"noPart": false
 },
 "21": {
-"parts": {},
-"noPart": true
+"parts": {
+"19프레임": 1
+},
+"noPart": false
 },
 "22": {
 "parts": {},
 "noPart": true
 },
 "23": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 4,
+"19프레임": 1
+},
+"noPart": false
 },
 "24": {
-"parts": {},
-"noPart": true
+"parts": {
+"17프레임": 2,
+"리벳": 8,
+"2단블록": 4
+},
+"noPart": false
 },
 "25": {
-"parts": {},
-"noPart": true
+"parts": {
+"115프레임": 2
+},
+"noPart": false
 },
 "26": {
 "parts": {},
