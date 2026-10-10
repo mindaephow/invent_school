@@ -163,47 +163,80 @@
 "noPart": true
 },
 "27": {
-"parts": {},
-"noPart": true
+"parts": {
+"27프레임": 2,
+"리벳": 4,
+"2열브라켓": 2,
+"8볼트": 2,
+"너트": 2
+},
+"noPart": false
 },
 "28": {
-"parts": {},
-"noPart": true
+"parts": {
+"1열브라켓": 2,
+"리벳": 2,
+"8볼트": 2,
+"너트": 2
+},
+"noPart": false
 },
 "29": {
 "parts": {},
 "noPart": true
 },
 "30": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 2,
+"215프레임": 1
+},
+"noPart": false
 },
 "31": {
-"parts": {},
-"noPart": true
+"parts": {
+"2열브라켓": 2,
+"리벳": 4,
+"12볼트": 2,
+"너트": 2
+},
+"noPart": false
 },
 "32": {
-"parts": {},
-"noPart": true
+"parts": {
+"메인보드": 1
+},
+"noPart": false
 },
 "33": {
 "parts": {},
 "noPart": true
 },
 "34": {
-"parts": {},
-"noPart": true
+"parts": {
+"축": 1,
+"부시": 2
+},
+"noPart": false
 },
 "35": {
-"parts": {},
-"noPart": true
+"parts": {
+"중간바퀴": 1,
+"부시": 1
+},
+"noPart": false
 },
 "36": {
-"parts": {},
-"noPart": true
+"parts": {
+"축": 1,
+"부시": 2
+},
+"noPart": false
 },
 "37": {
-"parts": {},
-"noPart": true
+"parts": {
+"중간바퀴": 1,
+"부시": 1
+},
+"noPart": false
 }
 }

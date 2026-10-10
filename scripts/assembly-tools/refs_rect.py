@@ -107,7 +107,7 @@ def process(step):
             ok=0
             for p in j['pts']:
                 x,y=T(p[2],p[3]); x,y=int(x),int(y)
-                if 0<=x<W and 0<=y<H and MASK[y,x]>128 and gray[max(0,y-6):y+7,max(0,x-6):x+7].min()<225: ok+=1
+                if 0<=x<W and 0<=y<H and MASK[y,x]>128 and gray[max(0,y-14):y+15,max(0,x-14):x+15].min()<225: ok+=1
             return ok>=0.6*len(j['pts'])
         for lab,j in fits:
             if lab!=rl and not on_picture(j): continue
