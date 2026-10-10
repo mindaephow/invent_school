@@ -86,7 +86,7 @@ s3 = SKEL[2]; s3.kw.pop("noPart", None)
 s3.note = "[교재 3] 27프레임 칸2 먼 줄 구멍에 12볼트를 위에서 꽂아 3장을 꿰고, 215프레임 아래에서 너트를 끼워 조여요."
 NT3 = s3.attach("너트", np.eye(3), {"p1": (P1, "홀면 -y 열13·줄1")}, hover=30)      # 너트: 215프레임 아래에서 몸통(모델 +y)이 구멍으로 올라온다
 BO3 = s3.attach("12볼트", np.eye(3), {"p1": (F27_2, "홀면 +y 열2·줄1")}, hover=40)  # 12볼트: 몸통(모델 −y)이 위에서 27프레임 구멍으로 내려간다
-A.steps[2].cam = (1.57, 1.3, False, None, None, None); A.steps[2].camSrc = "guess"
+A.steps[2].cam = (0.3, 1.25, False, None, None, None); A.steps[2].camSrc = "guess"
 A.meta["lift"] = {**(A.meta.get("lift") or {}), "3": 35.0}   # 3번: 너트가 215프레임 아래에서 올라오는 모습(떠 있는 자리)이 바닥 아래로 내려가므로 화면 전체를 35mm 띄운다
 
 # ── 4 ── 교재 14쪽 4 (읽은 것 2026-10-09, 격자 04_1·04_2 — 크롭 → 수평선 → 회전 → 27프레임 7칸×2줄, 링 2개가 칸3·칸7 의 줄2)
@@ -240,21 +240,25 @@ _pg3 = RG13 @ (_M2[0] + _M2[1] @ np.array([17.5, -1.0, 8.5]))      # 둘째 모�
 _T13 = _hole713(2, 6) - _pg3                                          # 둘째 모터 p3 → 칸2 줄6
 _G13 = [_q for _q in A.parts if _q.step.index <= 11]
 _PRE13 = {id(_q): _cur_pose(_q) for _q in _G13}
-P713 = s13.place("713프레임", R_713, tuple(C713), dir=[0, -1, 0], hover=0)
-for _q in _G13:
+# 9번부터 화면은 x축 +90°로 세운 자세(xform, 아래 정의)다. 13번부터는 판이 눕고 몸이 그 위에 올라가야 하므로, 13번 이후 자세는 "xform 을 거꾸로 돌린 좌표"로 적어 xform 을 통과한 뒤 눕힌 모습이 되게 한다.
+_RS = np.array([[1.0, 0, 0], [0, 0, -1.0], [0, 1.0, 0]]); _C9S = np.array([75.0, 3.5, ZB9])
+_T9S = _C9S - _RS @ _C9S + np.array([0.0, 40.0, 0.0])
+def _pre(p, R=None):   # 눕힌 세계 좌표 → xform 이전 좌표
+    pp = _RS.T @ (np.array(p, float) - _T9S)
+    return (pp, _RS.T @ np.array(R, float)) if R is not None else pp
+_pp713, _RR713 = _pre(C713, R_713)
+P713 = s13.place("713프레임", _RR713, tuple(_pp713), dir=list(rnd(_RS.T @ np.array([0.0, -1.0, 0.0]))), hover=60)
+P713.extra["loose"] = True; P713.extra["noMarkCheck"] = True   # 몸 자세를 poseAt(13번 이후)로 줘서 정밀 검사가 기본 자세로는 판과 몸이 맞물림을 못 본다 — 맞물림은 위 "13번 확인" 출력(돌기 위치 = 구멍 위치)으로 확인한다
+for _q in _G13:   # 12번 이동(move at 12, 화살표 유지)은 그대로 두고 13번 이후 자세만 poseAt 로 준다
     _pp, _RR = _cur_pose(_q)
-    if "move" in _q.extra:
-        _q.extra.setdefault("poseAt", {}); _q.extra["poseAt"]["12"] = {"p": list(_q.extra["move"]["p"]), "r": list(_q.extra["move"]["r"])}
-    _pf = RG13 @ _pp + _T13; _Rf = RG13 @ _RR
-    _q.extra["move"] = {"at": 13, "p": rnd(_pf), "r": R_to_euler(_Rf), "dir": [0, 1, 0], "hover": 60}; _q.extra["moveGroup"] = 13
-    _q.extra["loose"] = True; _q.extra["noMarkCheck"] = True
+    _pf, _Rf = _pre(RG13 @ _pp + _T13, RG13 @ _RR)
+    for _k13 in range(13, 38):
+        _q.extra.setdefault("poseAt", {})[str(_k13)] = {"p": rnd(_pf), "r": R_to_euler(_Rf)}
 for _mq, _cc, _sx in ((M11, 2, 17.5), (M4, 12, -17.5)):   # 둘째 모터는 옆돌기 p3·p4(모델 +x 면), 첫째 모터는 4번 자세를 z 축으로 돌렸기 때문에 p5·p6(모델 −x 면)이 +z 를 본다
     _Mp, _MR = _PRE13[id(_mq)]
     for _pid, _loc in (("p3" if _sx > 0 else "p5", (_sx, -1.0, 8.5)), ("p4" if _sx > 0 else "p6", (_sx, -1.0, -11.5))):
         _w = RG13 @ (_Mp + _MR @ np.array(_loc)) + _T13   # 확인용: 돌기 위치가 판 구멍 줄4·줄6 와 맞는지
         print("13번 확인", _mq.n, _pid, "→ 판 위치", rnd(_w), "구멍 칸%d 줄6" % _cc, rnd(_hole713(_cc, 6)), "줄4", rnd(_hole713(_cc, 4)))
-for _mq, _cc in ((M11, 2), (M4, 12)):   # 화살표: 모터 옆돌기 2개 → 713프레임 구멍 입구(위 면)
-    _mq.extra["moveGuide"] = True; _mq.extra["move"]["marks"] = [rnd(_hole713(_cc, _r) + np.array([0.0, 2.5, 0.0])) for _r in (6, 4)]
 A.steps[12].cam = (0.9, 1.0, False, None, None, None); A.steps[12].camSrc = "guess"
 
 # ── 14 ── 교재 15쪽 14 (읽은 것 2026-10-10, 격자 14_1·14_2 — 27프레임 7칸×2줄 2장(각각 모서리 구멍 4곳 연장), 링 8개 = 두 판 모두 칸1 줄1·줄2 와 칸7 줄1·줄2)
@@ -263,9 +267,10 @@ A.steps[12].cam = (0.9, 1.0, False, None, None, None); A.steps[12].camSrc = "gue
 #   블록 방향: 돌기 면(모델 +z)이 아래(−y), 긴 쪽(모델 x)이 판 짧은 쪽(줄) 방향(+z), 구멍 축(모델 y)이 판 긴 쪽 −x. 돌기 p3(모델 x −4.4)가 줄1, p4(x 5.7)가 줄2.
 s14 = SKEL[13]; s14.kw.pop("noPart", None)
 s14.note = "[교재 14] 검은 27프레임 2장 각각의 양 끝(칸1·칸7) 두 줄 구멍에 2단블록의 아래 돌기 2개를 끼워요(블록 4개, 판 2장)."
-R_BLK = np.array([[0, -1, 0], [0, 0, -1], [1, 0, 0]], float)   # 2단블록: 돌기 면(모델 +z) → 아래(−y), 긴 쪽(모델 x) → +z(줄 방향), 구멍 축(모델 y) → −x
+R_BLK_W = np.array([[0, -1, 0], [0, 0, -1], [1, 0, 0]], float)   # 2단블록: 돌기 면(모델 +z) → 아래(−y), 긴 쪽(모델 x) → +z(줄 방향), 구멍 축(모델 y) → −x
 ZF14 = (-300.0, -360.0)   # 두 벌을 한 화면에 나란히 둔다(몸은 창고 2 에 숨김)
-F27_14 = [s14._add(Part("27프레임", R_FL, (0.0, 3.5, _z), s14, {})) for _z in ZF14]
+R_BLK = _RS.T @ R_BLK_W   # 눕힌 세계 → xform 이전 좌표
+F27_14 = [s14._add(Part("27프레임", _RS.T @ R_FL, tuple(_pre((0.0, 3.5, _z))), s14, {})) for _z in ZF14]
 BLK14 = []
 for _f in F27_14:
     for _c in (1, 7):
@@ -282,7 +287,7 @@ A.steps[8].kw["history"] = "📦 첫째 조립품(1~8번)을 창고 1에 두고,
 for _q in A.parts:
     if _q.step.index <= 8: _addhide(_q, [9, 10, 11], "창고 1")   # 9~11번(둘째 조립품을 새 창고 2 에서 만듦): 첫째 조립품은 창고 1 에 둔다
 A.steps[11].kw["history"] = "창고 1의 첫째 조립품(1~8번)을 가져와 둘째 조립품(9~11번) 위에 합쳐요(12번 그림 — 그림으로 판단, 추정)"
-for _i in range(12, 38): A.meta["lift"][str(_i)] = 110.0 if _i == 12 else 20.0   # 12번: 첫째 조립품이 둘째 조립품 아래에 매달려 바닥 아래(−100)까지 내려가므로 화면 전체를 띄운다(13번부터 몸을 돌릴 때 조정)
+for _i in range(12, 38): A.meta["lift"][str(_i)] = 110.0 if _i == 12 else (62.0 if _i == 13 else 20.0)   # 12번: 첫째 조립품이 둘째 조립품 아래에 매달려 바닥 아래(−100)까지 내려가므로 화면 전체를 띄운다(13번부터 몸을 돌릴 때 조정)
 A.steps[13].kw["slot"] = 3
 A.steps[13].kw["history"] = "📦 몸(1~13번)을 창고 2에 두고, 창고 3에서 판 2벌을 새로 시작"
 A.steps[14].kw["history"] = "창고 3의 14번(블록 붙인 판 2장)을 가져와 몸에 합쳐요(그림으로 판단 — 15번을 읽을 때 확정)"
@@ -298,10 +303,10 @@ for _q in A.parts:   # 4번도 같은 자세(x축 +90°, 관리자 지시 2026-1
     if _q.step.index <= 4:
         _q.extra.setdefault("poseAt", {})["4"] = {"p": rnd(_R3 @ (np.array(_q.p, float) - _C3) + _C3), "r": R_to_euler(_R3 @ np.array(_q.R, float))}
 M4.extra["dir"] = rnd(_R3 @ np.array(M4.extra.get("dir", [0.0, 1.0, 0.0]), float))
-A.steps[3].cam = (1.57, 1.3, False, None, None, None); A.steps[3].camSrc = "guess"
+A.steps[3].cam = (0.3, 1.25, False, None, None, None); A.steps[3].camSrc = "guess"
 A.meta["lift"]["4"] = 35.0   # 4번: 눕힌 자세에서 바닥 아래로 내려가는 부분(모터 −21)을 띄운다
 # 5~8번: 책이 "조립품을 뒤집어 보세요"(5번)이고 그림은 판이 서서 카메라를 향한 모양(축이 앞·아래, 부시가 뒤·위)이라 조립품을 뒤집고 세워 놓는다 — 카메라를 땅 밑으로 보내지 않는다(관리자 지시 2026-10-10 "지하에서 보고 있다")
-_RF = np.diag([-1.0, -1.0, 1.0]); _CF = np.array([75.0, 0.0, 0.0]); _SF = np.array([0.0, 0.0, 0.0])   # z축 둘레 180° 뒤집기(책 5번 "조립품을 뒤집어 보세요"): 모터가 왼쪽 끝, 가까운 줄이 아래, 보이는 면 = 원래 아래 면(너트·리벳 끝) — 모터 큰 면(십자) 방향은 아직 책과 대조 못 함
+_RF = np.array([[-1.0, 0, 0], [0, 0, -1.0], [0, -1.0, 0]]); _CF = np.array([75.0, 0.0, 0.0]); _SF = np.array([0.0, 40.0, 0.0])   # 책 5번 근접 그림 = 아래에서 본 모습: 27프레임 아래 면(구멍 3칸×2줄, 구멍 속에 모터 십자가 비침)·너트·리벳 끝이 카메라 쪽, 모터는 뒤쪽 왼쪽 끝에서 옆돌기 2개가 위(+y)를 향함. z축 180° 뒤집기 + x축 +90° 세우기(모터 옆돌기 면 +x 는 4번과 같이 위를 향한다)
 for _k in (5, 6, 7, 8):
     for _q in A.parts:
         if _q.step.index <= _k:
@@ -310,10 +315,22 @@ for _k in (5, 6, 7, 8):
             _q.extra["dir"] = rnd(_RF @ np.array(_q.extra["dir"], float))
         if _q.step.index == _k and _q.extra.get("marks"):
             _q.extra["marks"] = [rnd(_RF @ (np.array(m, float) - _CF) + _CF + _SF) for m in _q.extra["marks"]]
-for _k in (5, 6, 7, 8): A.steps[_k - 1].cam = (0.3, 0.95, False, None, None, None); A.steps[_k - 1].camSrc = "guess"
+for _k in (5, 6, 7, 8): A.steps[_k - 1].cam = (-0.4, 1.3, False, None, None, None); A.steps[_k - 1].camSrc = "guess"
 NT3.extra["marks"] = [rnd(np.array(BO3.p, float) + np.array([0.0, -6.9, 0.0]))]; NT3.extra["noMarkCheck"] = True; NT3.extra["loose"] = True   # 축·부시처럼: 너트 화살표는 12볼트 끝(돌린 자세)에 닿는다
 A.meta["finalSlot"] = 0
 
+for _k in (6, 7, 8): A.meta["lift"][str(_k)] = 1.0   # 뒤집어 세운 자세(+40)라 따로 띄울 필요 없다 — 바닥 검사가 막으면 다시 올린다
+# 9~12번: 책 그림은 215프레임이 서서 카메라를 향한 모양 — 9번부터 전체를 x축 +90° 로 세운다(xform, 둘째 조립품 자리 기준). 13번 이후 자세는 위 13번 블록에서 거꾸로 돌린 좌표로 준다.
+A.meta["xform"] = {"at": 9, "m": _RS.tolist(), "t": [round(float(v), 3) for v in _T9S]}
+for _k in (9, 10, 11, 12): A.steps[_k - 1].cam = (0.3, 1.25, False, None, None, None); A.steps[_k - 1].camSrc = "eye"
+for _k in (6, 7, 8):   # 뒤집어 세운 자세에서 모터(왼쪽 끝)와 축 끝이 화면에 다 들어오게 가운데 점을 준다
+    _pts = [np.array(_q.extra["poseAt"][str(_k)]["p"], float) for _q in A.parts if _q.step.index <= _k and str(_k) in (_q.extra.get("poseAt") or {})]
+    _lo, _hi = np.min(_pts, axis=0), np.max(_pts, axis=0)
+    A.steps[_k - 1].cam = (A.steps[_k - 1].cam[0], A.steps[_k - 1].cam[1], False, [rnd(_lo), rnd(_hi)], None, None)
+# 바닥에 닿거나 바닥선 위로 겹쳐 보이는 부품을 전부 띄운다(관리자 지시 2026-10-10 "바닥아래 내려가있는것들도 다 올려") — 번호마다 가장 낮은 점이 12mm 이상 위에 오게 화면 전체를 올린다
+_FLOOR_UP = {1: 11.0, 2: 11.0, 6: 2.0, 7: 2.0, 8: 11.5, 13: 68.5, 38: 11.0, **{_k: 23.0 for _k in range(15, 38)}}
+for _k, _v in _FLOOR_UP.items(): A.meta["lift"][str(_k)] = _v
+for _k in range(1, 15): A.steps[_k - 1].camSrc = "eye"   # 책 1~4번 그림에서 읽은 방향(긴 쪽 가로·칸1 왼쪽·가까운 줄 아래, 오른쪽 끝이 약간 가까움)으로 정한 값 — 화면에서 책 그림과 나란히 확인한 뒤에만 유지
 import stepchecks; stepchecks.apply(A, "speedbike")           # 번호마다 한 일을 체크박스로 설명 끝에 적는다(관리자 지시 2026-10-08) — 지금까지 빠뜨렸던 것
 A.save_links()                                    # 이번 빌드의 잠금 기록 저장(수정 지시가 있는 빌드는 갱신하지 않는다)
 A.check_fixes()                                   # 적용되지 않은 수정 지시가 있으면 경고(번호가 밀렸거나 오타)

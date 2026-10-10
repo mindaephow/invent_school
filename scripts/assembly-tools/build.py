@@ -157,6 +157,10 @@ if name not in LEGACY_NO_GRID and not os.path.exists(_ckf):   # 2026-10-10: 조�
 if os.path.exists(_ckf) and name not in LEGACY_NO_GRID:
     _ck = json.load(open(_ckf, encoding="utf-8")); _bl = _ck.get("blocking", [])
     print("번호별 점검(" + _ckf + "):", "통과" if not _bl else "❌ 막힌 항목 %d개" % len(_bl)); [print("   ☐", b_) for b_ in _bl]
+    _wip = next((int(a_.split("=", 1)[1]) for a_ in sys.argv if a_.startswith("--wip=")), None)   # --wip=N: 지금 만드는 N번은 화면을 봐야 확인이 되므로, N번보다 앞 번호가 다 끝났을 때만 N번 이후의 막힘을 미리 쓰게 해 준다(앞 번호를 건너뛰고 가는 것은 막는다)
+    if _wip is not None:
+        _bl = [b_ for b_ in _bl if not re.match(r"(\d+)번", b_) or int(re.match(r"(\d+)번", b_).group(1)) < _wip]
+        print("   (--wip=%d: %d번 이후 항목은 지금 만드는 중이라 쓰기를 막지 않는다 — 앞 번호 막힘 %d개)" % (_wip, _wip, len(_bl)))
     if write and _bl: sys.exit("❌ 번호별 점검에서 막힌 항목이 있어 --write 를 하지 않는다 — 항목을 채우고(허락을 받지 말고) 계속한다.")
 if write and unver and "--unverified" not in sys.argv:
     sys.exit("❌ 규칙 확인이 끝나지 않아 --write 를 하지 않는다. 확인하고 " + rf + " 에 적거나, 미확인을 알고 넣으려면 --unverified 를 붙인다.")
