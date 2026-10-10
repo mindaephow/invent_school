@@ -1131,6 +1131,13 @@ for _k in range(1, 29):
     while len(_cm) < 6: _cm.append(None)
     _cm[4] = [round(float(_c[0]), 1), 0.0, round(float(_c[2]), 1)]
     A.steps[_k - 1].cam = tuple(_cm)
+# 15번(2026-10-11, 사용자 지시): 스프라켓·캐터필러 그룹을 두 215프레임 사이 가운데로 — 세계 z −2.5(= 모델 y −2.5) 옮긴다. 저장된 모습 기록(❄)이 코드를 덮으므로 이 부품들만 12~38번에서 noFreeze.
+for _q in A.parts:
+    if _q.n in ("스프라켓", "캐터필러") and _q.extra.get("move"):
+        _mp = list(_q.extra["move"]["p"]); _mp[1] = round(float(_mp[1]) - 2.5, 2); _q.extra["move"]["p"] = _mp
+        for _k, _v in (_q.extra.get("poseAt") or {}).items():   # 13번 이후 자세(poseAt)도 같이
+            _pp2 = list(_v["p"]); _pp2[1] = round(float(_pp2[1]) - 2.5, 2); _v["p"] = _pp2
+        _q.extra["noFreeze"] = list(range(12, 39))
 import stepchecks; stepchecks.apply(A, "speedbike")           # 번호마다 한 일을 체크박스로 설명 끝에 적는다(관리자 지시 2026-10-08) — 지금까지 빠뜨렸던 것
 A.save_links()                                    # 이번 빌드의 잠금 기록 저장(수정 지시가 있는 빌드는 갱신하지 않는다)
 A.check_fixes()                                   # 적용되지 않은 수정 지시가 있으면 경고(번호가 밀렸거나 오타)
