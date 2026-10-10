@@ -725,7 +725,9 @@ def export_steps(A):
     return out
 
 def js_entry(A):
-    L = ["  {", f"      id: {js_value(A.id)},", "      category: '큐보',", "      volume: 1,", f"      chapter: {js_value(A.chapter)},", f"      book: {js_value(A.book)},"]
+    _m = re.match(r"cubo-(\d+)-", A.id)   # 조립도 id(cubo-2-speedbike)의 권 번호 — 2권 조립도가 1권으로 등록되던 것을 막는다(2026-10-09)
+    _vol = int(_m.group(1)) if _m else 1
+    L = ["  {", f"      id: {js_value(A.id)},", "      category: '큐보',", f"      volume: {_vol},", f"      chapter: {js_value(A.chapter)},", f"      book: {js_value(A.book)},"]
     if A.camera: L.append(f"      camera: {js_value(A.camera)},")
     for k, v in A.meta.items(): L.append(f"      {k}: {js_value(v)},")
     L.append("      steps: [")

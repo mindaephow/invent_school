@@ -51,9 +51,11 @@ def apply(A, name):
         items.append((bool(rl.get("orient_check")) and not _oex, (len(_ori) >= 20 and not _ori.startswith("미")) or _oex or not rl.get("orient_check"), "부품 방향·제자리 판정(읽기 표 '부품방향')" + (" — 면제(재점검 대기)" if _oex and rl.get("orient_check") else "")))
         _cmp = str(r.get("대조", "")).strip()   # 앞·뒤 번호 그림과 완성 사진(00)을 같이 보고 읽은 내용(관리자 지시 2026-10-08: 한 장만 보고 만들어 12번이 틀렸다). 10번부터는 비어 있으면 막는다(1~9번은 아직 안 한 것으로 표시만)
         items.append((k >= 10, len(_cmp) >= 10 and not _cmp.startswith("미"), "앞·뒤 번호 그림·완성 사진(00)과 같이 읽음(읽기 표 '대조')"))
-        items.append((False, k in rl.get("view", []), "화면 확대 확인"))
-        items.append((False, k in rl.get("count", []), "책 그림과 나란히 비교(칸 수 대조)"))
-        items.append((False, k in rl.get("camera", []), "카메라 책과 대조"))
+        _strict = bool(rl.get("strict"))   # strict(관리자 지시 2026-10-10 "하지 않은 것을 하지 마"): 눈으로 하는 확인도 안 하면 막는다 — "안 했다고 보고"로 넘어가지 않는다
+        items.append((_strict, k in rl.get("view", []), "화면 확대 확인"))
+        items.append((_strict, k in rl.get("count", []), "책 그림과 나란히 비교(칸 수 대조)"))
+        items.append((_strict, k in rl.get("camera", []), "카메라 책과 대조"))
+        items.append((_strict, str(getattr(st, "camSrc", "guess")) != "guess", "카메라가 짐작(guess)이 아님 — 책 그림에서 가까운 쪽·오른쪽·위를 읽고 정한 값(camSrc eye)"))
         rows[k] = items
         for need, ok, txt in items:
             if need and not ok: blocking.append("%d번: %s" % (k, txt))

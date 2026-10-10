@@ -3,7 +3,7 @@
 #   3) check_local.js 의 모든 검사(단계별 정밀·겹침·검증 절차·LIST·안내 화살표) → 문제가 있으면 종료 코드 1
 #   4) --write 이면 문제 0건일 때만 public/design-assemblies.js 에 넣는다(emit.py)
 # 실수를 발견하면 lessons.py 의 LESSONS 에 규칙을 적고 가능하면 asmlib/검사로 옮긴다 — 이 스크립트가 마지막에 그 목록을 보여 준다.
-import subprocess, sys, os, json
+import re, subprocess, sys, os, json
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 name = sys.argv[1]; write = "--write" in sys.argv
 env = dict(os.environ, PYTHONIOENCODING="utf-8")
@@ -152,6 +152,8 @@ if rules.get("placecheck"):
     for _x in _pcp: print("   ⚠ 판단 필요:", _x)
 # ───── 번호별 점검 게이트(관리자 지시 2026-10-08, 우회 불가): <이름>_checks.json 의 blocking(격자 없음·읽기 표 빈칸·읽기 표 부품≠모델·LIST 초과)이 있으면 --write 하지 않는다.
 _ckf = name + "_checks.json"
+if name not in LEGACY_NO_GRID and not os.path.exists(_ckf):   # 2026-10-10: 조립 스크립트 끝에 import stepchecks; stepchecks.apply(A, "<이름>") 가 없으면 번호별 점검이 한 번도 안 돌아 규칙을 건너뛰게 된다
+    sys.exit("❌ " + _ckf + " 가 없다 — 조립 스크립트 끝(A.save_links() 앞)에 `import stepchecks; stepchecks.apply(A, \"" + name + "\")` 를 넣고 다시 돌린다. 이 검사는 --unverified 로 못 건너뛴다.")
 if os.path.exists(_ckf) and name not in LEGACY_NO_GRID:
     _ck = json.load(open(_ckf, encoding="utf-8")); _bl = _ck.get("blocking", [])
     print("번호별 점검(" + _ckf + "):", "통과" if not _bl else "❌ 막힌 항목 %d개" % len(_bl)); [print("   ☐", b_) for b_ in _bl]
@@ -159,4 +161,5 @@ if os.path.exists(_ckf) and name not in LEGACY_NO_GRID:
 if write and unver and "--unverified" not in sys.argv:
     sys.exit("❌ 규칙 확인이 끝나지 않아 --write 를 하지 않는다. 확인하고 " + rf + " 에 적거나, 미확인을 알고 넣으려면 --unverified 를 붙인다.")
 if write:  # (규칙 확인은 위에서 이미 검사)
-    rc, out = run([sys.executable, "emit.py", name + "_entry.js", "cubo-1-" + name]); print(out.strip())
+    _m = re.search(r'id: "(cubo-\d+-[A-Za-z0-9_]+)"', open(name + "_entry.js", encoding="utf-8").read())   # 항목 파일의 id(2권은 cubo-2-...). 없으면 1권 규칙
+    rc, out = run([sys.executable, "emit.py", name + "_entry.js", _m.group(1) if _m else "cubo-1-" + name]); print(out.strip())

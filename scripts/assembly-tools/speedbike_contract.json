@@ -1,0 +1,188 @@
+{
+"1": {
+"parts": {
+"215프레임": 1,
+"리벳": 2,
+"25프레임": 1
+},
+"noPart": false
+},
+"2": {
+"parts": {
+"리벳": 2,
+"27프레임": 1
+},
+"noPart": false
+},
+"3": {
+"parts": {
+"너트": 1,
+"12볼트": 1
+},
+"noPart": false
+},
+"4": {
+"parts": {
+"DC모터": 1
+},
+"noPart": false
+},
+"5": {
+"parts": {
+"축": 2,
+"부시": 2
+},
+"noPart": false
+},
+"6": {
+"parts": {
+"스프라켓": 2
+},
+"noPart": false
+},
+"7": {
+"parts": {
+"19프레임": 1,
+"부시": 2
+},
+"noPart": false
+},
+"8": {
+"parts": {
+"캐터필러": 28
+},
+"noPart": false
+},
+"9": {
+"parts": {
+"215프레임": 1,
+"리벳": 2,
+"19프레임": 1
+},
+"noPart": false
+},
+"10": {
+"parts": {
+"리벳": 2,
+"27프레임": 1,
+"너트": 1,
+"8볼트": 1
+},
+"noPart": false
+},
+"11": {
+"parts": {
+"DC모터": 1
+},
+"noPart": false
+},
+"12": {
+"parts": {},
+"noPart": true
+},
+"13": {
+"parts": {
+"713프레임": 1
+},
+"noPart": false
+},
+"14": {
+"parts": {
+"27프레임": 2,
+"2단블록": 4
+},
+"noPart": false
+},
+"15": {
+"parts": {},
+"noPart": true
+},
+"16": {
+"parts": {},
+"noPart": true
+},
+"17": {
+"parts": {},
+"noPart": true
+},
+"18": {
+"parts": {},
+"noPart": true
+},
+"19": {
+"parts": {},
+"noPart": true
+},
+"20": {
+"parts": {},
+"noPart": true
+},
+"21": {
+"parts": {},
+"noPart": true
+},
+"22": {
+"parts": {},
+"noPart": true
+},
+"23": {
+"parts": {},
+"noPart": true
+},
+"24": {
+"parts": {},
+"noPart": true
+},
+"25": {
+"parts": {},
+"noPart": true
+},
+"26": {
+"parts": {},
+"noPart": true
+},
+"27": {
+"parts": {},
+"noPart": true
+},
+"28": {
+"parts": {},
+"noPart": true
+},
+"29": {
+"parts": {},
+"noPart": true
+},
+"30": {
+"parts": {},
+"noPart": true
+},
+"31": {
+"parts": {},
+"noPart": true
+},
+"32": {
+"parts": {},
+"noPart": true
+},
+"33": {
+"parts": {},
+"noPart": true
+},
+"34": {
+"parts": {},
+"noPart": true
+},
+"35": {
+"parts": {},
+"noPart": true
+},
+"36": {
+"parts": {},
+"noPart": true
+},
+"37": {
+"parts": {},
+"noPart": true
+}
+}

@@ -28,6 +28,19 @@ BOOKS = {
         },
         "extra": [],
     },
+    "speedbike": {
+        "volume": 2,
+        "pages": {
+            13: [(0, (330, 500, 1290, 1300), "교재 13쪽 맨 앞 완성품 사진 — 앞(바퀴 1개 쪽이 앞, 캐터필러 쪽이 뒤), 메인보드·ㄷ자 손잡이 방향은 여기서 확인"), (1, (75, 1330, 705, 1888), ""), (2, (720, 1330, 1355, 1888), "")],
+            14: [(3 + i, box(*g), "") for i, g in enumerate(GRID)],
+            15: [(9 + i, box(*g), "") for i, g in enumerate(GRID)],
+            16: [(15 + i, box(*g), "") for i, g in enumerate(GRID)],
+            17: [(21 + i, box(*g), "") for i, g in enumerate(GRID)],
+            18: [(27 + i, box(*g), "") for i, g in enumerate(GRID)],
+            19: [(33, box("L", 1), ""), (34, box("R", 1), ""), (35, box("L", 2), ""), (36, box("R", 2), ""), (37, box("L", 3), ""), (99, box("R", 3), "완성")],
+        },
+        "extra": [],
+    },
     "dog": {
         "volume": 1,
         "pages": {
