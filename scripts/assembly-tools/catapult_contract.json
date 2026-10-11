@@ -90,23 +90,12 @@
 "noPart": false
 },
 "15": {
-"parts": {
-"1열브라켓": 2,
-"12볼트": 2,
-"너트": 2,
-"리벳": 2
-},
-"noPart": false
+"parts": {},
+"noPart": true
 },
 "16": {
-"parts": {
-"37프레임": 1,
-"리벳": 4,
-"59프레임": 1,
-"8볼트": 1,
-"너트": 1
-},
-"noPart": false
+"parts": {},
+"noPart": true
 },
 "17": {
 "parts": {},

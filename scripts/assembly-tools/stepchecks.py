@@ -4,6 +4,7 @@
 #   - 막는 항목(blocking)은 <이름>_checks.json 에 적고, build.py 가 --write 때 막는다: 격자 그림 없음, 읽기 표 빈칸, 읽기 표 부품 ≠ 모델 부품, 쓴 부품 합계가 LIST 를 넘음.
 #   - 사람이 눈으로 하는 항목(화면 확인·책과 나란히 비교·카메라)은 <이름>_rules.json 의 view/count/camera 목록에 번호가 있으면 ☑.
 import json, os, re, collections
+import numpy as np
 import userdone, stepfp
 MARK = "\n━ 작업 점검 ━"
 
@@ -16,6 +17,36 @@ def _parse(txt):   # "315프레임 1, 3단블록 1" → Counter (이름에 숫�
         m = re.match(r"\s*(.+?)\s+(\d+)\s*$", part)
         if m: c[m.group(1).strip()] += int(m.group(2))
     return c
+
+_DIMS = None
+def _dims():
+    global _DIMS
+    if _DIMS is None:
+        p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dims.json")
+        _DIMS = json.load(open(p, encoding="utf-8")) if os.path.exists(p) else {}
+    return _DIMS
+
+def _pose(pt, k):   # k번에서의 자세: 옆자리에서 만드는 중이면 옆자리 자세, 아니면 그룹으로 옮겨지기 전(_base)이 있으면 그것
+    from asmlib import euler_to_R
+    sd = pt.extra.get("side")
+    if sd and k < sd.get("until", 0): return np.array(sd["p"], float), np.array(euler_to_R(sd["r"]), float)
+    b = getattr(pt, "_base", None)
+    return (np.array(b[0], float), np.array(b[1], float)) if b else (np.array(pt.p, float), np.array(pt.R, float))
+
+def bush_wrong(A, k):
+    """k번의 부시 중 넓은 쪽(모델 −y)이 닿은 판 쪽을 향한 것(규칙: 좁은 쪽 +y 가 판 쪽)의 번호(0부터)를 돌려준다.
+    판정 못 하는 것(닿는 부품 없음·양쪽 다 닿음)은 통과로 친다 — 틀린 것만 막는다."""
+    dims = _dims(); bad = []
+    others = [(q, *_pose(q, k)) for k2, st2 in enumerate(A.steps, 1) if k2 <= k for q in st2.parts if q.n not in ("부시", "축", "T축") and q.n in dims]
+    def inside(pt, q, p, R):
+        loc = R.T @ (pt - p); return bool(np.all(np.abs(loc) <= np.array(dims[q.n]) / 2 + 0.3))
+    for i, b in enumerate(A.steps[k - 1].parts):
+        if b.n != "부시": continue
+        p, R = _pose(b, k); u = R @ np.array([0, 1, 0.])
+        hn = any(inside(p + u * 3.4, q, qp, qR) for q, qp, qR in others)
+        hw = any(inside(p - u * 3.4, q, qp, qR) for q, qp, qR in others)
+        if hw and not hn: bad.append(i)
+    return bad
 
 def apply(A, name):
     here = os.path.dirname(os.path.abspath(__file__))
@@ -53,6 +84,9 @@ def apply(A, name):
         _ori = str(r.get("부품방향", "")).strip()   # 부품 방향·제자리 판정(관리자 지시 2026-10-09): 새 부품의 위·바깥 면, 칸1 끝, 줄 방향, 부품 사이 좌우 관계, 그룹이 들어오는 방향·앉는 자세를 책 격자에서 읽어 적는다
         _oex = k in rl.get("orient_exempt", [])   # 면제 번호는 새 순서로 다시 점검할 때까지 통과로 친다(rules 의 orient_exempt 에서 지우면 점검 대상)
         items.append((bool(rl.get("orient_check")) and not _oex, (len(_ori) >= 20 and not _ori.startswith("미")) or _oex or not rl.get("orient_check"), "부품 방향·제자리 판정(읽기 표 '부품방향')" + (" — 면제(재점검 대기)" if _oex and rl.get("orient_check") else "")))
+        if any(p.n == "부시" for p in st.parts):   # 부시 방향 규칙(관리자 확정 2026-10-11): 넓은 쪽(모델 −y)이 바깥, 좁은 쪽(모델 +y)이 닿은 판 쪽. 사용자 ✓ 번호는 막지 않는다(내용을 못 바꾸므로)
+            _bw = bush_wrong(A, k)
+            items.append((k not in _done, not _bw, "부시 방향: 좁은 쪽(모델 +y)이 판 쪽" + ("" if not _bw else " — 넓은 쪽이 판에 닿은 부시 %s번째" % ", ".join(str(i + 1) for i in _bw))))
         _cmp = str(r.get("대조", "")).strip()   # 앞·뒤 번호 그림과 완성 사진(00)을 같이 보고 읽은 내용(관리자 지시 2026-10-08: 한 장만 보고 만들어 12번이 틀렸다). 10번부터는 비어 있으면 막는다(1~9번은 아직 안 한 것으로 표시만)
         items.append((k >= 10, len(_cmp) >= 10 and not _cmp.startswith("미"), "앞·뒤 번호 그림·완성 사진(00)과 같이 읽음(읽기 표 '대조')"))
         # 눈으로 하는 확인 4개 — 사용자가 ✓ 완료를 눌렀으면 통과, 아니면 가장 마지막에 만든 번호(화면을 봐야 확인되는 지금 번호)만 안 막고 앞 번호는 막는다.

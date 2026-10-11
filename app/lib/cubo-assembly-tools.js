@@ -104,16 +104,26 @@ export async function loadPoses(sb, assemblyId) {
   ;(data || []).forEach((row) => { byStep[row.step] = row.poses || {} })
   return byStep
 }
-export function applyPoseRotations(steps, posesByStep) {
+// ※ 부시만 덮는다: ❄ 회전은 "화면에 보이는 자세"라 몸 뒤집기(def.xform)·옆자리(side)·보관 단계에서는 코드 자세와 다르다 —
+//   모든 부품을 덮으면 포뮬러원·스피드바이크·배틀로봇의 결합 검사가 크게 무너졌다(142→42건 등). 부시는 변환을 거꾸로 풀고 옆자리 단계를 건너뛰면 모든 조립도에서 결과가 어긋나지 않았다.
+const _D2R = Math.PI / 180
+const _mmul = (a, b) => [0, 1, 2].map((i) => [0, 1, 2].map((j) => a[i][0] * b[0][j] + a[i][1] * b[1][j] + a[i][2] * b[2][j]))
+const _eulerToMat = (r) => { const [a, b, c] = r.map((v) => v * _D2R), cx = Math.cos(a), sx = Math.sin(a), cy = Math.cos(b), sy = Math.sin(b), cz = Math.cos(c), sz = Math.sin(c); return [[cz * cy, cz * sy * sx - sz * cx, cz * sy * cx + sz * sx], [sz * cy, sz * sy * sx + cz * cx, sz * sy * cx - cz * sx], [-sy, cy * sx, cy * cx]] }
+const _matToEuler = (R) => { const sy = Math.max(-1, Math.min(1, -R[2][0])), ry = Math.asin(sy); let rx, rz; if (Math.abs(sy) < 0.99999) { rx = Math.atan2(R[2][1], R[2][2]); rz = Math.atan2(R[1][0], R[0][0]) } else { rx = Math.atan2(-R[1][2], R[1][1]); rz = 0 } return [rx, ry, rz].map((v) => Math.round((v / _D2R) * 1e4) / 1e4 + 0) }
+export function applyPoseRotations(steps, posesByStep, xform) {
   if (!posesByStep || !Object.keys(posesByStep).length) return steps
   const cnt = {}
   return steps.map((st, si) => ({
     ...st,
     parts: (st.parts || []).map((pt) => {
       cnt[pt.n] = (cnt[pt.n] || 0) + 1
-      const o = pt.noFreeze ? null : (posesByStep[si + 1] || {})[`${pt.n} ${cnt[pt.n]}번`]
+      if (pt.n !== '부시' || pt.noFreeze) return pt
+      if (pt.side && si + 1 < (pt.side.until || 0)) return pt   // 옆자리에 있는 단계의 화면 자세는 코드 자세와 다르다
+      const o = (posesByStep[si + 1] || {})[`${pt.n} ${cnt[pt.n]}번`]
       if (!o || !Array.isArray(o.r)) return pt
-      return { ...pt, r: o.r.slice(), ...(pt.move && pt.move.r ? { move: { ...pt.move, r: o.r.slice() } } : {}) }
+      let r = o.r.slice()
+      if (xform && xform.m && si + 1 >= xform.at) r = _matToEuler(_mmul(xform.m[0].map((_, j) => xform.m.map((row) => row[j])), _eulerToMat(r)))   // def.xform 이후 화면 자세 → 코드 자세(m 의 전치를 곱함)
+      return { ...pt, r, ...(pt.move && pt.move.r ? { move: { ...pt.move, r: r.slice() } } : {}) }
     }),
   }))
 }
@@ -282,7 +292,7 @@ export function registerCuboAssemblyTools(server, getSupabase) {
           if (!list) {
             const a = (site.IVS_ASSEMBLIES || []).find((x) => x.id === assemblyId)
             if (!a) return fail('assemblyId 또는 steps 를 주세요 (list_assemblies 로 id 확인).')
-            list = applyPoseRotations(a.steps, await loadPoses(getSupabase(), assemblyId))   // 관리자가 ❄ 로 저장한 회전도 검사에 반영
+            list = applyPoseRotations(a.steps, await loadPoses(getSupabase(), assemblyId), a.xform)   // 관리자가 ❄ 로 저장한 회전도 검사에 반영
           }
           const r = checkOverlaps(list, site.IVS_COLLISION, tolerance)
           // 돌기↔구멍 결합 검사: 부품 DB의 연결점(data.connectors)으로 각 돌기가 다른 부품 구멍에 들어가 있는지 본다
@@ -775,7 +785,7 @@ export function registerCuboAssemblyTools(server, getSupabase) {
             const connBefore = { ...base }; if (existing.data?.connectors) connBefore[partName] = existing.data.connectors
             const connAfter = { ...base, [partName]: connectors }
             for (const a of users) {
-              const steps = applyPoseRotations(a.steps, await loadPoses(sb, a.id))   // 관리자가 ❄ 로 저장한 회전도 반영
+              const steps = applyPoseRotations(a.steps, await loadPoses(sb, a.id), a.xform)   // 관리자가 ❄ 로 저장한 회전도 반영
               impact.push(...diffSummary(`${a.id} (${a.chapter})`, connectorSummary(site, steps, connBefore), connectorSummary(site, steps, connAfter)))
             }
           }

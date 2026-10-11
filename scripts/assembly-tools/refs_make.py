@@ -54,6 +54,33 @@ BOOKS = {
         },
         "extra": [],
     },
+    "dropchecker": {
+        "volume": 2,
+        "pages": {
+            31: [(0, (360, 495, 1300, 1310), "교재 31쪽 맨 앞 완성품 사진 — 앞뒤·방향은 여기서 확인"), (1, (75, 1330, 705, 1888), ""), (2, (720, 1330, 1355, 1888), "")],
+            32: [(3 + i, box(*g), "") for i, g in enumerate(GRID)],
+            33: [(9 + i, box(*g), "") for i, g in enumerate(GRID)],
+            34: [(15 + i, box(*g), "") for i, g in enumerate(GRID)],
+            35: [(21 + i, box(*g), "") for i, g in enumerate(GRID)],
+            36: [(27 + i, box(*g), "") for i, g in enumerate(GRID)],
+            37: [(33, box("L", 1), ""), (34, box("R", 1), ""), (35, box("L", 2), ""), (99, box("R", 2), "완성")],
+        },
+        "extra": [],
+    },
+    "mantis": {
+        "volume": 2,
+        "pages": {
+            40: [(0, (350, 555, 1300, 1260), "교재 40쪽 맨 앞 완성품 사진 — 앞뒤·방향은 여기서 확인"), (1, (75, 1330, 705, 1888), ""), (2, (720, 1330, 1355, 1888), "")],
+            41: [(3 + i, box(*g), "") for i, g in enumerate(GRID)],
+            42: [(9 + i, box(*g), "") for i, g in enumerate(GRID)],
+            43: [(15 + i, box(*g), "") for i, g in enumerate(GRID)],
+            44: [(21 + i, box(*g), "") for i, g in enumerate(GRID)],
+            45: [(27 + i, box(*g), "") for i, g in enumerate(GRID)],
+            46: [(33 + i, box(*g), "") for i, g in enumerate(GRID)],
+            47: [(39, box("L", 1), ""), (40, box("R", 1), ""), (99, box("L", 2), "완성")],
+        },
+        "extra": [],
+    },
     "dog": {
         "volume": 1,
         "pages": {
