@@ -610,7 +610,7 @@
             <div class="part-list-body" id="requiredListBody"></div>
           </div>
         </div>
-        <div class="scene-hint">빈 곳 드래그: 회전 · ✋이동/오른쪽 버튼/두 손가락: 화면 밀기 · 선택한 부품 드래그: 부품 이동 · 휠/핀치: 확대축소 · Ctrl+드래그: 여러 부품 한번에 고르기</div>
+        <div class="scene-hint">빈 곳 드래그: 회전 · ✋이동/오른쪽 버튼/두 손가락: 화면 밀기 · 선택한 부품 드래그: 부품 이동 · 휠/핀치: 확대축소 · Ctrl+드래그: 여러 부품 한번에 고르기 · Ctrl+클릭: 하나씩 더하기·빼기</div>
         <div class="viewcube-wrap">
           <div class="viewcube" id="viewCube">
             <div class="face front" data-face="front">앞</div>
@@ -4347,6 +4347,24 @@
     boxSelectEl.style.width = Math.abs(x2 - x1) + 'px';
     boxSelectEl.style.height = Math.abs(y2 - y1) + 'px';
   }
+  // Ctrl+클릭: 클릭한 부품 하나를 지금 고른 부품들에 더하거나(안 골라져 있으면) 뺀다(이미 골라져 있으면) — 하나씩 골라 여러 개를 만든다(관리자 지시 2026-10-11).
+  // 빈 곳을 Ctrl+클릭하면 선택은 그대로 둔다. 결과가 2개 이상이면 박스 선택과 같이 한 덩어리로 옮기고 돌린다.
+  function ctrlToggleAt(e){
+    if (playing) return;
+    raycaster.setFromCamera(ndcFromEvent(e), camera);
+    const hits = raycaster.intersectObjects(parts.map(p => p.mesh), true);
+    let o = hits.length ? hits[0].object : null;
+    while (o && !o.userData.partRef) o = o.parent;
+    if (!o) return;
+    const part = o.userData.partRef;
+    const cur = selected ? (selected.isGroup ? selected.members.slice() : (selected.isMarker ? [] : [selected])) : [];
+    const at = cur.indexOf(part);
+    if (at >= 0) cur.splice(at, 1); else cur.push(part);
+    if (!cur.length) { select(null); setStatus('고른 부품이 없어요.', null); return; }
+    if (cur.length === 1) { select(cur[0]); setStatus('부품 1개를 골랐어요. Ctrl+클릭으로 더 고를 수 있어요.', 'warn'); return; }
+    select(makeGroupProxy(cur, '고른 부품 ' + cur.length + '개'));
+    setStatus('부품 ' + cur.length + '개를 골랐어요. Ctrl+클릭으로 더하거나 뺄 수 있어요. 이동과 돌리기가 함께 적용돼요.', 'warn');
+  }
   function finishBoxSelect(x1, y1, x2, y2){
     const lo = { x: Math.min(x1, x2), y: Math.min(y1, y2) }, hi = { x: Math.max(x1, x2), y: Math.max(y1, y2) };
     const rect = canvas.getBoundingClientRect();
@@ -4461,6 +4479,7 @@
     if (activePointers.size === 0) {
       if (boxSelecting) {
         if (moved) finishBoxSelect(boxSelectStart.x, boxSelectStart.y, e.clientX, e.clientY);
+        else ctrlToggleAt(e);   // 끌지 않고 Ctrl+클릭만 했으면 그 부품을 하나씩 더하거나 뺀다
         if (boxSelectEl) { boxSelectEl.remove(); boxSelectEl = null; }
         boxSelecting = false; boxSelectStart = null;
         pointerDown = false;

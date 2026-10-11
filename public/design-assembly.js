@@ -307,6 +307,8 @@
     const st = stepStatus[step]; sb.textContent = STATUS_LABEL[st] || '⬜ 상태 없음';
     sb.style.background = st === 'done' ? '#16a34a' : st === 'edit' ? '#f59e0b' : ''; sb.style.color = st ? '#fff' : '';
     sb.title = '이 단계의 상태(관리자만 보여요): 누를 때마다 상태 없음 → 수정중 → 완료 → 상태 없음. DB에 저장돼요';
+    // 📷 카메라·❄ 모습 기록: 이 단계에 저장해 둔 값이 있으면 연두색으로 표시한다(관리자 지시 2026-10-11 — 완료 버튼처럼 저장 여부가 보이게)
+    [['asmCamCopy', !!savedCams[step]], ['asmFreezeBtn', !!posesDB[step]]].forEach(([id, on]) => { const e = $(id); if (!e) return; e.style.background = on ? '#84cc16' : ''; e.style.color = on ? '#fff' : ''; e.style.borderColor = on ? '#65a30d' : ''; });
   }
   function ensureStatusBtn() {
     if ($('asmStatusBtn') || !$('asmMarkMove2')) return;
@@ -717,7 +719,7 @@
     buildStepButtons();
     savedCams = {};
     ensureStatusBtn(); posesDB = {}; if (b.poseStore) b.poseStore.load(def.id).then((m) => { posesDB = m || {}; paintStatus(); if (Object.keys(posesDB).length && viewing) render(); }); thumbsDB = {}; if (b.thumbStore) b.thumbStore.load(def.id).then((m) => { thumbsDB = m || {}; pushSlotThumbs(); }); stepStatus = {}; if (isAdm() && b.statusStore) b.statusStore.load(def.id).then((m) => { stepStatus = m || {}; paintStatus(); });
-    if (b.camStore) b.camStore.load(def.id).then((m) => { savedCams = m || {}; if (viewing) render(); }); // 관리자가 저장한 단계별 시점
+    if (b.camStore) b.camStore.load(def.id).then((m) => { savedCams = m || {}; paintStatus(); if (viewing) render(); }); // 관리자가 저장한 단계별 시점
     if (refsFor !== def.id) loadRefs();
     go(last()); // 처음엔 완성된 모습부터 보여준다
     pf.asmOpened = Math.round(performance.now());
@@ -867,7 +869,7 @@
           const myStep = step;
           try {
             await b2.camStore.save(def.id, myStep, cam);
-            savedCams[myStep] = cam;
+            savedCams[myStep] = cam; paintStatus();
             baseCam = { step: myStep, th: cam.theta, ph: cam.phi, target: cam.target, radius: cam.radius, src: 'admin' };
             b2.status(myStep + '단계 시점을 저장했습니다. 이제 이 단계를 열면 이 모습으로 보여요.', 'success');
             notice('교재 샷이 저장되었습니다.');
@@ -877,6 +879,7 @@
           const host = $('asmMarkMove2'), fz = $('asmFreezeBtn'), st0 = $('asmStatusBtn');
           if (host) host.parentNode.insertBefore(cb, fz && fz.parentNode === host.parentNode ? fz : host); else row.appendChild(cb);
           if (st0 && fz && st0.parentNode === fz.parentNode) fz.parentNode.insertBefore(st0, cb);
+          paintStatus();
         }
       }
     }
