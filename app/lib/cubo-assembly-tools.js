@@ -193,9 +193,7 @@ export function registerCuboAssemblyTools(server, getSupabase) {
         inputSchema: { assemblyId: z.string().optional().describe('list_assemblies 의 id. 생략하면 목록') },
       },
       async ({ assemblyId }) => {
-        if (!assemblyId) return text('작업 기록이 있는 작품:
-' + Object.entries(ASSEMBLY_NOTES).map(([k, v]) => `- ${k} (${v.length}자)`).join('
-'))
+        if (!assemblyId) return text('작업 기록이 있는 작품:\n' + Object.entries(ASSEMBLY_NOTES).map(([k, v]) => `- ${k} (${v.length}자)`).join('\n'))
         const n = ASSEMBLY_NOTES[assemblyId]
         return n ? text(n) : fail(`${assemblyId} 의 작업 기록이 없다. get_assembly_notes 를 인자 없이 불러 목록을 본다.`)
       }
