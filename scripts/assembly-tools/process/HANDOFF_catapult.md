@@ -1,6 +1,6 @@
 # 투석기(cubo-2-catapult) 인수인계 — 2026-10-12 기준
 
-이 문서와 같은 폴더의 `00_개선규칙.md`~`05_조립.md`(조립 과정 규칙, 원본은 사용자 Downloads 폴더), `.claude/skills/cubo-assembly/SKILL.md`, `scripts/assembly-tools/user_diffs/요청차이.md`(사용자가 바로잡은 것 19건)를 **처음부터 읽고** 시작한다.
+이 문서와 같은 폴더의 `00_개선규칙.md`~`05_조립.md`(조립 과정 규칙 — 이 저장소 사본이 기준), `.claude/skills/cubo-assembly/SKILL.md`, `scripts/assembly-tools/user_diffs/요청차이.md`(사용자가 바로잡은 것 19건)를 **처음부터 읽고** 시작한다.
 
 ## 상태
 - 1~15번: 사용자 ✓ (DB `ivs_assembly_status`). 내용을 바꾸지 않는다(빌드가 막는다).
@@ -21,3 +21,6 @@
 
 ## 지킬 것
 존댓말·짧게. ✓/완료 버튼 절대 누르지 않기. 푸시는 사용자가 "업로드"라고 할 때만. 빌드 게이트 우회 금지(`build.py` 는 --write 뿐). 확인한 것/추정 구분해서 정직하게 보고. 사용자가 바로잡은 것은 `요청차이.md` 에 한 항목 추가.
+
+## 환경
+저장소 루트 `CLAUDE.md` 의 "환경에서 사람이 줘야 하는 것"(.env.local 키, 로그인) 참고. 로컬 서버는 `npm run dev -- -p 3177`(README 새 PC 절), 화면 확인·이미지 등록은 로그인된 브라우저 패널이 필요하다.
