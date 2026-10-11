@@ -316,10 +316,16 @@
     sb.style.cssText = 'padding:6px 12px;font-size:12px;font-weight:600;border-radius:999px;background:var(--panel);border:1px solid var(--panel-border);color:var(--ink);';
     $('asmMarkMove2').parentNode.insertBefore(sb, $('asmMarkMove2'));
     { const fb = document.createElement('button'); fb.type = 'button'; fb.id = 'asmFreezeBtn'; fb.hidden = true; fb.textContent = '❄ 모습 기록';
-      fb.style.cssText = sb.style.cssText; fb.title = '지금 부품들의 위치·회전을 이 단계의 모습으로 기록해요(관리자만). 기록한 단계는 열 때 이 모습으로 보여요';
+      fb.style.cssText = sb.style.cssText; fb.title = '지금 부품들의 위치·회전을 이 단계의 모습으로 기록해요(관리자만). 기록한 단계는 열 때 이 모습으로 보여요. 기록한 단계에서 한 번 더 누르면 기록을 지워요';
       sb.parentNode.insertBefore(fb, sb);
       fb.addEventListener('click', async () => {
         const b2 = bridge(); if (!b2 || !b2.poseStore || !def || step < 1) return;
+        if (posesDB[step]) { // 이미 기록한 단계에서 한 번 더 누르면 기록을 지운다(사용자 지시 2026-10-11) — 다시 누르면 새로 기록
+          const mine0 = step;
+          try { await b2.poseStore.remove(def.id, mine0); delete posesDB[mine0]; paintStatus(); b2.status(mine0 + '단계 모습 기록을 지웠어요. 이제 코드가 만든 자세로 보여요. 다시 누르면 새로 기록해요.', 'success'); notice('모습 기록을 지웠습니다.'); if (viewing && step === mine0) render(); }
+          catch (e) { b2.status('모습 기록 삭제 실패: ' + e.message, 'error'); }
+          return;
+        }
         const ser = b2.serialize();
         if (ser.length !== lastLabels.length) { b2.status('부품 수가 달라서 기록하지 못했어요. 단계를 다시 열고 눌러 주세요.', 'error'); return; }
         const r1 = (v) => Math.round(v * 100) / 100, poses = {};

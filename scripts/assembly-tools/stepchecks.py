@@ -4,6 +4,7 @@
 #   - 막는 항목(blocking)은 <이름>_checks.json 에 적고, build.py 가 --write 때 막는다: 격자 그림 없음, 읽기 표 빈칸, 읽기 표 부품 ≠ 모델 부품, 쓴 부품 합계가 LIST 를 넘음.
 #   - 사람이 눈으로 하는 항목(화면 확인·책과 나란히 비교·카메라)은 <이름>_rules.json 의 view/count/camera 목록에 번호가 있으면 ☑.
 import json, os, re, collections
+import userdone, stepfp
 MARK = "\n━ 작업 점검 ━"
 
 def _counts(parts):
@@ -26,6 +27,9 @@ def apply(A, name):
     have = collections.defaultdict(dict)
     for r in idx: have[r["step"]][r["idx"]] = r.get("note", "")
     cum = collections.Counter(); blocking = []; rows = {}
+    _done = userdone.user_done(A.id)   # 사용자가 화면에서 직접 누른 ✓ 완료 단계(DB) — 눈으로 하는 확인(화면 확대·책과 나란히 비교·카메라)의 유일한 근거(2026-10-11: rules.json 에 Claude 가 적어서 푸는 길 삭제)
+    _last_built = max([i for i, st2 in enumerate(A.steps, 1) if st2.parts] or [0])
+    _evf = os.path.join(here, name + "_evidence.json"); _evid = json.load(open(_evf, encoding="utf-8")) if os.path.exists(_evf) else {}
     for k, st in enumerate(A.steps, 1):
         if not st.parts:
             continue
@@ -51,18 +55,16 @@ def apply(A, name):
         items.append((bool(rl.get("orient_check")) and not _oex, (len(_ori) >= 20 and not _ori.startswith("미")) or _oex or not rl.get("orient_check"), "부품 방향·제자리 판정(읽기 표 '부품방향')" + (" — 면제(재점검 대기)" if _oex and rl.get("orient_check") else "")))
         _cmp = str(r.get("대조", "")).strip()   # 앞·뒤 번호 그림과 완성 사진(00)을 같이 보고 읽은 내용(관리자 지시 2026-10-08: 한 장만 보고 만들어 12번이 틀렸다). 10번부터는 비어 있으면 막는다(1~9번은 아직 안 한 것으로 표시만)
         items.append((k >= 10, len(_cmp) >= 10 and not _cmp.startswith("미"), "앞·뒤 번호 그림·완성 사진(00)과 같이 읽음(읽기 표 '대조')"))
-        _strict = bool(rl.get("strict"))   # strict(관리자 지시 2026-10-10 "하지 않은 것을 하지 마"): 눈으로 하는 확인도 안 하면 막는다 — "안 했다고 보고"로 넘어가지 않는다
-        items.append((_strict, k in rl.get("view", []), "화면 확대 확인"))
-        items.append((_strict, k in rl.get("count", []), "책 그림과 나란히 비교(칸 수 대조)"))
-        items.append((_strict, k in rl.get("camera", []), "카메라 책과 대조"))
-        items.append((_strict, str(getattr(st, "camSrc", "guess")) != "guess", "카메라가 짐작(guess)이 아님 — 책 그림에서 가까운 쪽·오른쪽·위를 읽고 정한 값(camSrc eye)"))
+        # 눈으로 하는 확인 4개 — 사용자가 ✓ 완료를 눌렀으면 통과, 아니면 가장 마지막에 만든 번호(화면을 봐야 확인되는 지금 번호)만 안 막고 앞 번호는 막는다.
+        _ev = (_evid.get(str(k)) or {})
+        _evok = bool(_ev)   # 화면↔책 비교 증거(record_check.py)가 있으면 표시(지문이 지금 내용과 같은지는 build.py 가 최종 내용으로 따로 검사한다)
+        _ud = (k in _done) or _evok; _cur = (k == _last_built)
+        _eye = [("화면 확대 확인", True), ("책 그림과 나란히 비교(칸 수 대조)", True), ("카메라 책과 대조", True), ("카메라가 짐작(guess)이 아님 — 책 그림에서 가까운 쪽·오른쪽·위를 읽고 정한 값(camSrc eye)", str(getattr(st, "camSrc", "guess")) != "guess")]
+        for _txt, _okc in _eye:
+            items.append((not _cur, _ud, _txt + (" (사용자 ✓ 완료)" if k in _done else (" (비교 증거 있음)" if _evok else ""))))
         rows[k] = items
         for need, ok, txt in items:
             if need and not ok: blocking.append("%d번: %s" % (k, txt))
-        last_built = max(i for i, st2 in enumerate(A.steps, 1) if st2.parts)
-        if k < last_built:   # 앞 번호의 눈으로 하는 체크(화면 확인·책과 나란히 비교)를 미루고 다음 번호로 가지 못하게 한다(관리자 지시 2026-10-08: 체크를 뒤로 미룬다)
-            for need, ok, txt in items:
-                if (not need) and (not ok) and "카메라" not in txt and "대조" not in txt: blocking.append("%d번: %s — 다음 번호(%d번 이후)를 만들기 전에 해야 함" % (k, txt, k + 1))
         block = MARK + "\n" + "\n".join(("☑ " if ok else ("☐ " if not need else "☐ ")) + txt + ("" if need else " (눈으로)") for need, ok, txt in items)
         st.note = st.note.split(MARK)[0] + block
     left = {n: lst[n] - cum[n] for n in lst if lst[n] - cum[n] != 0 and n in cum or (n in lst and cum[n] == 0 and False)}

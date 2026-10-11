@@ -47,32 +47,47 @@
 "noPart": false
 },
 "8": {
-"parts": {},
-"noPart": true
+"parts": {
+"713프레임": 1,
+"515프레임": 1
+},
+"noPart": false
 },
 "9": {
-"parts": {},
-"noPart": true
+"parts": {
+"2단블록": 2
+},
+"noPart": false
 },
 "10": {
-"parts": {},
-"noPart": true
+"parts": {
+"2단블록": 2,
+"29프레임": 2
+},
+"noPart": false
 },
 "11": {
-"parts": {},
-"noPart": true
+"parts": {
+"축": 1,
+"부시": 2
+},
+"noPart": false
 },
 "12": {
-"parts": {},
-"noPart": true
+"parts": {
+"2단블록": 1
+},
+"noPart": false
 },
 "13": {
 "parts": {},
-"noPart": true
+"noPart": false
 },
 "14": {
-"parts": {},
-"noPart": true
+"parts": {
+"2단블록": 4
+},
+"noPart": false
 },
 "15": {
 "parts": {},

@@ -3756,7 +3756,7 @@
     const prevQ = selected.body.quaternion.clone(), prevRot = selected.rot;
     selected.body.quaternion.set(q.x, q.y, q.z, q.w);
     selected.rot = r;
-    if (overlappingPart(selected)) { // 돌리면 다른 부품과 겹치면 돌리지 않는다
+    if (assemblyListParts.indexOf(selected) < 0 && overlappingPart(selected)) { // 돌리면 다른 부품과 겹치면 돌리지 않는다(조립 보기의 부품은 끼워진 부품끼리 겹쳐 보이는 게 정상이라 막지 않는다 — 사용자 지시 2026-10-11)
       selected.body.quaternion.set(prevQ.x, prevQ.y, prevQ.z, prevQ.w);
       selected.rot = prevRot;
       noteBlocked();
@@ -5300,8 +5300,9 @@
       if (mateList.length) {
         const HEADM = 6;
         const connDots = new Map();
-        const connDot = (pi, kind, id) => {
-          const key = pi + ':' + kind + ':' + id;
+        const connDot = (pi, kind0, id) => {
+          const neg = kind0 === 'peg-', kind = neg ? 'peg' : kind0, sg = neg ? -1 : 1; // 'peg-' = 긴 돌기(축)의 반대쪽 끝
+          const key = pi + ':' + kind0 + ':' + id;
           if (connDots.has(key)) return connDots.get(key);
           const part = assemblyListParts[pi] || parts[pi];
           const info = part && part.type && part.type.indexOf('robot:') === 0 ? robotPartsCache.find(x => x.id === part.type.slice(6)) : null;
@@ -5316,11 +5317,11 @@
             geo = new THREE.ShapeGeometry(sh);
           } else geo = new THREE.CircleGeometry(kind === 'peg' ? Math.min(2.6, Math.max(1.4, (c.r || 2.5) * 1.05)) : Math.min(3.3, Math.max(1.4, c.r || 3)), 32);
           const m = new THREE.Mesh(geo, paint());
-          m.renderOrder = 10; m.userData.dot = true; m.userData.users = new Set(); m.userData.connKey = key;
+          m.renderOrder = 10; m.userData.dot = true; m.userData.longPeg = kind === 'peg' && (c.len || 0) >= 40; m.userData.users = new Set(); m.userData.connKey = key;
           if (kind === 'hole' && !isCross) m.userData.ring = true;
-          const at = kind === 'peg' ? [c.pos[0] + c.dir[0] * (c.len || 0) / 2, c.pos[1] + c.dir[1] * (c.len || 0) / 2, c.pos[2] + c.dir[2] * (c.len || 0) / 2] : c.pos;
+          const at = kind === 'peg' ? [c.pos[0] + sg * c.dir[0] * (c.len || 0) / 2, c.pos[1] + sg * c.dir[1] * (c.len || 0) / 2, c.pos[2] + sg * c.dir[2] * (c.len || 0) / 2] : c.pos;
           m.position.set(at[0], at[1], at[2]);
-          m.quaternion.setFromUnitVectors(Z, new THREE.Vector3(c.dir[0], c.dir[1], c.dir[2]).normalize());
+          m.quaternion.setFromUnitVectors(Z, new THREE.Vector3(sg * c.dir[0], sg * c.dir[1], sg * c.dir[2]).normalize());
           part.mesh.add(m);
           connDots.set(key, m);
           return m;
@@ -5328,8 +5329,12 @@
         const items = [];
         mateList.forEach((e) => {
           [e.pegIdx, e.holeIdx].forEach((pi) => { const q = assemblyListParts[pi] || parts[pi]; if (q && q.mesh && q.body) { q.mesh.position.copy(q.body.position); q.mesh.quaternion.copy(q.body.quaternion); q.mesh.updateMatrixWorld(true); } }); // 점 자리를 재기 전에 부품 몸을 지금 자세로 맞춘다(안 맞추면 모두 원점에 있는 것으로 계산돼 겹친다고 오해해 화살표가 지워진다)
-          const dp = connDot(e.pegIdx, e.pegKind || 'peg', e.pegId), dh = connDot(e.holeIdx, 'hole', e.holeId);
+          let dp = connDot(e.pegIdx, e.pegKind || 'peg', e.pegId); const dh = connDot(e.holeIdx, 'hole', e.holeId);
           if (!dp || !dh) return;
+          if (!e.pegKind && dp.userData.longPeg) { // 축처럼 긴 돌기(길이 40 이상, 양 끝이 열려 있음): 화살표는 끝 두 곳 중 구멍(부시)에 가까운 끝으로만 간다(사용자 지시 2026-10-11)
+            const dp2 = connDot(e.pegIdx, 'peg-', e.pegId);
+            if (dp2) { const W1 = new THREE.Vector3(), W2 = new THREE.Vector3(), WH = new THREE.Vector3(); [dp, dp2, dh].forEach((o) => { o.parent.updateWorldMatrix(true, false); o.updateWorldMatrix(true, false); }); dp.getWorldPosition(W1); dp2.getWorldPosition(W2); dh.getWorldPosition(WH); if (W2.distanceTo(WH) < W1.distanceTo(WH)) dp = dp2; }
+          }
           const from = e.moverIdx === e.pegIdx ? dp : dh, to = e.moverIdx === e.pegIdx ? dh : dp;
           const A = new THREE.Vector3(), B = new THREE.Vector3();
           from.parent.updateWorldMatrix(true, false); to.parent.updateWorldMatrix(true, false);
@@ -5560,6 +5565,10 @@
       },
       async save(assemblyId, step, poses){
         const res = await fetch(SUPABASE_URL + '/rest/v1/ivs_assembly_poses?on_conflict=assembly_id,step', { method: 'POST', headers: this._h({ Prefer: 'resolution=merge-duplicates,return=minimal' }), body: JSON.stringify([{ assembly_id: assemblyId, step, poses, updated_at: new Date().toISOString() }]) });
+        if (!res.ok) throw new Error('(' + res.status + ') ' + (await res.text()).slice(0, 100));
+      },
+      async remove(assemblyId, step){
+        const res = await fetch(SUPABASE_URL + '/rest/v1/ivs_assembly_poses?assembly_id=eq.' + encodeURIComponent(assemblyId) + '&step=eq.' + Number(step), { method: 'DELETE', headers: this._h({ Prefer: 'return=minimal' }) });
         if (!res.ok) throw new Error('(' + res.status + ') ' + (await res.text()).slice(0, 100));
       }
     },
