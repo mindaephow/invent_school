@@ -95,8 +95,19 @@ def process(step):
         base=out.copy()
         g=base.copy()
     # 선 긋기(수평·수직)
+    _axf0=D+nm+'_axes.json'; _AX0=json.load(open(_axf0,encoding='utf-8')) if os.path.exists(_axf0) else {}
     def lines(im):
         Hh,Ww=im.shape[:2]
+        if _AX0.get('replace_lines') and _AX0.get('global'):   # 수평·수직선 대신 기준 점(vx,hy)을 지나는 X(빨강)·Z(파랑)·Y(초록) 축선(관리자 제안 2026-10-11: 방향은 x,y,z 축으로)
+            _Lx=(A2[:,:2] if fits else Mx[:,:2]).astype(np.float64); _C={'X':(40,40,230),'Y':(40,170,40),'Z':(230,110,20)}
+            for k_,v_ in _AX0['global'].items():
+                d_=_Lx@np.array(v_,float); n_=float(np.hypot(*d_)) or 1.0; d_=d_/n_
+                t_=max(Ww,Hh)*2; cv2.line(im,(int(vx-d_[0]*t_),int(hy-d_[1]*t_)),(int(vx+d_[0]*t_),int(hy+d_[1]*t_)),_C[k_],2,cv2.LINE_AA)
+                # 화면 안 가장자리 가까이에 축 이름
+                for sg in (1,-1):
+                    ex,ey=vx+sg*d_[0]*min(Ww,Hh)*0.42,hy+sg*d_[1]*min(Ww,Hh)*0.42
+                    if 20<ex<Ww-40 and 30<ey<Hh-20: cv2.putText(im,('+' if sg==1 else '-')+k_,(int(ex),int(ey)),cv2.FONT_HERSHEY_SIMPLEX,0.7,_C[k_],2,cv2.LINE_AA)
+            return
         cv2.line(im,(0,int(round(hy))),(Ww,int(round(hy))),ORANGE,2,cv2.LINE_AA); cv2.putText(im,'horizontal',(Ww-130,int(hy)-8),cv2.FONT_HERSHEY_SIMPLEX,0.55,ORANGE,2)
         cv2.line(im,(int(round(vx)),0),(int(round(vx)),Hh),ORANGE,2,cv2.LINE_AA); cv2.putText(im,'vertical',(int(vx)+8,28),cv2.FONT_HERSHEY_SIMPLEX,0.55,ORANGE,2)
     lines(base)
