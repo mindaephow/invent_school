@@ -116,7 +116,7 @@ for key, label in (("view", "화면 확대 확인"), ("count", "교재와 칸 �
     done = set(rules.get(key, [])); miss = [k for k in range(1, n_steps + 1) if k not in done]
     unver = unver or bool(miss)
     print(f"{label}: {n_steps - len(miss)}/{n_steps} 단계" + (f" — 안 한 단계 {miss}" if miss else ""))
-print("(위 rules.json 목록은 참고용이다 — 번호별 확인의 근거는 사용자 ✓ 완료(DB)뿐이고, Claude 가 이 목록에 적어서 막힘을 풀 수 없다)")
+print("(위 rules.json 목록은 참고용이다 — 눈으로 하는 확인의 근거는 화면↔책 비교 증거(record_check.py)나 사용자 ✓ 이고, Claude 가 이 목록에 적어서 막힘을 풀 수 없다)")
 # ───── 책 이미지 작업 게이트(관리자 지시 2026-10-07: 수평선·격자·부품 배치가 이 작업의 전부 — 기억이 없는 Claude 도 이 검사로 강제된다) ─────
 # 부품이 있는 단계마다 refs/<이름>/index.json 에 그 단계의 격자 그림이 있어야 한다: 1차(idx 1)와 2차(idx 2, 수평선을 긋고 돌린 그림 위의 격자). 판이 없는 단계는 설명이 ① 로 시작하는 원본 1장(idx 1)만 인정한다.
 # 이 검사는 건너뛸 수 없다. 옛 조립도(아래 목록)만 면제.

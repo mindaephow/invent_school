@@ -86,11 +86,6 @@ def main():
         listing = fetch_list(url, volume, title)
         if not listing:
             print(f"교재관리에서 큐보 {volume}권 '{title}' 차시의 부품 목록을 못 찾았어요(차시 제목이 정확한지 check_chapter_parts 로 확인)."); sys.exit(1)
-    missing_db = [n for n in listing if n.startswith("(DB에")]
-    conn_f = os.path.join(out_dir, "conn.json")
-    known = set(json.load(open(conn_f, encoding="utf-8"))) if os.path.exists(conn_f) else set()
-    # 프레임(N프레임)은 규칙으로 만들어지므로 partlib 에 따로 없어도 된다
-    need_partlib = [n for n in listing if not re.fullmatch(r"\d\d+프레임", n) and known and n not in known and not n.startswith("(DB에")]
     lc = "\n".join("#   " + n + " " + str(q) for n, q in listing.items())
     files = {
         f"{name}.py": SKELETON.format(volume=volume, title=title, id=name, name=name, count=len(listing), list_comment=lc),
@@ -107,10 +102,6 @@ def main():
             open(path, "w", encoding="utf-8").write(content)
             print(f"만듦: {fn}")
     print(f"\n교재 LIST {len(listing)}종 · 총 {sum(listing.values())}개")
-    if missing_db:
-        print("⚠ DB 에 없는 부품이 있어요 — 교재 그림을 보고 직접 등록한 뒤 진행(안내서 '첫 30분').")
-    if need_partlib:
-        print("⚠ conn.json(partlib)에 연결점이 없는 부품: " + ", ".join(need_partlib) + "  → partlib.py 의 OTHER 에 get_part_connectors 결과를 옮긴다.")
     print(f"\n다음: {name}.py 에 1단계부터 순서대로 적고  python build.py {name}  으로 검사한다.")
 
 if __name__ == "__main__":

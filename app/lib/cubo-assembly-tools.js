@@ -95,6 +95,29 @@ async function textbookList(sb, def) {
   return out
 }
 
+// 관리자가 ❄ 모습 기록(ivs_assembly_poses)으로 저장한 부품 회전을 코드 자세 위에 덮는다 — 화면(design-assembly.js)과 같은 규칙:
+// 부품 이름표는 "이름 N번"(단계·부품 순서대로 같은 이름끼리 센 번호), 그 부품이 처음 나오는 단계의 기록을 쓰고, noFreeze 부품은 건너뛴다.
+// 기록의 위치 p 는 띄운(hover) 자리라 쓰지 않고 회전 r 만 덮는다. 원본 steps 는 건드리지 않는다.
+export async function loadPoses(sb, assemblyId) {
+  const { data } = await sb.from('ivs_assembly_poses').select('step, poses').eq('assembly_id', assemblyId)
+  const byStep = {}
+  ;(data || []).forEach((row) => { byStep[row.step] = row.poses || {} })
+  return byStep
+}
+export function applyPoseRotations(steps, posesByStep) {
+  if (!posesByStep || !Object.keys(posesByStep).length) return steps
+  const cnt = {}
+  return steps.map((st, si) => ({
+    ...st,
+    parts: (st.parts || []).map((pt) => {
+      cnt[pt.n] = (cnt[pt.n] || 0) + 1
+      const o = pt.noFreeze ? null : (posesByStep[si + 1] || {})[`${pt.n} ${cnt[pt.n]}번`]
+      if (!o || !Array.isArray(o.r)) return pt
+      return { ...pt, r: o.r.slice(), ...(pt.move && pt.move.r ? { move: { ...pt.move, r: o.r.slice() } } : {}) }
+    }),
+  }))
+}
+
 // 조립 데이터(steps)의 부품을 "제자리" 배치로 모은다(validate_assembly 와 같은 규칙).
 export function partsFinalOf(list) {
   const out = []
@@ -259,7 +282,7 @@ export function registerCuboAssemblyTools(server, getSupabase) {
           if (!list) {
             const a = (site.IVS_ASSEMBLIES || []).find((x) => x.id === assemblyId)
             if (!a) return fail('assemblyId 또는 steps 를 주세요 (list_assemblies 로 id 확인).')
-            list = a.steps
+            list = applyPoseRotations(a.steps, await loadPoses(getSupabase(), assemblyId))   // 관리자가 ❄ 로 저장한 회전도 검사에 반영
           }
           const r = checkOverlaps(list, site.IVS_COLLISION, tolerance)
           // 돌기↔구멍 결합 검사: 부품 DB의 연결점(data.connectors)으로 각 돌기가 다른 부품 구멍에 들어가 있는지 본다
@@ -751,7 +774,10 @@ export function registerCuboAssemblyTools(server, getSupabase) {
             const base = {}; (rows || []).forEach((r) => { if (r.connectors) base[r.name] = r.connectors })
             const connBefore = { ...base }; if (existing.data?.connectors) connBefore[partName] = existing.data.connectors
             const connAfter = { ...base, [partName]: connectors }
-            users.forEach((a) => { impact.push(...diffSummary(`${a.id} (${a.chapter})`, connectorSummary(site, a.steps, connBefore), connectorSummary(site, a.steps, connAfter))) })
+            for (const a of users) {
+              const steps = applyPoseRotations(a.steps, await loadPoses(sb, a.id))   // 관리자가 ❄ 로 저장한 회전도 반영
+              impact.push(...diffSummary(`${a.id} (${a.chapter})`, connectorSummary(site, steps, connBefore), connectorSummary(site, steps, connAfter)))
+            }
           }
         } catch (e) { impact = ['(영향받는 조립도 검사를 못 했어요: ' + e.message + ')'] }
         const { error } = await sb.from('ivs_part_catalog').update({ data: { ...existing.data, connectors } }).eq('id', partId)
