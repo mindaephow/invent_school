@@ -125,6 +125,25 @@ def process(step):
                 if p[1]==1: cv2.putText(g,str(p[0]),(int(x)-7,int(y)-10),cv2.FONT_HERSHEY_SIMPLEX,0.6,(255,0,0),2)
                 if p[0]==1: cv2.putText(g,'j%d'%p[1],(int(x)-30,int(y)+5),cv2.FONT_HERSHEY_SIMPLEX,0.55,(0,140,0),2)
     else: g=base.copy()
+    # ── 방향 화살표(선택, 관리자 제안 2026-10-11): <번호>_axes.json 이 있으면 X(빨강)·Y(초록)·Z(파랑) 방향을 오른쪽 위에 한 번(전체), 필요한 곳(local)에 또 그린다. 그림은 변형하지 않고 덧그리기만 한다.
+    #   {"global": {"X": [dx,dy], "Y": [dx,dy], "Z": [dx,dy]}, "local": [{"at": [x,y], "label": "DC모터", "X": [dx,dy], "Y": [...], "Z": [...]}]}  — 벡터와 at 은 원본 그림(NN.jpg) 화면 좌표(오른쪽 +x, 아래 +y), 안 쓰는 축은 빼도 된다.
+    axf=D+nm+'_axes.json'
+    if os.path.exists(axf):
+        AXJ=json.load(open(axf,encoding='utf-8')); _L=(A2[:,:2] if fits else Mx[:,:2]).astype(np.float64)
+        _COL={'X':(40,40,230),'Y':(40,170,40),'Z':(230,110,20)}   # BGR: 빨강·초록·파랑(조립 보기 화면의 +X·+Y·+Z 색과 같다)
+        def _gizmo(im,ox,oy,vecs,size,title=None):
+            if title: cv2.putText(im,title,(int(ox)-int(size)-6,int(oy)-int(size)-10),cv2.FONT_HERSHEY_SIMPLEX,0.6,(60,60,60),2,cv2.LINE_AA)
+            mx=max(float(np.hypot(*(_L@np.array(v,float)))) for v in vecs.values()) or 1.0
+            for k_,v_ in vecs.items():
+                w_=_L@np.array(v_,float)*(size/mx); ex,ey=ox+w_[0],oy+w_[1]
+                cv2.arrowedLine(im,(int(ox),int(oy)),(int(ex),int(ey)),_COL[k_],4,cv2.LINE_AA,tipLength=0.22)
+                cv2.putText(im,'+'+k_,(int(ex+(8 if w_[0]>=0 else -34)),int(ey+(8 if w_[1]>=0 else -4))),cv2.FONT_HERSHEY_SIMPLEX,0.8,_COL[k_],2,cv2.LINE_AA)
+            cv2.circle(im,(int(ox),int(oy)),4,(60,60,60),-1)
+        for im_ in (base,g):
+            if AXJ.get('global'): _gizmo(im_,im_.shape[1]-120,100,AXJ['global'],70,'방향')
+            for lc in AXJ.get('local',[]):
+                _o=(T(lc['at'][0],lc['at'][1]) if fits else Mx@np.array([lc['at'][0]-cx0,lc['at'][1]-cy0,1.0]))
+                _gizmo(im_,float(_o[0]),float(_o[1]),{k:lc[k] for k in 'XYZ' if k in lc},float(lc.get('size',45)),lc.get('label'))
     cv2.imwrite(D+nm+'_1.jpg',base,[cv2.IMWRITE_JPEG_QUALITY,88]); cv2.imwrite(D+nm+'_2.jpg',g,[cv2.IMWRITE_JPEG_QUALITY,88])
     return info,names
 def sentence(step,info,names):

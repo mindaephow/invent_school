@@ -41,6 +41,19 @@ BOOKS = {
         },
         "extra": [],
     },
+    "catapult": {
+        "volume": 2,
+        "pages": {
+            22: [(0, (400, 505, 1170, 1310), "교재 22쪽 맨 앞 완성품 사진 — 앞뒤(받침대 쪽 판이 뒤, 큰 바퀴 둘), 기둥·프레임 방향은 여기서 확인"), (1, (75, 1330, 705, 1888), ""), (2, (720, 1330, 1355, 1888), "")],
+            23: [(3 + i, box(*g), "") for i, g in enumerate(GRID)],
+            24: [(9 + i, box(*g), "") for i, g in enumerate(GRID)],
+            25: [(15 + i, box(*g), "") for i, g in enumerate(GRID)],
+            26: [(21 + i, box(*g), "") for i, g in enumerate(GRID)],
+            27: [(27 + i, box(*g), "") for i, g in enumerate(GRID)],
+            28: [(33, box("L", 1), ""), (34, box("R", 1), ""), (35, box("L", 2), ""), (99, box("R", 2), "완성")],
+        },
+        "extra": [],
+    },
     "dog": {
         "volume": 1,
         "pages": {
