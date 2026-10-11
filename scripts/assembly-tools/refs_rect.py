@@ -72,7 +72,20 @@ def process(step):
         _P={(q[0],q[1]):(q[2],q[3]) for q in pts}; _vs=[(_P[(c+1,r)][0]-_P[(c,r)][0],_P[(c+1,r)][1]-_P[(c,r)][1]) for (c,r) in _P if (c+1,r) in _P]; _off=0.0
         if not _vs: _vs=[(_P[(c,r+1)][0]-_P[(c,r)][0],_P[(c,r+1)][1]-_P[(c,r)][1]) for (c,r) in _P if (c,r+1) in _P]; _off=90.0
         _a=math.degrees(math.atan2(np.mean([v[1] for v in _vs]),np.mean([v[0] for v in _vs]))) - _off
+        _axr=D+nm+'_axes.json'; _AXj=json.load(open(_axr,encoding='utf-8')) if os.path.exists(_axr) else {}; _Xv=(_AXj.get('global') or {}).get(_AXj.get('rotate_to') or '')
         _res=_a-90.0*round(_a/90.0)                     # 가장 가까운 수평·수직까지의 작은 각도
+        if _Xv:
+            # 가운데 줄·가운데 열 구멍을 지나는 직선의 방향으로 맞춘다 — 줄들은 원근 때문에 부채꼴로 퍼져 줄마다 각도가 다르므로(첫 줄 41°·가운데 줄 38°) 줄 평균이나 첫 줄이 아니라 축선이 지나는 가운데 줄·가운데 열을 쓴다
+            _cs0=sorted({q[0] for q in pts}); _rs0=sorted({q[1] for q in pts}); _cm=_cs0[(len(_cs0)-1)//2]; _rm=_rs0[(len(_rs0)-1)//2]
+            def _ln(sel):
+                V_=np.array([(q[2],q[3]) for q in pts if sel(q)],float)
+                if len(V_)<2: return None
+                u_,s_,vt_=np.linalg.svd(V_-V_.mean(0)); return math.degrees(math.atan2(vt_[0][1],vt_[0][0]))
+            _wr=lambda d_:((d_+90.0)%180.0)-90.0
+            _aR=_ln(lambda q:q[1]==_rm); _aC=_ln(lambda q:q[0]==_cm); _oth={'X':'Z','Z':'X'}.get(_AXj.get('rotate_to')); _Ov=(_AXj.get('global') or {}).get(_oth) if _oth else None
+            _eR=_wr(_aR-math.degrees(math.atan2(_Xv[1],_Xv[0]))) if _aR is not None else None; _eC=_wr(_aC-math.degrees(math.atan2(_Ov[1],_Ov[0]))) if (_aC is not None and _Ov and len(_rs0)>=2) else None
+            _es=[e_ for e_ in (_eR,_eC) if e_ is not None]; _res=sum(_es)/len(_es) if _es else _res
+            print('  회전 근거: 가운데 줄 어긋남 %s° / 가운데 열 어긋남 %s° → 회전 %.2f°'%('-' if _eR is None else '%.2f'%_eR,'-' if _eC is None else '%.2f'%_eC,_res))
         Mr=cv2.getRotationMatrix2D((w/2.0,h/2.0),_res,1.0); _cs,_sn=abs(Mr[0,0]),abs(Mr[0,1]); W,H=int(h*_sn+w*_cs)+1,int(h*_cs+w*_sn)+1
         Mr[0,2]+=W/2.0-w/2.0; Mr[1,2]+=H/2.0-h/2.0
         A2=Mr.astype(np.float32); sc=1.0
@@ -85,6 +98,9 @@ def process(step):
         tp={ (p[0],p[1]):T(p[2],p[3]) for p in pts }
         _cn=min(tp.items(),key=lambda kv: abs(kv[0][0]-cc)+abs(kv[0][1]-rc))[1]   # 가운데 칸·줄에 가장 가까운 노드
         vx=float(_cn[0]); hy=float(_cn[1])                                          # 수직선 = 그 노드의 x, 수평선 = 그 노드의 y
+        if _Xv:   # rotate_to 를 정했으면 축선 중심을 기준 판(점이 가장 많은 판)의 중심으로 둔다 — 축선이 그 판의 가운데 줄·가운데 열 위로 지나게(판이 둘이면 두 판의 점을 합친 평균이 아니다: 중심이 기준 판에서 벗어났었다)
+            _cs=sorted({q[0] for q in pts}); _rs=sorted({q[1] for q in pts}); _mc={_cs[(len(_cs)-1)//2],_cs[len(_cs)//2]}; _mr={_rs[(len(_rs)-1)//2],_rs[len(_rs)//2]}   # 가운데 칸·가운데 줄의 구멍(짝수면 가운데 두 개의 중점) — 점 전체의 평균은 원근 때문에 가운데 구멍에서 벗어난다
+            _tc=np.mean([T(q[2],q[3]) for q in pts if q[0] in _mc and q[1] in _mr],axis=0); vx=float(_tc[0]); hy=float(_tc[1])
         xax,yax=0,1
         # 칸1·줄1 위치(위/아래/왼/오른)
         def where(ax):  # ax 0=칸 1=줄
@@ -99,7 +115,8 @@ def process(step):
     def lines(im):
         Hh,Ww=im.shape[:2]
         if _AX0.get('replace_lines') and _AX0.get('global'):   # 수평·수직선 대신 기준 점(vx,hy)을 지나는 X(빨강)·Z(파랑)·Y(초록) 축선(관리자 제안 2026-10-11: 방향은 x,y,z 축으로)
-            _Lx=(A2[:,:2] if fits else Mx[:,:2]).astype(np.float64); _C={'X':(40,40,230),'Y':(40,170,40),'Z':(230,110,20)}
+            _Lx=np.eye(2);   # 가운데 축선은 이미지 회전과 같이 돌리지 않는다(관리자 지시 2026-10-12) — 읽은 원래 화면 방향 그대로
+            _C={'X':(40,40,230),'Y':(40,170,40),'Z':(230,110,20)}
             for k_,v_ in _AX0['global'].items():
                 d_=_Lx@np.array(v_,float); n_=float(np.hypot(*d_)) or 1.0; d_=d_/n_
                 t_=max(Ww,Hh)*2; cv2.line(im,(int(vx-d_[0]*t_),int(hy-d_[1]*t_)),(int(vx+d_[0]*t_),int(hy+d_[1]*t_)),_C[k_],2,cv2.LINE_AA)
@@ -111,6 +128,12 @@ def process(step):
         cv2.line(im,(0,int(round(hy))),(Ww,int(round(hy))),ORANGE,2,cv2.LINE_AA); cv2.putText(im,'horizontal',(Ww-130,int(hy)-8),cv2.FONT_HERSHEY_SIMPLEX,0.55,ORANGE,2)
         cv2.line(im,(int(round(vx)),0),(int(round(vx)),Hh),ORANGE,2,cv2.LINE_AA); cv2.putText(im,'vertical',(int(vx)+8,28),cv2.FONT_HERSHEY_SIMPLEX,0.55,ORANGE,2)
     lines(base)
+    if fits and _AX0.get('rotate_to') and _AX0.get('global'):   # 화면에 그린 축선(가운데 구멍을 지남)과 가운데 줄·가운데 열 구멍 사이의 실제 거리(px)
+        _gl=_AX0['global']; _d2=lambda v_:(lambda d_:d_/(np.hypot(*d_) or 1.0))(np.array(v_,float))
+        _ax_=_AX0['rotate_to']; _oth_={'X':'Z','Z':'X'}.get(_ax_)
+        def _off(sel,vec):
+            dd_=_d2(vec); nn_=np.array([-dd_[1],dd_[0]]); return [round(float((np.array(tp[k],float)-np.array([vx,hy]))@nn_),1) for k in sorted(tp) if sel(k)]
+        print('  축선↔구멍 거리 px — 가운데 줄 구멍 vs %s 선:'%_ax_,_off(lambda k:k[1]==_rm,_gl[_ax_]),'| 가운데 열 구멍 vs %s 선:'%_oth_,_off(lambda k:k[0]==_cm,_gl[_oth_]) if (_oth_ and _oth_ in _gl and len(_rs0)>=2) else '-')
     if g is not None:
         g=base.copy()
         gray=cv2.cvtColor(out,cv2.COLOR_BGR2GRAY)
@@ -135,12 +158,16 @@ def process(step):
                 cv2.circle(g,(int(x),int(y)),3,(0,0,255),-1)
                 if p[1]==1: cv2.putText(g,str(p[0]),(int(x)-7,int(y)-10),cv2.FONT_HERSHEY_SIMPLEX,0.6,(255,0,0),2)
                 if p[0]==1: cv2.putText(g,'j%d'%p[1],(int(x)-30,int(y)+5),cv2.FONT_HERSHEY_SIMPLEX,0.55,(0,140,0),2)
+        if os.environ.get('RR_CHECK'):   # 확인용: 실제 가운데 줄·가운데 열 구멍을 잇는 선(청록·보라)을 겹쳐 그려 축선이 그 선과 겹치는지 눈으로 본다
+            for key_,val_,col_ in ((1,rc,(200,200,0)),(0,cc,(200,0,200))):
+                ks_=sorted([k for k in tp if k[key_]==val_]); q_=[(int(round(float(tp[k][0]))),int(round(float(tp[k][1])))) for k in ks_]
+                for a_,b_ in zip(q_,q_[1:]): cv2.line(g,a_,b_,col_,2,cv2.LINE_AA)
     else: g=base.copy()
     # ── 방향 화살표(선택, 관리자 제안 2026-10-11): <번호>_axes.json 이 있으면 X(빨강)·Y(초록)·Z(파랑) 방향을 오른쪽 위에 한 번(전체), 필요한 곳(local)에 또 그린다. 그림은 변형하지 않고 덧그리기만 한다.
     #   {"global": {"X": [dx,dy], "Y": [dx,dy], "Z": [dx,dy]}, "local": [{"at": [x,y], "label": "DC모터", "X": [dx,dy], "Y": [...], "Z": [...]}]}  — 벡터와 at 은 원본 그림(NN.jpg) 화면 좌표(오른쪽 +x, 아래 +y), 안 쓰는 축은 빼도 된다.
     axf=D+nm+'_axes.json'
     if os.path.exists(axf):
-        AXJ=json.load(open(axf,encoding='utf-8')); _L=(A2[:,:2] if fits else Mx[:,:2]).astype(np.float64)
+        AXJ=json.load(open(axf,encoding='utf-8')); _L=(A2[:,:2] if fits else Mx[:,:2]).astype(np.float64)   # 오른쪽 위 방향 표시판은 맨 처음 원본 위에 그리는 것이라 이미지를 돌리면 같이 돌아간다(관리자 지시 2026-10-12)
         _COL={'X':(40,40,230),'Y':(40,170,40),'Z':(230,110,20)}   # BGR: 빨강·초록·파랑(조립 보기 화면의 +X·+Y·+Z 색과 같다)
         def _gizmo(im,ox,oy,vecs,size,title=None):
             if title: cv2.putText(im,title,(int(ox)-int(size)-6,int(oy)-int(size)-10),cv2.FONT_HERSHEY_SIMPLEX,0.6,(60,60,60),2,cv2.LINE_AA)
