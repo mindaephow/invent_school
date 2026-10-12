@@ -1,6 +1,7 @@
 # 책 이미지 작업(새 방식, 관리자 지시 2026-10-09): 로봇은 똑바로 세운 채 회전만(늘이기·펴기 없음) 한 그림이고
 # 파란 수직선(판 가운데 열)·수평선(판 가운데 줄)을 긋는다. 그림 전체를 옆으로 눕히지(90° 돌리지) 않는다. 방향은 원본의 위·아래·좌·우를 최대한 유지(거울 금지).
 #   python refs_rect.py <이름> [번호 ...]   번호를 안 주면 fits 가 있는 모든 번호.  입력: refs/<이름>/NN.jpg(원본), NN_lv.json(자르기 영역 crop), fits/NN_<라벨>.json(구멍 점, 원본 좌표)
+#   axes.json 의 "column_axis": "Y" = 서 있는 판처럼 가운데 열이 Z 가 아니라 Y 선을 따를 때 그 축을 적는다.
 #   출력: refs/<이름>/NN_1.jpg(보정한 그림 + 수직·수평선), NN_2.jpg(+ 격자 점·칸·줄 번호), index.json 의 ③·④ 설명 갱신. 점이 없는 번호(한 줄 막대)는 막대 축이 수직/수평이 되게 회전만 한다.
 import json, os, glob, re, sys, math
 import cv2, numpy as np
@@ -86,7 +87,7 @@ def process(step):
                 if len(V_)<2: return None
                 u_,s_,vt_=np.linalg.svd(V_-V_.mean(0)); return math.degrees(math.atan2(vt_[0][1],vt_[0][0]))
             _wr=lambda d_:((d_+90.0)%180.0)-90.0
-            _aR=_ln(lambda q:q[1]==_rm); _aC=_ln(lambda q:q[0]==_cm); _oth={'X':'Z','Z':'X'}.get(_AXj.get('rotate_to')); _Ov=(_AXj.get('global') or {}).get(_oth) if _oth else None
+            _aR=_ln(lambda q:q[1]==_rm); _aC=_ln(lambda q:q[0]==_cm); _oth=_AXj.get('column_axis') or {'X':'Z','Z':'X'}.get(_AXj.get('rotate_to')); _Ov=(_AXj.get('global') or {}).get(_oth) if _oth else None
             _eR=_wr(_aR-math.degrees(math.atan2(_Xv[1],_Xv[0]))) if _aR is not None else None; _eC=_wr(_aC-math.degrees(math.atan2(_Ov[1],_Ov[0]))) if (_aC is not None and _Ov and len(_rs0)>=2) else None
             _es=[e_ for e_ in (_eR,_eC) if e_ is not None]; _res=sum(_es)/len(_es) if _es else _res
             print('  회전 근거: 가운데 줄 어긋남 %s° / 가운데 열 어긋남 %s° → 회전 %.2f°'%('-' if _eR is None else '%.2f'%_eR,'-' if _eC is None else '%.2f'%_eC,_res))
@@ -138,7 +139,7 @@ def process(step):
     lines(base)
     if fits and _AX0.get('rotate_to') and _AX0.get('global'):   # 화면에 그린 축선(가운데 구멍을 지남)과 가운데 줄·가운데 열 구멍 사이의 실제 거리(px)
         _gl=_rotg(_AX0['global']); _d2=lambda v_:(lambda d_:d_/(np.hypot(*d_) or 1.0))(np.array(v_,float))
-        _ax_=_AX0['rotate_to']; _oth_={'X':'Z','Z':'X'}.get(_ax_)
+        _ax_=_AX0['rotate_to']; _oth_=_AX0.get('column_axis') or {'X':'Z','Z':'X'}.get(_ax_)
         def _off(sel,vec):
             dd_=_d2(vec); nn_=np.array([-dd_[1],dd_[0]]); return [round(float((np.array(tp[k],float)-np.array([vx,hy]))@nn_),1) for k in sorted(tp) if sel(k)]
         print('  축선↔구멍 거리 px — 가운데 줄 구멍 vs %s 선:'%_ax_,_off(lambda k:k[1]==_rm,_gl[_ax_]),'| 가운데 열 구멍 vs %s 선:'%_oth_,_off(lambda k:k[0]==_cm,_gl[_oth_]) if (_oth_ and _oth_ in _gl and len(_rs0)>=2) else '-')
@@ -173,11 +174,11 @@ def process(step):
                 ks_=sorted([k for k in tp if k[key_]==val_]); q_=[(int(round(float(tp[k][0]))),int(round(float(tp[k][1])))) for k in ks_]
                 for a_,b_ in zip(q_,q_[1:]): cv2.line(g,a_,b_,col_,2,cv2.LINE_AA)
     else: g=base.copy()
-    # ── 방향 화살표(선택, 관리자 제안 2026-10-11): <번호>_axes.json 이 있으면 X(빨강)·Y(초록)·Z(파랑) 방향을 오른쪽 위에 한 번(전체), 필요한 곳(local)에 또 그린다. 그림은 변형하지 않고 덧그리기만 한다.
+    # ── 방향 화살표(선택, 관리자 제안 2026-10-11): <번호>_axes.json 이 있으면 필요한 곳(local)에 X(빨강)·Y(초록)·Z(파랑) 방향을 그린다. 그림은 변형하지 않고 덧그리기만 한다.
     #   {"global": {"X": [dx,dy], "Y": [dx,dy], "Z": [dx,dy]}, "local": [{"at": [x,y], "label": "DC모터", "X": [dx,dy], "Y": [...], "Z": [...]}]}  — 벡터와 at 은 원본 그림(NN.jpg) 화면 좌표(오른쪽 +x, 아래 +y), 안 쓰는 축은 빼도 된다.
     axf=D+nm+'_axes.json'
     if os.path.exists(axf):
-        AXJ=json.load(open(axf,encoding='utf-8')); _L=(A2[:,:2] if fits else Mx[:,:2]).astype(np.float64)   # 오른쪽 위 방향 표시판은 맨 처음 원본 위에 그리는 것이라 이미지를 돌리면 같이 돌아간다(관리자 지시 2026-10-12)
+        AXJ=json.load(open(axf,encoding='utf-8')); _L=(A2[:,:2] if fits else Mx[:,:2]).astype(np.float64)
         _COL={'X':(40,40,230),'Y':(40,170,40),'Z':(230,110,20)}   # BGR: 빨강·초록·파랑(조립 보기 화면의 +X·+Y·+Z 색과 같다)
         def _gizmo(im,ox,oy,vecs,size,title=None):
             if title: cv2.putText(im,title,(int(ox)-int(size)-6,int(oy)-int(size)-10),cv2.FONT_HERSHEY_SIMPLEX,0.6,(60,60,60),2,cv2.LINE_AA)
@@ -188,7 +189,6 @@ def process(step):
                 cv2.putText(im,'+'+k_,(int(ex+(8 if w_[0]>=0 else -34)),int(ey+(8 if w_[1]>=0 else -4))),cv2.FONT_HERSHEY_SIMPLEX,0.8,_COL[k_],2,cv2.LINE_AA)
             cv2.circle(im,(int(ox),int(oy)),4,(60,60,60),-1)
         for im_ in (base,g):
-            if AXJ.get('global') and not AXJ.get('no_gizmo'): _gizmo(im_,im_.shape[1]-120,100,_rotg(AXJ['global']),70,'방향')   # no_gizmo: 오른쪽 위 방향 표시(XYZ 화살표 게이지)를 그리지 않는다(사용자 지시 2026-10-12)
             for lc in AXJ.get('local',[]):
                 _o=(T(lc['at'][0],lc['at'][1]) if fits else Mx@np.array([lc['at'][0]-cx0,lc['at'][1]-cy0,1.0]))
                 _gizmo(im_,float(_o[0]),float(_o[1]),{k:lc[k] for k in 'XYZ' if k in lc},float(lc.get('size',45)),lc.get('label'))

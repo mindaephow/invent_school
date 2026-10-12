@@ -21,8 +21,45 @@ def strip_paren(t):   # "리벳 2 (그림 옆 (2)), 축 1 (추정)" → "리벳 
     return t
 parts = "" if (not used or used.startswith("없음")) else ", ".join(x.strip() for x in strip_paren(used).split(",") if x.strip())
 
+# ⓪ 앞 과정 점검(사용자 지시 2026-10-12 "앞순서에 안한게 있으면 하고 넘어가야 하게끔") — 02·03·04 와 앞 번호 확인이 끝나지 않았으면 여기서 멈춘다.
+#    읽기 표·규칙 파일도 만들지 않고, 격자·구멍 점 같은 번호 작업은 시작할 수 없다. 끝낸 뒤 다시 돌린다.
+_gate = []
+_R0 = os.path.join(here, "refs", name)
+_miss_img = [i for i in range(0, len(asm) + 1) if i and not os.path.exists(os.path.join(_R0, "%02d.jpg" % i))]
+if not os.path.exists(os.path.join(_R0, "00.jpg")): _miss_img.insert(0, 0)
+if _miss_img: _gate.append(("02 이미지 자르기", "책 그림이 없는 번호: %s" % _miss_img[:12], "refs_make.py 로 만든다(02)"))
+_miss_used = [i for i, s in enumerate(asm, 1) if "▣ 사용 부품:" not in (s.get("note") or "")]
+if _miss_used: _gate.append(("03 부품 체크", "▣ 사용 부품이 없는 번호: %s" % _miss_used[:15], "번호별 사용 부품을 적고 LIST 와 대조한다(03 B)"))
+_miss_slot = [i for i, s in enumerate(asm, 1) if s.get("slot") is None]
+_miss_hist = [i for i in range(2, len(asm) + 1) if asm[i - 1].get("slot") is not None and asm[i - 2].get("slot") is not None and asm[i - 1]["slot"] != asm[i - 2]["slot"] and not asm[i - 1].get("history")]
+if _miss_slot: _gate.append(("04 창고 정리", "창고(slot)가 없는 번호: %s" % _miss_slot[:15], "번호마다 slot·history 를 적는다(04) — 스크립트를 고쳤으면 python %s.py 로 asm 을 다시 만든다" % name))
+if _miss_hist: _gate.append(("04 창고 정리", "창고가 바뀌는데 history 가 없는 번호: %s" % _miss_hist[:15], "history 글을 적는다(04)"))
+if k > 1:   # 앞 번호: 사용자 ✓ 또는 지금 내용과 같은 지문의 비교 증거(record_check)가 있어야 다음 번호를 시작한다
+    _prev = asm[k - 2]
+    if not _prev.get("parts"): _gate.append(("앞 번호 %d" % (k - 1), "아직 작성 전(부품 없음)", "앞 번호부터 끝낸다 — 번호는 순서대로"))
+    else:
+        _ok = False
+        try:
+            import stepfp; _ev = load(os.path.join(here, name + "_evidence.json"), {}).get(str(k - 1))
+            _ok = bool(_ev and _ev.get("fp") == stepfp.fp(_prev))
+        except Exception: pass
+        if not _ok:
+            try:
+                import userdone; _mid0 = re.search(r'Asm\("([^"]+)"', open(os.path.join(here, name + ".py"), encoding="utf-8").read())
+                _ok = k - 1 in (userdone.user_done(_mid0.group(1)) or ())
+            except (SystemExit, Exception): pass
+        if not _ok: _gate.append(("앞 번호 %d" % (k - 1), "사용자 ✓ 도, 지금 내용과 같은 비교 증거(record_check)도 없음", "화면에서 책과 나란히 비교하고 record_check.py 로 증거를 남긴다(05 5-5)"))
+try:   # 01 준비: 개발 서버(3178)가 떠 있어야 화면 비교를 할 수 있다 — 로그인은 사용자가 한다(비밀번호는 대신 입력하지 않는다)
+    import urllib.request; urllib.request.urlopen("http://localhost:3178/design.html", timeout=4).read(1)
+except Exception: _gate.append(("01 준비", "개발 서버(localhost:3178)가 응답하지 않음", "서버를 켜고(preview_start invent-school-dev2) 사용자에게 로그인을 요청한다"))
+print("※ 화면 비교(05 5-5)에는 사용자가 로그인한 화면이 필요하다 — 번호 작업 전에 사용자에게 로그인을 먼저 요청한다(비밀번호는 대신 입력하지 않는다).")
+if _gate:
+    print("═══ %s %d번 — ❌ 앞 과정이 끝나지 않았다: 이것부터 하고 넘어간다 ═══" % (name, k))
+    for i, (p, why, how) in enumerate(_gate, 1): print("  %d. [%s] %s\n       → %s" % (i, p, why, how))
+    sys.exit("(읽기 표·규칙 파일은 만들지 않았다. 위를 끝낸 뒤 다시 돌린다)")
+
 # ① 읽기 표 칸
-rp = os.path.join(here, name + "_read.json"); rd = load(rp, {})
+rp =os.path.join(here, name + "_read.json"); rd = load(rp, {})
 if str(k) not in rd:
     rd[str(k)] = {"면": "", "링": "", "부품": parts, "대조": "", "방향": "", "부품방향": "", "판단과정": ""}; save(rp, rd); made = "새로 만듦(부품은 03 의 사용 부품으로 채움)"
 else: made = "이미 있음(건드리지 않음)"

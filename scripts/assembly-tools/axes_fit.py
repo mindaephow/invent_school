@@ -1,8 +1,8 @@
 # 번호 하나의 카메라(theta·phi)와 축선 방향(+X·+Y·+Z)을 "그 번호의 격자 점"에서 계산해 <번호>_axes.json 에 쓴다.
 #   앞 번호 값을 복사하거나 눈대중으로 쓰지 않기 위한 도구다(2026-10-11 투석기 16번: 15번 값에서 출발해 적은 것을 관리자가 지적).
 #   python axes_fit.py <이름> <번호> <라벨> <칸수> <줄수> <칸방향> <줄방향> [간격=10]
-#     라벨 = fits/NN_<라벨>.json (한 판의 격자 점, 원본 그림 좌표). 판은 눕혀 있고(홀면 위) 칸·줄 방향은 그 판이 놓일 세계 축이다.
-#     칸방향·줄방향 = +X -X +Z -Z 중 하나(칸이 늘어나는 쪽이 세계 어느 쪽인지). 두 방향은 서로 달라야 한다(칸 +X 면 줄 은 ±Z).
+#     라벨 = fits/NN_<라벨>.json (한 판의 격자 점, 원본 그림 좌표). 판이 눕혀 있으면(홀면 위) 칸·줄이 X·Z, 서 있으면 칸은 X 또는 Z 이고 줄은 ±Y 다. 책 그림에서 판이 서 있는지 눕는지를 먼저 읽고 정한다.
+#     칸방향·줄방향 = +X -X +Y -Y +Z -Z 중 하나(칸이 늘어나는 쪽이 세계 어느 쪽인지). 두 방향은 서로 다른 축이어야 한다(칸 +X 면 줄은 ±Z — 눕힌 판, 또는 ±Y — 서 있는 판).
 #   출력: 맞춘 오차(px)·theta·phi·화면에서 +X +Y +Z 가 가리키는 방향. 오차 2px 넘으면 칸·줄 방향이 거울이거나 점이 틀린 것이니 쓰지 않는다.
 import sys, os, json, math
 import numpy as np, cv2
@@ -15,13 +15,13 @@ def main():
     pitch = float(sys.argv[8]) if len(sys.argv) > 8 else 10.0
     D = os.path.join(os.path.dirname(os.path.abspath(__file__)), "refs", name)
     f = json.load(open(os.path.join(D, "fits", "%02d_%s.json" % (step, label)), encoding="utf-8"))
-    ax = {"+X": (1, 0), "-X": (-1, 0), "+Z": (0, 1), "-Z": (0, -1)}
-    if cd not in ax or rd not in ax or ax[cd] == ax[rd] or ax[cd] == tuple(-v for v in ax[rd]): sys.exit("칸방향·줄방향은 서로 다른 축이어야 한다(+X -X +Z -Z)")
-    cx, cz = ax[cd]; rx, rz = ax[rd]
+    ax = {"+X": (1, 0, 0), "-X": (-1, 0, 0), "+Y": (0, 1, 0), "-Y": (0, -1, 0), "+Z": (0, 0, 1), "-Z": (0, 0, -1)}
+    if cd not in ax or rd not in ax or abs(sum(a * b for a, b in zip(ax[cd], ax[rd]))) == 1: sys.exit("칸방향·줄방향은 서로 다른 축이어야 한다(+X -X +Y -Y +Z -Z)")
+    cvec = np.array(ax[cd], float); rvec = np.array(ax[rd], float)
     obj, img = [], []
     for c, r, x, y in f["pts"]:
         u, v = (c - 1) - (cols - 1) / 2.0, (r - 1) - (rows - 1) / 2.0
-        obj.append([pitch * (u * cx + v * rx), 0.0, pitch * (u * cz + v * rz)]); img.append([x, y])
+        obj.append(list(pitch * (u * cvec + v * rvec))); img.append([x, y])
     obj = np.array(obj, np.float32); img = np.array(img, np.float32)
     im = cv2.imread(os.path.join(D, "%02d.jpg" % step)); H, W = im.shape[:2]
     best = None
@@ -38,6 +38,8 @@ def main():
         d[k] = [round(float(w[0] * s), 1), round(float(w[1] * s), 1)]
     out = {"global": d, "replace_lines": True, "fit": {"from": "%02d_%s.json" % (step, label), "err_px": round(float(e), 2), "points": len(obj), "theta": round(math.radians(az), 2), "phi": round(math.radians(90 - el), 2), "cols": cd, "rows": rd}}
     json.dump(out, open(os.path.join(D, "%02d_axes.json" % step), "w", encoding="utf-8"), ensure_ascii=False)
+    _roll = math.degrees(math.asin(max(-1, min(1, float(right[1])))))   # 화면 가로축이 수평에서 기운 정도 — 뷰어 카메라는 기울이지(roll) 못하니 0 에 가까워야 한다
+    print("카메라 roll %.1f°(0 에 가까워야 뷰어 카메라로 같은 그림이 나온다)" % _roll)
     print("오차 %.2fpx (%d점) theta %.2f phi %.2f  X%s Y%s Z%s" % (e, len(obj), out["fit"]["theta"], out["fit"]["phi"], d["X"], d["Y"], d["Z"]))
     if out["fit"]["phi"] > 1.55: print("⚠ phi 가 1.55(≈90°)를 넘는다 = 판 아래에서 올려다보는 해 — 거울로 맞은 것이다. 책은 위에서 내려다보니 줄방향(또는 칸방향)을 반대로 준다.")
     if e > 2: print("⚠ 오차가 2px 를 넘는다 — 칸·줄 방향(거울)이나 격자 점을 다시 본다. 이 값을 쓰지 않는다.")

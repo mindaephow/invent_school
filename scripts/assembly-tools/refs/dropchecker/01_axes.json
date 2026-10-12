@@ -1,0 +1,1 @@
+{"global": {"X": [53.0, -14.8], "Y": [-5.3, -54.7], "Z": [55.0, 43.6]}, "replace_lines": true, "fit": {"from": "01_P.json", "err_px": 1.19, "points": 45, "theta": -0.44, "phi": 1.13, "cols": "+X", "rows": "-Y"}, "rotate_to": "X", "column_axis": "Y", "holeline": "X=줄2 구멍 15개, Y=칸8 구멍 3개 최소제곱(서 있는 판, 칸 +X·줄 −Y). Z 는 카메라 계산"}

@@ -1,11 +1,17 @@
 {
 "1": {
-"parts": {},
-"noPart": true
+"parts": {
+"315프레임": 2,
+"DC모터": 2
+},
+"noPart": false
 },
 "2": {
-"parts": {},
-"noPart": true
+"parts": {
+"3단블록": 2,
+"2단블록": 2
+},
+"noPart": false
 },
 "3": {
 "parts": {},
