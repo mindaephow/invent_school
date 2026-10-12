@@ -7,6 +7,9 @@ eval(fs.readFileSync(path.join(pub,'design-mates.js'),'utf8'));
 eval(fs.readFileSync(path.join(pub,'design-collision.js'),'utf8'));
 const conn=JSON.parse(fs.readFileSync('conn.json','utf8')), dims=JSON.parse(fs.readFileSync('dims.json','utf8'));
 const asm=JSON.parse(fs.readFileSync(process.argv[2],'utf8')), steps=asm.steps;
+// moveMade(✓ 한 앞 번호 부품을 나중 번호가 옮김 — asmlib Step.move_made): public/design-assemblies.js 끝의 합치기 코드와 같이 part.move 로 합친다
+window.IVS_moveAt=function(pt,step){const ms=pt.moves;if(!ms)return(pt.move&&pt.move.at<=step)?pt.move:null;let best=null;for(const m of ms)if(m.at<=step&&(!best||m.at>=best.at))best=m;return best;};window.IVS_moveIs=function(pt,step){const ms=pt.moves||(pt.move?[pt.move]:[]);return ms.some(m=>m&&m.at===step);};
+steps.forEach((s,k)=>{const mm=s.moveMade;if(!mm)return;Object.keys(mm).forEach(key=>{const q=key.split(':'),st=steps[+q[0]-1],pt=st&&(st.parts||[])[+q[1]];if(!pt)return;const e=Object.assign({},mm[key],{at:k+1});if(e.moveGroup!==undefined){pt.moveGroup=e.moveGroup;delete e.moveGroup;}pt.moves=pt.moves||(pt.move?[pt.move]:[]);pt.moves.push(e);pt.moves.sort((x,y)=>x.at-y.at);pt.move=pt.moves[pt.moves.length-1];});});
 const issues=window.IVS_MATES.checkSteps(steps,conn);
 console.log('단계별 정밀 검사 문제:',issues.length); issues.forEach(i=>console.log('  ',i));
 const C=window.IVS_COLLISION,M=window.IVS_MATES;

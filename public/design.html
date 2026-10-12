@@ -315,6 +315,7 @@
   .slot-head{ display:flex; justify-content:space-between; align-items:center; gap:6px; font-size:13px; }
   .slot-head b{ font-weight:800; } .slot-tag{ font-size:12px; font-weight:700; color:#2563eb; } .slot-card.empty .slot-tag{ color:#9ca3af; font-weight:600; }
   .slot-line{ display:flex; justify-content:space-between; align-items:center; gap:6px; width:100%; padding:5px 8px; border-radius:9px; border:0; background:rgba(0,0,0,.05); font-weight:700; font-size:12.5px; cursor:pointer; text-align:left; }
+  .slot-line.sel{ outline:3px solid #2563eb; outline-offset:1px; background:#dbeafe; }
   .slot-line.off{ background:#fde68a; } .slot-line.stored{ cursor:default; color:#4b5563; }
   .slot-line .gs{ white-space:nowrap; font-weight:800; }
   .slot-card .gthumb{ width:100%; border-radius:8px; display:block; margin-top:2px; }
@@ -2936,7 +2937,7 @@
     const demoMode = !!(window.__ivsAssembly && window.__ivsAssembly.isViewing()); // 조립 보기 시연 중엔 부품 창 없이 끌어서 움직인다
     selectedControls.classList.toggle('asm-compact', demoMode);
     document.querySelectorAll('#axisBlock [data-mode]').forEach(b => { b.textContent = (p && p.isGroup ? '그룹 ' : '') + (b.dataset.mode === 'rotate' ? '돌리기' : '이동'); }); // 그룹을 골랐을 땐 "그룹 돌리기 / 그룹 이동"(묶음 전체에 적용된다)
-    selectedControls.hidden = !p;
+    selectedControls.hidden = !p; refreshGroupChip();   // 고른 부품·그룹이 속한 창고 그룹 줄을 파랗게 강조(사용자 지시 2026-10-12)
     modalBackdrop.hidden = !p || demoMode; // 조립 보기에선 뒷배경을 깔지 않아 부품을 계속 끌 수 있다
     document.getElementById('asmDemoBlock').hidden = !demoMode; // 🔗 결합·움직임 방식·원위치는 이 창 안에
     if (p) {
@@ -5079,10 +5080,15 @@
           const th2_ = assemblySlotThumbs[n] ? null : th_; // 이 창고에 저장한 썸네일이 있으면 그걸 카드 아래에 한 번만 보여 준다
           if (th2_) { const im = document.createElement('img'); im.src = th2_; im.alt = ''; im.className = 'gthumb'; card.appendChild(im); }
         } else {
-          lb.textContent = '그룹 ' + (gi + 1) + ' · ' + (g.ghost ? g.n : g.parts.length) + '개'; if (!g.on) line.classList.add('off'); if (g.ghost) { line.disabled = true; line.classList.add('stored'); }
+          lb.textContent = '그룹 ' + (gi + 1) + ' · ' + (g.ghost ? g.n : g.parts.length) + '개'; if (!g.on) line.classList.add('off'); if (g.ghost) { line.disabled = true; line.classList.add('stored'); } if (!g.ghost && selected && assemblyPanelOn) { const m_ = selected.isGroup ? (selected.members && selected.members[0]) : selected; if (m_ && g.parts.includes(m_)) line.classList.add('sel'); }
           const st = document.createElement('span'); st.className = 'gs'; st.innerHTML = (g.on ? LOCK_SVG : UNLOCK_SVG) + (g.on ? ' 그룹' : ' 해제'); // 잠기면 닫힌 자물쇠, 해제하면 열린 자물쇠
-          line.title = g.on ? '눌러서 해제하면 이 묶음의 부품을 하나씩 움직여요(저장되지 않아요)' : '눌러서 그룹으로 되돌리면 이 묶음이 통째로 움직여요(저장되지 않아요)';
-          if (!g.ghost) line.addEventListener('click', () => { g.on = !g.on; select(null); refreshGroupChip(); });
+          line.title = g.on ? '눌러서 이 그룹을 고르고(표시), 한 번 더 눌러 해제하면 이 묶음의 부품을 하나씩 움직여요(저장되지 않아요)' : '눌러서 그룹으로 되돌리면 이 묶음이 통째로 움직여요(저장되지 않아요)';
+          if (!g.ghost) line.addEventListener('click', () => {
+            // 묶인 그룹은 첫 눌림에 화면에서 그 그룹을 골라 표시하고(파란 줄), 이미 고른 그룹 줄을 한 번 더 눌러야 해제한다(사용자 지시 2026-10-12)
+            const cur_ = selected && (selected.isGroup ? (selected.members && selected.members[0]) : selected);
+            if (g.on && !(cur_ && g.parts.includes(cur_))) { select(g.parts[0]); return; }
+            g.on = !g.on; select(null); refreshGroupChip();
+          });
           line.appendChild(lb); line.appendChild(st); card.appendChild(line);
         }
       });
@@ -5473,6 +5479,17 @@
       scene.add(g);
       assemblyGuideGroup = g;
       setGuideDots(assemblyDotsVisible);
+    },
+    // 고무줄 같은 규격 없는 늘어진 줄: bands = [{ pts: [[x,y,z]…], color, r }] — 점들을 부드러운 곡선으로 잇는 노란 관(조립 보기, 사용자 지시 2026-10-12)
+    bands(list){
+      if (window.__asmBandGroup) { scene.remove(window.__asmBandGroup); window.__asmBandGroup.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); window.__asmBandGroup = null; }
+      if (!list || !list.length) return;
+      const g = new THREE.Group();
+      list.forEach(b_ => {
+        const cv = new THREE.CatmullRomCurve3((b_.pts || []).map(v => new THREE.Vector3(v[0], v[1], v[2])), !!b_.closed, 'catmullrom', 0.5);
+        g.add(new THREE.Mesh(new THREE.TubeGeometry(cv, 64, b_.r || 0.8, 8, !!b_.closed), new THREE.MeshStandardMaterial({ color: b_.color || 0xfacc15, roughness: 0.6 })));
+      });
+      scene.add(g); window.__asmBandGroup = g;
     },
     // 초록 점(돌기 끝·구멍 칠)을 보이거나 숨긴다 — 화살표는 그대로
     // 표시하기: 켜고 부품을 누르면 그 자리에 주황 표시가 생긴다(다시 누르면 지움).

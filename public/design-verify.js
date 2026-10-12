@@ -54,7 +54,9 @@
     steps.forEach((st, k) => (st.parts || []).forEach((pt, i) => all.push({ key: `${k + 1}.${i} ${pt.n}`, n: pt.n, p: pt.p, r: pt.r || [0, 0, 0], ref: pt, step: k + 1, idx: i })))
     let byKey = new Map(all.map((a) => [a.key, a]))
     // move{at,p|by,r}: 그 단계부터는 옮긴 자세로 검사한다
-    const poseNow = (pt, stp) => (pt.move && stp >= pt.move.at ? { p: pt.move.p || pt.p.map((x, q) => x + (pt.move.by || [0, 0, 0])[q]), r: pt.move.r || pt.r || [0, 0, 0] } : { p: pt.p, r: pt.r || [0, 0, 0] })
+    const mvAt = (pt, stp) => (typeof window !== 'undefined' && window.IVS_moveAt ? window.IVS_moveAt(pt, stp) : (pt.move && stp >= pt.move.at ? pt.move : null)) // 여러 번 옮긴 부품은 그 단계 이전 가장 마지막 이동
+    const mvIs = (pt, stp) => (typeof window !== 'undefined' && window.IVS_moveIs ? window.IVS_moveIs(pt, stp) : !!(pt.move && pt.move.at === stp))
+    const poseNow = (pt, stp) => { const m = mvAt(pt, stp); return m ? { p: m.p || pt.p.map((x, q) => x + (m.by || [0, 0, 0])[q]), r: m.r || pt.r || [0, 0, 0] } : { p: pt.p, r: pt.r || [0, 0, 0] } }
 
     // ── 단계별: 방향 확인 → 구멍 위치 목록 → 앞뒤 비교 ──
     const counts = {}
@@ -119,7 +121,7 @@
       // 안내 화살표: 앞 단계에 있던 부품과 결합하는 새 부품(옆자리에서 합쳐지거나 옮겨 붙는 부품 포함)은 그 단계의 안내점이 있어야 한다.
       // 화면의 "끌면 화살표가 따라가는" 기능이 이 값(marks / 합칠 땐 settleMarks / 옮길 땐 move.marks)을 읽는다 — 토끼(검토 완료)는 리벳까지 전부 있었다.
       {
-        const arriving = all.filter((a) => { const q = a.ref; return (a.step === si && !q.side) || (q.side && q.side.until === si) || (q.move && q.move.at === si) })
+        const arriving = all.filter((a) => { const q = a.ref; return (a.step === si && !q.side) || (q.side && q.side.until === si) || mvIs(q, si) })
         const arrSet = new Set(arriving.map((a) => a.key))
         const prior = new Set(all.filter((a) => a.step < si).map((a) => a.key))
         const outside = (k) => prior.has(k) && !arrSet.has(k) // 같이 합쳐지는 묶음 안의 결합은 뺀다
@@ -127,7 +129,7 @@
           const q = a.ref
           if (q.noGuide) return false // 우연히 맞닿아 보일 뿐 결합이 아닌 부품(안내 화살표 없음)
           if (!res.mated.some((m) => (m.part === a.key && outside(m.into)) || (m.into === a.key && outside(m.part)))) return false
-          const got = q.move && q.move.at === si ? (q.move.marks || []) : q.side && q.side.until === si ? (q.settleMarks || []) : (q.marks || [])
+          const got = mvIs(q, si) ? ((mvAt(q, si) || {}).marks || []) : q.side && q.side.until === si ? (q.settleMarks || []) : (q.marks || [])
           return !got.length
         })
         if (lack.length) { const nm = {}; lack.forEach((a) => { nm[a.n] = (nm[a.n] || 0) + 1 }); issues.push(`${si}단계: 안내 화살표(marks)가 없는 부품 ${lack.length}개 — ${Object.keys(nm).map((n) => n + ' ' + nm[n]).join(', ')}`) }
@@ -148,7 +150,7 @@
     }
     const poseAt = (pt, step) => { // 그 단계에서 실제로 놓인 자리(옆자리·옮기기 반영)
       if (pt.side && step < pt.side.until) return { p: pt.side.p, r: pt.side.r }
-      if (pt.move && step >= pt.move.at) return { p: pt.move.p || [pt.p[0] + pt.move.by[0], pt.p[1] + pt.move.by[1], pt.p[2] + pt.move.by[2]], r: pt.move.r || pt.r }
+      { const m = mvAt(pt, step); if (m) return { p: m.p || [pt.p[0] + m.by[0], pt.p[1] + m.by[1], pt.p[2] + m.by[2]], r: m.r || pt.r } }
       return { p: pt.p, r: pt.r }
     }
     const flipPose = (po, end) => { const f = def.flip; const rg = (f.ranges || []).find((r) => end >= r[0] && end <= r[1]); const fy = rg && rg[2] != null ? rg[2] : f.y; const R = M().matFromEuler(po.r || [0, 0, 0]); const R2 = [R[0], [-R[1][0], -R[1][1], -R[1][2]], [-R[2][0], -R[2][1], -R[2][2]]]

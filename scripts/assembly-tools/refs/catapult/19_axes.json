@@ -1,0 +1,1 @@
+{"global": {"X": [13.4, 55.0], "Y": [-38.4, -55.0], "Z": [-55.0, 16.5]}, "replace_lines": true, "fit": {"from": "19_W.json", "err_px": 0.06, "points": 30, "theta": 1.91, "phi": 0.4, "cols": "-Z", "rows": "-X"}, "rotate_to": "Z"}

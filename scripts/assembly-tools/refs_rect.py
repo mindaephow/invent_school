@@ -43,6 +43,10 @@ def pitch(pts):
     return float(np.mean(ds)) if ds else 34.0
 def side(vals_by_idx, axis):
     pass
+LV_ROT=None   # <번호>_axes.json 에 "level": true 가 있으면 판 구멍 줄이 수평이 되게 그림을 돌리고(1번 그림처럼), 축선·방향 표시도 같은 회전을 따라간다
+def _rotg(d):
+    return {k:(list(LV_ROT@np.array(v,float)) if LV_ROT is not None else v) for k,v in d.items()}
+
 def process(step):
     nm='%02d'%step
     if not os.path.exists(D+nm+'_lv.json'):   # 새 번호: 쪽 테두리를 뺀 기본 자르기(글씨·배지는 crop 을 고쳐 다시)
@@ -86,9 +90,13 @@ def process(step):
             _eR=_wr(_aR-math.degrees(math.atan2(_Xv[1],_Xv[0]))) if _aR is not None else None; _eC=_wr(_aC-math.degrees(math.atan2(_Ov[1],_Ov[0]))) if (_aC is not None and _Ov and len(_rs0)>=2) else None
             _es=[e_ for e_ in (_eR,_eC) if e_ is not None]; _res=sum(_es)/len(_es) if _es else _res
             print('  회전 근거: 가운데 줄 어긋남 %s° / 가운데 열 어긋남 %s° → 회전 %.2f°'%('-' if _eR is None else '%.2f'%_eR,'-' if _eC is None else '%.2f'%_eC,_res))
+        global LV_ROT; LV_ROT=None
+        if _AXj.get('level'): _res=_wr(_a) if _a is not None else _res
+        if _AXj.get('no_rotate'): _res=0.0   # no_rotate: 구멍 줄이 없는 번호(링 점만 찍는 그림)는 회전하지 않는다(투석기 24번)   # 가운데 줄이 아니라 판 전체 구멍 줄 방향(_a)을 수평으로 — 원근 부채꼴이라 줄마다 다르지만 평균 방향
         Mr=cv2.getRotationMatrix2D((w/2.0,h/2.0),_res,1.0); _cs,_sn=abs(Mr[0,0]),abs(Mr[0,1]); W,H=int(h*_sn+w*_cs)+1,int(h*_cs+w*_sn)+1
         Mr[0,2]+=W/2.0-w/2.0; Mr[1,2]+=H/2.0-h/2.0
         A2=Mr.astype(np.float32); sc=1.0
+        if _AXj.get('level'): LV_ROT=A2[:2,:2].astype(float)
         out=cv2.warpAffine(crop,A2,(W,H),flags=cv2.INTER_CUBIC,borderValue=(255,255,255))
         MASK=cv2.warpAffine(np.full((h,w),255,np.uint8),A2,(W,H),flags=cv2.INTER_LINEAR,borderValue=0)   # 그림이 있는 영역(다른 평면 판의 점이 그림 밖에 찍히지 않게)
         T=lambda x,y: A2@np.array([x-cx0,y-cy0,1.0])
@@ -99,7 +107,7 @@ def process(step):
         _cn=min(tp.items(),key=lambda kv: abs(kv[0][0]-cc)+abs(kv[0][1]-rc))[1]   # 가운데 칸·줄에 가장 가까운 노드
         vx=float(_cn[0]); hy=float(_cn[1])                                          # 수직선 = 그 노드의 x, 수평선 = 그 노드의 y
         if _Xv:   # rotate_to 를 정했으면 축선 중심을 기준 판(점이 가장 많은 판)의 중심으로 둔다 — 축선이 그 판의 가운데 줄·가운데 열 위로 지나게(판이 둘이면 두 판의 점을 합친 평균이 아니다: 중심이 기준 판에서 벗어났었다)
-            _cs=sorted({q[0] for q in pts}); _rs=sorted({q[1] for q in pts}); _mc={_cs[(len(_cs)-1)//2],_cs[len(_cs)//2]}; _mr={_rs[(len(_rs)-1)//2],_rs[len(_rs)//2]}   # 가운데 칸·가운데 줄의 구멍(짝수면 가운데 두 개의 중점) — 점 전체의 평균은 원근 때문에 가운데 구멍에서 벗어난다
+            _cs=sorted({q[0] for q in pts}); _rs=sorted({q[1] for q in pts}); _mc={_cs[(len(_cs)-1)//2],_cs[len(_cs)//2]}; _mr={_rs[(len(_rs)-1)//2],_rs[len(_rs)//2]}; _mr={_AXj['center_row']} if _AXj.get('center_row') else _mr   # center_row: 줄이 짝수(2줄 프레임)면 가운데가 구멍 줄 사이라 선이 구멍을 안 지난다 — 그 줄 번호를 정하면 선이 그 구멍 줄의 구멍 중심을 지난다(투석기 20번)   # 가운데 칸·가운데 줄의 구멍(짝수면 가운데 두 개의 중점) — 점 전체의 평균은 원근 때문에 가운데 구멍에서 벗어난다
             _tc=np.mean([T(q[2],q[3]) for q in pts if q[0] in _mc and q[1] in _mr],axis=0); vx=float(_tc[0]); hy=float(_tc[1])
         xax,yax=0,1
         # 칸1·줄1 위치(위/아래/왼/오른)
@@ -115,7 +123,7 @@ def process(step):
     def lines(im):
         Hh,Ww=im.shape[:2]
         if _AX0.get('replace_lines') and _AX0.get('global'):   # 수평·수직선 대신 기준 점(vx,hy)을 지나는 X(빨강)·Z(파랑)·Y(초록) 축선(관리자 제안 2026-10-11: 방향은 x,y,z 축으로)
-            _Lx=np.eye(2);   # 가운데 축선은 이미지 회전과 같이 돌리지 않는다(관리자 지시 2026-10-12) — 읽은 원래 화면 방향 그대로
+            _Lx=LV_ROT if LV_ROT is not None else np.eye(2);   # 가운데 축선은 이미지 회전과 같이 돌리지 않는다(관리자 지시 2026-10-12) — 읽은 원래 화면 방향 그대로. 단 level 옵션이면 같이 돌린다
             _C={'X':(40,40,230),'Y':(40,170,40),'Z':(230,110,20)}
             for k_,v_ in _AX0['global'].items():
                 d_=_Lx@np.array(v_,float); n_=float(np.hypot(*d_)) or 1.0; d_=d_/n_
@@ -129,7 +137,7 @@ def process(step):
         cv2.line(im,(int(round(vx)),0),(int(round(vx)),Hh),ORANGE,2,cv2.LINE_AA); cv2.putText(im,'vertical',(int(vx)+8,28),cv2.FONT_HERSHEY_SIMPLEX,0.55,ORANGE,2)
     lines(base)
     if fits and _AX0.get('rotate_to') and _AX0.get('global'):   # 화면에 그린 축선(가운데 구멍을 지남)과 가운데 줄·가운데 열 구멍 사이의 실제 거리(px)
-        _gl=_AX0['global']; _d2=lambda v_:(lambda d_:d_/(np.hypot(*d_) or 1.0))(np.array(v_,float))
+        _gl=_rotg(_AX0['global']); _d2=lambda v_:(lambda d_:d_/(np.hypot(*d_) or 1.0))(np.array(v_,float))
         _ax_=_AX0['rotate_to']; _oth_={'X':'Z','Z':'X'}.get(_ax_)
         def _off(sel,vec):
             dd_=_d2(vec); nn_=np.array([-dd_[1],dd_[0]]); return [round(float((np.array(tp[k],float)-np.array([vx,hy]))@nn_),1) for k in sorted(tp) if sel(k)]
@@ -145,14 +153,16 @@ def process(step):
             return ok>=0.6*len(j['pts'])
         for lab,j in fits:
             if lab!=rl and not on_picture(j): continue
-            P_={(q[0],q[1]):T(q[2],q[3]) for q in j['pts']}   # 격자선: 같은 칸끼리·같은 줄끼리 번호 순서로 이웃한 점을 잇는다(번호가 건너뛰어도, 줄 번호가 소수여도 된다)
-            for key_,idx_ in ((0,1),(1,0)):
+            P_={(q[0],q[1]):T(q[2],q[3]) for q in j['pts'] if not (_AX0.get('hide_est') and [q[0],q[1]] in j.get('est',[]))}   # 격자선: 같은 칸끼리·같은 줄끼리 번호 순서로 이웃한 점을 잇는다(번호가 건너뛰어도, 줄 번호가 소수여도 된다)
+            for key_,idx_ in (() if _AX0.get('no_lines') else (((1,0),) if _AX0.get('grid_rows_only') else ((0,1),(1,0)))):   # no_lines: 점과 번호만(칸·줄 격자가 아닌 링 점 모음)   # grid_rows_only: 줄이 둘뿐이거나 옆면을 비스듬히 본 프레임은 칸 사이 세로선이 기울어 평행사변형처럼 보이므로 구멍 줄(홀 라인)만 긋는다(투석기 20번)
                 grp_={}
                 for k_ in P_: grp_.setdefault(k_[key_],[]).append(k_)
                 for ks_ in grp_.values():
                     ks_.sort(key=lambda k: k[idx_])
                     for a_,b_ in zip(ks_,ks_[1:]): cv2.line(g,(int(P_[a_][0]),int(P_[a_][1])),(int(P_[b_][0]),int(P_[b_][1])),(0,0,255),1,cv2.LINE_AA)
+            _est_=set(map(tuple,j.get('est',[]))) if _AX0.get('hide_est') else set()   # hide_est: 가려서 안 보이는 구멍(연장한 점)은 그리지 않는다(투석기 20번: 칸13~15 가 브라켓 위에 그려짐)
             for p in j['pts']:
+                if (p[0],p[1]) in _est_: continue
                 x,y=T(p[2],p[3])
                 if not (0<=int(x)<W and 0<=int(y)<H and MASK[int(y),int(x)]>128): continue
                 cv2.circle(g,(int(x),int(y)),3,(0,0,255),-1)
@@ -178,10 +188,27 @@ def process(step):
                 cv2.putText(im,'+'+k_,(int(ex+(8 if w_[0]>=0 else -34)),int(ey+(8 if w_[1]>=0 else -4))),cv2.FONT_HERSHEY_SIMPLEX,0.8,_COL[k_],2,cv2.LINE_AA)
             cv2.circle(im,(int(ox),int(oy)),4,(60,60,60),-1)
         for im_ in (base,g):
-            if AXJ.get('global'): _gizmo(im_,im_.shape[1]-120,100,AXJ['global'],70,'방향')
+            if AXJ.get('global'): _gizmo(im_,im_.shape[1]-120,100,_rotg(AXJ['global']),70,'방향')
             for lc in AXJ.get('local',[]):
                 _o=(T(lc['at'][0],lc['at'][1]) if fits else Mx@np.array([lc['at'][0]-cx0,lc['at'][1]-cy0,1.0]))
                 _gizmo(im_,float(_o[0]),float(_o[1]),{k:lc[k] for k in 'XYZ' if k in lc},float(lc.get('size',45)),lc.get('label'))
+    # notes: <번호>_axes.json 의 "notes":[{"at":[x,y](원본 좌표),"text":"글자","size":28}] — 그림에 한글 글자를 크게 적어 목표 구멍·부품 이름을 눈에 띄게 한다(투석기 20번 "글자를 잘 보이게")
+    _nt=(_AX0.get('notes') or []) if '_AX0' in dir() else []
+    if _nt:
+        from PIL import Image, ImageDraw, ImageFont
+        _ff=next((p for p in ('C:/Windows/Fonts/malgunbd.ttf','C:/Windows/Fonts/malgun.ttf') if os.path.exists(p)),None)
+        def _notes(im_):
+            pil=Image.fromarray(cv2.cvtColor(im_,cv2.COLOR_BGR2RGB)); dr=ImageDraw.Draw(pil)
+            for nt in _nt:
+                p_=nt['at'] if nt.get('px') else (T(nt['at'][0],nt['at'][1]) if fits else Mx@np.array([nt['at'][0]-cx0,nt['at'][1]-cy0,1.0]))   # px: true 면 at 이 돌린 그림 좌표(빈 공간에 두기 쉽다)
+                ft=ImageFont.truetype(_ff,int(nt.get('size',26))) if _ff else ImageFont.load_default()
+                tx,ty=int(p_[0]),int(p_[1]); bb=dr.textbbox((tx,ty),nt['text'],font=ft)
+                if nt.get('to'):   # to: 가리킬 구멍(원본 좌표) — 글자 상자에서 그 구멍까지 선을 긋는다(글자가 부품·번호를 덮지 않게 빈 공간에 둔다)
+                    q_=T(nt['to'][0],nt['to'][1]) if fits else Mx@np.array([nt['to'][0]-cx0,nt['to'][1]-cy0,1.0]); cx_=(bb[0]+bb[2])/2.0; cy_=(bb[1]+bb[3])/2.0
+                    dr.line((cx_,cy_,float(q_[0]),float(q_[1])),fill=(220,0,0),width=3); dr.ellipse((float(q_[0])-9,float(q_[1])-9,float(q_[0])+9,float(q_[1])+9),outline=(220,0,0),width=3)
+                dr.rectangle((bb[0]-6,bb[1]-4,bb[2]+6,bb[3]+4),fill=(255,255,255),outline=(220,0,0),width=2); dr.text((tx,ty),nt['text'],font=ft,fill=(220,0,0))
+            return cv2.cvtColor(np.array(pil),cv2.COLOR_RGB2BGR)
+        base=_notes(base); g=_notes(g)
     cv2.imwrite(D+nm+'_1.jpg',base,[cv2.IMWRITE_JPEG_QUALITY,88]); cv2.imwrite(D+nm+'_2.jpg',g,[cv2.IMWRITE_JPEG_QUALITY,88])
     return info,names
 def sentence(step,info,names):

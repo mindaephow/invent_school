@@ -153,6 +153,15 @@
   }
 
   // target 단계까지의 부품 목록과, 이번 단계의 초록 안내(화살표·구멍 원)를 만든다.
+  // 고무줄(step.bands)은 만든 번호부터 뒤 번호에도 이어서 그린다. bandsHideAt: 몸이 창고에 들어가 안 보이는 번호, bandsEnd: 줄을 푸는 번호.
+  function bandsAt(n) {
+    for (let k = Math.min(n, def.steps.length); k >= 1; k--) {
+      const st = def.steps[k - 1] || {};
+      if (st.bands) return (st.bandsHideAt || []).indexOf(n) >= 0 ? [] : st.bands;
+      if (st.bandsEnd) return [];
+    }
+    return [];
+  }
   function buildList(target) {
     const b = bridge();
     const list = [];
@@ -188,21 +197,22 @@
           viewEff = Math.max(viewEff, effStepOf(pt, si + 1, upTo));
         } else if (hidHere(pt, si + 1)) { const pick = (v) => (v && typeof v === 'object' ? v[upTo] : v); const k = storeOf(pt, si + 1); stored[k] = (stored[k] || 0) + 1; storedTypes[type] = (storedTypes[type] || 0) + 1; storedEff = Math.max(storedEff, effStepOf(pt, si + 1, upTo)); storedEffBy[k] = Math.max(storedEffBy[k] || 0, effStepOf(pt, si + 1, upTo)); if (pick(pt.storeThumb)) { storedThumb = pick(pt.storeThumb); storedThumbBy[k] = storedThumb; } return; } // store·storeThumb 는 글자 하나 또는 {단계번호: 값} // hideAt: 이 단계에서는 따로 보관해 두고 안 보여준다(예: 비행기 6번은 5번까지 만든 본체와 따로 만드는 조립품)
         const useSide = pt.side && upTo < pt.side.until;
-        const moved = pt.move && upTo >= pt.move.at; // move: 옆자리에서 다 만든 뒤 다른 자리로 한 번 더 옮겨 붙는 단계(예: 풍차 상자를 몸체에 끼우기)
+        const mvE = window.IVS_moveAt ? window.IVS_moveAt(pt, upTo) : pt.move; // 여러 번 옮긴 부품은 이 단계 이전 가장 마지막 이동
+        const moved = mvE && upTo >= mvE.at; // move: 옆자리에서 다 만든 뒤 다른 자리로 한 번 더 옮겨 붙는 단계(예: 풍차 상자를 몸체에 끼우기)
         // move: { at, by } 평행 이동 또는 { at, p, r } 새 자세로 옮기기(회전 포함 — 예: 3륜바이크 7단계 샌드위치를 뒤집어 올림)
-        let base = useSide ? pt.side.p : (moved ? (pt.move.p || add(pt.p, pt.move.by || [0, 0, 0], 1)) : pt.p);
+        let base = useSide ? pt.side.p : (moved ? (mvE.p || add(pt.p, mvE.by || [0, 0, 0], 1)) : pt.p);
         // lift: 다 만든 묶음(총몸·기둥)이 받침 위에 띄워져 있다가(from~at 직전 단계) at 단계에 위에서 내려와 결합한다(교재 29) — { from, at, by, dir, hover, marks }
         if (pt.lift && !useSide && upTo >= (pt.lift.from || 0) && upTo < pt.lift.at) base = add(base, pt.lift.by || [0, 0, 0], 1);
         if (pt.asideAt && pt.asideAt[upTo]) base = add(base, pt.asideAt[upTo], 1); // asideAt: 이 단계에서는 카메라 밖 옆자리에 치워 둔다(드라마 촬영처럼 화면엔 안 나오지만 옆에 있다) — 다음 단계에서 제자리
-        let rot = useSide ? pt.side.r : (moved && pt.move.r ? pt.move.r : pt.r);
+        let rot = useSide ? pt.side.r : (moved && mvE.r ? mvE.r : pt.r);
         if (pt.poseAt && pt.poseAt[target]) { base = pt.poseAt[target].p; rot = pt.poseAt[target].r; } // poseAt: 이 단계에서만 다른 자세(회전 포함)로 보여 준다(예: 롤링봇 27·28번은 팔 조립품을 눕혀서 조립 — 앞뒤 단계는 세운 자세)
         // 이번 단계에 새로 놓이거나(또는 옆자리에서 제자리로 들어가는) 부품 — 완성 단계에선 없다
-        const isNew = target <= n && (si + 1 === target || (pt.side && pt.side.until === target) || (pt.move && pt.move.at === target) || (pt.lift && pt.lift.at === target));
+        const isNew = target <= n && (si + 1 === target || (pt.side && pt.side.until === target) || (mvE && mvE.at === target) || (pt.lift && pt.lift.at === target));
         let pos = base;
         // 옆자리 조립품이 제자리로 합쳐지는 단계(settle)에는 settleDir(없으면 dir)로 띄우고, settleMarks(있는 부품만) 자리로 안내한다
         const lowering = !!(pt.lift && pt.lift.at === target); // 위에서 내려와 결합하는 단계
-        const mvSrc = lowering ? pt.lift : pt.move;
-        const moving = !!(pt.move && pt.move.at === target) || lowering;
+        const mvSrc = lowering ? pt.lift : mvE;
+        const moving = !!(mvE && mvE.at === target) || lowering;
         const settling = !!(pt.side && !useSide) || moving;
         const dirH = moving ? mvSrc.dir : (settling ? (pt.settleDir || pt.dir) : pt.dir);
         // 앞 단계에서 만든 부품을 이번 단계에서 "결합되기 전" 모습으로 띄워 보여준다(예: 14단계 T축+기어를 15프레임 위로)
@@ -539,6 +549,7 @@
     }
     if (stc && Array.isArray(stc.rings)) stc.rings.forEach((m) => guides.push({ from: m, to: m, dir: [0, 1, 0], idx: -1, ringOnly: true })); // cam.rings: 이 단계에 고정으로 칠할 결합 점(예: 받침 흰 판 구멍)
     b.guides(guides);
+    if (b.bands) b.bands(bandsAt(step));   // 고무줄 같은 규격 없는 줄(노란 곡선) — 만든 번호 이후 계속 보인다
     // 앞 벽이 뒤쪽 끝에 있는 단계(flip)는 반대편에서 보여준다
     // view: 기본 각도에서 90도×view 만큼 돌려서 보기 / cam: {theta, phi}로 교재 그림과 같은 각도를 직접 지정
     const camStep = (viewActive && viewEff >= 1) ? viewEff : step; // 창고 화면 보기: 그 묶음이 마지막으로 만들어진 단계의 시점
@@ -747,7 +758,7 @@
     $('asmStageBar').hidden = true;
     $('historyPanel').hidden = false;
     if (b) b.axes(false);
-    if (b) { b.guides([]); b.restore(snapshot || []); b.setViewing(false); }
+    if (b) { b.guides([]); if (b.bands) b.bands([]); b.restore(snapshot || []); b.setViewing(false); }
     { const cb = $('connToggle'); if (connAutoOn && cb && cb.getAttribute('aria-pressed') === 'true') cb.click(); connAutoOn = false; } // 자동으로 켠 연결점은 닫을 때 같이 끈다(손으로 켠 건 그대로)
     snapshot = null;
   }

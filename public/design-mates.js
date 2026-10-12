@@ -77,8 +77,9 @@
     const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
   const issues = []
   // move: 옆자리에서 다 만든 뒤 한 번 더 옮겨 붙는 부품(풍차 상자) — 그 단계 이후엔 옮긴 자리 기준으로 검사한다
-  const posAfterMove = (pt, stepNo) => (pt.move && stepNo >= pt.move.at ? (pt.move.p || pt.p.map((v, k) => v + (pt.move.by || [0, 0, 0])[k])) : pt.p)
-  const rotAfterMove = (pt, stepNo) => (pt.move && pt.move.r && stepNo >= pt.move.at ? pt.move.r : (pt.r || [0, 0, 0]))
+  const mvAt = (pt, stepNo) => (typeof window !== 'undefined' && window.IVS_moveAt ? window.IVS_moveAt(pt, stepNo) : (pt.move && stepNo >= pt.move.at ? pt.move : null))
+  const posAfterMove = (pt, stepNo) => { const m = mvAt(pt, stepNo); return m ? (m.p || pt.p.map((v, k) => v + (m.by || [0, 0, 0])[k])) : pt.p }
+  const rotAfterMove = (pt, stepNo) => { const m = mvAt(pt, stepNo); return m && m.r ? m.r : (pt.r || [0, 0, 0]) }
   const worldOf = (pt) => (conn[pt.n] ? M.worldConnectors({ p: pt.p, r: pt.r || [0, 0, 0] }, conn[pt.n]) : null)
   list.forEach((st, si) => {
     const upto = []
@@ -109,7 +110,7 @@
       const name = Object.keys(counts).find((n) => n === m[1] || m[1].endsWith(n))
       if (name && counts[name] !== Number(m[2])) issues.push(`${si + 1}단계 설명 "${m[0]}" ↔ 데이터 ${name} ${counts[name]}개`)
     }
-    if (!(st.parts || []).length && !st.noPart && !list.some((s) => (s.parts || []).some((pt) => (pt.side && pt.side.until === si + 1) || (pt.move && pt.move.at === si + 1)))) issues.push(`${si + 1}단계: 부품이 하나도 없음`)
+    if (!(st.parts || []).length && !st.noPart && !list.some((s) => (s.parts || []).some((pt) => (pt.side && pt.side.until === si + 1) || (window.IVS_moveIs ? window.IVS_moveIs(pt, si + 1) : (pt.move && pt.move.at === si + 1))))) issues.push(`${si + 1}단계: 부품이 하나도 없음`)
   })
   // 마지막 모양: 리벳은 양 끝 돌기가 모두 구멍에 들어가야 한다
   const all = []; list.forEach((s, k) => (s.parts || []).forEach((pt, i) => all.push({ key: `${k + 1}.${i} ${pt.n}`, n: pt.n, p: posAfterMove(pt, 1e9), r: rotAfterMove(pt, 1e9), ref: pt })))

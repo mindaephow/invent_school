@@ -406,6 +406,20 @@ class Step:
             pt.p = pt.p + sh
             pt.extra["move"] = {"at": s.index, "p": rnd(pt.p), "r": R_to_euler(pt.R)}
         return g
+    def move_made(s, g, R, pivot=None, shift=(0, 0, 0), dir=None, hover=60, group=None, marks=None):
+        """이미 ✓ 한 앞 번호에서 만든 부품 묶음을 이번 번호에서 옮긴다(투석기 17번). move_group 은 앞 번호 부품 데이터에 move 를 써서 ✓ 단계 지문이 바뀌어 빌드가 막히므로,
+        이동은 이번 단계 데이터(kw["moveMade"] = {"만든번호:부품순서": {p, r, dir, hover, moveGroup, marks}})에만 적는다. 화면·도구는 design-assemblies.js 끝의 합치기 코드로 part.move 를 본다.
+        marks 는 {부품: [안내점…]} (부품 하나당 한 번). 부품마다 한 번만 옮길 수 있다(여러 번 옮기려면 poseAt)."""
+        R = np.array(R, float); pv = g.center() if pivot is None else np.array(pivot, float); sh = np.array(shift, float)
+        mm = s.kw.setdefault("moveMade", {})
+        for pt in g.parts:
+            if pt._base is None: pt._base = (pt.p.copy(), pt.R.copy())
+            pt.p = R @ (pt.p - pv) + pv + sh; pt.R = R @ pt.R
+            e = {"p": rnd(pt.p), "r": R_to_euler(pt.R), "dir": [float(v) for v in (dir if dir is not None else [0, 1, 0])], "hover": hover}
+            if group is not None: e["moveGroup"] = group
+            if marks and id(pt) in marks: e["marks"] = marks[id(pt)]
+            mm["%d:%d" % (pt.step.index, pt.step.parts.index(pt))] = e
+        return g
     def place(s, n, R, p, **extra):
         """위치가 정해진 부품(구멍에 끼우는 안내가 필요 없는 부품: 바닥판 등). 수정 파일에 shift 가 있으면 그만큼 옮긴다."""
         p = s._anchored(n, R, p)
