@@ -1,0 +1,1 @@
+{"global": {"X": [-55.0, -18.3], "Y": [0.0, -55.0], "Z": [55.0, -21.8]}, "replace_lines": true, "no_rotate": true, "fit": {"from": "13_F.json", "err_px": 0.0, "points": 2, "theta": -2.4, "phi": 1.2, "cols": "구멍 판이 없는 번호 — 허브 가운데 구멍과 부시 구멍 중심 2점(카메라는 12번과 같은 추정)", "rows": "-"}}

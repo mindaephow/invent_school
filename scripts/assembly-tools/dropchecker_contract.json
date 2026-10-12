@@ -15,91 +15,151 @@
 },
 "3": {
 "parts": {},
-"noPart": true
+"noPart": false
 },
 "4": {
-"parts": {},
-"noPart": true
+"parts": {
+"T축": 2,
+"작은기어": 2
+},
+"noPart": false
 },
 "5": {
-"parts": {},
-"noPart": true
+"parts": {
+"축": 2,
+"큰기어": 2,
+"부시": 2
+},
+"noPart": false
 },
 "6": {
-"parts": {},
-"noPart": true
+"parts": {
+"중간바퀴": 2,
+"부시": 2
+},
+"noPart": false
 },
 "7": {
-"parts": {},
-"noPart": true
+"parts": {
+"135도 프레임": 1,
+"리벳": 4,
+"15프레임": 1,
+"3단블록": 1,
+"12볼트": 1,
+"너트": 1
+},
+"noPart": false
 },
 "8": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 1,
+"15프레임": 1,
+"12볼트": 1,
+"너트": 1
+},
+"noPart": false
 },
 "9": {
-"parts": {},
-"noPart": true
+"parts": {
+"IR센서": 1
+},
+"noPart": false
 },
 "10": {
-"parts": {},
-"noPart": true
+"parts": {
+"35프레임": 1,
+"3단블록": 1
+},
+"noPart": false
 },
 "11": {
 "parts": {},
-"noPart": true
+"noPart": false
 },
 "12": {
-"parts": {},
-"noPart": true
+"parts": {
+"스프라켓": 2,
+"캐터필러": 28
+},
+"noPart": false
 },
 "13": {
-"parts": {},
-"noPart": true
+"parts": {
+"축": 1,
+"부시": 1
+},
+"noPart": false
 },
 "14": {
-"parts": {},
-"noPart": true
+"parts": {
+"부시": 1
+},
+"noPart": false
 },
 "15": {
-"parts": {},
-"noPart": true
+"parts": {
+"713프레임": 1,
+"리벳": 2
+},
+"noPart": false
 },
 "16": {
 "parts": {},
-"noPart": true
+"noPart": false
 },
 "17": {
-"parts": {},
-"noPart": true
+"parts": {
+"135도 프레임": 1,
+"리벳": 4,
+"15프레임": 1,
+"3단블록": 1,
+"12볼트": 1,
+"너트": 1
+},
+"noPart": false
 },
 "18": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 1,
+"15프레임": 1,
+"12볼트": 1,
+"너트": 1
+},
+"noPart": false
 },
 "19": {
-"parts": {},
-"noPart": true
+"parts": {
+"IR센서": 1
+},
+"noPart": false
 },
 "20": {
-"parts": {},
-"noPart": true
+"parts": {
+"35프레임": 1,
+"3단블록": 1
+},
+"noPart": false
 },
 "21": {
 "parts": {},
-"noPart": true
+"noPart": false
 },
 "22": {
-"parts": {},
-"noPart": true
+"parts": {
+"축": 1,
+"부시": 1
+},
+"noPart": false
 },
 "23": {
-"parts": {},
-"noPart": true
+"parts": {
+"부시": 1
+},
+"noPart": false
 },
 "24": {
 "parts": {},
-"noPart": true
+"noPart": false
 },
 "25": {
 "parts": {},

@@ -20,7 +20,7 @@ def main():
     book = os.path.join(here, "refs", name, "%02d.jpg" % step)
     if not os.path.isfile(book): sys.exit("❌ 책 그림이 없다: " + book)
     asm = json.load(open(os.path.join(here, name + "_asm.json"), encoding="utf-8"))["steps"]
-    if step < 1 or step > len(asm) or not asm[step - 1].get("parts"): sys.exit("❌ 부품이 있는 번호가 아니다")
+    if step < 1 or step > len(asm) or not (asm[step - 1].get("parts") or asm[step - 1].get("moveMade")): sys.exit("❌ 부품이 있거나 앞 번호 부품을 옮기는(합치는) 번호가 아니다")
     fp = stepfp.fp(asm[step - 1])
     b = Image.open(book).convert("RGB"); h = 760
     a = b.resize((int(b.width * h / b.height), h)); c = im.resize((int(im.width * h / im.height), h))

@@ -259,23 +259,24 @@
     const slotByName = {};
     // hideMade: 이번 단계 데이터에 { 만든 번호: 보관 이름 } 을 적으면 그 번호에서 만든 부품을 이번 단계에서 숨기고 창고에 둔다 — 새 창고에서 새 부분을 시작할 때 앞 번호(이미 ✓ 한 번호) 부품 데이터를 고치지 않고 이 번호에만 적는다(투석기 16번)
     const hideMade = (def.steps[upTo - 1] && def.steps[upTo - 1].hideMade) || null;
-    const hidHere = (p, made) => !!((p.hideAt && p.hideAt.includes(upTo)) || (hideMade && hideMade[made] !== undefined));
-    const storeOf = (p, made) => ((p.hideAt && p.hideAt.includes(upTo)) ? ((p.store && typeof p.store === 'object' ? p.store[upTo] : p.store) || '보관 중') : hideMade[made]);
-    if (viewS !== null) def.steps.slice(0, upTo).forEach((s2, si2) => (s2.parts || []).forEach((p2) => { if (hidHere(p2, si2 + 1)) { const k2 = storeOf(p2, si2 + 1); slotByName[k2] = Math.max(slotByName[k2] || 0, effStepOf(p2, si2 + 1, upTo)); } }));
+    // 부품 하나만 숨기려면 키를 "만든 번호:부품 순서"(예: "3:2", moveMade 키와 같다)로 적는다 — 번호 전체가 아닌 일부(예: 둘째 유닛)만 창고에 둘 때(✓ 번호의 부품 데이터는 못 고친다).
+    const hidHere = (p, made, pi) => !!((p.hideAt && p.hideAt.includes(upTo)) || (hideMade && (hideMade[made] !== undefined || (pi !== undefined && hideMade[made + ':' + pi] !== undefined))));
+    const storeOf = (p, made, pi) => ((p.hideAt && p.hideAt.includes(upTo)) ? ((p.store && typeof p.store === 'object' ? p.store[upTo] : p.store) || '보관 중') : (hideMade[made] !== undefined ? hideMade[made] : hideMade[made + ':' + pi]));
+    if (viewS !== null) def.steps.slice(0, upTo).forEach((s2, si2) => (s2.parts || []).forEach((p2, pi2) => { if (hidHere(p2, si2 + 1, pi2)) { const k2 = storeOf(p2, si2 + 1, pi2); slotByName[k2] = Math.max(slotByName[k2] || 0, effStepOf(p2, si2 + 1, upTo)); } }));
     // 부품 번호("리벳 3/14"): design-faces.js 의 규칙 — 조립 MCP(get_part_faces)와 같은 번호
     const { numOf } = window.IVS_FACES.numberParts(def.steps);
     def.steps.slice(0, upTo).forEach((s, si) => {
-      (s.parts || []).forEach((pt0) => {
+      (s.parts || []).forEach((pt0, pi) => {
         const pt = flipOn && !pt0.noflip ? flipPt(pt0, target) : pt0; // 뒤집기 전 방향으로 보여 주는 단계(noflip: 로봇과 따로 만드는 손잡이는 그대로)
         const type = b.resolve(pt.n, catId);
         if (!type) { if (!missing.includes(pt.n)) missing.push(pt.n); return; }
         if (pt.finalOnly && target <= n) return; // finalOnly: 완성 화면에서만 보이는 부품(예: 롤링봇 장전한 작은바퀴)
         if (viewS !== null) { // 창고 화면 보기: 보관 중이던 묶음 중 이 창고에 있는 것만 보이고, 지금 작업하던 부품은 숨긴다
-          if (!hidHere(pt, si + 1)) return;
-          const k3 = storeOf(pt, si + 1);
+          if (!hidHere(pt, si + 1, pi)) return;
+          const k3 = storeOf(pt, si + 1, pi);
           if (slotOfStep(slotByName[k3] || 0) !== viewS) return;
           viewEff = Math.max(viewEff, effStepOf(pt, si + 1, upTo));
-        } else if (hidHere(pt, si + 1)) { const pick = (v) => (v && typeof v === 'object' ? v[upTo] : v); const k = storeOf(pt, si + 1); stored[k] = (stored[k] || 0) + 1; storedTypes[type] = (storedTypes[type] || 0) + 1; storedEff = Math.max(storedEff, effStepOf(pt, si + 1, upTo)); storedEffBy[k] = Math.max(storedEffBy[k] || 0, effStepOf(pt, si + 1, upTo)); if (pick(pt.storeThumb)) { storedThumb = pick(pt.storeThumb); storedThumbBy[k] = storedThumb; } return; } // store·storeThumb 는 글자 하나 또는 {단계번호: 값} // hideAt: 이 단계에서는 따로 보관해 두고 안 보여준다(예: 비행기 6번은 5번까지 만든 본체와 따로 만드는 조립품)
+        } else if (hidHere(pt, si + 1, pi)) { const pick = (v) => (v && typeof v === 'object' ? v[upTo] : v); const k = storeOf(pt, si + 1, pi); stored[k] = (stored[k] || 0) + 1; storedTypes[type] = (storedTypes[type] || 0) + 1; storedEff = Math.max(storedEff, effStepOf(pt, si + 1, upTo)); storedEffBy[k] = Math.max(storedEffBy[k] || 0, effStepOf(pt, si + 1, upTo)); if (pick(pt.storeThumb)) { storedThumb = pick(pt.storeThumb); storedThumbBy[k] = storedThumb; } return; } // store·storeThumb 는 글자 하나 또는 {단계번호: 값} // hideAt: 이 단계에서는 따로 보관해 두고 안 보여준다(예: 비행기 6번은 5번까지 만든 본체와 따로 만드는 조립품)
         const useSide = pt.side && upTo < pt.side.until;
         const mvE = window.IVS_moveAt ? window.IVS_moveAt(pt, upTo) : pt.move; // 여러 번 옮긴 부품은 이 단계 이전 가장 마지막 이동
         const moved = mvE && upTo >= mvE.at; // move: 옆자리에서 다 만든 뒤 다른 자리로 한 번 더 옮겨 붙는 단계(예: 풍차 상자를 몸체에 끼우기)

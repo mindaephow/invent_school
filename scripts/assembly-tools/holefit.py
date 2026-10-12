@@ -63,6 +63,7 @@ if not ok:
 pts = [[c, r, round(float(P[sel[(c, r)]][0]), 2), round(float(P[sel[(c, r)]][1]), 2)] if (c, r) in sel else [c, r, round(float(pred[(c, r)][0]), 2), round(float(pred[(c, r)][1]), 2)] for c in range(1, cols + 1) for r in range(1, rows + 1)]
 est = [[c, r] for c in range(1, cols + 1) for r in range(1, rows + 1) if (c, r) not in sel]
 out = {"cols": cols, "rows": rows, "pts": pts, "name": "%s %d번 %s: 구멍 %d개를 찾아 %d×%d 격자에 호모그래피로 맞춤(오차 평균 %.2fpx·최대 %.2fpx) — holefit.py" % (name, step, label, len(sel), cols, rows, mean_e, max_e), "est": est, "err_px": round(mean_e, 2), "max_err_px": round(max_e, 2)}
+out.update({"tool": "holefit", "err_px": round(mean_e, 2), "max_err_px": round(max_e, 2), "found": len(sel), "found_ratio": round(len(sel) / (cols * rows), 2)})   # 규칙 점검(rulecheck.py)이 읽는 출처 기록 — 이 도구가 기준을 통과해 만든 격자라는 표시
 os.makedirs(D + "fits", exist_ok=True)
 json.dump(out, open(D + "fits/%02d_%s.json" % (step, label), "w", encoding="utf-8"), ensure_ascii=False)
 print("✅ 통과 — fits/%02d_%s.json 저장(찾지 못해 격자로 채운 점 %d개). 확인 그림 hf/%02d_%s.png 를 눈으로 본다." % (step, label, len(est), step, label))

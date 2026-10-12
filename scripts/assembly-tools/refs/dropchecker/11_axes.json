@@ -1,0 +1,1 @@
+{"global": {"X": [-55.0, -39.2], "Y": [0.0, -55.0], "Z": [55.0, -36.7]}, "replace_lines": true, "no_rotate": true, "fit": {"from": "11_F.json", "err_px": 4.9, "points": 6, "theta": -2.34, "phi": 0.81, "cols": "모터 유닛 판 −Z 면 링 4곳(칸1·3 × 줄1·3)과 판 오른쪽 끝 모서리 2곳 6점 PnP — 판이 작게 보이고 가려져 holefit(구멍 18~36%)는 못 씀", "rows": "-"}}

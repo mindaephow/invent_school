@@ -179,6 +179,14 @@ if os.path.exists(_ckf) and name not in LEGACY_NO_GRID:
         if _eye_stale: print("   (이미 저장한 번호를 고치는 저장이라 다음 눈 확인 %d개는 막지 않는다 — 저장 뒤 화면으로 다시 비교하고 record_check.py 로 증거를 새로 남긴다)" % len(_eye_stale)); [print("     ·", b_) for b_ in _eye_stale]
         _bl = [b_ for b_ in _bl if b_ not in _eye_stale]
     if write and _bl: sys.exit("❌ 번호별 점검에서 막힌 항목이 있어 --write 를 하지 않는다 — 막힌 항목을 고친다. 눈으로 하는 확인(화면 확대·칸 수 대조·카메라 대조)은 화면 캡처와 책 그림을 나란히 비교하고 record_check.py 로 증거를 남긴 번호(또는 사용자가 ✓ 한 번호)만 통과한다. 마지막으로 만든 번호 하나만 증거 없이 쓸 수 있다.")
+# 규칙 점검(rulecheck.py): 번호마다 격자 출처·카메라 오차·증거·읽기 표를 판정해 요약을 보여 준다. 저장은 막지 않고(경고) 다음 번호 시작은 number_start 가 막는다.
+try:
+    import rulecheck as _rc
+    _res, _strict = _rc.check(name)
+    _badn = [k_ for k_, it_ in _res.items() if any(s_ == "❌" for s_, _, _ in it_)]
+    print("규칙 점검(rulecheck): ❌ %d번 %s — 자세한 해결 방법: python rulecheck.py %s" % (len(_badn), _badn[:20], name) if _badn else "규칙 점검(rulecheck): ❌ 없음")
+except Exception as _e_:
+    print("규칙 점검(rulecheck) 을 실행하지 못함:", str(_e_)[:100])
 if write:  # (규칙 확인은 위에서 이미 검사)
     _m = re.search(r'id: "(cubo-\d+-[A-Za-z0-9_]+)"', open(name + "_entry.js", encoding="utf-8").read())   # 항목 파일의 id(2권은 cubo-2-...). 없으면 1권 규칙
     rc, out = run([sys.executable, "emit.py", name + "_entry.js", _m.group(1) if _m else "cubo-1-" + name]); print(out.strip())

@@ -36,8 +36,8 @@ if _miss_slot: _gate.append(("04 창고 정리", "창고(slot)가 없는 번호:
 if _miss_hist: _gate.append(("04 창고 정리", "창고가 바뀌는데 history 가 없는 번호: %s" % _miss_hist[:15], "history 글을 적는다(04)"))
 if k > 1:   # 앞 번호: 사용자 ✓ 또는 지금 내용과 같은 지문의 비교 증거(record_check)가 있어야 다음 번호를 시작한다
     _prev = asm[k - 2]
-    if not _prev.get("parts"): _gate.append(("앞 번호 %d" % (k - 1), "아직 작성 전(부품 없음)", "앞 번호부터 끝낸다 — 번호는 순서대로"))
-    else:
+    if _prev.get("noPart") or not (_prev.get("parts") or _prev.get("moveMade")): _gate.append(("앞 번호 %d" % (k - 1), "아직 작성 전(부품 없음)", "앞 번호부터 끝낸다 — 번호는 순서대로"))
+    else:   # 부품이 있는 번호, 또는 앞 번호 부품을 옮기기만 하는(합치는) 번호
         _ok = False
         try:
             import stepfp; _ev = load(os.path.join(here, name + "_evidence.json"), {}).get(str(k - 1))
@@ -53,6 +53,13 @@ try:   # 01 준비: 개발 서버(3178)가 떠 있어야 화면 비교를 할 �
     import urllib.request; urllib.request.urlopen("http://localhost:3178/design.html", timeout=4).read(1)
 except Exception: _gate.append(("01 준비", "개발 서버(localhost:3178)가 응답하지 않음", "서버를 켜고(preview_start invent-school-dev2) 사용자에게 로그인을 요청한다"))
 print("※ 화면 비교(05 5-5)에는 사용자가 로그인한 화면이 필요하다 — 번호 작업 전에 사용자에게 로그인을 먼저 요청한다(비밀번호는 대신 입력하지 않는다).")
+try:   # 규칙 점검(rulecheck.py) — 앞 번호에 규칙 미달(❌)이 있으면 그것부터 해결해야 다음 번호를 시작한다(사용자 지시 2026-10-12: 도망가지 않고 스스로 문제를 찾아 해결)
+    import rulecheck; _fb = rulecheck.first_bad(name)
+    if _fb and _fb[0] < k:
+        for _t, _why in _fb[1]:
+            _gate.append(("규칙 점검 %d번" % _fb[0], "%s — %s" % (_t, _why), "python rulecheck.py %s %d 로 해결 방법을 보고 먼저 끝낸다(%s)" % (name, _fb[0], rulecheck.FIX.get(_t.split()[0], "05_조립.md"))))
+except Exception as _e:
+    _gate.append(("규칙 점검", "rulecheck 를 실행하지 못함: %s" % str(_e)[:80], "python rulecheck.py %s 를 돌려 오류를 본다" % name))
 if _gate:
     print("═══ %s %d번 — ❌ 앞 과정이 끝나지 않았다: 이것부터 하고 넘어간다 ═══" % (name, k))
     for i, (p, why, how) in enumerate(_gate, 1): print("  %d. [%s] %s\n       → %s" % (i, p, why, how))

@@ -1,0 +1,1 @@
+{"global": {"X": [49.5, -24.0], "Y": [2.0, -55.0], "Z": [41.1, 36.6]}, "replace_lines": true, "fit": {"from": "10_P.json", "err_px": 0.8, "points": 15, "theta": -0.69, "phi": 0.85, "cols": "+X", "rows": "+Z"}, "rotate_to": "X", "column_axis": "Z", "holeline": "X=줄2 구멍 최소제곱, Z=칸3 구멍 최소제곱(35프레임 5칸×3줄, 판이 눕혀 있어 Y 는 위)"}

@@ -4,5 +4,6 @@
  "camera": [],
  "strict": true,
  "orient_check": true,
- "placecheck": true
+ "placecheck": true,
+ "rulecheck": true
 }
