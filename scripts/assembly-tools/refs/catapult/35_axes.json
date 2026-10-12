@@ -1,0 +1,1 @@
+{"global": {"X": [-55.0, 45.6], "Y": [2.3, -55.0], "Z": [-55.0, -22.3]}, "replace_lines": true, "fit": {"from": "35_W.json", "err_px": 0.57, "points": 45, "theta": 2.14, "phi": 0.97, "cols": "+X", "rows": "+Z"}, "no_rotate": true, "hide_est": true, "no_gizmo": true, "notes": [{"at": [30, 40], "px": true, "text": "모터 케이블 → 보드 오른쪽 DC잭", "size": 24}], "center_row": 3}

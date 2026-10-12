@@ -206,6 +206,7 @@
   .asm-compact .rotate-row button{padding:5px 0; font-size:12px;}
   .asm-compact .axis-row .axis-tag{min-height:30px; font-size:14px;}
   .asm-compact .axis-hint{font-size:9px;}
+  .nudge-step{display:flex; align-items:center; gap:6px; font-size:12px; font-weight:700; margin:0 0 6px;} .nudge-step input{width:72px; padding:4px 6px; border:1px solid #cbd5e1; border-radius:8px; font:inherit; text-align:right;}
   .nudge-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:8px;}
   .nudge-grid button{padding:8px 2px; font-size:12px;}
   .rotate-row{display:flex; gap:6px; margin-bottom:8px;}
@@ -668,6 +669,7 @@
           <button type="button" class="mount-btn" data-mount="wall">벽</button>
           <button type="button" class="mount-btn" data-mount="ceiling">천장</button>
         </div>
+        <label class="nudge-step" title="좌·우·높이·앞·뒤 버튼을 한 번 누를 때 움직이는 거리(mm). 미세하게 움직일 때는 1, 0.5 처럼 작게 넣으세요.">이동량 <input id="nudgeStep" type="number" min="0.1" step="0.5" value="20" inputmode="decimal"> mm</label>
         <div class="nudge-grid">
           <button id="mvLeft">◀ 좌</button>
           <button id="mvUp">▲ 높이</button>
@@ -3816,12 +3818,17 @@
     selected.body.position.set(nx, ny, nz);
     guardRobotMove(selected, prev);
   }
-  document.getElementById('mvLeft').addEventListener('click', () => nudge(-GRID_UNIT, 0, 0));
-  document.getElementById('mvRight').addEventListener('click', () => nudge(GRID_UNIT, 0, 0));
-  document.getElementById('mvUp').addEventListener('click', () => nudge(0, GRID_UNIT, 0));
-  document.getElementById('mvDown').addEventListener('click', () => nudge(0, -GRID_UNIT, 0));
-  document.getElementById('mvFwd').addEventListener('click', () => nudge(0, 0, GRID_UNIT));
-  document.getElementById('mvBack').addEventListener('click', () => nudge(0, 0, -GRID_UNIT));
+  // 이동량(mm): 입력칸에 쓴 값만큼 좌·우·높이·앞·뒤 버튼이 움직인다(사용자 지시 2026-10-12 "미세하게 움직이고 싶을 때 숫자를 입력하고 방향을 선택"). 비었거나 0 이하면 기본 20.
+  const nudgeStepEl = document.getElementById('nudgeStep');
+  try { const sv = parseFloat(localStorage.getItem('ivsNudgeStep')); if (isFinite(sv) && sv > 0) nudgeStepEl.value = String(sv); } catch (e) {}
+  nudgeStepEl.addEventListener('change', () => { try { localStorage.setItem('ivsNudgeStep', String(nudgeStepEl.value)); } catch (e) {} });
+  function nudgeAmount(){ const v = parseFloat(nudgeStepEl.value); return isFinite(v) && v > 0 ? v : GRID_UNIT; }
+  document.getElementById('mvLeft').addEventListener('click', () => { const a_ = nudgeAmount(); nudge(-a_, 0, 0); });
+  document.getElementById('mvRight').addEventListener('click', () => { const a_ = nudgeAmount(); nudge(a_, 0, 0); });
+  document.getElementById('mvUp').addEventListener('click', () => { const a_ = nudgeAmount(); nudge(0, a_, 0); });
+  document.getElementById('mvDown').addEventListener('click', () => { const a_ = nudgeAmount(); nudge(0, -a_, 0); });
+  document.getElementById('mvFwd').addEventListener('click', () => { const a_ = nudgeAmount(); nudge(0, 0, a_); });
+  document.getElementById('mvBack').addEventListener('click', () => { const a_ = nudgeAmount(); nudge(0, 0, -a_); });
 
   function clearBalls(){
     balls.forEach(b => {
@@ -5481,6 +5488,18 @@
       setGuideDots(assemblyDotsVisible);
     },
     // 고무줄 같은 규격 없는 늘어진 줄: bands = [{ pts: [[x,y,z]…], color, r }] — 점들을 부드러운 곡선으로 잇는 노란 관(조립 보기, 사용자 지시 2026-10-12)
+    // 팔 당기기: 목록 번호 idxs 의 부품들을 pivot 점을 지나는 axis 방향 선을 기준으로 rad 만큼 통째로 돌린다(투석기 팔 — T축을 중심으로 시소처럼). 부품 자세도 같이 돈다.
+    hinge(idxs, pivot, axis, rad){
+      const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(axis[0], axis[1], axis[2]).normalize(), rad);
+      const pv = new THREE.Vector3(pivot[0], pivot[1], pivot[2]);
+      (idxs || []).forEach(i => {
+        const m = assemblyListParts[i]; if (!m) return;
+        const v = new THREE.Vector3(m.body.position.x, m.body.position.y, m.body.position.z).sub(pv).applyQuaternion(q).add(pv);
+        m.body.position.set(v.x, v.y, v.z);
+        const mq = new THREE.Quaternion(m.body.quaternion.x, m.body.quaternion.y, m.body.quaternion.z, m.body.quaternion.w).premultiply(q);
+        m.body.quaternion.set(mq.x, mq.y, mq.z, mq.w); m.rot = null;
+      });
+    },
     bands(list){
       if (window.__asmBandGroup) { scene.remove(window.__asmBandGroup); window.__asmBandGroup.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); window.__asmBandGroup = null; }
       if (!list || !list.length) return;

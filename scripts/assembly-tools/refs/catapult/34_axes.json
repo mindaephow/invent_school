@@ -1,0 +1,1 @@
+{"global": {"X": [-55.0, 42.4], "Y": [2.5, -55.0], "Z": [-55.0, -20.0]}, "replace_lines": true, "fit": {"from": "34_W.json", "err_px": 0.61, "points": 45, "theta": 2.12, "phi": 1.03, "cols": "+X", "rows": "+Z"}, "no_rotate": true, "hide_est": true, "no_gizmo": true, "notes": [{"at": [30, 40], "px": true, "text": "메인보드 아래 돌기 → 몸 윗판 가운데 줄 칸11·칸13", "size": 24}], "center_row": 3}

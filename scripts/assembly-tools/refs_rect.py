@@ -188,7 +188,7 @@ def process(step):
                 cv2.putText(im,'+'+k_,(int(ex+(8 if w_[0]>=0 else -34)),int(ey+(8 if w_[1]>=0 else -4))),cv2.FONT_HERSHEY_SIMPLEX,0.8,_COL[k_],2,cv2.LINE_AA)
             cv2.circle(im,(int(ox),int(oy)),4,(60,60,60),-1)
         for im_ in (base,g):
-            if AXJ.get('global'): _gizmo(im_,im_.shape[1]-120,100,_rotg(AXJ['global']),70,'방향')
+            if AXJ.get('global') and not AXJ.get('no_gizmo'): _gizmo(im_,im_.shape[1]-120,100,_rotg(AXJ['global']),70,'방향')   # no_gizmo: 오른쪽 위 방향 표시(XYZ 화살표 게이지)를 그리지 않는다(사용자 지시 2026-10-12)
             for lc in AXJ.get('local',[]):
                 _o=(T(lc['at'][0],lc['at'][1]) if fits else Mx@np.array([lc['at'][0]-cx0,lc['at'][1]-cy0,1.0]))
                 _gizmo(im_,float(_o[0]),float(_o[1]),{k:lc[k] for k in 'XYZ' if k in lc},float(lc.get('size',45)),lc.get('label'))

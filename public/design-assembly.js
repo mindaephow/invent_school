@@ -153,11 +153,91 @@
   }
 
   // target 단계까지의 부품 목록과, 이번 단계의 초록 안내(화살표·구멍 원)를 만든다.
+  // ───── 팔 당기기(투석기, 사용자 요청 2026-10-12): def.hinges = [{ id, name, keys:['단계:순서'…], pivot:[x,y,z], axis:[x,y,z], max, from }].
+  //   완성 화면의 슬라이더로 팔 부품 묶음을 pivot(T축)을 지나는 axis 선을 기준으로 당긴다(−각도 = 시계 방향). 고무줄(band.elastic)은 팔 구멍이 돌아간 자리를 따라 팽팽하게 다시 그린다.
+  const hingeAng = { arm: 0, motor: 0 }; let hingeActive = false, hingeBusy = false, hingeLoaded = false;
+  function elasticPts(el, ang, xf) {   // el: { pivot:[x,y], hole:[x,y], bush:[x,y], rb, bz, hz, off } — 구멍은 팔이 돈 만큼 pivot 둘레로 돌고, 줄은 구멍 → 부시 접선 직선 + 부시 바깥 감김(투석기 22번 고무줄과 같은 모양)
+    const t = xf ? xf.t : [0, 0, 0], a = -ang * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
+    const px = el.pivot[0] + t[0], py = el.pivot[1] + t[1];
+    const dx = el.hole[0] + t[0] - px, dy = el.hole[1] + t[1] - py;
+    const hx = px + dx * c - dy * s, hy = py + dx * s + dy * c, bx = el.bush[0] + t[0], by = el.bush[1] + t[1];
+    const rb = el.rb, bz = el.bz, hz = el.hz, hi = hy + el.off, lo = hy - el.off;
+    const tan = (sgn) => { const ex = bx - hx, ey = by - hy, L = Math.hypot(ex, ey), th = Math.atan2(ey, ex) + sgn * Math.asin(Math.min(0.99, rb / L)), tt = Math.sqrt(Math.max(1, L * L - rb * rb)); return [hx + tt * Math.cos(th), hy + tt * Math.sin(th)]; };
+    const lin = (A, B, n) => { const o = []; for (let k = 1; k < n; k++) o.push([A[0] + (B[0] - A[0]) * k / n, A[1] + (B[1] - A[1]) * k / n, A[2] + (B[2] - A[2]) * k / n]); return o; };
+    const lobe = (sg) => {
+      const T1 = tan(1), T2 = tan(-1); let a0 = Math.atan2(T1[1] - by, T1[0] - bx), a1 = Math.atan2(T2[1] - by, T2[0] - bx); if (a1 > a0) a1 -= 2 * Math.PI;
+      const arc = []; for (let k = 0; k < 9; k++) { const aa = a0 + (a1 - a0) * k / 8; arc.push([bx + rb * Math.cos(aa), by + rb * Math.sin(aa), bz * sg]); }
+      const first = [hx, hi, hz * sg], last = [hx, lo, hz * sg];
+      return [first].concat(lin(first, arc[0], 6), arc, lin(arc[arc.length - 1], last, 6), [last]);
+    };
+    const thruHi = [[hx, hi, -hz], [hx, hi, -2.5], [hx, hi, 2.5]], thruLo = [[hx, lo, 2.5], [hx, lo, -2.5]];
+    return thruHi.concat(lobe(1), thruLo, lobe(-1).reverse().slice(0, -1));
+  }
+  function setupHinge(list, b) {
+    const hs = def.hinges || [], arm = hs.find((h) => h.id === 'arm'), mot = hs.find((h) => h.id === 'motor'), bar = $('asmHingeBar');
+    hingeAng.arm = 0; hingeAng.motor = 0; hingeActive = false; hingeBusy = false; hingeLoaded = false;
+    if (!arm || step < (arm.from || 0) || !$('asmStageBar')) { if (bar) bar.hidden = true; return; }
+    let bar2 = bar;
+    if (!bar2) {
+      bar2 = document.createElement('div'); bar2.id = 'asmHingeBar'; bar2.style.cssText = 'display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:0 0 8px; padding:6px 10px; background:#fff7ed; border:1px solid #fdba74; border-radius:10px; font-size:13px; font-weight:700;';
+      bar2.innerHTML = '<button type="button" id="asmLoadBtn" style="padding:5px 14px; border-radius:10px; border:0; background:#f97316; color:#fff; font-weight:800;">장전</button><button type="button" id="asmFireBtn" style="padding:5px 14px; border-radius:10px; border:0; background:#dc2626; color:#fff; font-weight:800;">발사</button><span id="asmHingeName"></span><input type="range" id="asmHingeRange" min="0" step="0.5" style="flex:1; min-width:110px;"><input type="number" id="asmHingeNum" min="0" step="0.5" style="width:66px; padding:3px 6px; border:1px solid #cbd5e1; border-radius:8px; text-align:right;"><span>°</span><button type="button" class="ghost" id="asmHingeReset" style="padding:3px 10px;">원위치</button><span id="asmHingeHint" style="font-weight:600; color:#9a3412;"></span>';
+      $('asmStageBar').insertBefore(bar2, $('asmStageBar').firstChild);
+    }
+    bar2.hidden = false;
+    const idxOf = (h) => { const keys = new Set((h && h.keys) || []), r = []; list.forEach((d, i) => { if (keys.has(d.key)) r.push(i); }); return r; };
+    const xf = def.xform && step >= def.xform.at ? def.xform : null, T = xf ? xf.t : [0, 0, 0];
+    const pv = (h) => [h.pivot[0] + T[0], h.pivot[1] + T[1], h.pivot[2] + T[2]];
+    const armIdx = idxOf(arm), motIdx = idxOf(mot), armPv = pv(arm), motPv = mot ? pv(mot) : null;
+    const rng = $('asmHingeRange'), num = $('asmHingeNum'), mx = Number(arm.max) || 0;
+    $('asmHingeName').textContent = '팔 당기기'; rng.max = String(mx); num.max = String(mx); rng.value = '0'; num.value = '0';
+    $('asmHingeHint').textContent = '0° = 선 모양, ' + mx + '° = 브라켓에 걸림';
+    hingeActive = true;
+    const redraw = () => { if (b.bands) b.bands(bandsAt(step)); };
+    const setArm = (v) => {   // 당김 각도(°): 팔을 T축 선 기준으로 시계 방향(−)으로 돌린다
+      v = Math.min(Math.max(Number(v) || 0, 0), mx); const d = v - hingeAng.arm; if (!d) return;
+      b.hinge(armIdx, armPv, arm.axis || [0, 0, 1], -d * Math.PI / 180); hingeAng.arm = v; rng.value = String(Math.round(v * 10) / 10); num.value = String(Math.round(v * 10) / 10); redraw();
+    };
+    const setMotor = (v) => {   // 모터 각도(°): 큰기어 조립을 모터 출력축 선 기준으로 반시계(+)로 돌린다
+      if (!mot || !motIdx.length) return; const d = v - hingeAng.motor; if (!d) return;
+      b.hinge(motIdx, motPv, mot.axis || [0, 0, 1], d * Math.PI / 180); hingeAng.motor = v;
+    };
+    const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2), easeOut = (t) => 1 - Math.pow(1 - t, 3);
+    const tween = (from, to, ms, set, fn) => new Promise((res) => { const t0 = performance.now(); const f = (now) => { const k = Math.min(1, (now - t0) / ms); set(from + (to - from) * (fn || ease)(k)); if (k < 1) requestAnimationFrame(f); else res(); }; requestAnimationFrame(f); });
+    const lock = (on) => { hingeBusy = on; ['asmLoadBtn', 'asmFireBtn', 'asmHingeReset'].forEach((id) => { const e = $(id); if (e) e.disabled = on; }); rng.disabled = on; num.disabled = on; };
+    const load = async () => {   // 장전(사용자 지시 2026-10-12: 부품을 뚫고 지나갈 수 없다): 팔이 브라켓 자리(contact)까지 오면 → 모터(브라켓)가 뒤로 비켜 주고 → 팔이 브라켓 자리를 지나가면 → 모터가 제자리로 돌아와 팔을 붙잡는다
+      if (hingeBusy) return; lock(true);
+      const ct = Math.min(mx, Number(arm.contact) || mx * 0.9);
+      await tween(hingeAng.arm, ct, 1100, setArm);
+      await tween(0, Number((mot && mot.load) || 0), 450, setMotor);
+      await tween(hingeAng.arm, mx, 450, setArm);
+      await tween(hingeAng.motor, 0, 450, setMotor);
+      hingeLoaded = true; lock(false);
+    };
+    const fire = async () => {   // 발사: 모터가 크게 돌아 팔을 놓으면 고무줄이 줄어들며 팔이 튕겨 올라간다
+      if (hingeBusy) return;
+      if (!hingeLoaded && hingeAng.arm < mx - 0.5) await load();
+      if (hingeBusy) return; lock(true);
+      await tween(0, Number((mot && mot.fire) || 0), 500, setMotor);
+      await tween(hingeAng.arm, 0, 380, setArm, easeOut);
+      await tween(hingeAng.motor, 0, 500, setMotor);
+      hingeLoaded = false; lock(false);
+    };
+    $('asmLoadBtn').onclick = load; $('asmFireBtn').onclick = fire;
+    rng.oninput = () => { if (!hingeBusy) { setArm(rng.value); hingeLoaded = false; } };
+    num.onchange = () => { if (!hingeBusy) { setArm(num.value); hingeLoaded = false; } };
+    $('asmHingeReset').onclick = () => { if (!hingeBusy) { setMotor(0); setArm(0); hingeLoaded = false; } };
+  }
   // 고무줄(step.bands)은 만든 번호부터 뒤 번호에도 이어서 그린다. bandsHideAt: 몸이 창고에 들어가 안 보이는 번호, bandsEnd: 줄을 푸는 번호.
   function bandsAt(n) {
     for (let k = Math.min(n, def.steps.length); k >= 1; k--) {
       const st = def.steps[k - 1] || {};
-      if (st.bands) return (st.bandsHideAt || []).indexOf(n) >= 0 ? [] : st.bands;
+      if (st.bands) {
+        if ((st.bandsHideAt || []).indexOf(n) >= 0) return [];
+        const xf = def.xform && n >= def.xform.at ? def.xform : null;   // 부품처럼 줄도 xform(전체 이동·회전)을 같이 받는다 — 안 그러면 31번처럼 부품만 올라가고 줄이 제자리에 남는다
+        const mv = (v) => { if (!xf) return v; const w = mvec(xf.m, v); return [w[0] + xf.t[0], w[1] + xf.t[1], w[2] + xf.t[2]]; };
+        const hel = ((def.hinges || []).find((h) => h.elastic) || {}).elastic;
+        return st.bands.map((b) => Object.assign({}, b, { pts: (b.tight && hel && hingeActive ? elasticPts(hel, hingeAng.arm, xf) : (b.pts || []).map(mv)) }));
+      }
       if (st.bandsEnd) return [];
     }
     return [];
@@ -249,7 +329,7 @@
         }
         // holeMarks: 프레임 구멍에 고정된 결합 위치 원(교재처럼 판 구멍에 표시, 부품이 움직여도 그 자리)
         if (isNew && !moving && pt.holeMarks) pt.holeMarks.forEach((m) => guides.push({ from: m, to: m, dir: dirH || [0, 1, 0], idx: list.length, ringOnly: true }));
-        list.push({ step: si + 1, eff: effStepOf(pt, si + 1, upTo), noFreeze: !!(pt.noFreeze && pt.noFreeze.includes(upTo)), name: pt.n, label: pt.n + ' ' + numOf.get(pt0) + '번', type, mount: 'floor', pos: pos.slice(), quat: b.quat(rot), rot: rot.slice(), isNew, final: (isNew && dirH) || ex ? base.slice() : null, order: settling ? (pt.settleOrder || 1) : (pt.joinOrder || (ex && ex.order) || 1), moveGroup: (moving && pt.moveGroup) || null, arrowFrom: pt.arrowFrom || null, skipMates: pt.skipMates || null, sideUntil: pt.side ? pt.side.until : null, fin: moved ? (pt.move.p || add(pt.p, pt.move.by || [0, 0, 0], 1)) : pt.p, finRot: (moved && pt.move.r) ? pt.move.r : pt.r }); // 합쳐지는 묶음(settle)은 모두 한꺼번에 내려온다 // ex: 14단계처럼 "결합 전"으로 띄운 부품도 제자리(결합 후)가 있다
+        list.push({ key: (si + 1) + ':' + (s.parts || []).indexOf(pt0), step: si + 1, eff: effStepOf(pt, si + 1, upTo), noFreeze: !!(pt.noFreeze && pt.noFreeze.includes(upTo)), name: pt.n, label: pt.n + ' ' + numOf.get(pt0) + '번', type, mount: 'floor', pos: pos.slice(), quat: b.quat(rot), rot: rot.slice(), isNew, final: (isNew && dirH) || ex ? base.slice() : null, order: settling ? (pt.settleOrder || 1) : (pt.joinOrder || (ex && ex.order) || 1), moveGroup: (moving && pt.moveGroup) || null, arrowFrom: pt.arrowFrom || null, skipMates: pt.skipMates || null, sideUntil: pt.side ? pt.side.until : null, fin: moved ? (pt.move.p || add(pt.p, pt.move.by || [0, 0, 0], 1)) : pt.p, finRot: (moved && pt.move.r) ? pt.move.r : pt.r }); // 합쳐지는 묶음(settle)은 모두 한꺼번에 내려온다 // ex: 14단계처럼 "결합 전"으로 띄운 부품도 제자리(결합 후)가 있다
       });
     });
     deferredShift.forEach((fn) => fn());
@@ -550,6 +630,7 @@
     if (stc && Array.isArray(stc.rings)) stc.rings.forEach((m) => guides.push({ from: m, to: m, dir: [0, 1, 0], idx: -1, ringOnly: true })); // cam.rings: 이 단계에 고정으로 칠할 결합 점(예: 받침 흰 판 구멍)
     b.guides(guides);
     if (b.bands) b.bands(bandsAt(step));   // 고무줄 같은 규격 없는 줄(노란 곡선) — 만든 번호 이후 계속 보인다
+    setupHinge(list, b);   // 팔 당기기 슬라이더(완성 화면에서)
     // 앞 벽이 뒤쪽 끝에 있는 단계(flip)는 반대편에서 보여준다
     // view: 기본 각도에서 90도×view 만큼 돌려서 보기 / cam: {theta, phi}로 교재 그림과 같은 각도를 직접 지정
     const camStep = (viewActive && viewEff >= 1) ? viewEff : step; // 창고 화면 보기: 그 묶음이 마지막으로 만들어진 단계의 시점
