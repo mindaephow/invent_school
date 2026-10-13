@@ -24,11 +24,20 @@ def main():
         obj.append(list(pitch * (u * cvec + v * rvec))); img.append([x, y])
     obj = np.array(obj, np.float32); img = np.array(img, np.float32)
     im = cv2.imread(os.path.join(D, "%02d.jpg" % step)); H, W = im.shape[:2]
-    best = None
+    best = None; cands = []
     for fov in (20, 25, 30, 35, 40, 45, 50):
         r = fit(obj, img, W, H, fov)
-        if r and (best is None or r[0] < best[0][0]): best = (r, fov)
+        if r: cands.append((r, fov))
+    # 평면 위 점(판 구멍)만으로 푸는 PnP 는 위에서 내려다보는 해와 아래에서 올려다보는 거울 해가 거의 같은 오차로 나온다(드롭체커 27번: 0.88 vs 0.90px).
+    #   오차만 보면 거울 해(phi>1.55)나 카메라가 뒤집힌 해(up_y<0)가 뽑힐 수 있어서, 위에서 내려다보고 위쪽이 위인 해(phi≤1.55·up_y>0)를 먼저 고른다(2026-10-13).
+    def _ok(c):
+        (e_, rv_, tv_, K_), fov_ = c; C_, fwd_, up_, right_ = cam_from(rv_, tv_); az_, el_, rad_ = angles(C_, (0, 0, 0))
+        return math.radians(90 - el_) <= 1.55 and float(up_[1]) > 0
+    good = [c for c in cands if _ok(c)]
+    for c in (good or cands):
+        if best is None or c[0][0] < best[0][0]: best = c   # c = (r, fov), r = (오차, rv, tv, K)
     if not best: sys.exit("카메라를 못 맞췄다(점이 한 줄이거나 너무 적다)")
+    if cands and not good: print("⚠ 위에서 내려다보는(phi≤1.55, 위쪽이 위) 해가 없다 — 칸·줄 방향(거울)을 다시 본다")
     (e, rv, tv, K), fov = best
     C, fwd, up, right = cam_from(rv, tv); az, el, rad = angles(C, (0, 0, 0))
     P = lambda v: cv2.projectPoints(np.float32([v]), rv, tv, K, None)[0][0][0]

@@ -175,8 +175,12 @@
 "noPart": false
 },
 "27": {
-"parts": {},
-"noPart": true
+"parts": {
+"25프레임": 2,
+"3단블록": 6,
+"135도 프레임": 2
+},
+"noPart": false
 },
 "28": {
 "parts": {},

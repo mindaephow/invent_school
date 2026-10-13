@@ -586,7 +586,8 @@ export function buildReference() {
 - 환경: 저장소 루트 .env.local(SUPABASE_URL·SERVICE_ROLE_KEY, 없으면 사용자에게), 개발 서버 npm run dev -- -p 3178(백그라운드)·사용자 로그인, 파이썬 numpy·opencv.
 - 번호 N 순서: ① number_start.py <이름> N ② 책 그림 Read·링 색 검출 ③ crop_ticks.py <이름> N corners x1 y1 … 로 판 모서리 4곳 읽기 ④ holefit.py(기본→어두운판→자동 DoG, 판이 가려지면 infer_grid.py) 후 hf 그림 눈 확인 ⑤ axes_fit.py → NN_axes.json 에 no_rotate true → refs_rect.py → 그림 DB 바로 업로드 ⑥ pegprobe.py 위돌기·빈구멍·빈돌기 로 받는 돌기·빈 구멍을 숫자로(점수·후보 탐색 금지, 대칭 쪽은 반대편 거울) ⑦ 읽기 표(부품 칸은 "713프레임 1, 리벳 2" 형식) ⑧ <이름>.py 의 stepchecks.apply 바로 앞에 코드(attach: 새 돌기→기존 구멍, rivet=True 면 리벳 가운데가 구멍 입구 면 / recv: 새 구멍←기존 돌기, 아래에서 올라오는 돌기는 홀면 -y) ⑨ build.py --write ⑩ 화면 비교 → record_check.py ⑪ rulecheck.py·symcheck.py ⑫ 푸시는 사용자가 "업로드"라고 할 때만(안내서 JS 템플릿 안 백틱은 이스케이프, node --check).
 - 함정: run_path(run_name="probe") 로 분석(__main__ 이면 asm.json 을 덮어씀), 읽기 표 빈 번호·부품 칸 형식이 다르면 빌드가 저장 안 함, 사용자 📷 카메라가 코드 시점보다 우선, ivs_assembly_refs 에는 created_at 이 없다(get_rows 에 order_by), 윈도우에서 긴 경로 cv2.imwrite 는 조용히 실패.
-- 상태·구조: process/HANDOFF_dropchecker.md(1~26번 완료, 다음 27번), 대칭 ref_대칭조립.md, n족 ref_n족로봇.md, 화면 조작 viewer_snippets.md.
+- 결합 방향은 책 화살표 선의 방향을 재서(수평에서 몇 도) 축선 각도와 비교해 정한다(세로로 짐작 금지). 기준 부품 = 결합을 받는 부품(격자·축은 그 부품에, 한 줄·L자 프레임은 frame_fit.py: 부품 모델 구멍 좌표 PnP). 같은 조립이 다른 방향으로 둘 그려져 있으면 대칭(반대쪽에서 본 것). 책대로 서면 바닥 아래로 내려가는지 숫자로 보고 내려가면 lift. 이미지 작업(확대 눈금 그림·hf·fit 확인 그림)도 그 번호 idx 3~ 으로 DB 에 올린다.
+- 상태·구조: process/HANDOFF_dropchecker.md(1~27번 완료, 다음 28번), 대칭 ref_대칭조립.md, n족 ref_n족로봇.md, 화면 조작 viewer_snippets.md.
 
 ## 8. 화면·코드 위치
 - public/design-assemblies.js: 규칙(IVS_ASSEMBLY_RULES) + 조립 단계 데이터(IVS_ASSEMBLIES) — 여기가 원본
