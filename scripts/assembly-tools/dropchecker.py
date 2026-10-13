@@ -589,17 +589,40 @@ R_B27 = np.array([[0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, -1.0]])          
 R_F27 = rot_x(-90)                                                                  # 135도 프레임: 곧은 팔 +X, 구멍 축(로컬 y) → −Z(앞에서 뒤로 끼움), 꺾인 팔은 로컬 z 감소 방향 = 아래(−Y)
 _s2 = 0.70710678
 R_C27 = np.array([[_s2, -_s2, 0.0], [_s2, _s2, 0.0], [0.0, 0.0, 1.0]])             # 꺾인 팔 끝 3단블록: 길이가 꺾인 팔 방향(+X +Y 대각선), 돌기 면(로컬 +z) → +Z(프레임 쪽)
-RY180_27 = np.diag([-1.0, 1.0, -1.0])                                               # 위쪽 아치(뒤에서 본 모습) = 같은 아치를 Y축 180° 돌린 것
+M27 = np.diag([1.0, 1.0, -1.0])                                                      # 앞뒤 대칭: 두 아치는 z=290 면에 거울(부품 거울상 = 세계 z 뒤집기 M·R·부품 로컬 y 뒤집기 — 프레임·판·블록은 두께(y) 방향 대칭이라 회전으로 표현됨)(꺾인 팔은 둘 다 같은 쪽 아래, 프레임은 바깥, 판·블록은 안쪽)
 ARCH27 = []
-for _k, (_c, _rot) in enumerate(((np.array([-110.0, 25.0, 250.0]), RY180_27), (np.array([110.0, 25.0, 330.0]), np.eye(3)))):   # 책: 위쪽(뒤에서 본, 멀리) · 아래쪽(앞에서 본, 가까이). 블록 아래 끝이 바닥(y 0)에 서도록 판 중심 y 25
-    _pos = lambda _d, _c=_c, _rot=_rot: tuple(_c + _rot @ np.array(_d, float))      # 아치 로컬(앞 +Z) 좌표 → 세계
-    _P = s27.place("25프레임", _rot @ R_P27, tuple(_c))
-    _BA = s27.attach("3단블록", _rot @ R_B27, {"p3": (_P, _pos((-20.0, 5.0, 0.0))), "p4": (_P, _pos((-20.0, -5.0, 0.0)))})
-    _BB = s27.attach("3단블록", _rot @ R_B27, {"p3": (_P, _pos((20.0, 5.0, 0.0))), "p4": (_P, _pos((20.0, -5.0, 0.0)))})
-    _F = s27.recv("135도 프레임", _rot @ R_F27, {"h5": (_BA, "p7"), "h9": (_BB, "p7")}, hover=40)
-    _BC = s27.attach("3단블록", _rot @ R_C27, {"p5": (_F, "h1"), "p4": (_F, "h2"), "p3": (_F, "h3")})   # 책이 이미 프레임에 꽂아 둔 모양 — 꽂힌 채(seated). 프레임과 한 덩어리로 같이 띄우는 표현은 design-verify.js 방향 검사(돌기는 띄우는 방향의 반대)와 충돌해서 못 한다(옮기기·옆자리 단계만 면제)
+for _k, (_c, _mir) in enumerate(((np.array([0.0, 25.0, 250.0]), True), (np.array([0.0, 25.0, 330.0]), False))):   # 책: 뒤쪽 그룹(멀리)·앞쪽 그룹(가까이)이 앞뒤로 대칭. 블록 아래 끝이 바닥(y 0)에 서도록 판 중심 y 25
+    _Rm = (lambda R: M27 @ R @ np.diag([1.0, -1.0, 1.0])) if _mir else (lambda R: R)
+    _M = M27 if _mir else np.eye(3)
+    _pos = lambda _d, _c=_c, _M=_M: tuple(_c + _M @ np.array(_d, float))      # 아치 로컬(앞 +Z) 좌표 → 세계(뒤쪽 그룹은 z 거울)
+    _P = s27.place("25프레임", _Rm(R_P27), tuple(_c))
+    _BA = s27.attach("3단블록", _Rm(R_B27), {"p4": (_P, _pos((-20.0, 5.0, 0.0))), "p5": (_P, _pos((-20.0, -5.0, 0.0)))})
+    _BB = s27.attach("3단블록", _Rm(R_B27), {"p4": (_P, _pos((20.0, 5.0, 0.0))), "p5": (_P, _pos((20.0, -5.0, 0.0)))})
+    _F = s27.recv("135도 프레임", _Rm(R_F27), {"h5": (_BA, "p7"), "h9": (_BB, "p7")})   # 프레임(+꺾인 팔 블록)은 끼운 채 제자리 — 판 쪽 묶음(판+블록 2)이 프레임에서 40mm 물러나 있다가 블록 위 돌기 p7 이 프레임 구멍 h5·h9 로 들어온다(책: 블록 10·11 이 프레임에 바로 연결)
+    _BC = s27.attach("3단블록", _Rm(R_C27), {"p5": (_F, "h1"), "p4": (_F, "h2"), "p3": (_F, "h3")})   # 책이 이미 프레임에 꽂아 둔 모양 — 꽂힌 채(seated). 프레임과 한 덩어리로 같이 띄우는 표현은 design-verify.js 방향 검사(돌기는 띄우는 방향의 반대)와 충돌해서 못 한다(옮기기·옆자리 단계만 면제)
+    _dv = np.array([0.0, 0.0, -1.0]) if not _mir else np.array([0.0, 0.0, 1.0])   # 프레임에서 멀어지는 쪽(프레임이 +Z 면 판 묶음은 −Z 로 물러난다)
+    for _q, _hid in ((_BA, "h5"), (_BB, "h9")):
+        _pg = _q.peg("p7"); _h = _F.hole(_hid)
+        _q.extra.update({"dir": rnd(_dv), "hover": 30, "marks": [rnd(_h["pos"] - _pg["dir"] * (_h["len"] / 2))]})
+    _P.extra.update({"dir": rnd(_dv), "hover": 30})
+    _BC.extra.pop("marks", None); _BC.extra.pop("dir", None)   # 프레임에 꽂힌 채(안내 화살표·띄움 없음) — marks 가 있으면 화면이 기본 띄움으로 프레임에서 떼어 그린다
     ARCH27.append(dict(P=_P, BA=_BA, BB=_BB, F=_F, BC=_BC))
-A.steps[26].cam = (-0.76, 0.69, False, None, None, None); A.steps[26].camSrc = "eye"   # 기준 부품 135도 프레임 구멍 7개 PnP(fov 70, 평균 1.96·최대 3.71px, roll −2.3°). 위쪽 아치 판 기준(theta −0.43·phi 1.10)과 다르다 — 책이 아치를 임의 자세로 그렸거나 구멍 읽기 오차
+for _k, _dz in ((0, 80.0), (1, -80.0)):   # 2026-10-13 사용자 요청·확인: 두 그룹(판+블록 2) 위치만 서로 바꿈(방향·프레임 그대로) — 화살표(결합 위치)는 아직 안 만듦
+    for _q in (ARCH27[_k]["P"], ARCH27[_k]["BA"], ARCH27[_k]["BB"]):
+        _q.p = _q.p + np.array([0.0, 0.0, _dz])
+    for _q in (ARCH27[_k]["P"], ARCH27[_k]["BA"], ARCH27[_k]["BB"], ARCH27[_k]["F"], ARCH27[_k]["BC"]):
+        for _f in ("marks", "dir", "hover"): _q.extra.pop(_f, None)
+# 2026-10-13 사용자 지시: 이 배치를 두고 간격을 벌려 화살표를 그린다 — 프레임(+꺾인 팔 블록)을 바깥으로 30mm 벌리고, 묶음은 바로 옆 프레임 쪽 제자리(프레임 구멍 −15)에서 가운데로 30mm 떠서(= 지금 보이는 자리) 프레임 5번·9번 구멍으로 들어가는 화살표를 그린다. 판은 화살표 없이 같이 뜬다.
+for _k, _sd in ((0, 1.0), (1, -1.0)):   # _sd = 묶음의 짝 프레임이 있는 쪽(+Z/−Z)
+    for _q in (ARCH27[_k]["F"], ARCH27[_k]["BC"]): _q.p = _q.p + np.array([0.0, 0.0, -_sd * 30.0])
+    for _q in (ARCH27[_k]["P"], ARCH27[_k]["BA"], ARCH27[_k]["BB"]): _q.p = _q.p + np.array([0.0, 0.0, _sd * 30.0])
+for _k, _sd in ((0, 1.0), (1, -1.0)):
+    _o = ARCH27[1 - _k]
+    for _q, _hid in ((ARCH27[_k]["BA"], "h5"), (ARCH27[_k]["BB"], "h9")):
+        _h = _o["F"].hole(_hid)
+        _q.extra.update({"dir": rnd([0.0, 0.0, -_sd]), "hover": 30, "marks": [rnd(_h["pos"] - np.array([0.0, 0.0, _sd]) * (_h["len"] / 2))]})
+    ARCH27[_k]["P"].extra.update({"dir": rnd([0.0, 0.0, -_sd]), "hover": 30, "noGuide": True})
+A.steps[26].cam = (-0.67, 0.87, False, None, None, None); A.steps[26].camSrc = "eye"   # 기준 부품 135도 프레임 구멍 7개 PnP(fov 70, 평균 1.96·최대 3.71px, roll −2.3°). 위쪽 아치 판 기준(theta −0.43·phi 1.10)과 다르다 — 책이 아치를 임의 자세로 그렸거나 구멍 읽기 오차
 A.meta["lift"]["27"] = 2.0   # 아치가 서면 꺾인 팔 3단블록 하나의 아래 끝이 바닥(y 0) 아래 −1.6 으로 내려간다 — 규칙대로 화면 전체를 올린다(책을 보고 제대로 그리면 바닥 아래로 내려가는 구조)
 import stepchecks; stepchecks.apply(A, "dropchecker")
 # ── 작업 공간(창고) 정리(04) — 책을 1→35번 순서로 보며 정했다(2026-10-12).
