@@ -19,6 +19,7 @@ JSON.stringify({clicked:!!b, cam:window.__ivsAssemblyBridge.camState()})
 - **카메라는 사용자가 📷 로 저장한 시점이 코드 시점보다 우선한다.** `camState()` 의 theta·phi 가 코드(`A.steps[N-1].cam`)와 다르면 사용자 저장 시점이다 — 책과 같은 시점으로 비교하려면 아래 2번으로 맞춘다.
 
 ## 2. 카메라를 책 시점으로 맞추고 확대한다 (비교용 — 저장하지 않는다)
+**먼저 `number_start` 의 "사용자 📷 카메라" 줄을 본다 — 사용자가 저장한 시점이 있으면 그 값이 우선이다(2026-10-13 사용자: "내가 정해놓은 게 있으면 내가 정해놓은 게 우선"). 그럴 때는 `br.camera` 로 덮어쓰지 말고 번호를 연 그대로(`camState()` 가 그 값) 찍어 비교하고, 코드 `cam` 도 그 값에 맞춘다. 아래 값은 사용자 기록이 없을 때만 쓴다(드롭체커 29번: 사용자 📷 theta −0.832·phi 1.076 vs 판 무늬 풀이 −0.88·0.86 — 사용자 값을 따랐다).**
 ```js
 const br=window.__ivsAssemblyBridge; br.camera({target:[5,30,5], radius:300, theta:-0.76, phi:0.96});   // theta·phi = 그 번호 axes_fit 결과(refs/<이름>/NN_axes.json 의 fit)
 await new Promise(r=>setTimeout(r,1500)); document.querySelector('canvas').scrollIntoView({block:'center'});

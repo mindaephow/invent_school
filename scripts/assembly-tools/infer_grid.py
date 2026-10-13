@@ -7,6 +7,7 @@
 #     --거울 NN [줄|칸]   대칭(거울) 쪽: NN번(반대편 유닛)의 끼움 자리(조립 데이터 moveMade 마크 → 칸·높이)를 줄(기본) 또는 칸으로 뒤집은 것이 이 번호의 앵커 칸이다.
 #     --링 "x,y;x,y;…"    책 그림 초록 링 중심 픽셀(칸 번호 없이). 어느 링이 어느 칸인지는 거울 앵커 칸과 모든 짝을 맞춰 보고 잔차가 가장 작은 짝을 고른다.
 #     --anchor "c,r,x,y,높이;…"  칸을 직접 아는 점(링·읽기 표). --거울/--링 과 함께 써도 된다. 높이 = 판 바닥 0 기준 mm(판 윗면 5, 리벳 윗부분 8~9).
+#     --제외 "x,y;x,y;…"  판 위에 있는 다른 밝은 부품(흰 프레임 등)의 윤곽 다각형(원본 그림 좌표) — 그 안의 밝은 조각은 구멍 단서에서 뺀다(여러 번 쓸 수 있다). 통과 기준은 그대로다(2026-10-13 드롭체커 28번: 흰 135도 프레임의 밝은 부분이 구멍 후보로 섞였다).
 #     --조각높이 2.5      선명한 구멍(흰 조각)이 보이는 높이.   --cam theta phi  참고 카메라(사용자 📷·뒷 번호 카메라) — 비교만 하고 결과는 안 바꾼다.
 #   쓰는 근거: ① 판의 3차원 구멍 좌표(10mm 간격) ② 그림에서 선명하게 검출된 구멍(흰 조각) ③ 앵커(칸을 아는 링) ④ 줄·칸 배정 가설과 링 짝 가설을 모두 돌려 잔차가 가장 작은 것
 #   출력: 가설별 잔차 표, 1·2등 가설 비교(유일성), 카메라 theta·phi·roll. 가설이 하나로 안 갈리면(2등이 1등의 1.3배 미만) 저장하지 않고 "어떤 추가 근거가 필요한지"를 말한다.
@@ -21,14 +22,15 @@ def parse():
     a = sys.argv[1:]
     if len(a) < 13: sys.exit(__doc__)
     o = dict(name=a[0], step=int(a[1]), label=a[2], cols=int(a[3]), rows=int(a[4]), C=np.array([float(v) for v in a[5:13]], np.float32).reshape(4, 2),
-             anchors=[], ys=2.5, cam=None, plate=None, mirror=None, rings=None)
+             anchors=[], excl=[], ys=2.5, cam=None, plate=None, mirror=None, rings=None)
     i = 13
     while i < len(a):
         k = a[i]
         if k == "--anchor":
             for tok in a[i + 1].split(";"):
-                c, r, x, y, h = [float(v) for v in tok.split(",")]; o["anchors"].append(((int(c), int(r)), (x, y), h))
+                c, r, x, y, h = [float(v) for v in tok.split(",")]; o["anchors"].append((((int(c) if c == int(c) else c), (int(r) if r == int(r) else r)), (x, y), h))   # 칸은 정수가 아니어도 된다(세계 3D 점을 판 칸 좌표 c=(x−5)/10+7·r=(z−5)/10+4·h=y−35 로 환산해 준 앵커 — 판 위 칸이 아닌 부품(블록 돌기·리벳 끝)도 앵커가 된다)
             i += 2
+        elif k == "--제외": o["excl"].append(np.array([[float(v) for v in tok.split(",")] for tok in a[i + 1].split(";")], np.float32)); i += 2
         elif k == "--조각높이": o["ys"] = float(a[i + 1]); i += 2
         elif k == "--cam": o["cam"] = (float(a[i + 1]), float(a[i + 2])); i += 3
         elif k == "--판": o["plate"] = a[i + 1]; i += 2
@@ -67,9 +69,16 @@ def main():
     sub = g[y0:y1, x0:x1]; ie = cv2.erode(ins[y0:y1, x0:x1], np.ones((5, 5), np.uint8))
     m = ((sub > 200) & (ie > 0)).astype(np.uint8) * 255; n, lab, st, cen = cv2.connectedComponentsWithStats(m)
     S = np.array([[cen[i][0] + x0, cen[i][1] + y0] for i in range(1, n) if 15 < st[i][4] < 700 and .3 < st[i][2] / max(1, st[i][3]) < 3.8], float)   # 선명한 흰 조각(구멍 뒤가 비쳐 보이는 곳)
-    if len(S) < 8: sys.exit("선명한 구멍 후보가 8개 미만(%d)이라 유추 근거가 모자란다 — 다른 번호·완성 사진에서 앵커를 더 모은다" % len(S))
+    if o["excl"] and len(S):   # 판 위의 다른 부품(흰 프레임 등) 윤곽 안의 밝은 조각은 구멍 단서가 아니다
+        keep = [i for i, s in enumerate(S) if not any(cv2.pointPolygonTest(pg, (float(s[0]), float(s[1])), False) >= 0 for pg in o["excl"])]
+        print("제외 영역 안의 밝은 조각 %d개를 뺐다(남은 후보 %d)" % (len(S) - len(keep), len(keep))); S = S[keep]
+    anchor_only = False
+    if len(S) < 8:
+        if len(o["anchors"]) >= 6 and not o["mirror"] and not o["rings"]:   # 앵커만 유추(사용자 지시 2026-10-13 "가려져 있어도 유추해서 선을 그려라"): 칸이 확정된 점(리벳·링 등)이 6개 이상이면 선명한 구멍 없이 그 점들로 카메라를 푼다. 통과 기준(앵커 잔차)은 같다.
+            print("선명한 구멍 후보 %d개(8개 미만) — 칸이 확정된 앵커 %d곳만으로 카메라를 푼다(앵커만 유추)" % (len(S), len(o["anchors"]))); anchor_only = True; S = np.zeros((0, 2))
+        else: sys.exit("선명한 구멍 후보가 8개 미만(%d)이라 유추 근거가 모자란다 — 다른 번호·완성 사진에서 앵커를 더 모은다(칸이 확정된 앵커 6개 이상이면 앵커만으로 푼다)" % len(S))
     pitch = float(np.mean([np.hypot(*(nodes(H0)[(c + 1, r)] - nodes(H0)[(c, r)])) for c in range(1, cols) for r in range(1, rows + 1)])); H = H0; sel = {}
-    for it in range(12):   # 흰 조각 첫 배정(모서리 격자 → 반복). 줄·칸 배정이 어긋나 있을 수 있어 아래에서 줄·칸 이동 가설을 모두 돌린다.
+    for it in range(0 if anchor_only else 12):   # 흰 조각 첫 배정(모서리 격자 → 반복). 줄·칸 배정이 어긋나 있을 수 있어 아래에서 줄·칸 이동 가설을 모두 돌린다.
         pr = nodes(H); new = {}; used = set(); tol = max(.33, .5 - .04 * it)
         for cr, pos in sorted(pr.items()):
             d = np.hypot(*(S - pos).T); k = int(np.argmin(d))
@@ -83,6 +92,18 @@ def main():
     P3 = lambda c, r, y: [(c - (cols + 1) / 2.0) * 10.0, y, (r - (rows + 1) / 2.0) * 10.0]   # 판 가운데 원점, 칸 +X·줄 +Z, 높이는 판 바닥 0
     def solve(anchors, fovs):
         out = []
+        if anchor_only:   # 칸이 확정된 앵커만으로 PnP(줄·칸 이동 가설 없음 — 칸은 확정이다)
+            obj = [P3(c, r, h) for (c, r), px, h in anchors]; img = [px for (c, r), px, h in anchors]; best = None
+            for fov in fovs:
+                r_ = fit(obj, img, Ww, Hh, fov)
+                if r_ and (best is None or r_[0] < best[0][0]): best = (r_, fov)
+            if not best: return []
+            (e, rv, tv, K), fov = best
+            pj = cv2.projectPoints(np.float32(obj), rv, tv, K, None)[0].reshape(-1, 2); ee = np.hypot(*(pj - np.array(img)).T)
+            Cc, fwd, up, right = cam_from(rv, tv); az, el, rad = angles(Cc, (0, 0, 0))
+            if math.radians(90 - el) > 1.55: return []
+            return [dict(dr=0, dc=0, nS=0, sm=0.0, sx=0.0, am=float(ee.mean()), ax=float(ee.max()), score=float(ee.mean()), fov=fov, rv=rv, tv=tv, K=K, th=math.radians(az), ph=math.radians(90 - el), anchors=anchors,
+                         roll=math.degrees(math.asin(max(-1, min(1, float(right[1])))))) ]
         for dr in range(-3, 5):
             for dc in (-1, 0, 1):
                 obj, img = [], []
@@ -133,19 +154,27 @@ def main():
     print("1등 가설: 줄 %+d 칸 %+d, 앵커 칸 %s — 2등과 점수 비 %.2f(1.3 이상이어야 유일)" % (b["dr"], b["dc"], [c for c, px, _ in b["anchors"]], ratio))
     if abs(b["roll"]) > 5: print("⚠ 풀이 카메라가 %.1f° 기울어 있다(roll) — 책 그림이 기울어 그려진 번호다. 뷰어 카메라는 기울이지 못하니 비교할 때 그림을 이 각도만큼 돌려 본다. 가설을 거르는 근거로는 쓰지 않는다(축 규칙을 바꿔도 같은 값)." % b["roll"])
     if o["cam"]: print("참고 카메라 theta %.2f phi %.2f ↔ 풀이 theta %.2f phi %.2f (차이 theta %.2f rad)" % (o["cam"][0], o["cam"][1], b["th"], b["ph"], abs(o["cam"][0] - b["th"])))
-    if ratio < 1.3 or b["sm"] > 2.5 or b["sx"] > 4.5:
-        why = "가설이 하나로 안 갈린다(2등과 %.2f배)" % ratio if ratio < 1.3 else "선명한 구멍 잔차가 크다(평균 %.2f·최대 %.2f px)" % (b["sm"], b["sx"])
+    if (b["am"] > 2.5 or b["ax"] > 4.5) if anchor_only else (ratio < 1.3 or b["sm"] > 2.5 or b["sx"] > 4.5):
+        why = ("앵커 잔차가 크다(평균 %.2f·최대 %.2f px)" % (b["am"], b["ax"])) if anchor_only else ("가설이 하나로 안 갈린다(2등과 %.2f배)" % ratio if ratio < 1.3 else "선명한 구멍 잔차가 크다(평균 %.2f·최대 %.2f px)" % (b["sm"], b["sx"]))
         sys.exit("⚠ 저장하지 않는다 — %s. 추가 근거가 필요하다: 뒷 번호 그림(같은 몸체가 보이는 번호)에서 이 판의 칸을 아는 점을 앵커로 더하거나, 완성 사진(00)·사용자에게 칸 한 곳을 묻는다." % why)
+    loo = None
+    if anchor_only:   # 앵커만 유추의 안정성(2026-10-13 사용자 지시 "내가 체크한 거 필요 없다"): 앵커를 하나씩 빼고 다시 풀어 카메라 theta·phi 가 얼마나 변하는지 — 29번 앵커 7개는 크게 변해 불안정, 30번 8개는 안 변해 안정이었다
+        dth = dph = 0.0
+        for i_ in range(len(b["anchors"])):
+            hh_ = solve([a_ for j_, a_ in enumerate(b["anchors"]) if j_ != i_], tuple(range(10, 71, 5)))
+            if not hh_: dth = dph = 9.9; break
+            dth = max(dth, abs(hh_[0]["th"] - b["th"])); dph = max(dph, abs(hh_[0]["ph"] - b["ph"]))
+        loo = (round(dth, 3), round(dph, 3)); print("앵커를 하나씩 빼 본 안정성: theta 최대 변화 %.3f·phi 최대 변화 %.3f rad (0.05 이하면 안정)" % loo)
     proj = lambda p: cv2.projectPoints(np.float32([p]), b["rv"], b["tv"], b["K"], None)[0][0][0]
     pts = [[c, r, round(float(proj(P3(c, r, 5.0))[0]), 2), round(float(proj(P3(c, r, 5.0))[1]), 2)] for c in range(1, cols + 1) for r in range(1, rows + 1)]   # 구멍 입구(판 윗면 5)
-    evid.append("선명한 구멍 %d개 + 앵커 %d곳" % (b["nS"], len(b["anchors"])))
-    vis = [(c + b["dc"], r + b["dr"]) for (c, r) in sel if 1 <= c + b["dc"] <= cols and 1 <= r + b["dr"] <= rows]   # 선명하게 검출된(눈에 보이는) 구멍의 칸
-    ocell = min(vis, key=lambda cr: (cr[0] - (cols + 1) / 2.0) ** 2 + (cr[1] - (rows + 1) / 2.0) ** 2)   # 판 가운데에 가장 가까운 보이는 구멍 — 축선 원점
+    evid.append(("앵커만 %d곳(선명한 구멍 없이)" % len(b["anchors"])) if anchor_only else ("선명한 구멍 %d개 + 앵커 %d곳" % (b["nS"], len(b["anchors"]))))
+    vis = [cr for cr, px, h in b["anchors"]] if anchor_only else [(c + b["dc"], r + b["dr"]) for (c, r) in sel if 1 <= c + b["dc"] <= cols and 1 <= r + b["dr"] <= rows]   # 선명하게 검출된(눈에 보이는) 구멍의 칸
+    ocell = ((cols + 1) // 2, (rows + 1) // 2) if anchor_only else min(vis, key=lambda cr: (cr[0] - (cols + 1) / 2.0) ** 2 + (cr[1] - (rows + 1) / 2.0) ** 2)   # 판 가운데에 가장 가까운 보이는 구멍 — 축선 원점(앵커만 유추는 모든 칸을 투영하므로 가려져도 판 가운데 칸 — 앞 번호와 같다: 가운데 칸·가운데 줄에서 축선이 만난다)
     out = {"origin_cell": list(ocell), "visible_cells": [list(cr) for cr in sorted(vis)], "cols": cols, "rows": rows, "pts": pts, "tool": "infer", "err_px": round(b["sm"], 2), "max_err_px": round(b["sx"], 2), "est": [[c, r] for c in range(1, cols + 1) for r in range(1, rows + 1)],
            "name": "%s %d번 %s: 유추 격자 — %s를 합쳐 카메라를 풀고 모든 칸을 투영(구멍 평균 %.2f·최대 %.2f px, 앵커 평균 %.2f px) — infer_grid.py" % (name, step, label, " + ".join(evid), b["sm"], b["sx"], b["am"]),
            "evidence": {"sources": evid, "visible_holes": b["nS"], "anchors": [[list(cr), list(px), h] for cr, px, h in b["anchors"]], "row_shift": b["dr"], "col_shift": b["dc"], "unique_ratio": round(ratio, 2),
-                        "roll_deg": round(b["roll"], 1), "anchor_mean_px": round(b["am"], 2), "anchor_max_px": round(b["ax"], 2), "theta": round(b["th"], 2), "phi": round(b["ph"], 2)}}
+                        "roll_deg": round(b["roll"], 1), "anchor_mean_px": round(b["am"], 2), "anchor_max_px": round(b["ax"], 2), "theta": round(b["th"], 2), "phi": round(b["ph"], 2), "anchor_only": bool(anchor_only), "loo_dtheta": (loo[0] if loo else None), "loo_dphi": (loo[1] if loo else None)}}
     os.makedirs(D + "fits", exist_ok=True); json.dump(out, open(D + "fits/%02d_%s.json" % (step, label), "w", encoding="utf-8"), ensure_ascii=False)
-    print("축선 원점 = 눈에 보이는 구멍 칸 %s(판 가운데에 가장 가까운 검출 구멍)" % (list(ocell),)); print("✅ 유추 격자 저장 — fits/%02d_%s.json (rulecheck 는 ⚠ 로 보고한다: 사용자 확인 필요)" % (step, label))
+    print("축선 원점 = 칸 %s(%s)" % (list(ocell), "판 가운데 칸 — 가려져 있어도 모델 좌표로 투영" if anchor_only else "판 가운데에 가장 가까운 검출 구멍")); print("✅ 유추 격자 저장 — fits/%02d_%s.json (rulecheck 는 ⚠ 로 보고한다: 사용자 확인 필요)" % (step, label))
 
 main()

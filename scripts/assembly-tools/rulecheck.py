@@ -72,6 +72,12 @@ def check(name, only=None):
                 if fj.get("tool") == "infer":   # 유추 격자(2026-10-13): 판이 가려져 holefit 기준(구멍 40%)을 못 채울 때 모든 근거를 합쳐 푼 격자 — 개수가 아니라 근거 일치도로 본다. ✅ 는 아니고 사용자 확인이 필요한 ⚠.
                     ev = fj.get("evidence") or {}; mean = fj.get("err_px"); mx = fj.get("max_err_px")
                     good = (ev.get("unique_ratio", 0) >= 1.3 and ev.get("visible_holes", 0) >= 8 and len(ev.get("anchors", [])) >= 3 and mean is not None and mean <= 2.5 and mx is not None and mx <= 4.5)
+                    anc_only = ev.get("visible_holes", 0) == 0 and len(ev.get("anchors", [])) >= 6   # 앵커만 유추(사용자 지시 2026-10-13 "내가 체크한 거 필요 없다"): 선명한 구멍 없이 칸이 확정된 앵커 6곳 이상으로 푼 격자 — 앵커 잔차와 안정성(하나씩 빼도 theta·phi 변화 ≤0.05rad)으로 본다. 기준을 넘으면 ⚠(사용자 확인 권장, 진행은 막지 않음)
+                    if anc_only:
+                        stable = ev.get("loo_dtheta") is None or (ev.get("loo_dtheta", 9) <= 0.05 and ev.get("loo_dphi", 9) <= 0.05)   # 안정성 기록이 없는 옛 격자(28·29번)는 앵커 잔차만
+                        good = ev.get("anchor_mean_px") is not None and ev["anchor_mean_px"] <= 2.5 and ev.get("anchor_max_px", 99) <= 4.5 and stable
+                        why = "앵커만 유추 격자: 앵커 %d곳 평균 %s·최대 %s px, 하나씩 빼도 theta 변화 %s·phi 변화 %s rad, roll %s° — 사용자 확인 권장(진행은 막지 않음)" % (len(ev.get("anchors", [])), ev.get("anchor_mean_px"), ev.get("anchor_max_px"), ev.get("loo_dtheta"), ev.get("loo_dphi"), ev.get("roll_deg")) if good else "앵커만 유추 격자 근거 부족(앵커 %d곳 평균 %s·최대 %s px, 하나씩 빼면 theta 변화 %s·phi 변화 %s rad) — 앵커를 더 모은다" % (len(ev.get("anchors", [])), ev.get("anchor_mean_px"), ev.get("anchor_max_px"), ev.get("loo_dtheta"), ev.get("loo_dphi"))
+                        items.append(("⚠" if good else bad, "격자 " + fn, why)); continue
                     why = "유추 격자(infer_grid): 선명한 구멍 %s개 평균 %s·최대 %s px, 앵커 %d곳 평균 %s px, 가설 유일 %s배, roll %s° — 사용자 확인 필요" % (ev.get("visible_holes"), mean, mx, len(ev.get("anchors", [])), ev.get("anchor_mean_px"), ev.get("unique_ratio"), ev.get("roll_deg")) if good else "유추 격자 근거 부족(유일성 %s·구멍 %s개·앵커 %d곳·평균 %s·최대 %s px) — 앵커·근거를 더 모은다" % (ev.get("unique_ratio"), ev.get("visible_holes"), len(ev.get("anchors", [])), mean, mx)
                     items.append(("⚠" if good else bad, "격자 " + fn, why)); continue
                 if fj.get("relaxed"): why = "기준 완화 옵션(%s)으로 만든 격자 — holefit 기준을 그대로 지킨 것이 아님" % ", ".join(fj["relaxed"]); ok = False

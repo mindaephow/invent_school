@@ -306,7 +306,7 @@
           // seated: 교재가 이미 꽂아 둔 모양으로 그리는 부품(리벳 등) — 떠서 내려오지 않고 제자리에 두고, 꽂힌 구멍에 초록 원만 칠한다(교재 23·25·27)
           (pt.marks || []).forEach((m) => guides.push({ from: m, to: m, dir: dirH || [0, 1, 0], idx: list.length, ringOnly: true }));
         } else if (isNew && dirH && pt.noGuide) {
-          pos = add(base, dirH, pt.hover || HOVER); // noGuide: 받는 판과 함께 떠서 오는 부품(판에 이미 박힌 리벳) — 따로 안내 화살표·점이 없다
+          pos = add(base, dirH, (moving ? (mvSrc.hover || pt.hover) : pt.hover) || HOVER); // noGuide: 받는 판과 함께 떠서 오는 부품(판에 이미 박힌 리벳) — 따로 안내 화살표·점이 없다. 옮겨 붙는 단계(move)에서는 그 이동의 hover 를 따라 같은 묶음과 같이 뜬다(드롭체커 28번: 27번의 판 hover 30 이 남아 25프레임만 블록에서 떨어졌다)
         } else if (isNew && dirH) {
           // 띄우는 거리·돌기가 들어가는 깊이·판 두께는 부품마다 정할 수 있다(T축처럼 길게 꽂히는 것, 두꺼운 부시)
           const hv = moving ? (mvSrc.hover || HOVER) : settling ? (pt.settleHover || HOVER) : (pt.hover || (pt.recv ? HOVER_RECV : HOVER)); // 합쳐지는 묶음은 모두 같은 거리로 띄워야 모양이 흐트러지지 않는다

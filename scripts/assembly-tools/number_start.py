@@ -35,6 +35,40 @@ def _session_check():
     print("  ⚠ 읽을 것: SKILL.md 처음부터 → process/05_조립.md 체크리스트 → HANDOFF_<이름>.md → user_diffs/요청차이.md (이번 번호에서 지킬 규칙 3개를 첫 보고 한 줄에)")
     return up
 _SERVER = _session_check()
+
+# ── 알고 있는 정보 리마인드(사용자 지시 2026-10-13 "새 번호에 들어가면 이미지 작업부터 하지 말고, 이미 알고 있는 정보를 먼저 파악하자" — 드롭체커 28번) ──
+# 이미지 작업(격자·모서리·홀라인) 전에 앞 번호까지 만든 것·쓴 부품·남은 부품·사용자가 바로잡은 것을 먼저 보여 준다. 읽기만 하고 아무것도 쓰지 않는다. 못 읽어도 번호 시작은 막지 않는다.
+def _remind():
+    try:
+        print("═══ 이미 알고 있는 정보 — 이미지 작업 전에 읽는다 (%s %d번) ═══" % (name, k))
+        a_ = load(os.path.join(here, name + "_asm.json"), {"steps": []})["steps"]; lst = load(os.path.join(here, name + "_list.json"), {})
+        # ① 쓴 부품 / 남은 부품 (LIST 대비, 앞 번호까지)
+        used = {}
+        for st_ in a_[:k - 1]:
+            for pt_ in st_.get("parts", []): used[pt_.get("n")] = used.get(pt_.get("n"), 0) + 1
+        left = {n_: c_ - used.get(n_, 0) for n_, c_ in lst.items() if c_ - used.get(n_, 0) > 0}
+        print("  ① 앞 번호(%d번)까지 쓴 부품 %d개 / 남은 부품(LIST 대비): %s" % (k - 1, sum(used.values()), ", ".join("%s %d" % (n_, c_) for n_, c_ in left.items()) or "없음"))
+        # ② 앞 번호 읽기 표 — 놓은 방법·열린 사항(정정·확인 대기)
+        rd = load(os.path.join(here, name + "_read.json"), {})
+        for j_ in (k - 1, k - 2):
+            e_ = rd.get(str(j_)) or {}
+            if e_: print("  ② %d번 읽기 표 — 부품방향: %s" % (j_, str(e_.get("부품방향", ""))[:260].replace(chr(10), " "))); print("       열린 사항·정정: %s" % (" / ".join(x_ for x_ in str(e_.get("판단과정", "")).split("★") [1:])[:260] or "없음"))
+        # ③ 앞 번호 코드가 정한 짝·창고 (history·slot)
+        prev = a_[k - 2] if 1 < k <= len(a_) else {}
+        print("  ③ 앞 번호 창고 %s · 이번 번호 창고 %s | 앞 번호 history: %s" % (prev.get("slot"), (a_[k - 1].get("slot") if k <= len(a_) else "?"), str(prev.get("history", ""))[:120] or "-"))
+        # ④ 사용자가 바로잡은 최근 항목(같은 실수 반복 금지)
+        dif = os.path.join(here, "user_diffs", "요청차이.md")
+        if os.path.exists(dif):
+            heads = [l_.strip() for l_ in open(dif, encoding="utf-8").read().splitlines() if l_.startswith("## ")][-4:]
+            print("  ④ 사용자가 최근 바로잡은 것(user_diffs/요청차이.md 끝 4개):"); [print("       " + h_[:110]) for h_ in heads]
+        print("  ⑤ 놓을 자리는 모델로 먼저 좁힌다: python pegprobe.py %s 빈구멍 <칸> <줄> · 위돌기 · 빈돌기 <부품> — 그다음에 책 그림으로 후보 중 어느 것인지 가린다(이미지 격자는 카메라·화면 비교용)." % name)
+        _pf = os.path.join(here, "refs", name, "fits", "%02d_P.json" % (k - 1))
+        if os.path.exists(_pf):   # 29번에서 배운 것: 판이 가려져 holefit 가 안 되면 앞 번호 책 그림과 판 무늬를 맞춘다(눈으로 안 된다고 건너뛰지 말고 도구를 먼저 돌린다)
+            print('  ⑥ 판이 이번 번호에서 가려졌으면(앞 번호 %d 판 격자 있음): holefit → python plate_match.py %s %d %d P --검증 "c,r,h,x,y;…" (앞 번호에서 놓아 3D 가 확정된 리벳 끝·블록 돌기·판 모서리 5개 이상의 칸·높이·픽셀) → infer_grid --anchor. 05_조립.md 0-2 절. 유추 격자는 규칙 점검이 사용자 ✓ 를 요구한다.' % (k - 1, name, k - 1, k))
+        print("  ⑦ 진행 상태 문서: process/HANDOFF_%s.md (앞 번호 절) — 번호 하나로 안 풀리면 05_조립.md 0-1 절." % name)
+    except Exception as ex_:
+        print("  (리마인드를 읽지 못했다: %s — 번호 시작은 계속한다)" % ex_)
+_remind()
 asm = load(os.path.join(here, name + "_asm.json"), {"steps": []})["steps"]
 if not 1 <= k <= len(asm): sys.exit("❌ %s 에 %d번이 없다(번호 %d개). 먼저 01 번호 등록을 한다." % (name, k, len(asm)))
 st = asm[k - 1]; note = st.get("note", "")
@@ -145,6 +179,15 @@ try:
         if q and o.get("r") and not q.get("noFreeze") and not (q.get("side") and k < q["side"].get("until", 0)):
             rel = (M @ _R(q.get("r") or [0, 0, 0])).T @ _R(o["r"]); ang = math.degrees(math.acos(max(-1, min(1, (np.trace(rel) - 1) / 2))))
             if ang > 3: diff.append("%s(%d°)" % (lab, round(ang)))
+    # 위치(p)도 비교한다(드롭체커 29번: 코드 hover 를 고쳐도 사용자 ❄ 기록의 위치가 화면을 덮어서 안 바뀌어 보였다 — 사용자 지정이 무조건 우선)
+    posd = []
+    for lab, o in (prow[0]["poses"] if prow else {}).items():
+        q = code.get(lab)
+        if q and o.get("p") and not q.get("noFreeze") and not (q.get("side") and k < q["side"].get("until", 0)):
+            fin = np.array(q["p"], float); dr = np.array(q.get("dir") or [0, 0, 0], float); hv = (q.get("hover") or 0)
+            cand = [fin] + ([fin + dr * hv] if hv and dr.any() else [])
+            if min(float(np.linalg.norm((M @ c) - np.array(o["p"], float))) for c in cand) > 1.5: posd.append("%s" % lab)
+    if posd: print("사용자 ❄ 기록 위치가 코드(제자리·띄운 자리)와 다른 부품(사용자 값이 기준이라 화면은 기록 위치로 보인다): " + ", ".join(posd[:12]) + (" …" if len(posd) > 12 else "") + " — 고치라는 지시면 pose_edit.py 로 기록을 고친다(백업 자동)")
     print("사용자 ❄ 모습 기록:", "없음" if not prow else "%d개 부품" % len(prow[0]["poses"]) + (" — 코드와 자세가 다른 부품(사용자 값이 기준): " + ", ".join(diff) if diff else " (코드와 자세가 모두 같음)"))
     cam = crow[0]["cam"] if crow else None; print("사용자 📷 카메라:", "없음" if not cam else "theta %s phi %s (이 값이 코드 cam 보다 기준)" % (cam.get("theta"), cam.get("phi")))
 except Exception as e: print("(사용자 ❄·📷 기록을 읽지 못함: %s — 화면에서 먼저 확인한다)" % str(e)[:60])

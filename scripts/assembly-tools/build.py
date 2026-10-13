@@ -28,12 +28,17 @@ files = [name + "_asm.json"]
 list_f, def_f = name + "_list.json", name + "_def.json"
 args = ["node", "check_local.js", files[0]] + ([list_f] + ([def_f] if os.path.exists(def_f) else []) if os.path.exists(list_f) else [])
 rc, out = run(args)
+try: _MATE_MARKS = bool(json.load(open(name + "_rules.json", encoding="utf-8")).get("mate_marks"))
+except Exception: _MATE_MARKS = False
 bad = []
 for line in (out0 + chr(10) + out).splitlines():
     s = line.strip()
     if s.startswith("단계별 정밀 검사 문제:") and not s.endswith(" 0"): bad.append(s)
     if s.startswith("단계별 검증 절차 문제:") and not s.endswith(" 0"): bad.append(s)
     if s.startswith("안내 화살표 없는 부품:") and not s.endswith(" 0"): bad.append(s)
+    if s.startswith("안내점 맞물림 없는 부품:") and not s.endswith(" 0"):   # 안내점(marks)이 가리키는 구멍에 돌기가 제자리에서 안 들어가 있으면 화살표가 안 나온다(드롭체커 27번). <이름>_rules.json 에 "mate_marks": true 인 조립도만 막고, 나머지는 경고로 보여 준다(옛 조립도 ✓ 번호는 못 고친다)
+        if _MATE_MARKS: bad.append(s)
+        else: print("⚠ " + s + " (참고 — <이름>_rules.json 에 \"mate_marks\": true 를 넣으면 이 조립도는 막는다)")
     if s.startswith("[경고]") or "[경고]" in s: bad.append(s)
     if s.startswith("LIST") and "불일치" in s: bad.append(s)
 if bad:

@@ -110,3 +110,33 @@ if (process.argv[3]) {
   });
   console.log('띄우는 길에 다른 부품이 있는 부품:', issuesPath.length); issuesPath.slice(0, 40).forEach((m) => console.log('  ', m));
 }
+// ── 안내점 맞물림 검사(2026-10-13 드롭체커 27번): marks 가 있는 새 부품은 그 안내점 자리에서 돌기↔구멍이 제자리 자세로 실제 맞물려야 한다.
+// 뷰어(design-assembly.js mateGuides)는 "제자리에서 돌기가 구멍에 1mm 이상 들어간 쌍"에만 화살표를 그린다 — 블록이 판에는 끼워져 있어도(위 검사 통과) 안내점이 가리키는 프레임 구멍과 30mm 떨어져 있으면 화살표가 0개인데 빌드는 0건이었다.
+// 해결: 제자리(p)는 돌기-구멍 거리 0.0 으로 맞추고, 떨어진 모습은 dir·hover 로만 만든다.
+{
+  const sub3 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const bad = [];
+  steps.forEach((st, si) => {
+    const step = si + 1, upto = [];
+    steps.slice(0, step).forEach((s, k) => (s.parts || []).forEach((pt, i) => {
+      const mv = pt.move && pt.move.at <= step; const p = mv ? (pt.move.p || pt.p.map((v, j) => v + pt.move.by[j])) : pt.p;
+      upto.push({ key: `${k + 1}.${i} ${pt.n}`, n: pt.n, p, r: (mv && pt.move.r) ? pt.move.r : (pt.r || [0, 0, 0]), step: k + 1, ref: pt });
+    }));
+    const res = M.check(upto, conn);
+    const worlds = upto.map((u) => ({ u, w: conn[u.n] ? M.worldConnectors({ p: u.p, r: u.r }, conn[u.n]) : null }));
+    (st.parts || []).forEach((pt) => {
+      if (pt.side || pt.explode || pt.noMarkCheck || pt.noGuide || pt.seated || !pt.dir || !(pt.marks && pt.marks.length)) return;
+      const me = upto.find((u) => u.ref === pt); if (!me || !conn[pt.n]) return;
+      pt.marks.forEach((m) => {
+        let hit = false;
+        worlds.forEach(({ u, w }) => {
+          if (!w || u === me) return;
+          if (pt.recv || pt.pegTarget) w.pegs.forEach((pg) => { const tip = [0, 1, 2].map((a) => pg.pos[a] + pg.dir[a] * pg.len / 2); if (Math.hypot(...sub3(tip, m)) <= 3 && res.mated.some((x) => x.part === u.key && x.peg === pg.id && x.into === me.key)) hit = true; });
+          else w.holes.forEach((h) => { const rel = sub3(m, h.pos), al = dot3(rel, h.dir), lat = Math.hypot(...sub3(rel, h.dir.map((x) => x * al))); if (lat <= 1.8 && Math.abs(al) <= h.len / 2 + 3 && res.mated.some((x) => x.part === me.key && x.into === u.key && x.hole === h.id)) hit = true; });
+        });
+        if (!hit) bad.push(`${step}단계 ${pt.n}: 안내점 [${m}] 에서 돌기·구멍이 제자리 자세로 맞물려 있지 않음 → 화살표가 안 나옴(제자리 p 를 돌기-구멍 거리 0.0 으로 맞추고, 떨어진 모습은 dir·hover 로)`);
+      });
+    });
+  });
+  console.log('안내점 맞물림 없는 부품:', bad.length); bad.slice(0, 40).forEach((m) => console.log('  ', m));
+}

@@ -184,27 +184,40 @@
 },
 "28": {
 "parts": {},
-"noPart": true
+"noPart": false
 },
 "29": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 6,
+"37프레임": 1,
+"17프레임": 1
+},
+"noPart": false
 },
 "30": {
-"parts": {},
-"noPart": true
+"parts": {
+"27프레임": 1
+},
+"noPart": false
 },
 "31": {
-"parts": {},
-"noPart": true
+"parts": {
+"37프레임": 1,
+"T축": 1,
+"큰기어": 1,
+"부시": 1
+},
+"noPart": false
 },
 "32": {
 "parts": {},
-"noPart": true
+"noPart": false
 },
 "33": {
-"parts": {},
-"noPart": true
+"parts": {
+"메인보드": 1
+},
+"noPart": false
 },
 "34": {
 "parts": {},
