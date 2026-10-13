@@ -11,6 +11,30 @@ def load(p, default):
     return json.load(open(p, encoding="utf-8")) if os.path.exists(p) else default
 def save(p, d): json.dump(d, open(p, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 
+# ── 세션 시작 체크(사용자 지시 2026-10-13 "다시 시작하면 개발서버와 로그인을 체크해서 먼저 요청") — 번호 작업·계산에 들어가기 전에 이 블록을 읽고, ❌ 는 사용자에게 먼저 요청한다.
+def _session_check():
+    import urllib.request
+    up = None
+    for port in (3178, 3177, 3179):
+        try: urllib.request.urlopen("http://localhost:%d/design.html" % port, timeout=4).read(1); up = port; break
+        except Exception: pass
+    root = os.path.abspath(os.path.join(here, "..", ".."))
+    env = os.path.join(root, ".env.local"); envtxt = open(env, encoding="utf-8").read() if os.path.exists(env) else ""
+    keys = all(k_ in envtxt for k_ in ("SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"))
+    db = None
+    if keys:
+        try:
+            import userdone; _m = re.search(r'Asm\("([^"]+)"', open(os.path.join(here, name + ".py"), encoding="utf-8").read())
+            db = sorted(userdone.user_done(_m.group(1)) or ())
+        except (SystemExit, Exception): db = None
+    print("═══ 세션 시작 체크 (번호 작업 전에 읽는다) ═══")
+    print("  %s 개발 서버: %s" % ("✅" if up else "❌", ("localhost:%d 응답" % up) if up else "응답 없음 → 서버를 켠다(preview_start invent-school-dev2), 다른 채팅 서버가 이미 있으면 그 포트를 쓴다"))
+    print("  %s .env.local(SUPABASE 키): %s" % ("✅" if keys else "❌", "있음" if keys else "없음 → 사용자에게 달라고 한다(CLAUDE.md)"))
+    print("  %s DB 읽기(사용자 ✓): %s" % ("✅" if db is not None else "❌", ("읽음 — ✓ 번호 %s" % db) if db is not None else "못 읽음 → 멈춘다(통과시키지 않는다)"))
+    print("  ⚠ 로그인: 스크립트가 확인할 수 없다. 화면 비교(05 5-5)·❄/📷 확인에는 선생님 계정 로그인이 필요하므로 **새로 시작하거나 새 세션이면 사용자에게 먼저 요청한다**(비밀번호는 대신 입력하지 않는다). 브라우저 pane 에서 로그인 화면이 보이면 아직이다.")
+    print("  ⚠ 읽을 것: SKILL.md 처음부터 → process/05_조립.md 체크리스트 → HANDOFF_<이름>.md → user_diffs/요청차이.md (이번 번호에서 지킬 규칙 3개를 첫 보고 한 줄에)")
+    return up
+_SERVER = _session_check()
 asm = load(os.path.join(here, name + "_asm.json"), {"steps": []})["steps"]
 if not 1 <= k <= len(asm): sys.exit("❌ %s 에 %d번이 없다(번호 %d개). 먼저 01 번호 등록을 한다." % (name, k, len(asm)))
 st = asm[k - 1]; note = st.get("note", "")
@@ -49,10 +73,7 @@ if k > 1:   # 앞 번호: 사용자 ✓ 또는 지금 내용과 같은 지문의
                 _ok = k - 1 in (userdone.user_done(_mid0.group(1)) or ())
             except (SystemExit, Exception): pass
         if not _ok: _gate.append(("앞 번호 %d" % (k - 1), "사용자 ✓ 도, 지금 내용과 같은 비교 증거(record_check)도 없음", "화면에서 책과 나란히 비교하고 record_check.py 로 증거를 남긴다(05 5-5)"))
-try:   # 01 준비: 개발 서버(3178)가 떠 있어야 화면 비교를 할 수 있다 — 로그인은 사용자가 한다(비밀번호는 대신 입력하지 않는다)
-    import urllib.request; urllib.request.urlopen("http://localhost:3178/design.html", timeout=4).read(1)
-except Exception: _gate.append(("01 준비", "개발 서버(localhost:3178)가 응답하지 않음", "서버를 켜고(preview_start invent-school-dev2) 사용자에게 로그인을 요청한다"))
-print("※ 화면 비교(05 5-5)에는 사용자가 로그인한 화면이 필요하다 — 번호 작업 전에 사용자에게 로그인을 먼저 요청한다(비밀번호는 대신 입력하지 않는다).")
+if not _SERVER: _gate.append(("세션 시작 체크", "개발 서버가 응답하지 않음(3177·3178·3179 모두)", "서버를 켜고(preview_start invent-school-dev2 — 다른 채팅이 쓰는 중이면 그 포트를 그대로 쓴다) 사용자에게 로그인을 요청한다"))
 try:   # 규칙 점검(rulecheck.py) — 앞 번호에 규칙 미달(❌)이 있으면 그것부터 해결해야 다음 번호를 시작한다(사용자 지시 2026-10-12: 도망가지 않고 스스로 문제를 찾아 해결)
     import rulecheck; _fb = rulecheck.first_bad(name)
     if _fb and _fb[0] < k:
