@@ -69,6 +69,11 @@ def check(name, only=None):
         else:
             for fn, fj in fs:
                 nm = str(fj.get("name", ""))
+                if fj.get("tool") == "infer":   # 유추 격자(2026-10-13): 판이 가려져 holefit 기준(구멍 40%)을 못 채울 때 모든 근거를 합쳐 푼 격자 — 개수가 아니라 근거 일치도로 본다. ✅ 는 아니고 사용자 확인이 필요한 ⚠.
+                    ev = fj.get("evidence") or {}; mean = fj.get("err_px"); mx = fj.get("max_err_px")
+                    good = (ev.get("unique_ratio", 0) >= 1.3 and ev.get("visible_holes", 0) >= 8 and len(ev.get("anchors", [])) >= 3 and mean is not None and mean <= 2.5 and mx is not None and mx <= 4.5)
+                    why = "유추 격자(infer_grid): 선명한 구멍 %s개 평균 %s·최대 %s px, 앵커 %d곳 평균 %s px, 가설 유일 %s배, roll %s° — 사용자 확인 필요" % (ev.get("visible_holes"), mean, mx, len(ev.get("anchors", [])), ev.get("anchor_mean_px"), ev.get("unique_ratio"), ev.get("roll_deg")) if good else "유추 격자 근거 부족(유일성 %s·구멍 %s개·앵커 %d곳·평균 %s·최대 %s px) — 앵커·근거를 더 모은다" % (ev.get("unique_ratio"), ev.get("visible_holes"), len(ev.get("anchors", [])), mean, mx)
+                    items.append(("⚠" if good else bad, "격자 " + fn, why)); continue
                 if fj.get("relaxed"): why = "기준 완화 옵션(%s)으로 만든 격자 — holefit 기준을 그대로 지킨 것이 아님" % ", ".join(fj["relaxed"]); ok = False
                 elif fj.get("hand") or ("holefit.py" not in nm and fj.get("tool") != "holefit"): why = "holefit 가 만든 격자가 아님(손으로 읽은 점·다른 도구) — 규칙 0번 위반"; ok = False
                 else:

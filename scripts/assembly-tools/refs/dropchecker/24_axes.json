@@ -1,1 +1,1 @@
-{"global": {"X": [55.0, -22.3], "Y": [0.0, -55.0], "Z": [51.1, 55.0]}, "replace_lines": true, "no_rotate": true, "fit": {"from": "24_F.json", "err_px": 0.0, "points": 4, "theta": -0.55, "phi": 0.85, "cols": "24번: 판 위 초록 링 3개와 리벳 1 중심 4점(추정 — 판이 첫째 유닛에 가려 구멍 격자를 만들 수 없음). 카메라는 판 긴 변 방향에서 정한 추정값", "rows": "-"}}
+{"global": {"X": [-55.0, -37.1], "Y": [24.7, -55.0], "Z": [55.0, -28.4]}, "replace_lines": true, "fit": {"from": "24_P.json", "err_px": 0.52, "points": 91, "theta": -2.79, "phi": 1.08, "cols": "+X", "rows": "+Z"}, "no_rotate": true}

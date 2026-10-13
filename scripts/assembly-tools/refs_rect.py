@@ -110,6 +110,18 @@ def process(step):
         if _Xv:   # rotate_to 를 정했으면 축선 중심을 기준 판(점이 가장 많은 판)의 중심으로 둔다 — 축선이 그 판의 가운데 줄·가운데 열 위로 지나게(판이 둘이면 두 판의 점을 합친 평균이 아니다: 중심이 기준 판에서 벗어났었다)
             _cs=sorted({q[0] for q in pts}); _rs=sorted({q[1] for q in pts}); _mc={_cs[(len(_cs)-1)//2],_cs[len(_cs)//2]}; _mr={_rs[(len(_rs)-1)//2],_rs[len(_rs)//2]}; _mr={_AXj['center_row']} if _AXj.get('center_row') else _mr   # center_row: 줄이 짝수(2줄 프레임)면 가운데가 구멍 줄 사이라 선이 구멍을 안 지난다 — 그 줄 번호를 정하면 선이 그 구멍 줄의 구멍 중심을 지난다(투석기 20번)   # 가운데 칸·가운데 줄의 구멍(짝수면 가운데 두 개의 중점) — 점 전체의 평균은 원근 때문에 가운데 구멍에서 벗어난다
             _tc=np.mean([T(q[2],q[3]) for q in pts if q[0] in _mc and q[1] in _mr],axis=0); vx=float(_tc[0]); hy=float(_tc[1])
+        _oc=rj.get('origin_cell') or _AXj.get('origin_cell')   # 판 가운데가 다른 부품에 가려져 있으면(드롭체커 24번 — 모터 밑) 축선 원점을 눈에 보이는 구멍 위로 옮긴다(축선은 보이는 구멍 줄의 구멍 중심을 지난다 — 사용자 지적 2026-10-13)
+        LOCDIR={}
+        if _oc and tuple(_oc) in tp:
+            vx,hy=float(tp[tuple(_oc)][0]),float(tp[tuple(_oc)][1])
+            # 원점 구멍 가까이에서 구멍이 실제로 늘어선 방향으로 X·Z 축선을 긋는다 — 판 가운데에서 계산한 전역 방향을 평행 이동하면 원근 때문에 보이는 홀라인과 어긋난다(사용자 지적 2026-10-13: 보이는 쪽 홀라인에 맞춘다)
+            _c0,_r0=tuple(_oc); _fit=(_AXj.get('fit') or {})
+            for _ax_,_nm_ in ((_fit.get('cols'),'c'),(_fit.get('rows'),'r')):
+                if _ax_ in ('+X','-X','+Z','-Z'):
+                    _a=((_c0-1,_r0),(_c0+1,_r0)) if _nm_=='c' else ((_c0,_r0-1),(_c0,_r0+1))
+                    if _a[0] in tp and _a[1] in tp:
+                        _d=np.array(tp[_a[1]],float)-np.array(tp[_a[0]],float); _d=_d*(1.0 if _ax_[0]=='+' else -1.0)
+                        LOCDIR[_ax_[1]]=[float(_d[0]),float(_d[1])]
         xax,yax=0,1
         # 칸1·줄1 위치(위/아래/왼/오른)
         def where(ax):  # ax 0=칸 1=줄
@@ -127,7 +139,7 @@ def process(step):
             _Lx=LV_ROT if LV_ROT is not None else np.eye(2);   # 가운데 축선은 이미지 회전과 같이 돌리지 않는다(관리자 지시 2026-10-12) — 읽은 원래 화면 방향 그대로. 단 level 옵션이면 같이 돌린다
             _C={'X':(40,40,230),'Y':(40,170,40),'Z':(230,110,20)}
             for k_,v_ in _AX0['global'].items():
-                d_=_Lx@np.array(v_,float); n_=float(np.hypot(*d_)) or 1.0; d_=d_/n_
+                d_=np.array(LOCDIR[k_],float) if k_ in LOCDIR else _Lx@np.array(v_,float); n_=float(np.hypot(*d_)) or 1.0; d_=d_/n_
                 t_=max(Ww,Hh)*2; cv2.line(im,(int(vx-d_[0]*t_),int(hy-d_[1]*t_)),(int(vx+d_[0]*t_),int(hy+d_[1]*t_)),_C[k_],2,cv2.LINE_AA)
                 # 화면 안 가장자리 가까이에 축 이름
                 for sg in (1,-1):

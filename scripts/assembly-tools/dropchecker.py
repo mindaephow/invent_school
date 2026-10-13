@@ -523,7 +523,8 @@ _best24 = None
 for _Rn, _R24 in (("I", np.eye(3)), ("Ry180", rot_y(180))):
     _gp24 = [(_q, _c["id"], _R24 @ (_q.world("peg", _c)["pos"] - _pc24) + _pc24, _R24 @ _q.world("peg", _c)["dir"]) for _q in _G2 for _c in _q.conn["pegs"]]
     _gp24 = [t for t in _gp24 if t[3][1] < -0.9]
-    _hu = [(_q, _i, _R24 @ (_w["pos"] - _pc24) + _pc24, _R24 @ _w["dir"]) for _q, _i, _w in _hu24]
+    _hu = [(_q, _i, _R24 @ (_w["pos"] - _pc24) + _pc24, _R24 @ _w["dir"], float(_w["len"])) for _q, _i, _w in _hu24]
+    _nax = [_R24 @ (_nu.world("hole", _nu.conn["holes"][0])["pos"] - _pc24) + _pc24 for _nu in _G2 if _nu.name == "너트"]   # 볼트·너트가 지나는 축(이미 차 있는 구멍)
     _pA = _R24 @ (MO1b.peg("p5")["pos"] - _pc24) + _pc24
     _pwh = _R24 @ (WH6[1].p - _pc24) + _pc24                    # 큰 바퀴 중심(판 가장자리 바깥으로 나가야 판과 안 겹침)
     for (_c0, _r0), _h0 in _hl713:
@@ -535,20 +536,22 @@ for _Rn, _R24 in (("I", np.eye(3)), ("Ry180", rot_y(180))):
         for _q, _i, _pw, _dw in _gp24:
             _pp = _pw + _t; _bb = min(_hl713, key=lambda kv: float(np.linalg.norm((kv[1]["pos"] - _pp) * np.array([1, 0, 1]))))
             if float(np.linalg.norm((_bb[1]["pos"] - _pp) * np.array([1, 0, 1]))) < 0.8 and abs(_pp[1] - 2.5) < 3: _hit.append((_q, _i, _bb[0]))
-        _rl = sum(1 for _q, _i, _pw, _dw in _hu if abs(_dw[1]) > 0.9 and float(np.linalg.norm(_pw + _t - _rv24)) < 1.6)
+        _rl = 1 if any(abs(_dw[1]) > 0.9 and float(np.linalg.norm((_pw + _t - _rv24) * np.array([1, 0, 1]))) < 1.2 and abs(float((_pw + _t - _rv24)[1])) <= _ln / 2 + 1.0
+                       and not any(float(np.linalg.norm((_pw - _na) * np.array([1, 0, 1]))) < 1.5 for _na in _nax) for _q, _i, _pw, _dw, _ln in _hu) else 0
+        # 리벳 판정(2026-10-13 사용자 지적): 가로 거리 + 구멍 길이 안인지로 본다(구멍 중심까지 3차원 거리 1.6 은 y 가 우연히 가까운 너트 구멍만 통과시켰다). 너트·볼트가 이미 차 있는 축의 구멍은 받지 않는다.
         _score = len(_hit) + 3 * _rl
         if _best24 is None or _score > _best24[0]: _best24 = (_score, _t, _hit, _rl, (_c0, _r0), _R24, _Rn)
 _T24 = _best24[1]; _R24 = _best24[5]
 _mk24 = {}
 for _q, _i, _cr in _best24[2]: _mk24.setdefault(id(_q), []).append(rnd(_hole713(*_cr)["pos"] + np.array([0, 1.0, 0]) * 2.5))
-_mk24all = {**_mk24, id(NU17): [rnd(_rv24)], id(B17): [rnd(_rv24)]}   # 판에 남은 리벳(칸1 줄7)에 팔 쪽 너트·블록 구멍이 들어온다
+_mk24all = {**_mk24, id(B17): [rnd(_rv24)]}   # 판에 남은 리벳(칸1 줄7)이 팔 쪽 3단블록 5번의 비어 있는 구멍(h1)으로 들어간다 — 너트가 있는 구멍(h2)이 아니다(사용자 지적 2026-10-13)
 _GU = [_q for _q in _G2 if _q.step.index <= 14 and not any(_q is _w for _w in _W2)]            # 둘째 유닛 본체
 _GA = [_q for _q in _G2 if any(_q is _a for _a in _ARM2)]                                      # 팔 조립
 _GW = [_q for _q in _G2 if not any(_q is _x for _x in _GU) and not any(_q is _x for _x in _GA)]   # 바퀴·축·부시
 for _nm, _gg in (("mm24u", _GU), ("mm24a", _GA), ("mm24w", _GW)):   # moveGroup 은 부품 하나에 마지막 값만 남으므로(안내 화살표가 같은 묶음 쌍을 건너뜀) 앞 번호에서 맞물린 덩어리끼리 이름을 다르게 한다
     s24.move_made(A.group(_nm, _gg), _R24, pivot=_pc24, shift=_T24, dir=[0, 1, 0], hover=60, group=_nm, marks=_mk24all)
 #   계산: 둘째 유닛(거울 배치)을 회전 없이 이동만 — 판 구멍과 맞는 돌기 %d곳, 판에 남은 리벳과 맞는 구멍 %d곳(자동 탐색 결과를 읽기 표에 적는다).
-A.steps[23].cam = (-0.55, 0.85, False, [[0.0, 20.0, 0.0], [-40.0, 30.0, -120.0], [40.0, 30.0, 60.0]], None, None); A.steps[23].camSrc = "guess"
+A.steps[23].cam = (-2.79, 1.09, False, [[0.0, 20.0, 0.0], [-40.0, 30.0, -120.0], [40.0, 30.0, 60.0]], None, None); A.steps[23].camSrc = "eye"   # 2026-10-13 유추 격자(infer_grid: 713판 3차원 좌표 + 선명한 구멍 + 링 4곳, 줄 +3 가설 유일 2.02배)에서 axes_fit 으로 계산 — theta −2.79·phi 1.09 오차 0.52px 91점(책 그림이 24° 기울어 roll 은 못 맞춤)
 import stepchecks; stepchecks.apply(A, "dropchecker")
 # ── 작업 공간(창고) 정리(04) — 책을 1→35번 순서로 보며 정했다(2026-10-12).
 #   번호표로 확인: 1~6번 "2개 만들기"(모터 유닛 두 벌, 창고 1에 나란히), 21번 "6 + 20", 24번 "16 + 23". 나머지는 그림 모양으로 판단(추정):
