@@ -3,7 +3,8 @@
 사용자는 한국어를 쓰고, 항상 **존댓말·짧게** 답한다. 말이 거칠어도 규칙대로 하나씩 정직하게(확인한 것/추정 구분) 보고하길 원한다.
 
 ## 큐보 조립도(조립 보기) 작업을 이어받을 때 — 이 순서로 읽는다
-1. `scripts/assembly-tools/process/HANDOFF_catapult.md` — 투석기 현재 상태·다음 할 일·도구 순서(가장 먼저).
+0. **메모리 없는 처음 보는 Claude 는 `scripts/assembly-tools/process/05_조립.md` 맨 위 "★ 처음 보는 Claude 를 위한 실행 순서"(환경·번호 하나 12단계·코드 템플릿·함정·도구 지도)를 가장 먼저 읽고 그대로 따른다.** 화면 조작 코드는 `process/viewer_snippets.md`.
+1. `scripts/assembly-tools/process/HANDOFF_<이름>.md` — 진행 중인 조립도의 현재 상태·다음 할 일(드롭체커: `HANDOFF_dropchecker.md`, 투석기: `HANDOFF_catapult.md`).
 2. `scripts/assembly-tools/process/00_개선규칙.md` ~ `05_조립.md` — 조립 과정 규칙(이 저장소 사본이 기준이다. 번호를 하다 빈틈이 나오면 해당 파일을 **덮어써서** 고친다). **한 번호로 안 풀리면 멈추지 말고 `05_조립.md` 0-1 절(정보를 모아 유추: holefit 자동 DoG → infer_grid)대로 푼다.** **대부분 대칭형이다 — 대칭 쪽·다리(n족: 강아지 4족·꼬마기사 2족)를 만들 때는 `process/ref_대칭조립.md`(모범 = 드롭체커)·`process/ref_n족로봇.md` 를 먼저 본다(MCP: `get_assembly_reference` part="참고"). 대칭 검증·짝 없는 부품 찾기는 `python symcheck.py <이름>`.**
 3. `.claude/skills/cubo-assembly/SKILL.md` (git 에 있으나 `.claude/` 는 ignore 설정 — 없으면 `git show HEAD:.claude/skills/cubo-assembly/SKILL.md`), `app/lib/cubo-assembly-guide.js`(MCP `get_assembly_guide` 와 같은 내용).
 4. `scripts/assembly-tools/user_diffs/요청차이.md` — 사용자가 바로잡은 것 모음(같은 실수 반복 금지).

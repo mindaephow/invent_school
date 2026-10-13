@@ -582,6 +582,12 @@ export function buildReference() {
 - 꼬마기사: 1~8번 몸통·머리 → 9~12번 다리 두 벌(큰기어·T축·315프레임·2단블록·35프레임, 나란히) → 13번 두 다리를 눕혀 연결 → 14번 한쪽 끝, 15번 반대쪽 끝에 같은 모양으로(판 가운데 둘레 x 축 180°) → 16~19번 벽 바깥 팔·기어 → 20~24번 첫째 팔(새 창고에서 만들어 21번에 합침) → 25~29번 반대쪽 팔(22~24번을 z=0 평면 거울로 옮김) → 30~34번 칼·방패 → 35~36번 메인보드·케이블.
 - 참고할 것: ① 다리 두 벌은 첫째를 끝까지 확인한 뒤 둘째는 거울 위치·자세로 만든다 ② 한쪽 다리·팔을 고치면 반대쪽에도 같게 ③ 서 있는 다리는 앞(+Z)에서 본다(눈대중 카메라 guess 는 번호마다 격자에서 계산해 바꾼다) ④ 큰기어 중앙 구멍·위쪽 구멍의 T축 방향은 앞·뒤로 반대(강아지 2번·꼬마기사 9번) — measure_part 로 면을 읽는다 ⑤ 기울인 다리 자세(poseAt)와 완성 화면 hinge 는 ✓ 잠금과 분리해서 정의 쪽에 둔다. 자세한 내용은 저장소 scripts/assembly-tools/process/ref_n족로봇.md.
 
+## 11-3. 처음 보는 Claude(기억 없음)의 번호 하나 실행 순서 — 저장소 scripts/assembly-tools/process/05_조립.md 맨 위가 원본 (관리자 지시 2026-10-13)
+- 환경: 저장소 루트 .env.local(SUPABASE_URL·SERVICE_ROLE_KEY, 없으면 사용자에게), 개발 서버 npm run dev -- -p 3178(백그라운드)·사용자 로그인, 파이썬 numpy·opencv.
+- 번호 N 순서: ① number_start.py <이름> N ② 책 그림 Read·링 색 검출 ③ crop_ticks.py <이름> N corners x1 y1 … 로 판 모서리 4곳 읽기 ④ holefit.py(기본→어두운판→자동 DoG, 판이 가려지면 infer_grid.py) 후 hf 그림 눈 확인 ⑤ axes_fit.py → NN_axes.json 에 no_rotate true → refs_rect.py → 그림 DB 바로 업로드 ⑥ pegprobe.py 위돌기·빈구멍·빈돌기 로 받는 돌기·빈 구멍을 숫자로(점수·후보 탐색 금지, 대칭 쪽은 반대편 거울) ⑦ 읽기 표(부품 칸은 "713프레임 1, 리벳 2" 형식) ⑧ <이름>.py 의 stepchecks.apply 바로 앞에 코드(attach: 새 돌기→기존 구멍, rivet=True 면 리벳 가운데가 구멍 입구 면 / recv: 새 구멍←기존 돌기, 아래에서 올라오는 돌기는 홀면 -y) ⑨ build.py --write ⑩ 화면 비교 → record_check.py ⑪ rulecheck.py·symcheck.py ⑫ 푸시는 사용자가 "업로드"라고 할 때만(안내서 JS 템플릿 안 백틱은 이스케이프, node --check).
+- 함정: run_path(run_name="probe") 로 분석(__main__ 이면 asm.json 을 덮어씀), 읽기 표 빈 번호·부품 칸 형식이 다르면 빌드가 저장 안 함, 사용자 📷 카메라가 코드 시점보다 우선, ivs_assembly_refs 에는 created_at 이 없다(get_rows 에 order_by), 윈도우에서 긴 경로 cv2.imwrite 는 조용히 실패.
+- 상태·구조: process/HANDOFF_dropchecker.md(1~26번 완료, 다음 27번), 대칭 ref_대칭조립.md, n족 ref_n족로봇.md, 화면 조작 viewer_snippets.md.
+
 ## 8. 화면·코드 위치
 - public/design-assemblies.js: 규칙(IVS_ASSEMBLY_RULES) + 조립 단계 데이터(IVS_ASSEMBLIES) — 여기가 원본
 - public/design-assembly.js: 조립 보기 화면(재생·역재생·번호 버튼·화살표)
@@ -634,7 +640,7 @@ const CATS = [
   ['끝내기', '끝내기 전 체크리스트·마무리와 업로드', ['단계 5', '6-1.']],
   ['교훈', '이전에 규칙을 어겨 지적받은 것(원인과 대책)', ['10-3.']],
   ['수정', '이미 만든 조립도를 고치거나 검토할 때', ['B·C.']],
-  ['참고', '대칭(거울) 조립·n족 보행 로봇(강아지·꼬마기사) 조립 참고 사례 — 드롭체커가 대칭 모범', ['11-1.', '11-2.']],
+  ['참고', '대칭(거울) 조립·n족 보행 로봇(강아지·꼬마기사) 조립 참고 사례 — 드롭체커가 대칭 모범 / 처음 보는 Claude 의 번호 하나 실행 순서', ['11-1.', '11-2.', '11-3.']],
   ['화면', '조립 보기 화면 기능·코드 위치', ['8. 화면', '9. 조립 보기']],
 ]
 function catOf(title) { for (const [n, , pre] of CATS) if (pre.some((x) => title.startsWith(x))) return n; return null }

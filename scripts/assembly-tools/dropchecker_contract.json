@@ -162,12 +162,17 @@
 "noPart": false
 },
 "25": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 2,
+"713프레임": 1
+},
+"noPart": false
 },
 "26": {
-"parts": {},
-"noPart": true
+"parts": {
+"17프레임": 1
+},
+"noPart": false
 },
 "27": {
 "parts": {},

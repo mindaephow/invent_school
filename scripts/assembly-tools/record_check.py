@@ -4,7 +4,21 @@
 # build.py 의 번호별 점검은 이 증거(지문이 지금 내용과 같은 것)가 있어야 그 번호의 눈으로 하는 확인 3개(화면 확대·칸 수 대조·카메라 대조)를 통과시킨다.
 # 번호 내용이 바뀌면 지문이 달라져 증거가 무효가 되므로 다시 비교해야 한다. 사용자는 나중에 cmp 이미지를 열어 검토한다.
 import sys, os, json, time
-from PIL import Image
+try:
+    from PIL import Image
+except ImportError:   # Pillow 가 없는 PC(2026-10-13): OpenCV 로 같은 동작(캡처 크기 확인·책 그림과 나란히 붙이기)을 한다 — 검사 기준은 그대로
+    import cv2, numpy as np
+    class _Im:
+        def __init__(self, a): self.a = a; self.height, self.width = a.shape[:2]; self.size = (self.width, self.height)
+        def convert(self, _): return self
+        def resize(self, wh): return _Im(cv2.resize(self.a, tuple(int(v) for v in wh), interpolation=cv2.INTER_AREA))
+        def paste(self, other, xy): x, y = xy; self.a[y:y + other.height, x:x + other.width] = other.a
+        def save(self, path): cv2.imwrite(path, self.a)
+    class Image:
+        @staticmethod
+        def open(path): return _Im(cv2.imdecode(np.fromfile(path, np.uint8), cv2.IMREAD_COLOR))
+        @staticmethod
+        def new(mode, size, color): return _Im(np.full((size[1], size[0], 3), 255, np.uint8))
 sys.stdout.reconfigure(encoding="utf-8")
 import stepfp
 
