@@ -86,6 +86,7 @@ _R0 = os.path.join(here, "refs", name)
 _miss_img = [i for i in range(0, len(asm) + 1) if i and not os.path.exists(os.path.join(_R0, "%02d.jpg" % i))]
 if not os.path.exists(os.path.join(_R0, "00.jpg")): _miss_img.insert(0, 0)
 if _miss_img: _gate.append(("02 이미지 자르기", "책 그림이 없는 번호: %s" % _miss_img[:12], "refs_make.py 로 만든다(02)"))
+if not os.path.exists(os.path.join(_R0, "00_1.jpg")): _gate.append(("02 완성품 방향선 그림", "완성 사진과 한 세트인 방향선 그림(refs/%s/00_1.jpg)이 없다" % name, "02_이미지_자르기.md 3-2 로 만들어 올린다(앞 +Z · 뒤 −Z · 위 +Y · 왼쪽 +X · 오른쪽 −X, 사용자 확인) — 00_개선규칙 9번"))
 _miss_used = [i for i, s in enumerate(asm, 1) if "▣ 사용 부품:" not in (s.get("note") or "")]
 if _miss_used: _gate.append(("03 부품 체크", "▣ 사용 부품이 없는 번호: %s" % _miss_used[:15], "번호별 사용 부품을 적고 LIST 와 대조한다(03 B)"))
 _miss_slot = [i for i, s in enumerate(asm, 1) if s.get("slot") is None]
