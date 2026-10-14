@@ -18,7 +18,7 @@ def R(r):
     Rx = np.array([[1,0,0],[0,np.cos(a),-np.sin(a)],[0,np.sin(a),np.cos(a)]]); Ry = np.array([[np.cos(b),0,np.sin(b)],[0,1,0],[-np.sin(b),0,np.cos(b)]]); Rz = np.array([[np.cos(c),-np.sin(c),0],[np.sin(c),np.cos(c),0],[0,0,1]])
     return Rz @ Ry @ Rx
 poses = rest("ivs_assembly_poses?select=assembly_id,step,poses&order=assembly_id,step"); cams = rest("ivs_assembly_cams?select=assembly_id,step,cam&order=assembly_id,step")
-fix = []; tot = Counter(); chg = Counter()
+fix = []; tot = Counter(); chg = Counter(); angs = defaultdict(list)
 for row in poses:
     a = A.get(row["assembly_id"])
     if not a: continue
@@ -33,7 +33,7 @@ for row in poses:
         if not q or not o.get("r") or q.get("noFreeze") or (q.get("side") and k < q["side"].get("until", 0)): continue
         rel = (M @ R(q.get("r") or [0, 0, 0])).T @ R(o["r"]); ang = math.degrees(math.acos(max(-1, min(1, (np.trace(rel) - 1) / 2))))
         tot[q["n"]] += 1
-        if ang > 3: chg[q["n"]] += 1; fix.append((row["assembly_id"].split("-", 2)[-1], k, lab, round(ang)))
+        if ang > 3: chg[q["n"]] += 1; angs[q["n"]].append(round(ang)); fix.append((row["assembly_id"].split("-", 2)[-1], k, lab, round(ang)))
 cam_rows = []; per = defaultdict(list)
 for row in cams:
     a = A.get(row["assembly_id"]); c = (a["steps"][row["step"] - 1].get("cam") if a and row["step"] <= len(a["steps"]) else None)
@@ -50,4 +50,6 @@ L += ["## 2. 카메라(📷): 내 코드 값과 사용자 값의 차이(라디�
 for s, v in per.items(): L.append("| %s | %d | %.2f | %.2f |" % (s, len(v), np.mean([x[0] for x in v]), np.mean([x[1] for x in v])))
 L += ["", "| 조립도 | 번호 | 내 theta·phi(출처) | 사용자 theta·phi | Δtheta | Δphi |", "|---|---|---|---|---|---|"] + ["| %s | %d | %.2f %.2f (%s) | %.2f %.2f | %+.2f | %+.2f |" % (a, k, t, p, s, ut, up, dt, dp) for a, k, t, p, s, ut, up, dt, dp in cam_rows if abs(dt) > 0.15 or abs(dp) > 0.15]
 os.makedirs(os.path.join(here, "user_diffs"), exist_ok=True); open(os.path.join(here, "user_diffs", "수정저장차이.md"), "w", encoding="utf-8").write("\n".join(L) + "\n")
+# 기계가 읽는 통계(2026-10-14): number_start.py 가 번호를 시작할 때 이 번호의 부품별로 "사용자가 자세를 고친 비율·돌린 각도"를 경고로 보여 준다. 사용자가 고쳐 저장하고 이 도구를 돌릴 때마다 저절로 갱신된다.
+json.dump({"만든때": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), "자세": {n: {"비교": tot[n], "고침": chg[n], "각도": sorted(Counter(angs[n]).items(), key=lambda x: -x[1])} for n in tot if chg[n]}}, open(os.path.join(here, "user_diffs", "pose_stats.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 print("수정저장차이.md 작성: 자세 %d/%d건 고침, 카메라 비교 %d건(차이 큰 %d건)" % (sum(chg.values()), sum(tot.values()), len(cam_rows), sum(1 for r in cam_rows if abs(r[7]) > 0.15 or abs(r[8]) > 0.15)))

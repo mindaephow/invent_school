@@ -7,15 +7,39 @@ import json, os, re, sys
 sys.stdout.reconfigure(encoding="utf-8")
 here = os.path.dirname(os.path.abspath(__file__))
 name, k = sys.argv[1], int(sys.argv[2]); NN = "%02d" % k
+CONT = "--연속" in sys.argv   # 반자동 연속 진행(사용자 지시 2026-10-14): 앞 과정 미완이어도 막지 않고 표시만 하고 계속한다. 표시는 <이름>_flags.json 에 쌓여 마지막 검토 목록이 된다.
 def load(p, default):
     return json.load(open(p, encoding="utf-8")) if os.path.exists(p) else default
 def save(p, d): json.dump(d, open(p, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+
+# ── 이번 번호에서 조심할 것(사용자 지시 2026-10-14 "정보를 모르는 게 아니라 사용을 안 한다") — mistake_types.json(요청차이 분석)의 반복 실수 유형과, 이 번호의 부품·위치에 맞는 경고를 맨 앞에 보여 준다.
+def _warn():
+    try:
+        types = load(os.path.join(here, "mistake_types.json"), [])
+        a_ = load(os.path.join(here, name + "_asm.json"), {"steps": []})["steps"]
+        cur = a_[k - 1] if 1 <= k <= len(a_) else {}
+        names = [p_.get("n", "") for p_ in (cur.get("parts") or [])]
+        print("═══ 이번 번호에서 조심할 것 — 요청차이에서 반복된 실수 유형(건수는 대략) ═══")
+        for t_ in types: print("  · %s (%s건) → %s" % (t_["제목"], t_["건수"], t_["경고"]))
+        sit = []
+        if any("프레임" in n_ for n_ in names): sit.append("판(프레임)이 이번 번호에 들어온다 → 격자는 holefit 로 측정한다(눈대중 금지). 막히면 infer_grid.")
+        ps = load(os.path.join(here, "user_diffs", "pose_stats.json"), {})   # collect_diffs.py 가 사용자의 ❄ 수정 저장에서 자동으로 만든 통계 — 고치고 다시 돌릴 때마다 갱신된다
+        for n_ in sorted(set(names)):
+            s_ = (ps.get("자세") or {}).get(n_)
+            if s_: sit.append("%s: 지금까지 %d건 중 %d건(%d%%)을 사용자가 자세를 고쳤다(돌린 각도 %s) → 방향 근거를 책 그림에서 먼저 읽고 놓은 뒤 좌표로 대조한다. (통계 %s)" % (n_, s_["비교"], s_["고침"], 100 * s_["고침"] // max(1, s_["비교"]), ", ".join("%d°×%d" % (a_, c_) for a_, c_ in s_["각도"][:3]), ps.get("만든때", "?")))
+        if k > 1: sit.append("앞 번호(%d번)까지 만든 모델과 바로 뒤 번호의 책 그림에서 먼저 읽는다 — 책 한 장만 보고 정하지 않는다." % (k - 1))
+        sit.append("사용자가 저장한 ❄·📷 기록이 있으면 그 값이 기준이다(덮어쓰지 않는다).")
+        print("  이번 번호(%d번)에 해당하는 것:" % k)
+        for s_ in sit: print("   ▸ " + s_)
+        if CONT: print("  (--연속 모드: 앞 과정이 안 끝나도 막지 않고 표시만 한다. 표시는 %s_flags.json 에 쌓인다)" % name)
+    except Exception as ex_:
+        print("  (실수 유형 경고를 읽지 못했다: %s — 번호 시작은 계속한다)" % ex_)
 
 # ── 세션 시작 체크(사용자 지시 2026-10-13 "다시 시작하면 개발서버와 로그인을 체크해서 먼저 요청") — 번호 작업·계산에 들어가기 전에 이 블록을 읽고, ❌ 는 사용자에게 먼저 요청한다.
 def _session_check():
     import urllib.request
     up = None
-    for port in (3178, 3177, 3179):
+    for port in (3178,):
         try: urllib.request.urlopen("http://localhost:%d/design.html" % port, timeout=4).read(1); up = port; break
         except Exception: pass
     root = os.path.abspath(os.path.join(here, "..", ".."))
@@ -28,13 +52,14 @@ def _session_check():
             db = sorted(userdone.user_done(_m.group(1)) or ())
         except (SystemExit, Exception): db = None
     print("═══ 세션 시작 체크 (번호 작업 전에 읽는다) ═══")
-    print("  %s 개발 서버: %s" % ("✅" if up else "❌", ("localhost:%d 응답" % up) if up else "응답 없음 → 서버를 켠다(preview_start invent-school-dev2), 다른 채팅 서버가 이미 있으면 그 포트를 쓴다"))
+    print("  %s 개발 서버: %s" % ("✅" if up else "❌", ("localhost:%d 응답" % up) if up else "응답 없음 → 서버를 켠다(preview_start invent-school-dev, 포트 3178)"))
     print("  %s .env.local(SUPABASE 키): %s" % ("✅" if keys else "❌", "있음" if keys else "없음 → 사용자에게 달라고 한다(CLAUDE.md)"))
     print("  %s DB 읽기(사용자 ✓): %s" % ("✅" if db is not None else "❌", ("읽음 — ✓ 번호 %s" % db) if db is not None else "못 읽음 → 멈춘다(통과시키지 않는다)"))
     print("  ⚠ 로그인: 스크립트가 확인할 수 없다. 화면 비교(05 5-5)·❄/📷 확인에는 선생님 계정 로그인이 필요하므로 **새로 시작하거나 새 세션이면 사용자에게 먼저 요청한다**(비밀번호는 대신 입력하지 않는다). 브라우저 pane 에서 로그인 화면이 보이면 아직이다.")
-    print("  ⚠ 읽을 것: SKILL.md 처음부터 → process/05_조립.md 체크리스트 → HANDOFF_<이름>.md → user_diffs/요청차이.md (이번 번호에서 지킬 규칙 3개를 첫 보고 한 줄에)")
+    print("  ⚠ 읽을 것: SKILL.md 처음부터 → process/05_조립.md 체크리스트 → 진행기록_<이름>.md → user_diffs/요청차이.md (이번 번호에서 지킬 규칙 3개를 첫 보고 한 줄에)")
     return up
 _SERVER = _session_check()
+_warn()
 
 # ── 알고 있는 정보 리마인드(사용자 지시 2026-10-13 "새 번호에 들어가면 이미지 작업부터 하지 말고, 이미 알고 있는 정보를 먼저 파악하자" — 드롭체커 28번) ──
 # 이미지 작업(격자·모서리·홀라인) 전에 앞 번호까지 만든 것·쓴 부품·남은 부품·사용자가 바로잡은 것을 먼저 보여 준다. 읽기만 하고 아무것도 쓰지 않는다. 못 읽어도 번호 시작은 막지 않는다.
@@ -65,7 +90,7 @@ def _remind():
         _pf = os.path.join(here, "refs", name, "fits", "%02d_P.json" % (k - 1))
         if os.path.exists(_pf):   # 29번에서 배운 것: 판이 가려져 holefit 가 안 되면 앞 번호 책 그림과 판 무늬를 맞춘다(눈으로 안 된다고 건너뛰지 말고 도구를 먼저 돌린다)
             print('  ⑥ 판이 이번 번호에서 가려졌으면(앞 번호 %d 판 격자 있음): holefit → python plate_match.py %s %d %d P --검증 "c,r,h,x,y;…" (앞 번호에서 놓아 3D 가 확정된 리벳 끝·블록 돌기·판 모서리 5개 이상의 칸·높이·픽셀) → infer_grid --anchor. 05_조립.md 0-2 절. 유추 격자는 규칙 점검이 사용자 ✓ 를 요구한다.' % (k - 1, name, k - 1, k))
-        print("  ⑦ 진행 상태 문서: process/HANDOFF_%s.md (앞 번호 절) — 번호 하나로 안 풀리면 05_조립.md 0-1 절." % name)
+        print("  ⑦ 진행 상태 문서: process/진행기록_%s.md (앞 번호 절) — 번호 하나로 안 풀리면 05_조립.md 0-1 절." % name)
     except Exception as ex_:
         print("  (리마인드를 읽지 못했다: %s — 번호 시작은 계속한다)" % ex_)
 _remind()
@@ -108,7 +133,7 @@ if k > 1:   # 앞 번호: 사용자 ✓ 또는 지금 내용과 같은 지문의
                 _ok = k - 1 in (userdone.user_done(_mid0.group(1)) or ())
             except (SystemExit, Exception): pass
         if not _ok: _gate.append(("앞 번호 %d" % (k - 1), "사용자 ✓ 도, 지금 내용과 같은 비교 증거(record_check)도 없음", "화면에서 책과 나란히 비교하고 record_check.py 로 증거를 남긴다(05 5-5)"))
-if not _SERVER: _gate.append(("세션 시작 체크", "개발 서버가 응답하지 않음(3177·3178·3179 모두)", "서버를 켜고(preview_start invent-school-dev2 — 다른 채팅이 쓰는 중이면 그 포트를 그대로 쓴다) 사용자에게 로그인을 요청한다"))
+if not _SERVER: _gate.append(("세션 시작 체크", "개발 서버(3178)가 응답하지 않음", "서버를 켜고(preview_start invent-school-dev) 사용자에게 로그인을 요청한다"))
 try:   # 규칙 점검(rulecheck.py) — 앞 번호에 규칙 미달(❌)이 있으면 그것부터 해결해야 다음 번호를 시작한다(사용자 지시 2026-10-12: 도망가지 않고 스스로 문제를 찾아 해결)
     import rulecheck; _fb = rulecheck.first_bad(name)
     if _fb and _fb[0] < k:
@@ -116,10 +141,16 @@ try:   # 규칙 점검(rulecheck.py) — 앞 번호에 규칙 미달(❌)이 있
             _gate.append(("규칙 점검 %d번" % _fb[0], "%s — %s" % (_t, _why), "python rulecheck.py %s %d 로 해결 방법을 보고 먼저 끝낸다(%s)" % (name, _fb[0], rulecheck.FIX.get(_t.split()[0], "05_조립.md"))))
 except Exception as _e:
     _gate.append(("규칙 점검", "rulecheck 를 실행하지 못함: %s" % str(_e)[:80], "python rulecheck.py %s 를 돌려 오류를 본다" % name))
-if _gate:
+if _gate and CONT:   # 반자동 연속 진행: 막지 않는다. 미완 항목을 표시해 두고 이 번호를 계속한다(마지막 검토 때 사용자가 위험한 곳부터 본다).
+    print("═══ %s %d번 — ⚠ 앞 과정이 안 끝났다(--연속 모드라 막지 않고 표시만 한다) ═══" % (name, k))
+    for i, (p, why, how) in enumerate(_gate, 1): print("  %d. [%s] %s\n       → %s" % (i, p, why, how))
+    _fp = os.path.join(here, name + "_flags.json"); _fl = load(_fp, {})
+    _fl[str(k)] = [{"과정": p, "이유": why, "해결": how} for p, why, how in _gate]; save(_fp, _fl)
+    print("  → 표시를 %s_flags.json 에 남겼다. 이 번호를 계속하고, 마지막 검토 목록에 올라간다." % name)
+elif _gate:
     print("═══ %s %d번 — ❌ 앞 과정이 끝나지 않았다: 이것부터 하고 넘어간다 ═══" % (name, k))
     for i, (p, why, how) in enumerate(_gate, 1): print("  %d. [%s] %s\n       → %s" % (i, p, why, how))
-    sys.exit("(읽기 표·규칙 파일은 만들지 않았다. 위를 끝낸 뒤 다시 돌린다)")
+    sys.exit("(읽기 표·규칙 파일은 만들지 않았다. 위를 끝낸 뒤 다시 돌린다. 막지 않고 표시만 하려면 --연속 을 붙인다)")
 
 # ① 읽기 표 칸
 rp =os.path.join(here, name + "_read.json"); rd = load(rp, {})
@@ -141,7 +172,7 @@ ax = load(os.path.join(R, NN + "_axes.json"), None)
 state = [
     ("책 그림 크롭", os.path.exists(os.path.join(R, NN + ".jpg")), "refs/%s/%s.jpg" % (name, NN)),
     ("가위·회전값(_lv.json)", os.path.exists(os.path.join(R, NN + "_lv.json")), "refs/%s/%s_lv.json (crop·angle)" % (name, NN)),
-    ("구멍 점(fits)", os.path.isdir(fits) and any(f.startswith(NN + "_") and f.endswith(".json") for f in os.listdir(fits)), "blobfit / fit_corners / fit_row → fits/%s_<라벨>.json" % NN),
+    ("구멍 점(fits)", os.path.isdir(fits) and any(f.startswith(NN + "_") and f.endswith(".json") for f in os.listdir(fits)), "holefit.py → fits/%s_<라벨>.json" % NN),
     ("방향(_axes.json, fit 포함)", bool(ax and ax.get("fit")), "python axes_fit.py %s %d <라벨> <칸수> <줄수> <칸방향> <줄방향>" % (name, k)),
     ("격자 그림(NN_2)", os.path.exists(os.path.join(R, NN + "_2.jpg")), "python refs_rect.py %s %d" % (name, k)),
 ]
