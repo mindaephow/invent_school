@@ -388,12 +388,92 @@
     bx.appendChild(p); bx.appendChild(ok); ov.appendChild(bx); document.body.appendChild(ov); ok.focus();
   }
   window.__ivsNotice = notice;   // design-notes.js(그리기·메모)도 같은 안내 모달을 쓴다
+  // 확인/취소 모달: 확인(또는 Enter)이면 true, 취소(또는 Esc)면 false 로 풀린다
+  function ask(msg) {
+    return new Promise((resolve) => {
+      const ov = document.createElement('div');
+      ov.style.cssText = 'position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;';
+      const bx = document.createElement('div');
+      bx.style.cssText = 'background:#fff;border-radius:16px;padding:22px 28px 18px;min-width:240px;max-width:80vw;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.3);font:700 15px sans-serif;color:#111827;';
+      const p = document.createElement('div'); p.textContent = msg; p.style.cssText = 'margin-bottom:16px;line-height:1.5;white-space:pre-line;';
+      const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:10px;justify-content:center;';
+      const mk = (label, bg, fg) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.style.cssText = 'padding:8px 26px;border-radius:999px;border:0;background:' + bg + ';color:' + fg + ';font:700 14px sans-serif;cursor:pointer;'; return b; };
+      const cancel = mk('취소', '#e5e7eb', '#111827'), ok = mk('확인', '#2563eb', '#fff');
+      const done = (v) => { ov.remove(); document.removeEventListener('keydown', onKey, true); resolve(v); };
+      const onKey = (e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); done(true); } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(false); } };
+      ok.addEventListener('click', () => done(true)); cancel.addEventListener('click', () => done(false)); document.addEventListener('keydown', onKey, true);
+      row.appendChild(cancel); row.appendChild(ok); bx.appendChild(p); bx.appendChild(row); ov.appendChild(bx); document.body.appendChild(ov); ok.focus();
+    });
+  }
+  // 자동 검사 경고(관리자 전용): public/design-warnings.js(scripts/assembly-tools/insertion_check.js 가 만듦)의 경고를 단계 번호 옆 ⚠로 보이고, 오른쪽 아래 카드에서 관리자가 "문제없음"/"해결요청"을 고른다. 고른 결과는 ivs_assembly_checks 에 저장.
+  let checkVerdicts = {}; // '단계|경고키' → 'ok' | 'fix'
+  const warnsOf = (i) => (def && window.IVS_ASM_WARNINGS && window.IVS_ASM_WARNINGS[def.id] && window.IVS_ASM_WARNINGS[def.id][i]) || [];
+  function warnMark(i) {
+    const w = warnsOf(i); if (!w.length) return '';
+    const v = w.map((x) => checkVerdicts[i + '|' + x.key]);
+    return v.some((x) => !x) ? ' ⚠' : v.some((x) => x === 'fix') ? ' 🔧' : '';
+  }
+  function paintWarn() {
+    let box = $('asmWarnBox');
+    const w = isAdm() && step >= 1 ? warnsOf(step).filter((x) => checkVerdicts[step + '|' + x.key] !== 'ok') : []; // 문제없음으로 고른 경고는 카드에서 뺀다
+    if (!w.length) { if (box) box.hidden = true; return; }
+    if (!box) {
+      box = document.createElement('div'); box.id = 'asmWarnBox';
+      box.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:60;width:330px;max-height:45vh;overflow:auto;background:#fff;border:2px solid #f59e0b;border-radius:14px;padding:10px 12px;box-shadow:0 8px 28px rgba(0,0,0,.25);font:13px/1.45 sans-serif;color:#111827;';
+      try { const sp = JSON.parse(localStorage.getItem('ivs-asm-warn-pos') || 'null'); if (sp) { box.style.left = sp.left + 'px'; box.style.top = sp.top + 'px'; box.style.right = 'auto'; box.style.bottom = 'auto'; } } catch (e) { /* 위치를 못 읽어도 기본 자리 */ }
+      // 머리줄을 잡고 끌면 옮긴다(위치는 이 브라우저에 기억)
+      box.addEventListener('pointerdown', (ev) => {
+        const hd = ev.target.closest && ev.target.closest('[data-drag]'); if (!hd || ev.target.closest('button')) return;
+        const r = box.getBoundingClientRect(), dx = ev.clientX - r.left, dy = ev.clientY - r.top;
+        const mv = (e) => {
+          const W = box.offsetWidth, H = Math.min(box.offsetHeight, 60), left = Math.max(0, Math.min(window.innerWidth - W, e.clientX - dx)), top = Math.max(0, Math.min(window.innerHeight - H, e.clientY - dy));
+          box.style.left = left + 'px'; box.style.top = top + 'px'; box.style.right = 'auto'; box.style.bottom = 'auto';
+        };
+        const up = () => { document.removeEventListener('pointermove', mv); document.removeEventListener('pointerup', up);
+          try { localStorage.setItem('ivs-asm-warn-pos', JSON.stringify({ left: parseFloat(box.style.left), top: parseFloat(box.style.top) })); } catch (e) { /* */ } };
+        document.addEventListener('pointermove', mv); document.addEventListener('pointerup', up); ev.preventDefault();
+      });
+      document.body.appendChild(box);
+    }
+    let folded = false; try { folded = localStorage.getItem('ivs-asm-warn-folded') === '1'; } catch (e) { /* */ }
+    box.hidden = false; box.innerHTML = '';
+    const h = document.createElement('div'); h.dataset.drag = '1'; h.style.cssText = 'display:flex;align-items:center;gap:8px;font-weight:700;cursor:move;user-select:none;touch-action:none;' + (folded ? '' : 'margin-bottom:6px;');
+    const ht = document.createElement('span'); ht.style.flex = '1'; ht.textContent = '⚠ 자동 검사 경고 · ' + step + '번째 단계' + (folded ? ' (' + w.length + '건)' : ''); h.appendChild(ht);
+    const fb = document.createElement('button'); fb.type = 'button'; fb.textContent = folded ? '▴ 펼치기' : '▾ 접기'; fb.title = '카드를 접거나 펼쳐요';
+    fb.style.cssText = 'padding:2px 9px;font-size:12px;font-weight:600;border-radius:999px;border:1px solid #d1d5db;background:#fff;color:#111827;cursor:pointer;';
+    fb.addEventListener('click', () => { try { localStorage.setItem('ivs-asm-warn-folded', folded ? '0' : '1'); } catch (e) { /* */ } paintWarn(); });
+    h.appendChild(fb); box.appendChild(h);
+    if (folded) return;
+    const hint = document.createElement('div'); hint.style.cssText = 'font-size:11.5px;color:#6b7280;margin-bottom:6px;'; hint.textContent = '몸통 상자 근사라 꺾인 프레임·서브 조립은 오경고일 수 있어요. 화면을 보고 골라 주세요.'; box.appendChild(hint);
+    w.forEach((x) => {
+      const v = checkVerdicts[step + '|' + x.key], row = document.createElement('div');
+      row.style.cssText = 'border-top:1px solid #e5e7eb;padding:6px 0;' + (v ? 'opacity:.65;' : '');
+      const t = document.createElement('div'); t.textContent = x.text; row.appendChild(t);
+      const bar = document.createElement('div'); bar.style.cssText = 'display:flex;gap:6px;margin-top:5px;align-items:center;';
+      const mk = (label, val, on) => {
+        const b = document.createElement('button'); b.type = 'button'; b.textContent = label;
+        b.style.cssText = 'padding:4px 10px;font-size:12px;font-weight:600;border-radius:999px;border:1px solid #d1d5db;background:' + (v === val ? on : '#fff') + ';color:' + (v === val ? '#fff' : '#111827') + ';cursor:pointer;';
+        b.addEventListener('click', async () => {
+          const b2 = bridge(); if (!b2 || !b2.checkStore || !def) return;
+          const next = v === val ? null : val, mine = step; // 같은 버튼을 다시 누르면 선택 취소
+          if (!(await ask(next === 'ok' ? '"문제없음"으로 저장할까요?\n저장하면 이 경고는 더 이상 보이지 않아요.' : next === 'fix' ? '"해결요청"으로 저장할까요?\n단계 번호 옆에 🔧가 표시돼요.' : '이 선택을 취소할까요?'))) return;
+          try { await b2.checkStore.set(def.id, mine, x.key, next); if (next) checkVerdicts[mine + '|' + x.key] = next; else delete checkVerdicts[mine + '|' + x.key]; paintStatus(); }
+          catch (e) { notice('저장에 실패했습니다: ' + e.message + ' (supabase/assembly_checks.sql 을 실행했는지 확인)'); }
+        });
+        return b;
+      };
+      bar.appendChild(mk('✅ 문제없음', 'ok', '#16a34a')); bar.appendChild(mk('🔧 해결요청', 'fix', '#dc2626'));
+      if (v) { const s2 = document.createElement('span'); s2.style.cssText = 'font-size:11.5px;color:#6b7280;'; s2.textContent = v === 'ok' ? '문제없음으로 표시됨' : '해결요청됨'; bar.appendChild(s2); }
+      row.appendChild(bar); box.appendChild(row);
+    });
+  }
   const STATUS_LABEL = { done: '✅ 완료', edit: '🛠 수정중' };
   function paintStatus() {
     const adm = isAdm();
     [$('asmSteps'), $('asmStageSteps')].forEach((box) => { if (!box) return;
       box.querySelectorAll('button[data-step]').forEach((b) => { const i = Number(b.dataset.step), st = adm ? stepStatus[i] : null, tag = i === last() ? '완성' : stepTag(i);
-        b.textContent = tag + (st === 'done' ? ' ✓' : st === 'edit' ? ' 🛠' : ''); }); });
+        b.textContent = tag + (st === 'done' ? ' ✓' : st === 'edit' ? ' 🛠' : '') + (adm ? warnMark(i) : ''); }); });
+    paintWarn();
     const sb = $('asmStatusBtn'); if (!sb) return;
     sb.hidden = !adm || step < 1;   // 완성에도 체크·모습 기록 버튼을 보인다(사용자 지시 2026-10-05)
     { const tb = $('asmThumbBtn'); if (tb) tb.hidden = sb.hidden; }
@@ -591,7 +671,13 @@
     if (curBtn) box.scrollLeft = curBtn.offsetLeft - box.clientWidth / 2 + curBtn.offsetWidth / 2;
   }
 
+  // 새로고침(F5)해도 보던 차시·번호로 돌아오도록 조립 보기 중 위치를 기억한다(사용자 지시 2026-10-14: "큐보2권 3차시 15번에서 새로고침하면 다시 그곳으로"). 조립 보기를 닫으면 지운다.
+  function saveLast() {
+    if (!viewing || step < 1) return;
+    try { localStorage.setItem('ivs-asm-last', JSON.stringify({ sel: [...document.querySelectorAll('select')].slice(0, 3).map((x) => x.value), step })); } catch (e) { /* 저장 못 해도 보기는 된다 */ }
+  }
   function render() {
+    saveLast();
     const b = bridge();
     const { list, guides, missing, stored, storedThumb, storedSlot, storedSlots, storedThumbBy, storedTypes, targets, orders, viewEff } = buildList(step);
     window.__asmStored = storedTypes; // design.html 의 사용 부품 목록이 읽는다
@@ -821,7 +907,7 @@
     $('asmSlider').max = String(last());
     buildStepButtons();
     savedCams = {};
-    ensureStatusBtn(); posesDB = {}; if (b.poseStore) b.poseStore.load(def.id).then((m) => { posesDB = m || {}; paintStatus(); if (Object.keys(posesDB).length && viewing) render(); }); thumbsDB = {}; if (b.thumbStore) b.thumbStore.load(def.id).then((m) => { thumbsDB = m || {}; pushSlotThumbs(); }); stepStatus = {}; if (isAdm() && b.statusStore) b.statusStore.load(def.id).then((m) => { stepStatus = m || {}; paintStatus(); });
+    ensureStatusBtn(); posesDB = {}; if (b.poseStore) b.poseStore.load(def.id).then((m) => { posesDB = m || {}; paintStatus(); if (Object.keys(posesDB).length && viewing) render(); }); thumbsDB = {}; if (b.thumbStore) b.thumbStore.load(def.id).then((m) => { thumbsDB = m || {}; pushSlotThumbs(); }); checkVerdicts = {}; if (isAdm() && b.checkStore) b.checkStore.load(def.id).then((m) => { checkVerdicts = m || {}; paintStatus(); }); stepStatus = {}; if (isAdm() && b.statusStore) b.statusStore.load(def.id).then((m) => { stepStatus = m || {}; paintStatus(); });
     if (b.camStore) b.camStore.load(def.id).then((m) => { savedCams = m || {}; paintStatus(); if (viewing) render(); }); // 관리자가 저장한 단계별 시점
     if (refsFor !== def.id) loadRefs();
     go(last()); // 처음엔 완성된 모습부터 보여준다
@@ -833,6 +919,8 @@
     stop();
     if (!viewing) return;
     viewing = false;
+    try { localStorage.removeItem('ivs-asm-last'); } catch (e) { /* */ }
+    { const wb = $('asmWarnBox'); if (wb) wb.hidden = true; }
     setStudioTitle(false);
     $('asmBar').hidden = true;
     const mm = $('asmMarkMove2'); if (mm && mm.dataset.on === '1') { mm.dataset.on = '0'; mm.textContent = '📍 표시하기'; mm.style.background = mm.style.color = ''; if (b) b.markMove(false); } // 닫을 땐 사진 없이 끈다
@@ -1027,6 +1115,7 @@
   // 새로고침 버튼으로 다시 열었으면, 보던 차시(분류·권·차시 선택)와 단계를 자동으로 다시 연다
   (function restoreAfterReload() {
     let st = null; try { st = JSON.parse(sessionStorage.getItem('ivs-asm-restore') || 'null'); sessionStorage.removeItem('ivs-asm-restore'); } catch (e) { st = null; }
+    if (!st) { try { st = JSON.parse(localStorage.getItem('ivs-asm-last') || 'null'); } catch (e) { st = null; } } // 일반 새로고침: 마지막으로 보던 위치
     if (!st || !Array.isArray(st.sel)) return;
     let tries = 0;
     const timer = setInterval(() => {

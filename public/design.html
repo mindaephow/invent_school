@@ -792,6 +792,7 @@
 <script src="design-mates.js"></script>
 <script src="design-assembly.js"></script>
 <script src="design-collision.js"></script>
+<script src="design-warnings.js"></script>
 <script src="design-robot-categories.js"></script>
 <script src="design-notes.js" defer></script>
 <script>
@@ -5637,6 +5638,23 @@
         const res = status
           ? await fetch(SUPABASE_URL + '/rest/v1/ivs_assembly_status?on_conflict=assembly_id,step', { method: 'POST', headers: this._h({ Prefer: 'resolution=merge-duplicates,return=minimal' }), body: JSON.stringify([{ assembly_id: assemblyId, step, status, updated_at: new Date().toISOString() }]) })
           : await fetch(SUPABASE_URL + '/rest/v1/ivs_assembly_status?assembly_id=eq.' + encodeURIComponent(assemblyId) + '&step=eq.' + step, { method: 'DELETE', headers: this._h() });
+        if (!res.ok) throw new Error('(' + res.status + ') ' + (await res.text()).slice(0, 100));
+      }
+    },
+    // 자동 검사 경고에 관리자가 고른 결과(ivs_assembly_checks): 'ok' 문제없음 / 'fix' 해결요청. 표가 없으면 빈 값.
+    checkStore: {
+      _h(extra){ return Object.assign({ apikey: SUPABASE_KEY, Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' }, extra || {}); },
+      async load(assemblyId){
+        try {
+          const res = await fetch(SUPABASE_URL + '/rest/v1/ivs_assembly_checks?select=step,issue_key,verdict&assembly_id=eq.' + encodeURIComponent(assemblyId), { headers: this._h() });
+          if (!res.ok) return {};
+          const out = {}; (await res.json()).forEach(r => { if (r && r.verdict) out[r.step + '|' + r.issue_key] = r.verdict; }); return out;
+        } catch (e) { return {}; }
+      },
+      async set(assemblyId, step, issueKey, verdict){
+        const res = verdict
+          ? await fetch(SUPABASE_URL + '/rest/v1/ivs_assembly_checks?on_conflict=assembly_id,step,issue_key', { method: 'POST', headers: this._h({ Prefer: 'resolution=merge-duplicates,return=minimal' }), body: JSON.stringify([{ assembly_id: assemblyId, step, issue_key: issueKey, verdict, updated_at: new Date().toISOString() }]) })
+          : await fetch(SUPABASE_URL + '/rest/v1/ivs_assembly_checks?assembly_id=eq.' + encodeURIComponent(assemblyId) + '&step=eq.' + step + '&issue_key=eq.' + encodeURIComponent(issueKey), { method: 'DELETE', headers: this._h() });
         if (!res.ok) throw new Error('(' + res.status + ') ' + (await res.text()).slice(0, 100));
       }
     },
