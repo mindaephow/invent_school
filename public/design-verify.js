@@ -200,7 +200,7 @@
     if (opt.list) {
       const diffs = []
       const names = new Set([...Object.keys(opt.list), ...Object.keys(counts)])
-      names.forEach((n) => { const a = counts[n] || 0, b = opt.list[n] || 0; if (a !== b) diffs.push(`${n}: 조립도 ${a}개 / 교재 ${b}개`) })
+      names.forEach((n) => { if (n === '리모컨') return; /* 리모컨은 조립도에 넣지 않는다(사용자 지시 2026-10-14) */ const a = counts[n] || 0, b = opt.list[n] || 0; if (a !== b) diffs.push(`${n}: 조립도 ${a}개 / 교재 ${b}개`) })
       const mult = def.listNote ? ` (${def.listNote})` : ''
       report.push(diffs.length ? `교재 부품 LIST 대조: 불일치 ${diffs.length}종${mult} — ${diffs.join(', ')}` : '교재 부품 LIST 대조: 전부 일치')
       if (diffs.length && !def.listNote) issues.push(`교재 부품 LIST 와 개수 불일치 ${diffs.length}종: ${diffs.join(', ')} (의도적이면 def.listNote 에 이유를 적을 것)`)

@@ -6,6 +6,15 @@
 
 const r1 = (v) => Math.round(v * 10) / 10
 
+// 돌기처럼 생겼지만 다른 부품과 결합하는 역할이 없는 부품(사용자 지시 2026-10-14: "캐터필러의 돌기는 돌기의 역할을 하지 않아") — 빈 돌기 목록·후보 계산에서 뺀다.
+// 부품 DB 의 연결점에 inert: true 가 있으면 그것도 같은 취급이다.
+const INERT_PEG_PARTS = new Set(['캐터필러'])
+const isInertPeg = (partName, peg) => INERT_PEG_PARTS.has(partName) || !!(peg && peg.inert)
+
+// 서보혼의 s3·s4 는 뭘 꽂는 구멍이 아니다(사용자 2026-10-14: "저기에 뭘 꼽는 경우가 없을걸") — 빈 구멍 목록·후보 계산에서 뺀다.
+const isInertHole = (n, h) => (/서보혼$/.test(n) && /^s\d/.test(h.id)) || !!h.inert
+
+
 // 조립 데이터의 부품을 "제자리" 배치로 모은다(validate_assembly 와 같은 규칙).
 function finalPose(pt) {
   const moved = pt.move && (pt.move.p || pt.move.by)
@@ -23,6 +32,7 @@ function pickShort(free, used) {
     : '빈 곳: ' + free.join(', ')
 }
 
+
 export function stepContext({ steps, step, conn, F, M, listCounts }) {
   const before = steps.slice(0, step - 1)
   const parts = []
@@ -36,7 +46,7 @@ export function stepContext({ steps, step, conn, F, M, listCounts }) {
   const used = {}
   parts.forEach((q) => { used[q.n] = (used[q.n] || 0) + 1 })
   const remaining = {}
-  if (listCounts) Object.keys(listCounts).forEach((n) => { const left = listCounts[n] - (used[n] || 0); if (left !== 0) remaining[n] = left })
+  if (listCounts) Object.keys(listCounts).filter((n) => n !== '리모컨').forEach((n) => { const left = listCounts[n] - (used[n] || 0); if (left !== 0) remaining[n] = left })
   const lines = []
   lines.push('■ ' + step + '단계 직전 상태 (앞 ' + (step - 1) + '단계까지 부품 ' + parts.length + '개)')
   // ① 이미 쓴 부품 ② 남은 부품
@@ -55,9 +65,11 @@ export function stepContext({ steps, step, conn, F, M, listCounts }) {
   lines.push('')
   lines.push('부품별 빈 구멍·빈 돌기 (찬 곳은 앞 단계에서 이미 끼운 곳):')
   let shown = 0
+  const entries = []
   parts.forEach((q) => {
-    const c = conn[q.n]
-    if (!c) return
+    const c0 = conn[q.n]
+    if (!c0) return
+    const c = { ...c0, pegs: (c0.pegs || []).filter((x) => !isInertPeg(q.n, x)), holes: (c0.holes || []).filter((x) => !isInertHole(q.n, x)) }
     const rec = F.describe({ n: q.n, p: q.p, r: q.r }, c, q.no)
     const ents = []
     rec.faces.forEach((f) => {
@@ -78,8 +90,19 @@ export function stepContext({ steps, step, conn, F, M, listCounts }) {
       const face = twin ? e.f.key.replace(/ [+-]/, ' ±') + ' (양면 같음)' : e.f.key + ' (' + e.f.월드방향 + ' 쪽)'
       out.push('   ' + face + ': 총 ' + e.f.items.length + '개 · 빈 ' + e.free.length + '개 — ' + pickShort(e.free, e.usedL))
     })
-    if (out.length) { shown++; lines.push('· ' + rec.name + ' (' + q.step + '단계에 놓음)'); lines.push(...out) }
+    if (out.length) entries.push({ n: q.n, no: q.no, step: q.step, name: rec.name, out })
   })
+  // 같은 단계에 놓은 같은 부품이 똑같은 모양이면(예: 블록 여러 개) 한 항목으로 묶는다
+  for (let i = 0; i < entries.length; ) {
+    let j = i
+    const sig = (e) => e.n + '|' + e.step + '|' + e.out.map((l) => l.replace(/^\s+/, '')).join('\n')
+    while (j + 1 < entries.length && sig(entries[j + 1]) === sig(entries[i])) j++
+    shown++
+    if (j > i) lines.push('· ' + entries[i].n + ' ' + entries[i].no + '~' + entries[j].no + '번 (' + entries[i].step + '단계에 놓음, ' + (j - i + 1) + '개가 모두 같은 상태)')
+    else lines.push('· ' + entries[i].name + ' (' + entries[i].step + '단계에 놓음)')
+    lines.push(...entries[i].out)
+    i = j + 1
+  }
   if (!shown) lines.push('(빈 구멍·돌기가 있는 부품이 없음)')
 
   // ④ 이번 단계 데이터에 들어 있는 것(검토할 때): 새 부품과 그 결합

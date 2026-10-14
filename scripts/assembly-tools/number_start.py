@@ -46,7 +46,7 @@ def _remind():
         used = {}
         for st_ in a_[:k - 1]:
             for pt_ in st_.get("parts", []): used[pt_.get("n")] = used.get(pt_.get("n"), 0) + 1
-        left = {n_: c_ - used.get(n_, 0) for n_, c_ in lst.items() if c_ - used.get(n_, 0) > 0}
+        left = {n_: c_ - used.get(n_, 0) for n_, c_ in lst.items() if n_ != "리모컨" and c_ - used.get(n_, 0) > 0}   # 리모컨은 조립도에 넣지 않는다(사용자 지시 2026-10-14)
         print("  ① 앞 번호(%d번)까지 쓴 부품 %d개 / 남은 부품(LIST 대비): %s" % (k - 1, sum(used.values()), ", ".join("%s %d" % (n_, c_) for n_, c_ in left.items()) or "없음"))
         # ② 앞 번호 읽기 표 — 놓은 방법·열린 사항(정정·확인 대기)
         rd = load(os.path.join(here, name + "_read.json"), {})

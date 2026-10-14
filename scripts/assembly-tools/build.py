@@ -196,3 +196,14 @@ if write:  # (규칙 확인은 위에서 이미 검사)
     _m = re.search(r'id: "(cubo-\d+-[A-Za-z0-9_]+)"', open(name + "_entry.js", encoding="utf-8").read())   # 항목 파일의 id(2권은 cubo-2-...). 없으면 1권 규칙
     rc, out = run([sys.executable, "emit.py", name + "_entry.js", _m.group(1) if _m else "cubo-1-" + name]); print(out.strip())
     if rc == 0: json.dump({"last_built": max([_k for _k, _st in enumerate(asm, 1) if _st.get("parts")] or [0])}, open(name + "_gate.json", "w", encoding="utf-8"))
+    # 번호를 마무리(--write)할 때마다 자동 검사 경고 목록(public/design-warnings.js)도 새로 만든다. 경고는 막지 않는다 — 관리자 화면(⚠)에서 "문제없음/해결요청"을 고른다.
+    if rc == 0:
+        try:
+            _rc2, _o2 = run(["node", "insertion_check.js"], show=False)
+            _mine = [l_ for l_ in _o2.splitlines() if _m and l_.startswith(_m.group(1) + " ")] or [l_ for l_ in _o2.splitlines() if l_.startswith("cubo-") and name in l_]
+            print("자동 검사 경고 목록 갱신(insertion_check):", (_mine[0] if _mine else ("완료" if _rc2 == 0 else "실패 — " + _o2.strip()[:120])))
+        except Exception as _e2:
+            print("자동 검사 경고 목록을 갱신하지 못함(작업은 계속):", str(_e2)[:100])
+# 검사 파일 감시(CCTV, gate_watch.py): 규칙을 지키는 검사 도구가 사용자가 마지막으로 확인한 상태에서 바뀌었으면 매번 여기서 한 줄로 보인다(막지는 않는다).
+try: print(subprocess.run([sys.executable, "gate_watch.py", "--brief"], capture_output=True, text=True, encoding="utf-8").stdout.strip())
+except Exception as _e3: print("검사 파일 감시를 실행하지 못함:", str(_e3)[:80])

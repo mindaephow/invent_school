@@ -51,6 +51,7 @@ def bush_wrong(A, k):
 def apply(A, name):
     here = os.path.dirname(os.path.abspath(__file__))
     lst = json.load(open(os.path.join(here, name + "_list.json"), encoding="utf-8")) if os.path.exists(os.path.join(here, name + "_list.json")) else {}
+    lst.pop("리모컨", None)   # 리모컨은 조립도에 넣지 않는다(사용자 지시 2026-10-14) — LIST 대조에서 뺀다
     rd = json.load(open(os.path.join(here, name + "_read.json"), encoding="utf-8")) if os.path.exists(os.path.join(here, name + "_read.json")) else {}
     rl = json.load(open(os.path.join(here, name + "_rules.json"), encoding="utf-8")) if os.path.exists(os.path.join(here, name + "_rules.json")) else {}
     ip = os.path.join(here, "refs", name, "index.json")
