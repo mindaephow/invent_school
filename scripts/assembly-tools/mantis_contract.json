@@ -83,24 +83,37 @@
 "noPart": false
 },
 "12": {
-"parts": {},
-"noPart": true
+"parts": {
+"큰기어": 1,
+"T축": 2
+},
+"noPart": false
 },
 "13": {
-"parts": {},
-"noPart": true
+"parts": {
+"부시": 1
+},
+"noPart": false
 },
 "14": {
-"parts": {},
-"noPart": true
+"parts": {
+"2단블록": 2,
+"3단블록": 1
+},
+"noPart": false
 },
 "15": {
-"parts": {},
-"noPart": true
+"parts": {
+"29프레임": 1
+},
+"noPart": false
 },
 "16": {
-"parts": {},
-"noPart": true
+"parts": {
+"DC모터": 1,
+"3단블록": 1
+},
+"noPart": false
 },
 "17": {
 "parts": {},
