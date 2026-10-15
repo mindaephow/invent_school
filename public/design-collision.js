@@ -7,6 +7,11 @@
   function coreBoxes(name, dims) {
     const n = String(name || '');
     const sx = dims[0], sy = dims[1], sz = dims[2];
+    // 꺾인 프레임은 정사각·직사각 통상자로 보면 빈 모서리까지 몸통으로 계산돼 이웃 부품과 겹친 것으로 나온다 → 팔마다 상자로 나눈다.
+    //   90도 프레임(30×5×30): 구멍 열이 x=−10(z 방향 팔)·z=−10(x 방향 팔), 팔 너비 10mm.
+    if (/^90도 프레임/.test(n)) return [{ c: [-sx / 2 + 5, 0, 0], h: [5, sy / 2, sz / 2] }, { c: [0, 0, -sz / 2 + 5], h: [sx / 2, sy / 2, 5] }];
+    //   135도 프레임(83.3×5×33.3): 곧은 팔 = 구멍 h4~h9(z=11.5, x −13.5~36.5), 꺾인 팔 = h4→h1 방향 45°(−0.707, −0.707)로 29.7mm + 끝 여백 5mm. 팔 너비 10mm. (연결점 구멍 좌표 기준)
+    if (/^135도 프레임/.test(n)) return [{ c: [11.5, 0, 11.5], h: [30, sy / 2, 5] }, { c: [-25.77, 0, -0.77], h: [17.35, sy / 2, 5], ry: -45 }];
     if (/프레임/.test(n)) return [{ c: [0, 0, 0], h: [sx / 2, sy / 2, sz / 2] }];
     const block = n.match(/(\d+)단블록/);
     // N단블록: 몸통은 길이 10mm×N, 두께 10mm — 앞뒤 면의 돌기(양쪽 5mm)와 양 끝 돌기(5mm)는 제외
@@ -41,6 +46,10 @@
     const ax = axes || axesFromQuat(q);
     const c = [pos.x, pos.y, pos.z];
     for (let k = 0; k < 3; k++) for (let i = 0; i < 3; i++) c[i] += ax[k][i] * box.c[k];
+    if (box.ry) { // 상자 하나만 부품 로컬 y축으로 돌린 것(꺾인 프레임의 비스듬한 팔)
+      const r = box.ry * Math.PI / 180, cs = Math.cos(r), sn = Math.sin(r);
+      return { c, axes: [[0, 1, 2].map((i) => cs * ax[0][i] - sn * ax[2][i]), ax[1], [0, 1, 2].map((i) => sn * ax[0][i] + cs * ax[2][i])], h: box.h };
+    }
     return { c, axes: ax, h: box.h };
   }
 

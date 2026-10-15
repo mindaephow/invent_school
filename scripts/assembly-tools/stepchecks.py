@@ -9,7 +9,7 @@ import userdone, stepfp
 MARK = "\n━ 작업 점검 ━"
 
 def _counts(parts):
-    c = collections.Counter(p.n for p in parts); return c
+    c = collections.Counter(p.n for p in parts if "copyOf" not in p.extra); return c   # copyOf: 복사해서 다른 창고에 보관한 부품(asmlib copy_to_slot)은 읽기 표 부품 수에 넣지 않는다
 
 def _parse(txt):   # "315프레임 1, 3단블록 1" → Counter (이름에 숫자가 있어도 마지막 숫자가 개수)
     c = collections.Counter()

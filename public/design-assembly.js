@@ -247,7 +247,7 @@
     const list = [];
     const guides = [];
     const missing = [];
-    let storedThumb = null, storedEff = 0; const storedEffBy = {}, storedThumbBy = {};
+    let storedThumb = null, storedEff = 0; const storedEffBy = {}, storedThumbBy = {}, storedSlotOvr = {}; // storedSlotOvr: 부품에 slot 을 직접 적은 보관 묶음의 창고(만든 단계의 창고 대신)
     const storedTypes = {}; // 창고에 들어간 부품도 이미 쓴 부품이다 → 사용 부품 숫자·목록에 넣는다(종류 → 개수)
     const stored = {};
     const deferredShift = []; // 화살표 시작점을 먼저 결합하는 부품(리벳)의 떠 있는 자리로 옮기는 일 — 목록이 다 만들어진 뒤에 한다 // 이 단계에서 화면에서 치워 창고에 넣어 둔 부품(이름 → 개수)
@@ -256,13 +256,13 @@
     const flipOn = flipActive(target);
     const viewS = (viewSlot !== null && viewSlot !== slotOfStep(upTo)) ? viewSlot : null; // 다른 창고 화면을 보는 중이면 그 창고에 있는 묶음만 그린다
     let viewEff = 0; // 보는 창고의 묶음이 마지막으로 만들어진 단계(예: 창고 0 = 14번) — 그 단계의 마지막 시점으로 보여 준다
-    const slotByName = {};
+    const slotByName = {}, slotOvr = {}; // slotOvr: 보관 이름 → 부품에 직접 적은 창고(복사해서 다른 창고에 보관)
     // hideMade: 이번 단계 데이터에 { 만든 번호: 보관 이름 } 을 적으면 그 번호에서 만든 부품을 이번 단계에서 숨기고 창고에 둔다 — 새 창고에서 새 부분을 시작할 때 앞 번호(이미 ✓ 한 번호) 부품 데이터를 고치지 않고 이 번호에만 적는다(투석기 16번)
     const hideMade = (def.steps[upTo - 1] && def.steps[upTo - 1].hideMade) || null;
     // 부품 하나만 숨기려면 키를 "만든 번호:부품 순서"(예: "3:2", moveMade 키와 같다)로 적는다 — 번호 전체가 아닌 일부(예: 둘째 유닛)만 창고에 둘 때(✓ 번호의 부품 데이터는 못 고친다).
     const hidHere = (p, made, pi) => !!((p.hideAt && p.hideAt.includes(upTo)) || (hideMade && (hideMade[made] !== undefined || (pi !== undefined && hideMade[made + ':' + pi] !== undefined))));
     const storeOf = (p, made, pi) => ((p.hideAt && p.hideAt.includes(upTo)) ? ((p.store && typeof p.store === 'object' ? p.store[upTo] : p.store) || '보관 중') : (hideMade[made] !== undefined ? hideMade[made] : hideMade[made + ':' + pi]));
-    if (viewS !== null) def.steps.slice(0, upTo).forEach((s2, si2) => (s2.parts || []).forEach((p2, pi2) => { if (hidHere(p2, si2 + 1, pi2)) { const k2 = storeOf(p2, si2 + 1, pi2); slotByName[k2] = Math.max(slotByName[k2] || 0, effStepOf(p2, si2 + 1, upTo)); } }));
+    if (viewS !== null) def.steps.slice(0, upTo).forEach((s2, si2) => (s2.parts || []).forEach((p2, pi2) => { if (hidHere(p2, si2 + 1, pi2)) { const k2 = storeOf(p2, si2 + 1, pi2); slotByName[k2] = Math.max(slotByName[k2] || 0, effStepOf(p2, si2 + 1, upTo)); if (p2.slot !== undefined && p2.slot !== null) slotOvr[k2] = p2.slot; } }));
     // 부품 번호("리벳 3/14"): design-faces.js 의 규칙 — 조립 MCP(get_part_faces)와 같은 번호
     const { numOf } = window.IVS_FACES.numberParts(def.steps);
     def.steps.slice(0, upTo).forEach((s, si) => {
@@ -274,9 +274,9 @@
         if (viewS !== null) { // 창고 화면 보기: 보관 중이던 묶음 중 이 창고에 있는 것만 보이고, 지금 작업하던 부품은 숨긴다
           if (!hidHere(pt, si + 1, pi)) return;
           const k3 = storeOf(pt, si + 1, pi);
-          if (slotOfStep(slotByName[k3] || 0) !== viewS) return;
+          if ((slotOvr[k3] !== undefined ? slotOvr[k3] : slotOfStep(slotByName[k3] || 0)) !== viewS) return;
           viewEff = Math.max(viewEff, effStepOf(pt, si + 1, upTo));
-        } else if (hidHere(pt, si + 1, pi)) { const pick = (v) => (v && typeof v === 'object' ? v[upTo] : v); const k = storeOf(pt, si + 1, pi); stored[k] = (stored[k] || 0) + 1; storedTypes[type] = (storedTypes[type] || 0) + 1; storedEff = Math.max(storedEff, effStepOf(pt, si + 1, upTo)); storedEffBy[k] = Math.max(storedEffBy[k] || 0, effStepOf(pt, si + 1, upTo)); if (pick(pt.storeThumb)) { storedThumb = pick(pt.storeThumb); storedThumbBy[k] = storedThumb; } return; } // store·storeThumb 는 글자 하나 또는 {단계번호: 값} // hideAt: 이 단계에서는 따로 보관해 두고 안 보여준다(예: 비행기 6번은 5번까지 만든 본체와 따로 만드는 조립품)
+        } else if (hidHere(pt, si + 1, pi)) { const pick = (v) => (v && typeof v === 'object' ? v[upTo] : v); const k = storeOf(pt, si + 1, pi); stored[k] = (stored[k] || 0) + 1; storedTypes[type] = (storedTypes[type] || 0) + 1; storedEff = Math.max(storedEff, effStepOf(pt, si + 1, upTo)); storedEffBy[k] = Math.max(storedEffBy[k] || 0, effStepOf(pt, si + 1, upTo)); if (pt.slot !== undefined && pt.slot !== null) storedSlotOvr[k] = pt.slot; if (pick(pt.storeThumb)) { storedThumb = pick(pt.storeThumb); storedThumbBy[k] = storedThumb; } return; } // store·storeThumb 는 글자 하나 또는 {단계번호: 값} // hideAt: 이 단계에서는 따로 보관해 두고 안 보여준다(예: 비행기 6번은 5번까지 만든 본체와 따로 만드는 조립품)
         const useSide = pt.side && upTo < pt.side.until;
         const mvE = window.IVS_moveAt ? window.IVS_moveAt(pt, upTo) : pt.move; // 여러 번 옮긴 부품은 이 단계 이전 가장 마지막 이동
         const moved = mvE && upTo >= mvE.at; // move: 옆자리에서 다 만든 뒤 다른 자리로 한 번 더 옮겨 붙는 단계(예: 풍차 상자를 몸체에 끼우기)
@@ -347,7 +347,7 @@
     }
     { const lf = def.lift && Number(def.lift[target]); if (lf) list.forEach((d) => { d.pos = [d.pos[0], d.pos[1] + lf, d.pos[2]]; if (d.final) d.final = [d.final[0], d.final[1] + lf, d.final[2]]; }); } // lift: 단계 번호 → 그 단계에서만 화면 전체를 y 로 띄운다(바닥 아래에서 올라와야 하는 새 부품이 있는 단계, 꼬마기사 23번)
     const guidesOut = def.guideMode === 'mates' ? mateGuides(list, target) : guides;
-    return { list, guides: guidesOut, missing, stored, storedThumb, storedSlot: storedEff ? slotOfStep(storedEff) : 1, viewEff, storedSlots: Object.fromEntries(Object.keys(storedEffBy).map((k) => [k, slotOfStep(storedEffBy[k])])), storedThumbBy, storedTypes, targets: list.map((d) => d.final || null), orders: list.map((d) => d.order || 1) };
+    return { list, guides: guidesOut, missing, stored, storedThumb, storedSlot: storedEff ? slotOfStep(storedEff) : 1, viewEff, storedSlots: Object.fromEntries(Object.keys(storedEffBy).map((k) => [k, storedSlotOvr[k] !== undefined ? storedSlotOvr[k] : slotOfStep(storedEffBy[k])])), storedThumbBy, storedTypes, targets: list.map((d) => d.final || null), orders: list.map((d) => d.order || 1) };
   }
 
   // 단계 이름표: label 이 있는 단계(예: "창고")는 이름으로, 나머지는 label 없는 단계만 세어 번호를 붙인다
@@ -388,8 +388,9 @@
     bx.appendChild(p); bx.appendChild(ok); ov.appendChild(bx); document.body.appendChild(ov); ok.focus();
   }
   window.__ivsNotice = notice;   // design-notes.js(그리기·메모)도 같은 안내 모달을 쓴다
-  // 확인/취소 모달: 확인(또는 Enter)이면 true, 취소(또는 Esc)면 false 로 풀린다
-  function ask(msg) {
+  // 확인/취소 모달: 확인(또는 Enter)이면 true, 취소(또는 Esc)면 false 로 풀린다.
+  //   opts.note 가 있으면 확인 위에 글 쓰는 칸이 생기고, 확인하면 { note: 적은 글(없으면 '') } 로, 취소하면 false 로 풀린다(칸 안에서 Enter 는 줄바꿈).
+  function ask(msg, opts) {
     return new Promise((resolve) => {
       const ov = document.createElement('div');
       ov.style.cssText = 'position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;';
@@ -399,10 +400,15 @@
       const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:10px;justify-content:center;';
       const mk = (label, bg, fg) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.style.cssText = 'padding:8px 26px;border-radius:999px;border:0;background:' + bg + ';color:' + fg + ';font:700 14px sans-serif;cursor:pointer;'; return b; };
       const cancel = mk('취소', '#e5e7eb', '#111827'), ok = mk('확인', '#2563eb', '#fff');
+      const noteEl = opts && opts.note ? document.createElement('textarea') : null;
+      if (noteEl) { noteEl.rows = 3; noteEl.placeholder = opts.placeholder || '이유·설명 (선택) — 적지 않고 확인해도 돼요';
+        noteEl.style.cssText = 'display:block;width:100%;box-sizing:border-box;margin:0 0 14px;padding:8px 10px;font:400 13px/1.45 sans-serif;border:1px solid #d1d5db;border-radius:10px;resize:vertical;text-align:left;color:#111827;background:#fff;';
+        ['keydown', 'keyup', 'keypress'].forEach((ev) => noteEl.addEventListener(ev, (e) => { if (e.key !== 'Escape') e.stopPropagation(); })); } // 글을 쓰는 동안 화면 단축키가 움직이지 않게(Esc 만 취소로 간다)
+      const val = () => (noteEl ? { note: noteEl.value.trim() } : true);
       const done = (v) => { ov.remove(); document.removeEventListener('keydown', onKey, true); resolve(v); };
-      const onKey = (e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); done(true); } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(false); } };
-      ok.addEventListener('click', () => done(true)); cancel.addEventListener('click', () => done(false)); document.addEventListener('keydown', onKey, true);
-      row.appendChild(cancel); row.appendChild(ok); bx.appendChild(p); bx.appendChild(row); ov.appendChild(bx); document.body.appendChild(ov); ok.focus();
+      const onKey = (e) => { if (e.key === 'Enter') { if (noteEl && e.target === noteEl) return; e.preventDefault(); e.stopPropagation(); done(val()); } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(false); } };
+      ok.addEventListener('click', () => done(val())); cancel.addEventListener('click', () => done(false)); document.addEventListener('keydown', onKey, true);
+      row.appendChild(cancel); row.appendChild(ok); bx.appendChild(p); if (noteEl) bx.appendChild(noteEl); bx.appendChild(row); ov.appendChild(bx); document.body.appendChild(ov); (noteEl || ok).focus();
     });
   }
   // 자동 검사 경고(관리자 전용): public/design-warnings.js(scripts/assembly-tools/insertion_check.js 가 만듦)의 경고를 단계 번호 옆 ⚠로 보이고, 오른쪽 아래 카드에서 관리자가 "문제없음"/"해결요청"을 고른다. 고른 결과는 ivs_assembly_checks 에 저장.
@@ -456,8 +462,11 @@
         b.addEventListener('click', async () => {
           const b2 = bridge(); if (!b2 || !b2.checkStore || !def) return;
           const next = v === val ? null : val, mine = step; // 같은 버튼을 다시 누르면 선택 취소
-          if (!(await ask(next === 'ok' ? '"문제없음"으로 저장할까요?\n저장하면 이 경고는 더 이상 보이지 않아요.' : next === 'fix' ? '"해결요청"으로 저장할까요?\n단계 번호 옆에 🔧가 표시돼요.' : '이 선택을 취소할까요?'))) return;
-          try { await b2.checkStore.set(def.id, mine, x.key, next); if (next) checkVerdicts[mine + '|' + x.key] = next; else delete checkVerdicts[mine + '|' + x.key]; paintStatus(); }
+          const asked = await ask(next === 'ok' ? '"문제없음"으로 저장할까요?\n저장하면 이 경고는 더 이상 보이지 않아요.' : next === 'fix' ? '"해결요청"으로 저장할까요?\n단계 번호 옆에 🔧가 표시돼요.' : '이 선택을 취소할까요?',
+            next ? { note: true, placeholder: next === 'ok' ? '문제가 아닌 이유 (선택) — 예: 부시가 구멍을 지나가는 것이라 문제없음' : '고쳐야 할 이유 (선택)' } : undefined);
+          if (!asked) return;
+          const noteTxt = next && asked.note ? asked.note : undefined; // 적은 글이 있을 때만 설명을 같이 저장한다(설명 칸이 없는 DB 에서도 판정은 저장된다)
+          try { await b2.checkStore.set(def.id, mine, x.key, next, noteTxt); if (next) checkVerdicts[mine + '|' + x.key] = next; else delete checkVerdicts[mine + '|' + x.key]; paintStatus(); }
           catch (e) { notice('저장에 실패했습니다: ' + e.message + ' (supabase/assembly_checks.sql 을 실행했는지 확인)'); }
         });
         return b;
@@ -621,8 +630,8 @@
     refModal(title, [{ img: 'data:image/gif;base64,R0lGODlhAQABAAAAACw=', label: '불러오는 중…' }]);
     try {
       const rows = await b.refStore.get(def.id, steps);
-      rows.sort((a, c) => (a.step - c.step) || (String(a.note) < String(c.note) ? -1 : String(a.note) > String(c.note) ? 1 : 0)); // 설명 앞 ①②③④ 순서: 원본 → 1차 격자(원본 위) → 돌린 그림 → 2차 격자(돌린 그림 + 수평 기준선)
-      const KIND = { '①': '① 교재 원본', '②': '② 1차 격자(원본 위, 원근 그대로)', '③': '③ 수평으로 돌린 그림', '④': '④ 2차 격자(돌린 그림 위 + 수평 기준선)' };
+      rows.sort((a, c) => (a.step - c.step) || (String(a.note) < String(c.note) ? -1 : String(a.note) > String(c.note) ? 1 : 0)); // 설명 앞 ①②③④ 순서
+      const KIND = { '①': '① 교재 원본', '②': '② 1차 격자(원본 위, 원근 그대로)', '③': '③ 책 그림 작업 1', '④': '④ 책 그림 작업 2' };
       refModal(title, rows.map((r) => ({ img: r.img, note: String(r.note || '').replace(/^[①②③④]\s*/, ''), label: r.step === 0 ? '교재 맨 앞 완성품 사진' : r.step === 99 ? '교재 마지막 쪽 "완성" 그림' : (KIND[String(r.note || '').charAt(0)] || (r.idx ? '그림 ' + (r.idx + 1) : '교재 그림')) })));
     } catch (e) { refModal(title, []); const p = document.querySelector('#asmRefModal p'); if (p) p.textContent = '불러오지 못했어요: ' + e.message; }
   }
@@ -704,8 +713,8 @@
     // 이번 단계에 끼우는 부품과 그 끼워지는 자리를 화면 가운데에 크게 보여준다(나머지 부품은 배경)
     const focus = list.filter((d) => d.isNew).map((d) => d.pos).concat(guides.filter((g) => g.to).map((g) => g.to)); // 맞물림 방식 안내는 좌표가 없다(연결점이 부품에 붙어 있다)
     const stc = (step > 0 && step < last()) ? def.steps[step - 1].cam : null; // cam.tight: 이번에 끼우는 부분만 크게(교재가 그 부분만 크게 그린 단계)
-    { const axAt = stc && Array.isArray(stc.axes) ? stc.axes : null; const axKey = axAt ? axAt.join(',') : ''; // cam.axes: 이 단계의 기준점(방향선 원점)
-      if (axKey !== lastAxKey) { lastAxKey = axKey; b.axes(true, axAt); } }
+    { const axAt = stc && Array.isArray(stc.axes) ? stc.axes : null; const axNm = def.axisNames && step >= (def.axisNames.at || 1) ? def.axisNames : null; const axKey = (axAt ? axAt.join(',') : '') + (axNm ? '|n' : ''); // cam.axes: 이 단계의 기준점(방향선 원점) · def.axisNames: 이 단계부터 축 이름을 바꿔 보인다(완성 사진 방향 기준)
+      if (axKey !== lastAxKey) { lastAxKey = axKey; b.axes(true, axAt, axNm); } }
     const viewActive = viewSlot !== null && viewSlot !== slotOfStep(step); // 다른 창고 화면을 볼 땐 그 단계의 확대 설정을 쓰지 않고 보이는 부품 전체에 맞춘다
     const camFocus = !viewActive && stc && Array.isArray(stc.focus) && stc.focus.length ? stc.focus : null; // cam.focus: 부품이 없는 단계 등에서 이 점들을 화면 가운데에 크게(조립 프로그램이 지정)
     const axPt = stc && Array.isArray(stc.axes) ? stc.axes : [0, 0, 0]; // 바닥 기준선(방향선) 자리 — 카메라가 보는 범위에 항상 같이 들어오게 한다

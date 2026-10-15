@@ -1,1 +1,1 @@
-{"global": {"X": [55.0, -22.7], "Y": [2.1, -55.0], "Z": [55.0, 37.9]}, "replace_lines": true, "fit": {"from": "14_P.json", "err_px": 1.98, "points": 15, "theta": -0.7, "phi": 1.0, "cols": "+X", "rows": "-Y"}, "no_rotate": true}
+{"global": {"X": [55.0, -22.7], "Y": [2.1, -55.0], "Z": [55.0, 37.9]}, "fit": {"from": "14_P.json", "err_px": 1.98, "points": 15, "theta": -0.7, "phi": 1.0, "cols": "+X", "rows": "-Y"}, "no_rotate": true, "relabel": {"X": ["Z", -1], "Z": ["X", 1]}}

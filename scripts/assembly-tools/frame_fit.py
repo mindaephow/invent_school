@@ -79,7 +79,7 @@ def main():
     json.dump({"cols": len(order), "rows": 1, "pts": pts, "tool": "infer", "err_px": round(mean_e, 2), "max_err_px": round(max_e, 2), "est": [], "origin_cell": [order.index(org) + 1, 1],
                "visible_cells": [[k + 1, 1] for k, h in enumerate(order) if h in pix], "name": "%s %d번 %s: 기준 부품 %s 구멍 %d개(관측) + 부품 모델 3차원 좌표 PnP(%d점 평균 %.2f·최대 %.2f px) — frame_fit.py" % (name, step, label, part, len(pix), len(use), mean_e, max_e), "evidence": ev},
               open(D + "fits/%02d_%s.json" % (step, label), "w", encoding="utf-8"), ensure_ascii=False)
-    json.dump({"global": d, "replace_lines": True, "fit": {"from": "%02d_%s.json" % (step, label), "err_px": round(mean_e, 2), "points": len(use), "theta": round(b["th"], 2), "phi": round(b["ph"], 2), "cols": "+X", "rows": "+Y"}, "no_rotate": True},
+    json.dump({"global": d, "fit": {"from": "%02d_%s.json" % (step, label), "err_px": round(mean_e, 2), "points": len(use), "theta": round(b["th"], 2), "phi": round(b["ph"], 2), "cols": "+X", "rows": "+Y"}, "no_rotate": True},
               open(D + "%02d_axes.json" % step, "w", encoding="utf-8"), ensure_ascii=False)
     ov = im.copy()
     for h in pix:

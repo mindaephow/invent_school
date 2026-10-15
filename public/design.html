@@ -5232,7 +5232,7 @@
       return moves.length;
     },
     // 바닥(모눈) 위 X·Z 방향선(원점 (0,0,0)에서 +와 − 양쪽으로)과 위쪽 Y — 위치를 말할 때 "+X쪽", "−Z쪽"처럼 기준으로 쓴다.
-    axes(on, at){
+    axes(on, at, names){   // names: 조립도별 축 이름 바꿔 보이기(완성 사진 방향 기준) { X:[새 이름, 부호], Z:[...] } — 선 위치는 그대로, 글자·색만 바꾼다
       if (assemblyAxesGroup) { scene.remove(assemblyAxesGroup); assemblyAxesGroup.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } }); assemblyAxesGroup = null; }
       if (!on) return;
       const mkGroup = (pos) => {
@@ -5260,6 +5260,7 @@
       [['+X', '#E5484D', 0xE5484D, new THREE.Vector3(1, 0, 0), 90, true], ['−X', '#E5484D', 0xE5484D, new THREE.Vector3(-1, 0, 0), 60, false],
        ['+Z', '#3E63DD', 0x3E63DD, new THREE.Vector3(0, 0, 1), 70, true], ['−Z', '#3E63DD', 0x3E63DD, new THREE.Vector3(0, 0, -1), 70, false],
        ['+Y', '#30A46C', 0x30A46C, new THREE.Vector3(0, 1, 0), 30, true]].forEach(([name, css, hex, dir, len, plus]) => {
+        if (names && names[name.slice(-1)]) { const [nl, ns] = names[name.slice(-1)]; const sg = (name[0] === '+' ? 1 : -1) * ns; name = (sg > 0 ? '+' : '−') + nl; const cc = { X: ['#E5484D', 0xE5484D], Y: ['#30A46C', 0x30A46C], Z: ['#3E63DD', 0x3E63DD] }[nl]; css = cc[0]; hex = cc[1]; plus = sg > 0; }
         mk(hex, len, dir, plus);
         const label = tag(name, css);
         label.position.copy(dir).multiplyScalar(len + 12);
@@ -5651,9 +5652,12 @@
           const out = {}; (await res.json()).forEach(r => { if (r && r.verdict) out[r.step + '|' + r.issue_key] = r.verdict; }); return out;
         } catch (e) { return {}; }
       },
-      async set(assemblyId, step, issueKey, verdict){
+      // note: 글자가 있으면 판정과 함께 설명(이유)을 저장한다 / 없으면(undefined) 설명은 건드리지 않는다(설명 칸이 없는 DB 에서도 판정은 저장된다)
+      async set(assemblyId, step, issueKey, verdict, note){
+        const row = { assembly_id: assemblyId, step, issue_key: issueKey, verdict, updated_at: new Date().toISOString() };
+        if (note !== undefined) row.note = note;
         const res = verdict
-          ? await fetch(SUPABASE_URL + '/rest/v1/ivs_assembly_checks?on_conflict=assembly_id,step,issue_key', { method: 'POST', headers: this._h({ Prefer: 'resolution=merge-duplicates,return=minimal' }), body: JSON.stringify([{ assembly_id: assemblyId, step, issue_key: issueKey, verdict, updated_at: new Date().toISOString() }]) })
+          ? await fetch(SUPABASE_URL + '/rest/v1/ivs_assembly_checks?on_conflict=assembly_id,step,issue_key', { method: 'POST', headers: this._h({ Prefer: 'resolution=merge-duplicates,return=minimal' }), body: JSON.stringify([row]) })
           : await fetch(SUPABASE_URL + '/rest/v1/ivs_assembly_checks?assembly_id=eq.' + encodeURIComponent(assemblyId) + '&step=eq.' + step + '&issue_key=eq.' + encodeURIComponent(issueKey), { method: 'DELETE', headers: this._h() });
         if (!res.ok) throw new Error('(' + res.status + ') ' + (await res.text()).slice(0, 100));
       }

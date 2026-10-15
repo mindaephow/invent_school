@@ -9,10 +9,13 @@ create table if not exists public.ivs_assembly_checks (
   step int not null,                  -- 조립도 단계 번호(1부터)
   issue_key text not null,            -- 경고 이름
   verdict text not null check (verdict in ('ok', 'fix')),   -- ok = 문제없음, fix = 해결요청 (아직 안 골랐으면 행 없음)
+  note text,                          -- 관리자가 적은 이유·설명(선택). 문제없음/해결요청의 근거를 모으는 데이터
   updated_by uuid default auth.uid(),
   updated_at timestamptz not null default now(),
   unique (assembly_id, step, issue_key)
 );
+
+alter table public.ivs_assembly_checks add column if not exists note text;   -- 이미 만들어 둔 표에는 이 줄로 설명 칸만 더한다
 
 alter table public.ivs_assembly_checks enable row level security;
 

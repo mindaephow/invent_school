@@ -389,6 +389,16 @@ class Step:
     def built(s):
         """이 단계 직전까지 끝낸 조립품 전체 = 자동으로 만들어지는 그룹(사용자 지시 2026-10-04: 순서대로 1번이 완성되면 자동으로 그룹화)."""
         return Group(f"{s.index - 1}단계까지 완성품", [pt for st in s.A.steps if st.index < s.index for pt in st.parts])
+    def copy_to_slot(s, g, slot, store, until, shift=(0, 0, 300)):
+        """이미 만든 부품 묶음 g 를 그대로 복사해 다른 창고(slot)에 보관한다(교재 "N~M번 2개 만들기"의 둘째 벌 — 새로 만들지 않고 복사).
+        복사본은 이번 단계 부품으로 들어가 이번 단계부터 until−1 단계까지 창고 slot 에 '보관 중'(store 이름, 화면에 안 그려짐)이고 until 단계부터 보인다.
+        shift: 원본과 겹침 검사가 안 걸리게 떨어뜨려 두는 거리(보관 중에는 안 보인다). 복사본에는 안내점·화살표가 없고, 부품 개수 검사(읽기 표)에서는 빠진다. 반환: 복사한 부품 묶음(Group)."""
+        sh = np.array(shift, float); out = []; hide = list(range(s.index, int(until)))
+        for pt in g.parts:
+            p, R = pt._base if pt._base else (pt.p, pt.R)
+            ex = {"hideAt": hide, "store": store, "slot": int(slot), "noGuide": True, "copyOf": "%d:%d" % (pt.step.index, pt.step.parts.index(pt))}   # noGuide: 복사본은 안내 화살표가 없다
+            out.append(s._add(Part(pt.n, R, np.array(p, float) + sh, s, ex)))
+        return Group(store, out)
     def move_built(s, R, pivot=None, shift=(0, 0, 0), floor=False):
         """지금까지 끝낸 조립품 전체를 한 부품처럼 돌리고 옮긴다 (그룹을 따로 만들 필요 없음)."""
         return s.move_group(s.built(), R, pivot, shift, floor)

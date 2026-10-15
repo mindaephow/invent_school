@@ -1,15 +1,14 @@
 # 책 이미지 작업(새 방식, 관리자 지시 2026-10-09): 로봇은 똑바로 세운 채 회전만(늘이기·펴기 없음) 한 그림이고
-# 파란 수직선(판 가운데 열)·수평선(판 가운데 줄)을 긋는다. 그림 전체를 옆으로 눕히지(90° 돌리지) 않는다. 방향은 원본의 위·아래·좌·우를 최대한 유지(거울 금지).
+# X(빨강)·Z(파랑)·Y(초록) 축선을 긋는다. 그림 전체를 옆으로 눕히지(90° 돌리지) 않는다. 방향은 원본의 위·아래·좌·우를 최대한 유지(거울 금지).
 #   python refs_rect.py <이름> [번호 ...]   번호를 안 주면 fits 가 있는 모든 번호.  입력: refs/<이름>/NN.jpg(원본), NN_lv.json(자르기 영역 crop), fits/NN_<라벨>.json(구멍 점, 원본 좌표)
 #   axes.json 의 "column_axis": "Y" = 서 있는 판처럼 가운데 열이 Z 가 아니라 Y 선을 따를 때 그 축을 적는다.
-#   출력: refs/<이름>/NN_1.jpg(보정한 그림 + 수직·수평선), NN_2.jpg(+ 격자 점·칸·줄 번호), index.json 의 ③·④ 설명 갱신. 점이 없는 번호(한 줄 막대)는 막대 축이 수직/수평이 되게 회전만 한다.
+#   출력: refs/<이름>/NN_1.jpg(보정한 그림 + X·Y·Z 축선), NN_2.jpg(+ 격자 점·칸·줄 번호), index.json 의 ③·④ 설명 갱신. 점이 없는 번호(한 줄 막대)는 막대 축이 수직/수평이 되게 회전만 한다.
 import json, os, glob, re, sys, math
 import cv2, numpy as np
 sys.stdout.reconfigure(encoding='utf-8')
 NAME = sys.argv[1]
 D = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'refs', NAME) + os.sep
 INDEX=json.load(open(D+'index.json',encoding='utf-8'))
-ORANGE=(255,140,0)
 def oldnames(step):
     for r in INDEX:
         if r['step']==step and r['idx']==2: return r.get('names') or []
@@ -101,12 +100,12 @@ def process(step):
         out=cv2.warpAffine(crop,A2,(W,H),flags=cv2.INTER_CUBIC,borderValue=(255,255,255))
         MASK=cv2.warpAffine(np.full((h,w),255,np.uint8),A2,(W,H),flags=cv2.INTER_LINEAR,borderValue=0)   # 그림이 있는 영역(다른 평면 판의 점이 그림 밖에 찍히지 않게)
         T=lambda x,y: A2@np.array([x-cx0,y-cy0,1.0])
-        err=0.0; _ov=False
-        # 가운데 열(수직선)·가운데 줄(수평선): 격자 가운데 칸/줄
+        err=0.0; _ov=bool(_AXj.get('no_rotate'))
+        # 가운데 열·가운데 줄: 격자 가운데 칸/줄
         _cv=sorted({q[0] for q in pts}); _rv=sorted({q[1] for q in pts}); cc=_cv[(len(_cv)-1)//2]; rc=_rv[(len(_rv)-1)//2]   # 있는 칸·줄 번호 중 가운데(일부 칸만 있는 판도 된다)
         tp={ (p[0],p[1]):T(p[2],p[3]) for p in pts }
         _cn=min(tp.items(),key=lambda kv: abs(kv[0][0]-cc)+abs(kv[0][1]-rc))[1]   # 가운데 칸·줄에 가장 가까운 노드
-        vx=float(_cn[0]); hy=float(_cn[1])                                          # 수직선 = 그 노드의 x, 수평선 = 그 노드의 y
+        vx=float(_cn[0]); hy=float(_cn[1])                                          # 축선 원점 = 그 노드
         if _Xv:   # rotate_to 를 정했으면 축선 중심을 기준 판(점이 가장 많은 판)의 중심으로 둔다 — 축선이 그 판의 가운데 줄·가운데 열 위로 지나게(판이 둘이면 두 판의 점을 합친 평균이 아니다: 중심이 기준 판에서 벗어났었다)
             _cs=sorted({q[0] for q in pts}); _rs=sorted({q[1] for q in pts}); _mc={_cs[(len(_cs)-1)//2],_cs[len(_cs)//2]}; _mr={_rs[(len(_rs)-1)//2],_rs[len(_rs)//2]}; _mr={_AXj['center_row']} if _AXj.get('center_row') else _mr   # center_row: 줄이 짝수(2줄 프레임)면 가운데가 구멍 줄 사이라 선이 구멍을 안 지난다 — 그 줄 번호를 정하면 선이 그 구멍 줄의 구멍 중심을 지난다(투석기 20번)   # 가운데 칸·가운데 줄의 구멍(짝수면 가운데 두 개의 중점) — 점 전체의 평균은 원근 때문에 가운데 구멍에서 벗어난다
             _tc=np.mean([T(q[2],q[3]) for q in pts if q[0] in _mc and q[1] in _mr],axis=0); vx=float(_tc[0]); hy=float(_tc[1])
@@ -128,26 +127,27 @@ def process(step):
             _m=min((c,r)[ax] for (c,r) in tp); v1=np.mean([vv for (c,r),vv in tp.items() if (c,r)[ax]==_m],axis=0); vm=np.mean([vv for (c,r),vv in tp.items()],axis=0)
             dx,dy=v1[0]-vm[0],v1[1]-vm[1]
             return ('왼쪽' if dx<0 else '오른쪽')+' 끝' if abs(dx)>=abs(dy) else ('위' if dy<0 else '아래')+' 끝'
-        info={'err':round(err/sc,2),'canvas':(W,H),'c1':where(0),'r1':where(1),'ref':rl,'res':None,'cols':cols,'rows':rows,'overlay':_ov}
+        info={'err':round(err/sc,2),'canvas':(W,H),'c1':where(0),'r1':where(1),'ref':rl,'res':None,'cols':cols,'rows':rows,'overlay':_ov,'split':bool((json.load(open(D+nm+'_axes.json',encoding='utf-8')) if os.path.exists(D+nm+'_axes.json') else {}).get('split'))}
         base=out.copy()
         g=base.copy()
-    # 선 긋기(수평·수직)
+    # 축선 긋기
     _axf0=D+nm+'_axes.json'; _AX0=json.load(open(_axf0,encoding='utf-8')) if os.path.exists(_axf0) else {}
+    _RLB=_AX0.get('relabel') or {}   # 축 이름 바꿔 보이기(완성 사진 방향 기준, 2026-10-14): {"X":["Z",-1],"Z":["X",1]} = 원래 X 선은 새 Z(부호 반대), 원래 Z 선은 새 X. 선 위치·벡터는 그대로 두고 글자·색만 바꾼다
+    _rn=lambda k:_RLB.get(k,[k,1])[0]; _rs=lambda k:_RLB.get(k,[k,1])[1]
     def lines(im):
         Hh,Ww=im.shape[:2]
-        if _AX0.get('replace_lines') and _AX0.get('global'):   # 수평·수직선 대신 기준 점(vx,hy)을 지나는 X(빨강)·Z(파랑)·Y(초록) 축선(관리자 제안 2026-10-11: 방향은 x,y,z 축으로)
-            _Lx=LV_ROT if LV_ROT is not None else np.eye(2);   # 가운데 축선은 이미지 회전과 같이 돌리지 않는다(관리자 지시 2026-10-12) — 읽은 원래 화면 방향 그대로. 단 level 옵션이면 같이 돌린다
-            _C={'X':(40,40,230),'Y':(40,170,40),'Z':(230,110,20)}
-            for k_,v_ in _AX0['global'].items():
-                d_=np.array(LOCDIR[k_],float) if k_ in LOCDIR else _Lx@np.array(v_,float); n_=float(np.hypot(*d_)) or 1.0; d_=d_/n_
-                t_=max(Ww,Hh)*2; cv2.line(im,(int(vx-d_[0]*t_),int(hy-d_[1]*t_)),(int(vx+d_[0]*t_),int(hy+d_[1]*t_)),_C[k_],2,cv2.LINE_AA)
-                # 화면 안 가장자리 가까이에 축 이름
-                for sg in (1,-1):
-                    ex,ey=vx+sg*d_[0]*min(Ww,Hh)*0.42,hy+sg*d_[1]*min(Ww,Hh)*0.42
-                    if 20<ex<Ww-40 and 30<ey<Hh-20: cv2.putText(im,('+' if sg==1 else '-')+k_,(int(ex),int(ey)),cv2.FONT_HERSHEY_SIMPLEX,0.7,_C[k_],2,cv2.LINE_AA)
-            return
-        cv2.line(im,(0,int(round(hy))),(Ww,int(round(hy))),ORANGE,2,cv2.LINE_AA); cv2.putText(im,'horizontal',(Ww-130,int(hy)-8),cv2.FONT_HERSHEY_SIMPLEX,0.55,ORANGE,2)
-        cv2.line(im,(int(round(vx)),0),(int(round(vx)),Hh),ORANGE,2,cv2.LINE_AA); cv2.putText(im,'vertical',(int(vx)+8,28),cv2.FONT_HERSHEY_SIMPLEX,0.55,ORANGE,2)
+        if not _AX0.get('global'): print('  ⚠ %s_axes.json 에 global(X·Y·Z 화면 방향)이 없어 축선을 못 그렸다'%nm); return
+        _Lx=LV_ROT if LV_ROT is not None else np.eye(2);   # 가운데 축선은 이미지 회전과 같이 돌리지 않는다(관리자 지시 2026-10-12) — 읽은 원래 화면 방향 그대로. 단 level 옵션이면 같이 돌린다
+        _C={'X':(40,40,230),'Y':(40,170,40),'Z':(230,110,20)}
+        for k_,v_ in _AX0['global'].items():
+            d_=np.array(LOCDIR[k_],float) if k_ in LOCDIR else _Lx@np.array(v_,float); n_=float(np.hypot(*d_)) or 1.0; d_=d_/n_
+            t_=max(Ww,Hh)*2; cv2.line(im,(int(vx-d_[0]*t_),int(hy-d_[1]*t_)),(int(vx+d_[0]*t_),int(hy+d_[1]*t_)),_C[_rn(k_)],2,cv2.LINE_AA)
+            # 화면 안 가장자리 가까이에 축 이름
+            for sg in (1,-1):
+                ex,ey=vx+sg*d_[0]*min(Ww,Hh)*0.42,hy+sg*d_[1]*min(Ww,Hh)*0.42
+                if 20<ex<Ww-40 and 30<ey<Hh-20: cv2.putText(im,('+' if sg*_rs(k_)==1 else '-')+_rn(k_),(int(ex),int(ey)),cv2.FONT_HERSHEY_SIMPLEX,0.7,_C[_rn(k_)],2,cv2.LINE_AA)
+    _SPLIT=bool(_AX0.get('split'))   # split: NN_1 = 홀라인용(구멍 점 + 구멍 줄 직선, 축선 없음), NN_2 = 카메라 판단용(X·Y·Z 축선만, 점 없음)
+    _plain=base.copy()
     lines(base)
     if fits and _AX0.get('rotate_to') and _AX0.get('global'):   # 화면에 그린 축선(가운데 구멍을 지남)과 가운데 줄·가운데 열 구멍 사이의 실제 거리(px)
         _gl=_rotg(_AX0['global']); _d2=lambda v_:(lambda d_:d_/(np.hypot(*d_) or 1.0))(np.array(v_,float))
@@ -156,7 +156,7 @@ def process(step):
             dd_=_d2(vec); nn_=np.array([-dd_[1],dd_[0]]); return [round(float((np.array(tp[k],float)-np.array([vx,hy]))@nn_),1) for k in sorted(tp) if sel(k)]
         print('  축선↔구멍 거리 px — 가운데 줄 구멍 vs %s 선:'%_ax_,_off(lambda k:k[1]==_rm,_gl[_ax_]),'| 가운데 열 구멍 vs %s 선:'%_oth_,_off(lambda k:k[0]==_cm,_gl[_oth_]) if (_oth_ and _oth_ in _gl and len(_rs0)>=2) else '-')
     if g is not None:
-        g=base.copy()
+        g=(_plain if _SPLIT else base).copy()
         gray=cv2.cvtColor(out,cv2.COLOR_BGR2GRAY)
         def on_picture(j):   # 다른 평면에 있어 이 보정에서는 그림 밖 빈 곳에 찍히는 판은 그리지 않는다(구멍 점 주변이 판 색이어야 한다)
             ok=0
@@ -181,6 +181,13 @@ def process(step):
                 cv2.circle(g,(int(x),int(y)),3,(0,0,255),-1)
                 if p[1]==1: cv2.putText(g,str(p[0]),(int(x)-7,int(y)-10),cv2.FONT_HERSHEY_SIMPLEX,0.6,(255,0,0),2)
                 if p[0]==1: cv2.putText(g,'j%d'%p[1],(int(x)-30,int(y)+5),cv2.FONT_HERSHEY_SIMPLEX,0.55,(0,140,0),2)
+        if _SPLIT:   # 홀라인: 점들을 지나는 직선 하나(점이 한 줄일 때)
+            for lab,j in fits:
+                _q=np.array([T(q[2],q[3]) for q in j['pts']],np.float32)
+                if len(_q)>=2:
+                    _vx,_vy,_x0,_y0=cv2.fitLine(_q,cv2.DIST_L2,0,0.01,0.01).ravel()[:4]; _t=max(W,H)*2
+                    if float(np.max(np.abs((_q[:,0]-_x0)*_vy-(_q[:,1]-_y0)*_vx)))>5.0: continue   # 점이 한 줄이 아니면(꺾인 프레임) 직선은 긋지 않고 점을 이은 선만 둔다
+                    cv2.line(g,(int(_x0-_vx*_t),int(_y0-_vy*_t)),(int(_x0+_vx*_t),int(_y0+_vy*_t)),(0,0,255),2,cv2.LINE_AA)
         if os.environ.get('RR_CHECK'):   # 확인용: 실제 가운데 줄·가운데 열 구멍을 잇는 선(청록·보라)을 겹쳐 그려 축선이 그 선과 겹치는지 눈으로 본다
             for key_,val_,col_ in ((1,rc,(200,200,0)),(0,cc,(200,0,200))):
                 ks_=sorted([k for k in tp if k[key_]==val_]); q_=[(int(round(float(tp[k][0]))),int(round(float(tp[k][1])))) for k in ks_]
@@ -197,8 +204,8 @@ def process(step):
             mx=max(float(np.hypot(*(_L@np.array(v,float)))) for v in vecs.values()) or 1.0
             for k_,v_ in vecs.items():
                 w_=_L@np.array(v_,float)*(size/mx); ex,ey=ox+w_[0],oy+w_[1]
-                cv2.arrowedLine(im,(int(ox),int(oy)),(int(ex),int(ey)),_COL[k_],4,cv2.LINE_AA,tipLength=0.22)
-                cv2.putText(im,'+'+k_,(int(ex+(8 if w_[0]>=0 else -34)),int(ey+(8 if w_[1]>=0 else -4))),cv2.FONT_HERSHEY_SIMPLEX,0.8,_COL[k_],2,cv2.LINE_AA)
+                cv2.arrowedLine(im,(int(ox),int(oy)),(int(ex),int(ey)),_COL[_rn(k_)],4,cv2.LINE_AA,tipLength=0.22)
+                cv2.putText(im,('+' if _rs(k_)==1 else '-')+_rn(k_),(int(ex+(8 if w_[0]>=0 else -34)),int(ey+(8 if w_[1]>=0 else -4))),cv2.FONT_HERSHEY_SIMPLEX,0.8,_COL[_rn(k_)],2,cv2.LINE_AA)
             cv2.circle(im,(int(ox),int(oy)),4,(60,60,60),-1)
         for im_ in (base,g):
             for lc in AXJ.get('local',[]):
@@ -221,20 +228,25 @@ def process(step):
                 dr.rectangle((bb[0]-6,bb[1]-4,bb[2]+6,bb[3]+4),fill=(255,255,255),outline=(220,0,0),width=2); dr.text((tx,ty),nt['text'],font=ft,fill=(220,0,0))
             return cv2.cvtColor(np.array(pil),cv2.COLOR_RGB2BGR)
         base=_notes(base); g=_notes(g)
+    if _SPLIT: base,g=g,base
     cv2.imwrite(D+nm+'_1.jpg',base,[cv2.IMWRITE_JPEG_QUALITY,88]); cv2.imwrite(D+nm+'_2.jpg',g,[cv2.IMWRITE_JPEG_QUALITY,88])
     return info,names
 def sentence(step,info,names):
     if not names and info.get('cols'): names=['%d칸×%d줄 판'%(info['cols'],info['rows'])]
     nm=' / '.join(names) if names else '판'
     if info['ref']=='(점 없음)':
-        n1="③ 단계 %d — 로봇(부품)은 똑바로 세운 채, 한 줄 막대의 축이 수직·수평이 되도록 회전만 %.1f° 한 그림 + 파란 수직선·수평선(점 없음)."%(step,info['res'])
+        n1="③ 단계 %d — 로봇(부품)은 똑바로 세운 채, 한 줄 막대의 축이 수직·수평이 되도록 회전만 %.1f° 한 그림 + X·Y·Z 축선(점 없음)."%(step,info['res'])
         n2="④ 단계 %d — 한 줄 프레임은 구멍 점이 일직선이라 격자 점을 만들지 않았다(③과 같은 그림)."%step
     else:
-        if info.get('overlay'):
-            n1="③ 단계 %d — 판을 아주 비스듬히 본 그림이라 펴지 않고(보정하면 뭉개짐) 원본 그대로 두고 수직선·수평선(화면 기준선)을 그은 그림. 칸1 = %s, 줄1 = %s (격자 번호는 ④ 에서)."%(step,info['c1'],info['r1'])
-            n2="④ 단계 %d — 원본 위의 격자: %s. 빨강 점 = 구멍 중심, 초록 숫자 = 칸, j1~ = 줄(구멍 중심을 검출해 맞춘 점, 칸·줄 번호가 점 옆에 적힘)."%(step,nm)
+        if info.get('split'):
+            n1="③ 단계 %d — 홀라인용: %s 의 구멍 점(빨강)과 그 구멍 줄을 지나는 직선. 번호 = 칸. 회전·보정 없는 원본 그림."%(step,nm)
+            n2="④ 단계 %d — 카메라 판단용: 원본 그림 위의 X(빨강)·Z(파랑)·Y(초록) 축선(구멍 점 없음). 시점(보는 방향)을 판단하는 그림."%step
             return n1,n2
-        n1="③ 단계 %d — 로봇(부품)은 똑바로 세운 채, %s 의 구멍 줄이 수평에 가깝도록 회전만 한 그림(늘이거나 펴지 않음)(구멍 흰 틈 점으로 맞춤, 평균 오차 %.1fpx). 파란 수직선 = 판 가운데 열, 파란 수평선 = 판 가운데 줄. 칸1 = %s, 줄1 = %s."%(step,names[0] if names else '기준 판',info['err'],info['c1'],info['r1'])
+        if info.get('overlay'):
+            n1="③ 단계 %d — 회전하지 않고 펴지 않은 원본 그대로 X·Y·Z 축선을 그은 그림. 칸1 = %s, 줄1 = %s (격자 번호는 ④ 에서)."%(step,info['c1'],info['r1'])
+            n2="④ 단계 %d — 원본 위의 격자: %s. 빨강 점 = 구멍 중심, 초록 숫자 = 칸, j1~ = 줄."%(step,nm)
+            return n1,n2
+        n1="③ 단계 %d — 로봇(부품)은 똑바로 세운 채, %s 의 구멍 줄이 수평에 가깝도록 회전만 한 그림(늘이거나 펴지 않음)(구멍 흰 틈 점으로 맞춤, 평균 오차 %.1fpx). X(빨강)·Z(파랑)·Y(초록) 축선이 판 가운데를 지난다. 칸1 = %s, 줄1 = %s."%(step,names[0] if names else '기준 판',info['err'],info['c1'],info['r1'])
         n2="④ 단계 %d — 같은 그림 위의 격자: %s. 빨강 점 = 구멍 중심, 초록 숫자 = 칸, j1~ = 줄. 칸1 = %s, 줄1 = %s."%(step,nm,info['c1'],info['r1'])
     return n1,n2
 if __name__=='__main__':
