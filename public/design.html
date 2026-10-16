@@ -4938,7 +4938,6 @@
   // 끝내기: 지금 화면(주황 표시에 번호를 붙여서)과 표시 목록을 한 장의 그림(PNG)으로 만들어 돌려준다. 번호 = 옮긴 순서.
   async function markCapture(header) {
     const items = markMoves.filter(m => m.userData.txt && m.userData.txt !== '이동 없음');
-    if (!items.length) return null;
     renderer.render(scene, camera);
     const W = canvas.width, H = canvas.height, k = W / canvas.getBoundingClientRect().width;
     const lines = items.map((m, i) => (i + 1) + '번 · 표시   (' + m.userData.to.join(', ') + ')');

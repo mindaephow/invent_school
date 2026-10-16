@@ -374,12 +374,42 @@
   // 단계 설명 끝의 "━ 작업 점검 ━" 블록(번호마다 한 일 체크박스)은 관리자에게만 보인다(관리자 지시 2026-10-09). 일반 사용자에게는 그 앞까지만.
   const noteView = (n) => { n = n || ''; if (isAdm()) return n; const i = n.indexOf(String.fromCharCode(10) + '━ 작업 점검 ━'); return i >= 0 ? n.slice(0, i) : n; };
   // 안내 모달(확인 버튼 하나): 모습·교재 샷을 저장했을 때 확실히 알려 준다(사용자 지시 2026-10-05)
+  // 마무리 점검(관리자만): 완성에 갔을 때 저절로 돌고, "🔍 마무리 점검" 버튼으로도 돌린다(2026-10-16 관리자 지시). 작업을 막지 않고 목록만 보여 준다.
+  //   보는 것: 안 만든 번호 · 번호 설명 끝 "작업 점검" 블록의 ☐ 항목 · 카메라 출처(camSrc≠eye) · 그림 3장(NN·NN_1·NN_2, DB) · 확인 필요(review) 표시 · 사용자 ✅ 안 누른 번호.
+  //   (읽기 표 빈칸·카메라 fit 오차·비교 증거 파일은 개발 PC 의 final_audit.py 가 보고, 그 결과는 마지막 번호 설명 끝 "작업 점검 전체"에 붙는다)
+  function auditLines() {
+    const NLC = String.fromCharCode(10), out = [], built = [], unbuilt = [];
+    def.steps.forEach((st, k) => { ((st.parts || []).length ? built : unbuilt).push(k + 1); });
+    const rng = (a) => a.length ? (a[0] + '~' + a[a.length - 1] + '번' + (a.length === a[a.length - 1] - a[0] + 1 ? '' : ' 중 ' + a.length + '개')) : '없음';
+    out.push('만든 번호 ' + built.length + '개(' + rng(built) + ')' + (unbuilt.length ? ' · 아직 안 만든 번호 ' + unbuilt.length + '개(' + rng(unbuilt) + ')' : ' · 전부 만듦'));
+    const rows = [];
+    built.forEach((n) => {
+      const st = def.steps[n - 1], miss = [], warn = [];
+      const note = st.note || '', mk = note.indexOf(NLC + '━ 작업 점검 ━');
+      if (mk < 0) miss.push('작업 점검 블록 없음');
+      else note.slice(mk).split(NLC).forEach((l) => { if (l.indexOf('☐ ') === 0) miss.push(l.slice(2)); });
+      if (st.camSrc !== 'eye') miss.push('카메라 출처가 eye 가 아님(' + (st.camSrc || '없음') + ')');
+      const have = (refsMeta && refsMeta[n]) ? refsMeta[n].map((r) => r.idx) : [];
+      [0, 1, 2].forEach((i) => { if (have.indexOf(i) < 0) miss.push('그림 ' + i + '번 DB 에 없음'); });
+      if (st.review) warn.push('확인 필요(마무리 안 됨)');
+      if (stepStatus[n] !== 'done') warn.push('사용자 ✅ 완료 아직 안 눌림');
+      rows.push([n, miss, warn]);
+    });
+    const bad = rows.filter((r) => r[1].length);
+    out.push(bad.length ? '☐ 빠진 것 있는 번호 ' + bad.length + '개: ' + bad.map((r) => r[0]).join(', ') : '☑ 빠진 것 없음(작업 점검 ☐·카메라 출처·그림 3장)');
+    bad.forEach((r) => r[1].forEach((x) => out.push('   ☐ ' + r[0] + '번: ' + x)));
+    const rv = rows.filter((r) => def.steps[r[0] - 1].review).map((r) => r[0]);
+    if (rv.length) out.push('⚠ 확인 필요(마무리 안 됨, 번호판 주황): ' + rv.join(', ') + '번');
+    const nd = rows.filter((r) => stepStatus[r[0]] !== 'done').map((r) => r[0]);
+    out.push(nd.length ? '… ✅ 완료 안 누른 번호 ' + nd.length + '개' : '✅ 모든 번호 완료');
+    return out;
+  }
   function notice(msg, onClose) {
     const ov = document.createElement('div');
     ov.style.cssText = 'position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;';
     const bx = document.createElement('div');
     bx.style.cssText = 'background:#fff;border-radius:16px;padding:22px 28px 18px;min-width:240px;max-width:80vw;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.3);font:700 15px sans-serif;color:#111827;';
-    const p = document.createElement('div'); p.textContent = msg; p.style.cssText = 'margin-bottom:16px;line-height:1.5;';
+    const p = document.createElement('div'); p.textContent = msg; p.style.cssText = 'margin-bottom:16px;line-height:1.5;white-space:pre-line;text-align:left;max-height:60vh;overflow:auto;';
     const ok = document.createElement('button'); ok.type = 'button'; ok.textContent = '확인';
     ok.style.cssText = 'padding:8px 32px;border-radius:999px;border:0;background:#2563eb;color:#fff;font:700 14px sans-serif;cursor:pointer;';
     const close = () => { ov.remove(); document.removeEventListener('keydown', onKey, true); if (onClose) onClose(); };
@@ -477,16 +507,36 @@
     });
   }
   const STATUS_LABEL = { done: '✅ 완료', edit: '🛠 수정중' };
+  // 버튼 두 줄(2026-10-16 관리자 지시): 1번 줄 = 일반 사용자용(그리기·메모), 2번 줄 = 관리자용(상태·카메라·모습 기록·마무리 점검·새로고침·썸네일·표시하기·수정스샷)
+  function splitBtnRows() {
+    const sb = $('asmStatusBtn'); if (!sb) return;
+    let row2 = $('asmAdminRow');
+    if (!row2) {
+      const row1 = sb.parentNode; if (!row1) return;
+      row2 = document.createElement('div'); row2.id = 'asmAdminRow'; row2.style.cssText = row1.getAttribute('style') || '';
+      row1.parentNode.insertBefore(row2, row1.nextSibling);
+      row1.style.justifyContent = row2.style.justifyContent = 'flex-start';   // 두 줄 모두 왼쪽 정렬(2026-10-16 사용자 지시)
+    }
+    ['asmStatusBtn', 'asmCamCopy', 'asmFreezeBtn', 'asmAuditBtn', 'asmReloadBtn', 'asmThumbBtn', 'asmMarkMove2'].forEach((id) => { const e = $(id); if (e && e.parentNode !== row2) row2.appendChild(e); });
+    row2.hidden = !isAdm();
+  }
   function paintStatus() {
     const adm = isAdm();
+    const partialBuilt = !!def && def.steps.some((x, k) => k + 1 !== last() && !(x.parts || []).length) && def.steps.some((x) => (x.parts || []).length);
     [$('asmSteps'), $('asmStageSteps')].forEach((box) => { if (!box) return;
       box.querySelectorAll('button[data-step]').forEach((b) => { const i = Number(b.dataset.step), st = adm ? stepStatus[i] : null, tag = i === last() ? '완성' : stepTag(i);
-        b.textContent = tag + (st === 'done' ? ' ✓' : st === 'edit' ? ' 🛠' : '') + (adm ? warnMark(i) : ''); }); });
+        b.textContent = tag + (st === 'done' ? ' ✓' : st === 'edit' ? ' 🛠' : '') + (adm ? warnMark(i) : '');
+        // 작업 진행 표시(관리자만): 일부 번호만 만든 조립도에서 마무리하고 넘어간 번호는 파랑, 확인 필요(review)는 주황 — 안 만든 번호는 그대로 둔다
+        const made = i !== last() && !!(def.steps[i - 1] && (def.steps[i - 1].parts || []).length);
+        const review = !!(def.steps[i - 1] && def.steps[i - 1].review) && st !== 'done';   // 관리자가 ✅ 완료를 누르면 주황 → 파랑   // review: 만들었지만 마무리 안 됨(근거 약함·확인 필요) → 주황
+        b.style.color = adm && partialBuilt && made ? (review ? '#ea580c' : '#2563eb') : ''; b.style.fontWeight = adm && partialBuilt && made ? '700' : ''; }); });
     paintWarn();
+    splitBtnRows();
     const sb = $('asmStatusBtn'); if (!sb) return;
     sb.hidden = !adm || step < 1;   // 완성에도 체크·모습 기록 버튼을 보인다(사용자 지시 2026-10-05)
     { const tb = $('asmThumbBtn'); if (tb) tb.hidden = sb.hidden; }
     { const rb = $('asmReloadBtn'); if (rb) rb.hidden = !adm || step < 0; }
+    { const ab = $('asmAuditBtn'); if (ab) ab.hidden = !adm || step < 0; }
     { const fb = $('asmFreezeBtn'); if (fb) fb.hidden = sb.hidden; }
     const st = stepStatus[step]; sb.textContent = STATUS_LABEL[st] || '⬜ 상태 없음';
     sb.style.background = st === 'done' ? '#16a34a' : st === 'edit' ? '#f59e0b' : ''; sb.style.color = st ? '#fff' : '';
@@ -520,6 +570,10 @@
         catch (e) { b2.status('모습 기록 실패: ' + e.message + ' (supabase/assembly_poses.sql 을 실행했는지 확인)', 'error'); }
       });
     }
+    { const ab = document.createElement('button'); ab.type = 'button'; ab.id = 'asmAuditBtn'; ab.hidden = true; ab.textContent = '🔍 마무리 점검';
+      ab.style.cssText = sb.style.cssText; ab.title = '지금까지 만든 번호를 한꺼번에 점검해요(관리자만). 완성 단계에 가면 저절로도 보여요';
+      sb.parentNode.insertBefore(ab, sb);
+      ab.addEventListener('click', () => { if (def) notice(auditLines().join(String.fromCharCode(10))); }); }
     { const rb = document.createElement('button'); rb.type = 'button'; rb.id = 'asmReloadBtn'; rb.hidden = true; rb.textContent = '↻ 새로고침';
       rb.style.cssText = sb.style.cssText; rb.title = '지금 보는 단계 하나만 데이터를 다시 불러와요(관리자만). Shift+클릭 = 페이지 전체 새로고침';
       sb.parentNode.insertBefore(rb, sb);
@@ -745,7 +799,7 @@
     const curSt = step >= 1 ? def.steps[step - 1] : null, realN = def.steps.filter((q) => !q.label).length; // 창고·불러오기 같은 label 단계는 단계 번호에 넣지 않는다(사용자 지시 2026-10-04)
     $('asmLabel').textContent = step === 0 ? '시작 전' : (step === last() ? '완성!' : (curSt && curSt.label ? curSt.label : stepTag(step) + ' / ' + realN + ' 단계'));
     $('asmNote').textContent = step === 0 ? '빈 판에서 시작해요. ▶ 를 눌러 한 단계씩 만들어 봐요.'
-      : (step === last() ? '완성! 부품이 모두 제자리에 끼워졌어요.' : noteView(def.steps[step - 1].note));
+      : (step === last() ? '완성! 부품이 모두 제자리에 끼워졌어요.' + (isAdm() ? String.fromCharCode(10) + String.fromCharCode(10) + '━ 마무리 점검(관리자만) ━' + String.fromCharCode(10) + auditLines().join(String.fromCharCode(10)) : '') : noteView(def.steps[step - 1].note));
     { const adm2 = !!(window.__ivsIsAdmin && window.__ivsIsAdmin()); ['asmCamCopy', 'asmCamReset'].forEach((id) => { const e2 = $(id); if (e2) e2.hidden = !adm2; }); } // 📷(시점 맞춤)는 본사 관리자 로그인일 때만 보인다(사용자 지시 2026-10-03)
     $('asmSlider').value = String(step);
     $('asmStageNote').textContent = step === last() ? $('asmNote').textContent : $('asmLabel').textContent + ' · ' + $('asmNote').textContent;
@@ -909,7 +963,8 @@
     b.camera(def.camera);
     $('asmBar').hidden = false;
     { const adm = !!(window.__ivsIsAdmin && window.__ivsIsAdmin()); // 관리자만
-      ['asmMarkMove2', 'asmMarkShot'].forEach((id) => { if ($(id)) $(id).hidden = !adm; }); }
+      if ($('asmMarkMove2')) $('asmMarkMove2').hidden = !adm;   // 📍 표시하기는 관리자만
+      if ($('asmMarkShot')) $('asmMarkShot').hidden = false; }   // 📸 스샷은 누구나(2026-10-16 사용자 지시)
     $('asmStageBar').hidden = false;
     $('historyPanel').hidden = true;
     b.axes(true);
@@ -959,17 +1014,17 @@
     };
     const shot = async () => {
       const b = bridge();
-      const header = (def ? def.chapter : '') + ' 조립도 · ' + (step === last() ? '완성' : stepTag(step) + '단계') + ' · 표시하기';
+      const header = (def ? def.chapter : '') + ' 조립도 · ' + (step === last() ? '완성' : stepTag(step) + '단계');
       let blob = null;
       try { blob = await b.markCapture(header); } catch (e) { toast('사진 만들기 실패: ' + (e && e.message || e), true); notice('사진 만들기에 실패했습니다: ' + (e && e.message || e)); return; }
       if (!blob) { toast('표시가 없어요. 먼저 "📍 표시하기"를 누르고 화면의 부품을 눌러 주황 표시를 만든 뒤 눌러 주세요.', true); notice('표시가 없어요. 먼저 [표시하기]를 누르고 화면의 부품을 눌러 주황 표시를 만든 뒤 눌러 주세요.'); return; }
       let copied = false;
       try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); copied = true; } catch (e) { /* 복사 권한이 없으면 다운로드만 */ }
       const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob); a.download = '수정스샷_' + (def ? def.chapter : '') + '_' + (step === last() ? '완성' : stepTag(step) + '단계') + '.png';
+      a.href = URL.createObjectURL(blob); a.download = '스샷_' + (def ? def.chapter : '') + '_' + (step === last() ? '완성' : stepTag(step) + '단계') + '.png';
       document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
       toast(copied ? '📸 사진을 복사하고 내려받았어요 — Ctrl+V로 붙여넣어 보내 주세요' : '📸 사진을 내려받았어요(복사는 안 됐어요) — 파일을 보내 주세요');
-      notice(copied ? '수정스샷이 복사되고 내려받아졌습니다. Ctrl+V로 붙여넣어 보내 주세요.' : '수정스샷이 내려받아졌습니다(복사는 안 됐어요). 파일을 보내 주세요.');
+      notice(copied ? '스샷이 복사되고 내려받아졌습니다. Ctrl+V로 붙여넣어 보내 주세요.' : '스샷이 내려받아졌습니다(복사는 안 됐어요). 파일을 보내 주세요.');
       b.status(copied ? '사진을 복사하고 내려받았어요. 붙여넣기(Ctrl+V)로 보내 주세요.' : '사진을 내려받았어요(복사는 안 됐어요). 파일을 보내 주세요.', 'success');
     };
 

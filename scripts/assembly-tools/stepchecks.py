@@ -102,6 +102,10 @@ def apply(A, name):
             if need and not ok: blocking.append("%d번: %s" % (k, txt))
         block = MARK + "\n" + "\n".join(("☑ " if ok else ("☐ " if not need else "☐ ")) + txt + ("" if need else " (눈으로)") for need, ok, txt in items)
         st.note = st.note.split(MARK)[0] + block
+    # 완성 번호(마지막 단계)에는 final_audit.py 가 만든 "완성 마무리 점검"을 작업 점검 블록처럼 뒤에 붙인다(관리자만 보임, 2026-10-16)
+    _fa = os.path.join(here, "refs", name, "final_audit.md")
+    if os.path.exists(_fa) and A.steps:
+        _ls = A.steps[-1]; _ls.note = _ls.note.split(MARK)[0].split("\n━ 완성 마무리 점검")[0] + "\n" + MARK + " 전체\n" + open(_fa, encoding="utf-8").read()
     left = {n: lst[n] - cum[n] for n in lst if lst[n] - cum[n] != 0 and n in cum or (n in lst and cum[n] == 0 and False)}
     json.dump({"blocking": blocking, "cum": dict(cum), "list_left": {n: lst[n] - cum.get(n, 0) for n in lst}}, open(os.path.join(here, name + "_checks.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     return blocking
