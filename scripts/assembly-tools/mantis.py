@@ -424,6 +424,20 @@ for _i, _u in USED.items():
     _pp = A.steps[_i - 1].note.split("\n▣ 사용 부품:")
     _tail = ("\n" + _pp[1].split("\n", 1)[1]) if len(_pp) > 1 and "\n" in _pp[1] else ""
     A.steps[_i - 1].note = _pp[0] + "\n▣ 사용 부품: " + _u + _tail
+# ── 한 번호에서 같은 방향으로 같은 높이만큼 띄워 한꺼번에 들어오는 부품이 둘 이상이면 거리를 달리해 학생이 구분하기 쉽게 한다(사용자 지시 2026-10-16):
+#   그림에서 오른쪽에 있는 부품부터 1번·2번·3번, 2번부터 20mm 씩 더 멀리(1번 = 원래 거리). 오른쪽 = 그 번호 _axes.json 의 화면 방향(global)으로 잰 가로 위치.
+import json as _json, os as _os, collections as _co
+def stagger_hover(A, step_no, gap=20.0):
+    st = A.steps[step_no - 1]; ax = _json.load(open(_os.path.join("refs", "mantis", "%02d_axes.json" % step_no), encoding="utf-8"))["global"]
+    gx = np.array([ax["X"][0], ax["Y"][0], ax["Z"][0]], float)
+    grp = _co.defaultdict(list)
+    for q in st.parts:
+        d = q.extra.get("dir"); h = q.extra.get("hover")
+        if h and d is not None and not q.extra.get("seated") and not q.extra.get("rivet"): grp[(tuple(np.round(d, 2)), h)].append(q)
+    for (_d, h), lst in grp.items():
+        if len(lst) < 2: continue
+        for i, q in enumerate(sorted(lst, key=lambda q: -float(gx @ np.array(q.p, float)))): q.extra["hover"] = h + gap * i
+for _n in (9, 14, 23, 28): stagger_hover(A, _n)   # 4번(12볼트·너트)은 양쪽 끝에서 따로 들어와 겹쳐 보이지 않아 제외
 import stepchecks; stepchecks.apply(A, "mantis")   # 모든 번호를 만든 뒤에 돌려야 번호 설명 끝에 작업 점검 블록이 붙는다(2026-10-16 앞쪽에 있어 빈 채로 돌던 것을 옮김)
 for _n, _why in _REVIEW.items():   # 확인 필요 사유는 작업 점검 블록 뒤에 붙인다 — 관리자 화면에서만 보인다(일반 사용자는 작업 점검 앞까지만)
     SKEL[_n - 1].note = SKEL[_n - 1].note + "\n⚠ 확인 필요(마무리 안 됨): " + _why

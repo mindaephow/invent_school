@@ -739,6 +739,15 @@
     if (!viewing || step < 1) return;
     try { localStorage.setItem('ivs-asm-last', JSON.stringify({ sel: [...document.querySelectorAll('select')].slice(0, 3).map((x) => x.value), step })); } catch (e) { /* 저장 못 해도 보기는 된다 */ }
   }
+  // 단계 설명을 그리되 "⚠ 확인 필요" 줄은 주황 글씨로(2026-10-16 사용자 지시)
+  function paintNote(el, text) {
+    el.textContent = '';
+    String(text).split(String.fromCharCode(10)).forEach((ln, i) => {
+      if (i) el.appendChild(document.createTextNode(String.fromCharCode(10)));
+      if (ln.indexOf('⚠ 확인 필요') === 0) { const sp = document.createElement('span'); sp.style.cssText = 'color:#ea580c;font-weight:700;'; sp.textContent = ln; el.appendChild(sp); }
+      else el.appendChild(document.createTextNode(ln));
+    });
+  }
   function render() {
     saveLast();
     const b = bridge();
@@ -802,7 +811,7 @@
       : (step === last() ? '완성! 부품이 모두 제자리에 끼워졌어요.' + (isAdm() ? String.fromCharCode(10) + String.fromCharCode(10) + '━ 마무리 점검(관리자만) ━' + String.fromCharCode(10) + auditLines().join(String.fromCharCode(10)) : '') : noteView(def.steps[step - 1].note));
     { const adm2 = !!(window.__ivsIsAdmin && window.__ivsIsAdmin()); ['asmCamCopy', 'asmCamReset'].forEach((id) => { const e2 = $(id); if (e2) e2.hidden = !adm2; }); } // 📷(시점 맞춤)는 본사 관리자 로그인일 때만 보인다(사용자 지시 2026-10-03)
     $('asmSlider').value = String(step);
-    $('asmStageNote').textContent = step === last() ? $('asmNote').textContent : $('asmLabel').textContent + ' · ' + $('asmNote').textContent;
+    paintNote($('asmStageNote'), step === last() ? $('asmNote').textContent : $('asmLabel').textContent + ' · ' + $('asmNote').textContent);
     markStepButtons();
     $('asmFirst').disabled = $('asmPrev').disabled = step === 0;
     $('asmNext').disabled = $('asmLast').disabled = step === last();
