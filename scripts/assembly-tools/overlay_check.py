@@ -17,7 +17,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 here = os.path.dirname(os.path.abspath(__file__))
 COLORS = {"315프레임": (255, 0, 0), "DC모터": (0, 160, 0), "37프레임": (0, 0, 255), "27프레임": (0, 128, 255), "29프레임": (255, 0, 255), "2열브라켓": (255, 0, 255),
-          "2단블록": (0, 200, 200), "3단블록": (0, 200, 200), "15프레임": (120, 0, 120), "115프레임": (120, 0, 120), "작은바퀴": (0, 255, 255), "39프레임": (0, 140, 255), "35프레임": (0, 140, 255)}
+          "2단블록": (0, 200, 200), "3단블록": (0, 200, 200), "15프레임": (120, 0, 120), "115프레임": (120, 0, 120), "작은바퀴": (0, 255, 255), "39프레임": (0, 140, 255), "35프레임": (0, 140, 255), "59프레임": (0, 100, 200)}
 
 def wrap(d, text, font, maxw):
     out, cur = [], ""
@@ -35,6 +35,7 @@ def main():
     if f.get("xyz3d") and not f.get("xyz"): f["xyz"] = f["xyz3d"]   # 격자 점(c,r,x,y)과 3D 점을 같이 쓰는 번호는 3D 점을 xyz3d 에 적는다(refs_rect·axes_fit 이 xyz 를 만나면 격자를 못 쓴다)
     if not f.get("xyz"): sys.exit("fits/%02d_P.json 에 xyz(3D 점)가 없다 — 모델에서 3D 가 확정된 점의 xyz 를 적고 pts 에 책 그림 픽셀을 적는다." % N)
     obj = np.array(f["xyz"], float); img = [[p[2], p[3]] for p in f["pts"]][:len(obj)]   # 앞 len(xyz) 개만 짝(뒤에 환산한 점이 붙어 있을 수 있다)
+    if f.get("xyz3d_img"): img = [list(q) for q in f["xyz3d_img"]]   # 3D 점마다 짝 픽셀을 따로 적은 번호(23번: 두 평면 점)
     im = cv2.imread(os.path.join(R, "%02d.jpg" % N)); H, W = im.shape[:2]; c = obj.mean(0)
     best = None
     for fov in range(15, 61):
