@@ -377,9 +377,11 @@
   // 마무리 점검(관리자만): 완성에 갔을 때 저절로 돌고, "🔍 마무리 점검" 버튼으로도 돌린다(2026-10-16 관리자 지시). 작업을 막지 않고 목록만 보여 준다.
   //   보는 것: 안 만든 번호 · 번호 설명 끝 "작업 점검" 블록의 ☐ 항목 · 카메라 출처(camSrc≠eye) · 그림 3장(NN·NN_1·NN_2, DB) · 확인 필요(review) 표시 · 사용자 ✅ 안 누른 번호.
   //   (읽기 표 빈칸·카메라 fit 오차·비교 증거 파일은 개발 PC 의 final_audit.py 가 보고, 그 결과는 마지막 번호 설명 끝 "작업 점검 전체"에 붙는다)
+  // 만든 번호 판정: 새 부품이 있거나, 새 부품 없이 앞 번호 부품 묶음을 옮겨 합치는 번호(moveMade — 예: 사마귀로봇 32번 "18 + 31")도 만든 번호다
+  function stepMade(st) { return !!st && ((st.parts || []).length > 0 || (!!st.moveMade && Object.keys(st.moveMade).length > 0)); }
   function auditLines() {
     const NLC = String.fromCharCode(10), out = [], built = [], unbuilt = [];
-    def.steps.forEach((st, k) => { ((st.parts || []).length ? built : unbuilt).push(k + 1); });
+    def.steps.forEach((st, k) => { (stepMade(st) ? built : unbuilt).push(k + 1); });
     const rng = (a) => a.length ? (a[0] + '~' + a[a.length - 1] + '번' + (a.length === a[a.length - 1] - a[0] + 1 ? '' : ' 중 ' + a.length + '개')) : '없음';
     out.push('만든 번호 ' + built.length + '개(' + rng(built) + ')' + (unbuilt.length ? ' · 아직 안 만든 번호 ' + unbuilt.length + '개(' + rng(unbuilt) + ')' : ' · 전부 만듦'));
     const rows = [];
@@ -522,12 +524,12 @@
   }
   function paintStatus() {
     const adm = isAdm();
-    const partialBuilt = !!def && def.steps.some((x, k) => k + 1 !== last() && !(x.parts || []).length) && def.steps.some((x) => (x.parts || []).length);
+    const partialBuilt = !!def && def.steps.some((x, k) => k + 1 !== last() && !stepMade(x)) && def.steps.some((x) => stepMade(x));
     [$('asmSteps'), $('asmStageSteps')].forEach((box) => { if (!box) return;
       box.querySelectorAll('button[data-step]').forEach((b) => { const i = Number(b.dataset.step), st = adm ? stepStatus[i] : null, tag = i === last() ? '완성' : stepTag(i);
         b.textContent = tag + (st === 'done' ? ' ✓' : st === 'edit' ? ' 🛠' : '') + (adm ? warnMark(i) : '');
         // 작업 진행 표시(관리자만): 일부 번호만 만든 조립도에서 마무리하고 넘어간 번호는 파랑, 확인 필요(review)는 주황 — 안 만든 번호는 그대로 둔다
-        const made = i !== last() && !!(def.steps[i - 1] && (def.steps[i - 1].parts || []).length);
+        const made = i !== last() && stepMade(def.steps[i - 1]);
         const review = !!(def.steps[i - 1] && def.steps[i - 1].review) && st !== 'done';   // 관리자가 ✅ 완료를 누르면 주황 → 파랑   // review: 만들었지만 마무리 안 됨(근거 약함·확인 필요) → 주황
         b.style.color = adm && partialBuilt && made ? (review ? '#ea580c' : '#2563eb') : ''; b.style.fontWeight = adm && partialBuilt && made ? '700' : ''; }); });
     paintWarn();
