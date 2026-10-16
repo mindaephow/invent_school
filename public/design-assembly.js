@@ -404,6 +404,42 @@
     if (rv.length) out.push('⚠ 확인 필요(마무리 안 됨, 번호판 주황): ' + rv.join(', ') + '번');
     const nd = rows.filter((r) => stepStatus[r[0]] !== 'done').map((r) => r[0]);
     out.push(nd.length ? '… ✅ 완료 안 누른 번호 ' + nd.length + '개' : '✅ 모든 번호 완료');
+    jointAuditLines().forEach((l) => out.push(l));   // 관절·묶음 점검(2026-10-16 사용자 지시: 마무리 점검에 관절 부분 추가)
+    return out;
+  }
+  // 관절 점검(완성 화면 기준 — 부품이 모두 놓인 상태): 관절·묶음이 서로 맞게 이어져 있는지, 막대(19프레임) 길이가 두 핀 거리와 맞는지, 추정으로 남은 것이 없는지 본다
+  function jointAuditLines() {
+    const out = [], J = jointsDB.joints || [], G = jointsDB.groups || [], have = new Set(lastLabels), miss = [], warn = [];
+    if (!jointsDB.loaded) return ['… 관절: 아직 DB 에서 못 읽었어요(관리자 로그인과 supabase/assembly_joints.sql 실행을 확인하세요)'];
+    if (!J.length) return ['☐ 관절: 등록된 관절이 없어요(🔩 관절 패널에서 부품을 눌러 등록)'];
+    out.push('🔩 관절 ' + J.length + '개 · 움직이는 묶음 ' + G.length + '개');
+    J.forEach((j) => {
+      if (!have.has(j.part_a)) miss.push(j.name + ': 색칠할 부품 "' + j.part_a + '" 이(가) 완성 화면에 없음');
+      if (j.part_b && !have.has(j.part_b)) miss.push(j.name + ': 이어진 부품 "' + j.part_b + '" 이(가) 완성 화면에 없음');
+      if (j.group_id && !G.some((g) => g.group_id === j.group_id)) miss.push(j.name + ': 소속 묶음 "' + j.group_id + '" 이(가) 없음');
+      if (j.rides_group_id && !G.some((g) => g.group_id === j.rides_group_id)) miss.push(j.name + ': 올라타는 묶음 "' + j.rides_group_id + '" 이(가) 없음');
+      if (j.kind === 'pin' && !j.rides_group_id) miss.push(j.name + ': 핀인데 올라타는 묶음이 안 적힘');
+      if (/추정|확인 필요/.test(j.note || '')) warn.push(j.name + ' — 추정(확인 필요)');
+    });
+    G.forEach((g) => {
+      const root = J.find((j) => j.joint_id === g.root_joint_id);
+      if (g.kind === 'body' && !g.root_joint_id) miss.push('묶음 ' + g.name + ': 중심 관절이 안 정해짐');
+      else if (g.root_joint_id && !root) miss.push('묶음 ' + g.name + ': 중심 관절 "' + g.root_joint_id + '" 이(가) 없음');
+      (g.members || []).forEach((m) => { if (m && m.name && !have.has(m.name)) miss.push('묶음 ' + g.name + ': 부품 "' + m.name + '" 이(가) 완성 화면에 없음'); });
+      if (g.kind === 'link') {   // 막대 묶음: 양 끝 핀이 정확히 2개 있고, 두 핀 사이 거리가 막대 길이와 맞아야 한다(허용 ±2mm)
+        const pins = J.filter((j) => j.group_id === g.group_id && j.kind === 'pin');
+        if (pins.length !== 2) miss.push('막대 ' + g.name + ': 양 끝 핀 관절이 ' + pins.length + '개(2개여야 함)');
+        else { const a = jointWorld(pins[0]), b2 = jointWorld(pins[1]);
+          if (!a || !b2) miss.push('막대 ' + g.name + ': 핀 위치를 못 구함(색칠할 부품이 화면에 없음)');
+          else { const d = Math.hypot(a.pos[0] - b2.pos[0], a.pos[1] - b2.pos[1], a.pos[2] - b2.pos[2]); const L = Number(g.link_length);
+            if (!(L > 0)) miss.push('막대 ' + g.name + ': 길이(link_length)가 안 적힘');
+            else if (Math.abs(d - L) > 2) miss.push('막대 ' + g.name + ': 두 핀 거리 ' + (Math.round(d * 10) / 10) + 'mm ≠ 막대 길이 ' + L + 'mm');
+            else out.push('   ☑ 막대 ' + g.name + ': 두 핀 거리 ' + (Math.round(d * 10) / 10) + 'mm ≈ 길이 ' + L + 'mm'); } }
+      }
+    });
+    out.push(miss.length ? '☐ 관절 빠진 것 ' + miss.length + '개' : '☑ 관절 점검 통과(이름·묶음·중심 관절·막대 길이)');
+    miss.forEach((m) => out.push('   ☐ ' + m));
+    if (warn.length) { out.push('⚠ 추정으로 남은 관절 ' + warn.length + '개(확인 필요):'); warn.forEach((w) => out.push('   · ' + w)); }
     return out;
   }
   function notice(msg, onClose) {
@@ -575,7 +611,7 @@
   function loadJoints() {
     const b = bridge(); jointsDB = { joints: [], groups: [] }; jointSel = null; jointDraft = null; jointSel2 = null; grpDraft = null;
     if (!isAdm() || !b || !b.jointStore || !def) { paintJoints(); return; }
-    const mine = def.id; b.jointStore.load(mine).then((m) => { if (!def || def.id !== mine) return; jointsDB = m || { joints: [], groups: [] }; paintJoints(); paintJointPanel(); });
+    const mine = def.id; b.jointStore.load(mine).then((m) => { if (!def || def.id !== mine) return; jointsDB = Object.assign({ joints: [], groups: [] }, m || {}, { loaded: true }); paintJoints(); paintJointPanel(); if (viewing && step === last()) render(); });   // 완성 화면이면 마무리 점검의 관절 줄을 다시 그린다
   }
   function jointOptions(list, key, cur, blank) { return (blank ? '<option value="">' + jesc(blank) + '</option>' : '') + list.map((g) => '<option value="' + jesc(g[key]) + '"' + (g[key] === cur ? ' selected' : '') + '>' + jesc(g.name ? g.name + ' (' + g[key] + ')' : g[key]) + '</option>').join(''); }
   function paintJointPanel() {
