@@ -517,7 +517,7 @@
       row1.parentNode.insertBefore(row2, row1.nextSibling);
       row1.style.justifyContent = row2.style.justifyContent = 'flex-start';   // 두 줄 모두 왼쪽 정렬(2026-10-16 사용자 지시)
     }
-    ['asmStatusBtn', 'asmCamCopy', 'asmFreezeBtn', 'asmAuditBtn', 'asmReloadBtn', 'asmThumbBtn', 'asmMarkMove2'].forEach((id) => { const e = $(id); if (e && e.parentNode !== row2) row2.appendChild(e); });
+    ['asmStatusBtn', 'asmJointBtn', 'asmCamCopy', 'asmFreezeBtn', 'asmAuditBtn', 'asmReloadBtn', 'asmThumbBtn', 'asmMarkMove2'].forEach((id) => { const e = $(id); if (e && e.parentNode !== row2) row2.appendChild(e); });
     row2.hidden = !isAdm();
   }
   function paintStatus() {
@@ -537,12 +537,157 @@
     { const tb = $('asmThumbBtn'); if (tb) tb.hidden = sb.hidden; }
     { const rb = $('asmReloadBtn'); if (rb) rb.hidden = !adm || step < 0; }
     { const ab = $('asmAuditBtn'); if (ab) ab.hidden = !adm || step < 0; }
+    { const jb = $('asmJointBtn'); if (jb) jb.hidden = !adm || step < 1; }
     { const fb = $('asmFreezeBtn'); if (fb) fb.hidden = sb.hidden; }
     const st = stepStatus[step]; sb.textContent = STATUS_LABEL[st] || '⬜ 상태 없음';
     sb.style.background = st === 'done' ? '#16a34a' : st === 'edit' ? '#f59e0b' : ''; sb.style.color = st ? '#fff' : '';
     sb.title = '이 단계의 상태(관리자만 보여요): 누를 때마다 상태 없음 → 수정중 → 완료 → 상태 없음. DB에 저장돼요';
     // 📷 카메라·❄ 모습 기록: 이 단계에 저장해 둔 값이 있으면 연두색으로 표시한다(관리자 지시 2026-10-11 — 완료 버튼처럼 저장 여부가 보이게)
     [['asmCamCopy', !!savedCams[step]], ['asmFreezeBtn', !!posesDB[step]]].forEach(([id, on]) => { const e = $(id); if (!e) return; e.style.background = on ? '#84cc16' : ''; e.style.color = on ? '#fff' : ''; e.style.borderColor = on ? '#65a30d' : ''; });
+  }
+  // ── 관절(중심점으로 움직이는 곳) 보기·수정 — 관리자 전용 (2026-10-16 사용자 지시: 조립도에서 바로 다른 색으로 보고, 고칠 수 있게) ──────────
+  // DB: ivs_assembly_joints(관절)·ivs_assembly_joint_groups(움직이는 묶음) — supabase/assembly_joints.sql.
+  // 관절 위치(pivot·axis)는 part_a 부품 기준 "로컬" 좌표(mm)로 저장한다 — 팔을 들거나 유닛을 옮겨도 관절이 부품에 붙어 따라간다. 화면에서는 그 부품의 지금 자리·방향으로 바꿔 3D 에 칠한다.
+  //   색: 고정 축 = 보라 · 핀(묶음을 따라 움직임) = 파랑 · 구동 관절 = 빨강 · 고른 관절 = 노랑(구 + 축선)
+  let jointsDB = { joints: [], groups: [] }, jointSel = null, jointDraft = null, jointOn = true, jointSel2 = null, grpDraft = null, jointPicked = null;
+  const jqrot = (q, v) => { const x = q[0], y = q[1], z = q[2], w = q[3], tx = 2 * (y * v[2] - z * v[1]), ty = 2 * (z * v[0] - x * v[2]), tz = 2 * (x * v[1] - y * v[0]);
+    return [v[0] + w * tx + (y * tz - z * ty), v[1] + w * ty + (z * tx - x * tz), v[2] + w * tz + (x * ty - y * tx)]; };
+  const jqinv = (q) => [-q[0], -q[1], -q[2], q[3]];
+  const jesc = (t) => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+  const jr2 = (v) => Math.round(Number(v) * 100) / 100;
+  function partPose(name) { const b = bridge(); if (!b || !b.serialize) return null; const i = lastLabels.indexOf(name); if (i < 0) return null; const s2 = b.serialize()[i]; return s2 && s2.pos && s2.quat ? { pos: s2.pos, quat: s2.quat } : null; }
+  function jointWorld(j) { const P = partPose(j.part_a); if (!P) return null;
+    const lp = jqrot(P.quat, [Number(j.pivot_x), Number(j.pivot_y), Number(j.pivot_z)]), ax = jqrot(P.quat, [Number(j.axis_x), Number(j.axis_y), Number(j.axis_z)]);
+    return { pos: [P.pos[0] + lp[0], P.pos[1] + lp[1], P.pos[2] + lp[2]], axis: ax }; }
+  function jointLocal(partA, wpos, waxis) { const P = partPose(partA); if (!P) return null; const qi = jqinv(P.quat);
+    const lp = jqrot(qi, [wpos[0] - P.pos[0], wpos[1] - P.pos[1], wpos[2] - P.pos[2]]), la = jqrot(qi, waxis); return { pos: lp, axis: la }; }
+  function paintJoints() {
+    const b = bridge(); if (!b || !b.jointLayer) return;
+    if (!isAdm() || !jointOn || !def || step < 1) { b.jointLayer.set([]); return; }
+    const list = [];
+    jointsDB.joints.forEach((j) => { const row = jointSel === j.joint_id && jointDraft ? jointDraft : j; if (step < Number(j.step)) return;
+      const pi = lastLabels.indexOf(row.part_a); if (pi >= 0) list.push({ id: j.joint_id, partIndex: pi, kind: row.kind, driver: !!row.is_driver, selected: jointSel === j.joint_id }); });   // 관절이 가리키는 부품(part_a)을 칠한다
+    if (jointDraft && jointSel === '__new') { const pi = lastLabels.indexOf(jointDraft.part_a); if (pi >= 0) list.push({ id: '__new', partIndex: pi, kind: jointDraft.kind, driver: !!jointDraft.is_driver, selected: true }); }
+    b.jointLayer.set(list, null);   // 선택은 일반 부품 선택 + 아래 __ivsOnPartClick 이 한다(관절 부품도 일반 부품처럼 선택되고, 관절 정보가 같이 열린다)
+  }
+  function loadJoints() {
+    const b = bridge(); jointsDB = { joints: [], groups: [] }; jointSel = null; jointDraft = null; jointSel2 = null; grpDraft = null;
+    if (!isAdm() || !b || !b.jointStore || !def) { paintJoints(); return; }
+    const mine = def.id; b.jointStore.load(mine).then((m) => { if (!def || def.id !== mine) return; jointsDB = m || { joints: [], groups: [] }; paintJoints(); paintJointPanel(); });
+  }
+  function jointOptions(list, key, cur, blank) { return (blank ? '<option value="">' + jesc(blank) + '</option>' : '') + list.map((g) => '<option value="' + jesc(g[key]) + '"' + (g[key] === cur ? ' selected' : '') + '>' + jesc(g.name ? g.name + ' (' + g[key] + ')' : g[key]) + '</option>').join(''); }
+  function paintJointPanel() {
+    const el = $('asmJointPanel'); if (!el || el.hidden) return;
+    const J = jointDraft || jointsDB.joints.find((j) => j.joint_id === jointSel) || null, isNew = jointSel === '__new';
+    const w = J ? jointWorld(J) : null, inp = 'width:62px;padding:2px 4px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;', txt = 'width:100%;padding:3px 5px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;box-sizing:border-box;', btn = 'padding:4px 10px;border-radius:8px;border:1px solid #94a3b8;background:#f8fafc;font-size:12px;font-weight:600;cursor:pointer;';
+    const n3 = (a, id) => [0, 1, 2].map((k) => '<input id="' + id + k + '" type="number" step="0.5" value="' + (a ? jr2(a[k]) : '') + '" style="' + inp + '">').join(' ');
+    let h = '<div data-jtdrag="1" title="제목 줄을 끌어서 옮겨요" style="display:flex;align-items:center;gap:8px;margin-bottom:6px;cursor:move;user-select:none;touch-action:none;"><b style="font-size:13px;">🔩 관절 (관리자) ⠿</b><label style="margin-left:auto;font-weight:600;"><input id="jtOn" type="checkbox"' + (jointOn ? ' checked' : '') + '> 화면에 칠하기</label><button id="jtClose" style="' + btn + '">닫기</button></div>';
+    h += '<div style="color:#475569;margin-bottom:6px;">관절 부품(T축·축·리벳)은 모두 <b style="color:#d11fb0">분홍</b>으로 칠해져요. 고른 관절은 <b style="color:#b8860b">노랑</b>. 3D 화면에서 부품을 누르면 그 부품의 일반 정보와 함께 관절 정보가 여기에 나와요. 중심·축 숫자는 이 번호 화면 기준(mm)이에요.</div>';
+    { const si = bridge() && bridge().selectedPartIndex ? bridge().selectedPartIndex() : -1, sn = (jointPicked && lastLabels.indexOf(jointPicked) >= 0) ? jointPicked : (si >= 0 ? lastLabels[si] : '');
+      const already = sn ? jointsDB.joints.filter((j) => j.part_a === sn) : [];
+      h += '<div style="background:#fdf2f8;border:1px solid #f0abfc;border-radius:8px;padding:6px 8px;margin-bottom:6px;"><div style="font-weight:700;">부품을 눌러 관절로 등록</div><div style="margin:3px 0;">고른 부품: <b>' + (sn ? jesc(sn) : '없음 — 아래 🎯 를 누르고 3D 화면의 부품을 누르세요') + '</b>' + (already.length ? ' <span style="color:#b45309;">(이미 관절 ' + already.map((j) => jesc(j.name)).join(', ') + ')</span>' : '') + '</div><div style="display:flex;gap:6px;"><button id="jtPick" style="' + btn + '" title="누른 뒤 3D 화면에서 부품 하나를 누르세요">🎯 3D 화면에서 부품 찍기</button><button id="jtReg" style="' + btn + '"' + (sn ? '' : ' disabled') + '>🔩 이 부품을 관절로 등록</button></div></div>'; }
+    h += '<div style="display:flex;gap:6px;margin-bottom:6px;"><select id="jtSel" style="' + txt + '"><option value="">— 관절 고르기 (' + jointsDB.joints.length + '개) —</option>' + jointsDB.joints.map((j) => '<option value="' + jesc(j.joint_id) + '"' + (j.joint_id === jointSel ? ' selected' : '') + '>' + (j.step > step ? '· ' : '') + jesc(j.name) + ' (' + jesc(j.joint_id) + ', ' + j.step + '번~)</option>').join('') + '</select><button id="jtNew" style="' + btn + '">+ 새 관절</button></div>';
+    if (J) {
+      h += '<div style="display:grid;grid-template-columns:78px 1fr;gap:4px 6px;align-items:center;">';
+      h += '<span>이름표</span><input id="jtId" style="' + txt + '" value="' + jesc(J.joint_id) + '"' + (isNew ? '' : ' readonly') + '>';
+      h += '<span>이름</span><input id="jtName" style="' + txt + '" value="' + jesc(J.name) + '">';
+      h += '<span>시작 번호</span><input id="jtStep" type="number" style="' + inp + '" value="' + jesc(J.step) + '">';
+      h += '<span>종류</span><span><select id="jtKind"><option value="axis"' + (J.kind === 'axis' ? ' selected' : '') + '>고정 축(판에 고정)</option><option value="pin"' + (J.kind === 'pin' ? ' selected' : '') + '>핀(묶음을 따라 움직임)</option></select> <label><input id="jtDrv" type="checkbox"' + (J.is_driver ? ' checked' : '') + '> 구동</label></span>';
+      h += '<span>소속 묶음</span><select id="jtGrp" style="' + txt + '">' + jointOptions(jointsDB.groups, 'group_id', J.group_id, '(없음)') + '</select>';
+      h += '<span>올라타는 묶음</span><select id="jtRide" style="' + txt + '">' + jointOptions(jointsDB.groups, 'group_id', J.rides_group_id, '(없음)') + '</select>';
+      h += '<span>색칠할 부품 A</span><input id="jtPA" list="jtParts" style="' + txt + '" value="' + jesc(J.part_a) + '"><datalist id="jtParts">' + lastLabels.map((l) => '<option value="' + jesc(l) + '">').join('') + '</datalist>';
+      h += '<span>이어진 부품 B</span><input id="jtPB" list="jtParts" style="' + txt + '" value="' + jesc(J.part_b) + '">';
+      h += '<span>중심 x y z</span><span>' + n3(w && w.pos, 'jtP') + '</span>';
+      h += '<span>축 x y z</span><span>' + n3(w && w.axis, 'jtA') + '</span>';
+      h += '<span>각도 범위</span><span><input id="jtMin" type="number" style="' + inp + '" value="' + (J.min_angle == null ? '' : J.min_angle) + '" placeholder="최소"> ~ <input id="jtMax" type="number" style="' + inp + '" value="' + (J.max_angle == null ? '' : J.max_angle) + '" placeholder="최대"> 도</span>';
+      h += '<span>메모</span><textarea id="jtNote" rows="3" style="' + txt + '">' + jesc(J.note || '') + '</textarea></div>';
+      h += (w ? '' : '<div style="color:#b91c1c;margin-top:4px;">이 번호 화면에는 색칠할 부품 A("' + jesc(J.part_a) + '")가 없어서 위치를 못 그려요. 부품이 있는 번호로 가거나 이름을 고쳐 주세요.</div>');
+      h += '<div style="display:flex;gap:6px;margin-top:8px;"><button id="jtSave" style="' + btn + 'background:#2563eb;color:#fff;border-color:#2563eb;">저장</button>' + (isNew ? '' : '<button id="jtDel" style="' + btn + 'color:#b91c1c;">삭제</button>') + '<button id="jtCam" style="' + btn + '" title="화면 가운데(카메라가 보는 점)로 중심을 옮겨요">중심을 화면 가운데로</button></div>';
+    }
+    h += '<details style="margin-top:10px;"' + (jointSel2 ? ' open' : '') + '><summary style="cursor:pointer;font-weight:700;">움직이는 묶음 (' + jointsDB.groups.length + '개)</summary><div style="margin-top:6px;">';
+    h += '<div style="display:flex;gap:6px;margin-bottom:6px;"><select id="gpSel" style="' + txt + '"><option value="">— 묶음 고르기 —</option>' + jointOptions(jointsDB.groups, 'group_id', jointSel2) + '</select><button id="gpNew" style="' + btn + '">+ 새 묶음</button></div>';
+    if (grpDraft) { const G = grpDraft;
+      h += '<div style="display:grid;grid-template-columns:78px 1fr;gap:4px 6px;align-items:center;"><span>이름표</span><input id="gpId" style="' + txt + '" value="' + jesc(G.group_id) + '"' + (jointSel2 === '__new' ? '' : ' readonly') + '>';
+      h += '<span>이름</span><input id="gpName" style="' + txt + '" value="' + jesc(G.name) + '">';
+      h += '<span>종류</span><span><select id="gpKind"><option value="body"' + (G.kind === 'body' ? ' selected' : '') + '>덩어리(축 기준 회전)</option><option value="link"' + (G.kind === 'link' ? ' selected' : '') + '>막대(양 끝 관절 사이)</option></select> 길이 <input id="gpLen" type="number" style="' + inp + '" value="' + (G.link_length == null ? '' : G.link_length) + '"></span>';
+      h += '<span>바깥 묶음</span><select id="gpPar" style="' + txt + '">' + jointOptions(jointsDB.groups.filter((g) => g.group_id !== G.group_id), 'group_id', G.parent_group_id, '(없음)') + '</select>';
+      h += '<span>중심 관절</span><select id="gpRoot" style="' + txt + '">' + jointOptions(jointsDB.joints.map((j) => ({ group_id: j.joint_id, name: j.name })), 'group_id', G.root_joint_id, '(없음)') + '</select>';
+      h += '<span>부품들</span><textarea id="gpMem" rows="4" style="' + txt + '" placeholder="한 줄에 부품 하나(예: 215프레임 1번)">' + jesc((G.members || []).map((m) => m.name).join(String.fromCharCode(10))) + '</textarea>';
+      h += '<span>메모</span><textarea id="gpNote" rows="2" style="' + txt + '">' + jesc(G.note || '') + '</textarea></div>';
+      h += '<div style="display:flex;gap:6px;margin-top:8px;"><button id="gpSave" style="' + btn + 'background:#2563eb;color:#fff;border-color:#2563eb;">묶음 저장</button>' + (jointSel2 === '__new' ? '' : '<button id="gpDel" style="' + btn + 'color:#b91c1c;">묶음 삭제</button>') + '<button id="gpFill" style="' + btn + '" title="지금 화면의 부품 이름들을 넣어요">지금 부품 이름 넣기</button></div>'; }
+    h += '</div></details><div id="jtMsg" style="margin-top:6px;color:#475569;"></div>';
+    el.innerHTML = h; wireJointPanel();
+  }
+  function jmsg(t, bad) { const m = $('jtMsg'); if (m) { m.textContent = t; m.style.color = bad ? '#b91c1c' : '#15803d'; } }
+  function readJointForm() {   // 폼의 값(이 번호 화면 기준 좌표)을 부품 A 기준 로컬 좌표 행으로 바꾼다
+    const g = (id) => { const e = $(id); return e ? e.value : ''; }, num = (id) => Number(g(id));
+    const a = [num('jtA0'), num('jtA1'), num('jtA2')], L = Math.hypot(a[0], a[1], a[2]) || 1, pa = g('jtPA');
+    const loc = jointLocal(pa, [num('jtP0'), num('jtP1'), num('jtP2')], [a[0] / L, a[1] / L, a[2] / L]);
+    const base = jointDraft || jointsDB.joints.find((j) => j.joint_id === jointSel) || {};
+    const row = Object.assign({}, base, { assembly_id: def.id, joint_id: g('jtId').trim(), name: g('jtName').trim(), step: Math.max(1, Math.round(num('jtStep')) || 1), kind: g('jtKind'), is_driver: !!($('jtDrv') && $('jtDrv').checked),
+      group_id: g('jtGrp') || null, rides_group_id: g('jtRide') || null, part_a: pa, part_b: g('jtPB').trim(), min_angle: g('jtMin') === '' ? null : num('jtMin'), max_angle: g('jtMax') === '' ? null : num('jtMax'), note: g('jtNote') });
+    if (loc) { row.pivot_x = jr2(loc.pos[0]); row.pivot_y = jr2(loc.pos[1]); row.pivot_z = jr2(loc.pos[2]); row.axis_x = Math.round(loc.axis[0] * 1000) / 1000; row.axis_y = Math.round(loc.axis[1] * 1000) / 1000; row.axis_z = Math.round(loc.axis[2] * 1000) / 1000; }
+    row._noLocal = !loc; return row;
+  }
+  function wireJointPanel() {
+    const b = bridge(), on = (id, ev, fn) => { const e = $(id); if (e) e.addEventListener(ev, fn); };
+    on('jtClose', 'click', () => { $('asmJointPanel').hidden = true; });
+    on('jtOn', 'change', (ev) => { jointOn = ev.target.checked; paintJoints(); });
+    on('jtSel', 'change', (ev) => { jointSel = ev.target.value || null; jointDraft = null; paintJoints(); paintJointPanel(); });
+    on('jtPick', 'click', () => { if (!b.pickPart) return; jmsg('3D 화면에서 부품 하나를 누르세요…'); b.pickPart((i) => { jointPicked = i >= 0 ? lastLabels[i] : null; paintJointPanel(); jmsg(i >= 0 ? '"' + lastLabels[i] + '" 를 골랐어요. 아래 "관절로 등록"을 누르세요.' : '부품을 못 찾았어요. 다시 🎯 를 누르고 부품을 누르세요.', i < 0); }); });
+    on('jtReg', 'click', () => { const si = b.selectedPartIndex ? b.selectedPartIndex() : -1; const pa0 = (jointPicked && lastLabels.indexOf(jointPicked) >= 0) ? jointPicked : (si >= 0 ? lastLabels[si] : ''); if (!pa0) { jmsg('먼저 🎯 로 부품 하나를 찍어 주세요.', true); return; }
+      const pa = pa0, P = partPose(pa); if (!P) { jmsg('부품 위치를 못 읽었어요.', true); return; }
+      const ids = new Set(jointsDB.joints.map((j) => j.joint_id)); let k = 1; const base = 'j_' + pa.replace(/\s+/g, '').replace(/[^0-9A-Za-z가-힣]/g, ''); let jid = base; while (ids.has(jid)) jid = base + '_' + (++k);
+      jointSel = '__new'; jointDraft = { assembly_id: def.id, joint_id: jid, name: pa + ' 관절', step: Math.max(1, step), group_id: null, kind: 'pin', rides_group_id: null, is_driver: false, part_a: pa, part_b: '', pivot_x: 0, pivot_y: 0, pivot_z: 0, axis_x: 0, axis_y: 1, axis_z: 0, min_angle: null, max_angle: null, note: '' };
+      paintJoints(); paintJointPanel(); jmsg('"' + pa + '" 를 관절로 올렸어요. 종류·이어진 부품 B 를 정하고 저장하세요.'); });
+    on('jtNew', 'click', () => { const cs = b.camState ? b.camState() : { target: [0, 0, 0] }, pa = lastLabels[0] || '';
+      jointSel = '__new'; jointDraft = { assembly_id: def.id, joint_id: '', name: '새 관절', step: Math.max(1, step), group_id: null, kind: 'pin', rides_group_id: null, is_driver: false, part_a: pa, part_b: '', pivot_x: 0, pivot_y: 0, pivot_z: 0, axis_x: 0, axis_y: 0, axis_z: 1, min_angle: null, max_angle: null, note: '' };
+      const lp = jointLocal(pa, cs.target, [0, 0, 1]); if (lp) { jointDraft.pivot_x = jr2(lp.pos[0]); jointDraft.pivot_y = jr2(lp.pos[1]); jointDraft.pivot_z = jr2(lp.pos[2]); jointDraft.axis_x = jr2(lp.axis[0]); jointDraft.axis_y = jr2(lp.axis[1]); jointDraft.axis_z = jr2(lp.axis[2]); }
+      paintJoints(); paintJointPanel(); });
+    ['jtP0', 'jtP1', 'jtP2', 'jtA0', 'jtA1', 'jtA2', 'jtKind', 'jtDrv', 'jtPA'].forEach((id) => on(id, 'input', () => { const r = readJointForm(); if (r._noLocal) return; jointDraft = r; paintJoints(); }));
+    on('jtCam', 'click', () => { const cs = b.camState(); ['jtP0', 'jtP1', 'jtP2'].forEach((id, k) => { const e = $(id); if (e) e.value = jr2(cs.target[k]); }); const r = readJointForm(); if (!r._noLocal) { jointDraft = r; paintJoints(); } });
+    on('jtSave', 'click', async () => { const r = readJointForm(); if (!r.joint_id || !r.name || !r.part_a || !r.part_b) { jmsg('이름표·이름·부품 A·부품 B 를 모두 적어 주세요.', true); return; }
+      if (r._noLocal) { jmsg('색칠할 부품 A 가 이 번호 화면에 없어서 위치를 못 저장해요. 부품이 있는 번호에서 저장해 주세요.', true); return; }
+      delete r._noLocal; delete r.id; delete r.updated_at; delete r.updated_by;
+      try { const saved = await b.jointStore.saveJoint(r); const i = jointsDB.joints.findIndex((j) => j.joint_id === saved.joint_id); if (i >= 0) jointsDB.joints[i] = saved; else jointsDB.joints.push(saved); jointSel = saved.joint_id; jointDraft = null; paintJoints(); paintJointPanel(); jmsg('저장했어요: ' + saved.name); }
+      catch (e) { jmsg(e.message, true); } });
+    on('jtDel', 'click', async () => { const j = jointsDB.joints.find((x) => x.joint_id === jointSel); if (!j || !window.confirm('관절 "' + j.name + '" 을(를) 지울까요?')) return;
+      try { await b.jointStore.removeJoint(def.id, j.joint_id); jointsDB.joints = jointsDB.joints.filter((x) => x.joint_id !== j.joint_id); jointSel = null; jointDraft = null; paintJoints(); paintJointPanel(); jmsg('지웠어요.'); } catch (e) { jmsg(e.message, true); } });
+    on('gpSel', 'change', (ev) => { jointSel2 = ev.target.value || null; grpDraft = jointSel2 ? JSON.parse(JSON.stringify(jointsDB.groups.find((g) => g.group_id === jointSel2) || null)) : null; paintJointPanel(); });
+    on('gpNew', 'click', () => { jointSel2 = '__new'; grpDraft = { assembly_id: def.id, group_id: '', name: '새 묶음', kind: 'body', link_length: null, parent_group_id: null, root_joint_id: null, members: [], note: '' }; paintJointPanel(); });
+    on('gpFill', 'click', () => { const e = $('gpMem'); if (e) e.value = lastLabels.join(String.fromCharCode(10)); });
+    on('gpSave', 'click', async () => { const g = (id) => ($(id) ? $(id).value : '');
+      const r = Object.assign({}, grpDraft, { assembly_id: def.id, group_id: g('gpId').trim(), name: g('gpName').trim(), kind: g('gpKind'), link_length: g('gpLen') === '' ? null : Number(g('gpLen')), parent_group_id: g('gpPar') || null, root_joint_id: g('gpRoot') || null,
+        members: g('gpMem').split(String.fromCharCode(10)).map((t) => t.trim()).filter(Boolean).map((t) => ({ name: t })), note: g('gpNote') });
+      if (!r.group_id || !r.name) { jmsg('묶음 이름표와 이름을 적어 주세요.', true); return; } delete r.id; delete r.updated_at; delete r.updated_by;
+      try { const saved = await b.jointStore.saveGroup(r); const i = jointsDB.groups.findIndex((x) => x.group_id === saved.group_id); if (i >= 0) jointsDB.groups[i] = saved; else jointsDB.groups.push(saved); jointSel2 = saved.group_id; grpDraft = JSON.parse(JSON.stringify(saved)); paintJointPanel(); jmsg('묶음을 저장했어요: ' + saved.name); } catch (e) { jmsg(e.message, true); } });
+    on('gpDel', 'click', async () => { const G = jointsDB.groups.find((x) => x.group_id === jointSel2); if (!G || !window.confirm('묶음 "' + G.name + '" 을(를) 지울까요?')) return;
+      try { await b.jointStore.removeGroup(def.id, G.group_id); jointsDB.groups = jointsDB.groups.filter((x) => x.group_id !== G.group_id); jointSel2 = null; grpDraft = null; paintJointPanel(); jmsg('지웠어요.'); } catch (e) { jmsg(e.message, true); } });
+  }
+  // 부품을 누르면(일반 선택은 그대로) 그 부품이 관절이면 관절 정보를 패널에 연다 — 관절이 아니면 패널이 열려 있을 때 "관절로 등록" 후보로 보여 준다
+  window.__ivsOnPartClick = (idx) => { if (!isAdm() || !def || step < 1 || idx < 0) return; const nm = lastLabels[idx]; if (!nm) return;
+    setTimeout(() => { const el = $('asmJointPanel'); if (!el) return; jointPicked = nm; const j = jointsDB.joints.find((x) => x.part_a === nm && step >= Number(x.step));
+      if (j) { jointSel = j.joint_id; jointDraft = null; el.hidden = false; } else if (!el.hidden) { jointSel = null; jointDraft = null; } else return;
+      paintJoints(); paintJointPanel(); }, 80); };
+  window.__ivsOnPartSelect = () => { const el = $('asmJointPanel'); if (!el || el.hidden || !isAdm()) return; clearTimeout(window.__jtSelT); window.__jtSelT = setTimeout(() => { const act = document.activeElement; if (act && el.contains(act) && /INPUT|TEXTAREA|SELECT/.test(act.tagName)) return; paintJointPanel(); }, 60); };   // 부품을 고르면 패널의 "고른 부품" 줄을 갱신
+  function wireJointDrag(el) {   // 제목 줄을 끌면 패널이 움직인다(2026-10-16 사용자 지시). 놓은 자리는 이 브라우저에 기억한다.
+    const KEY = 'ivs-joint-panel-pos';
+    const put = (x, y) => { const w = el.offsetWidth, h2 = Math.min(el.offsetHeight, window.innerHeight); x = Math.max(8 - w + 80, Math.min(window.innerWidth - 80, x)); y = Math.max(0, Math.min(window.innerHeight - 40, y)); el.style.left = x + 'px'; el.style.top = y + 'px'; el.style.right = 'auto'; el.style.bottom = 'auto'; };
+    try { const sv = JSON.parse(localStorage.getItem(KEY) || 'null'); if (sv && isFinite(sv.x) && isFinite(sv.y)) put(sv.x, sv.y); } catch (e) { /* 기억 못 해도 기본 자리에 뜬다 */ }
+    let drag = null;
+    el.addEventListener('pointerdown', (ev) => { const hd = ev.target.closest && ev.target.closest('[data-jtdrag]'); if (!hd || ev.target.closest('button,input,select,textarea,label')) return;
+      const r = el.getBoundingClientRect(); drag = { dx: ev.clientX - r.left, dy: ev.clientY - r.top, id: ev.pointerId }; try { el.setPointerCapture(ev.pointerId); } catch (e) { /* 캡처 못 해도 끌린다 */ } ev.preventDefault(); });
+    el.addEventListener('pointermove', (ev) => { if (!drag || ev.pointerId !== drag.id) return; put(ev.clientX - drag.dx, ev.clientY - drag.dy); });
+    const end = (ev) => { if (!drag || ev.pointerId !== drag.id) return; drag = null; try { const r = el.getBoundingClientRect(); localStorage.setItem(KEY, JSON.stringify({ x: Math.round(r.left), y: Math.round(r.top) })); } catch (e) { /* 저장 못 해도 괜찮다 */ } };
+    el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+  }
+  function ensureJointUI() {
+    if (!$('asmJointPanel')) { const el = document.createElement('div'); el.id = 'asmJointPanel'; el.hidden = true;
+      el.style.cssText = 'position:fixed;right:14px;bottom:14px;width:340px;max-height:80vh;overflow:auto;z-index:950;background:#fff;border:1px solid #cbd5e1;border-radius:12px;box-shadow:0 8px 28px rgba(15,23,42,.25);padding:10px 12px;font-size:12px;color:#0f172a;'; document.body.appendChild(el); wireJointDrag(el); }
+    if (!$('asmJointBtn') && $('asmStatusBtn')) { const jb = document.createElement('button'); jb.type = 'button'; jb.id = 'asmJointBtn'; jb.hidden = true; jb.textContent = '🔩 관절';
+      jb.style.cssText = $('asmStatusBtn').style.cssText; jb.title = '회전하는 관절(중심점)을 보고 고쳐요(관리자만). 관절 부품(T축·축·리벳)을 3D 화면에서 분홍색으로 칠해요';
+      $('asmStatusBtn').parentNode.insertBefore(jb, $('asmStatusBtn'));
+      jb.addEventListener('click', () => { const el = $('asmJointPanel'); el.hidden = !el.hidden; if (!el.hidden) { paintJoints(); paintJointPanel(); } }); }
   }
   function ensureStatusBtn() {
     if ($('asmStatusBtn') || !$('asmMarkMove2')) return;
@@ -815,6 +960,7 @@
     markStepButtons();
     $('asmFirst').disabled = $('asmPrev').disabled = step === 0;
     $('asmNext').disabled = $('asmLast').disabled = step === last();
+    { const myJ = step; jointDraft = null; if (jointSel === '__new') jointSel = null; setTimeout(() => { if (step === myJ && isAdm()) { paintJoints(); paintJointPanel(); } }, 300); }   // 부품이 자리 잡은 뒤 관절을 칠한다
     paintStatus();
     curSlot = (step >= 1 && step < last() && def.steps[step - 1] && def.steps[step - 1].slot !== undefined) ? def.steps[step - 1].slot : ((step === last() && step >= 1 && def.finalSlot !== undefined) ? def.finalSlot : -1); setStudioTitle(true); if (b.setSlot) b.setSlot(curSlot); // (완성 화면의 작업 창고는 조립도 데이터 finalSlot)
     { const hs = step >= 1 && def.steps[step - 1] ? def.steps[step - 1].history : ''; if (hs) $('asmNote').textContent += '  ▸ ' + hs; } // 내역: 창고로 갔는지 불러왔는지(단계 번호에는 넣지 않는다)
@@ -980,7 +1126,7 @@
     $('asmSlider').max = String(last());
     buildStepButtons();
     savedCams = {};
-    ensureStatusBtn(); posesDB = {}; if (b.poseStore) b.poseStore.load(def.id).then((m) => { posesDB = m || {}; paintStatus(); if (Object.keys(posesDB).length && viewing) render(); }); thumbsDB = {}; if (b.thumbStore) b.thumbStore.load(def.id).then((m) => { thumbsDB = m || {}; pushSlotThumbs(); }); checkVerdicts = {}; if (isAdm() && b.checkStore) b.checkStore.load(def.id).then((m) => { checkVerdicts = m || {}; paintStatus(); }); stepStatus = {}; if (isAdm() && b.statusStore) b.statusStore.load(def.id).then((m) => { stepStatus = m || {}; paintStatus(); });
+    ensureStatusBtn(); ensureJointUI(); loadJoints(); posesDB = {}; if (b.poseStore) b.poseStore.load(def.id).then((m) => { posesDB = m || {}; paintStatus(); if (Object.keys(posesDB).length && viewing) render(); }); thumbsDB = {}; if (b.thumbStore) b.thumbStore.load(def.id).then((m) => { thumbsDB = m || {}; pushSlotThumbs(); }); checkVerdicts = {}; if (isAdm() && b.checkStore) b.checkStore.load(def.id).then((m) => { checkVerdicts = m || {}; paintStatus(); }); stepStatus = {}; if (isAdm() && b.statusStore) b.statusStore.load(def.id).then((m) => { stepStatus = m || {}; paintStatus(); });
     if (b.camStore) b.camStore.load(def.id).then((m) => { savedCams = m || {}; paintStatus(); if (viewing) render(); }); // 관리자가 저장한 단계별 시점
     if (refsFor !== def.id) loadRefs();
     go(last()); // 처음엔 완성된 모습부터 보여준다

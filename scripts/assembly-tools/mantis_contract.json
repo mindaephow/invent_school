@@ -211,20 +211,30 @@
 "noPart": false
 },
 "31": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 1,
+"19프레임": 1,
+"부시": 1
+},
+"noPart": false
 },
 "32": {
 "parts": {},
-"noPart": true
+"noPart": false
 },
 "33": {
-"parts": {},
-"noPart": true
+"parts": {
+"59프레임": 1
+},
+"noPart": false
 },
 "34": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 4,
+"39프레임": 1,
+"59프레임": 1
+},
+"noPart": false
 },
 "35": {
 "parts": {},
