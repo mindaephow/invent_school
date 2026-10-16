@@ -1,0 +1,1 @@
+{"global": {"X": [55.0, -25.7], "Y": [-1.4, -55.0], "Z": [42.7, 55.0]}, "fit": {"from": "06_P.json (6번 값을 옮김 — 7번은 위 판 모서리를 못 읽고 같은 장면 연속)", "err_px": 1.01, "points": 4, "theta": -0.51, "phi": 0.7, "cols": "+X", "rows": "+Z", "moved_from": 6}, "no_rotate": true, "origin_cell": [1, 1]}

@@ -1,0 +1,1 @@
+{"global": {"X": [-15.4, -52.8], "Y": [0.0, -55.0], "Z": [54.7, -6.2]}, "fit": {"from": "15번 — 책 그림과 화면을 나란히 보며 눈으로 맞춤(추정): 카메라가 −x 쪽 위에서 첫째 벌 바퀴 바깥쪽을 봄", "err_px": null, "points": 0, "theta": -1.75, "phi": 0.9, "cols": "+X", "rows": "+Z", "hand": true}, "no_rotate": true, "origin_cell": [1, 1]}

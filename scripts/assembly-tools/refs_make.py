@@ -67,6 +67,18 @@ BOOKS = {
         },
         "extra": [],
     },
+    "avoider": {
+        "volume": 2,
+        "pages": {
+            50: [(0, (430, 455, 1000, 1320), "교재 50쪽 맨 앞 완성품 사진 — 앞뒤·방향(IR센서 둘이 앞, 바퀴 둘)은 여기서 확인"), (1, (75, 1330, 705, 1888), "※ 모터 방향 주의"), (2, (720, 1330, 1355, 1888), "")],
+            51: [(3 + i, box(*g), "") for i, g in enumerate(GRID)],
+            52: [(9 + i, box(*g), "") for i, g in enumerate(GRID)],
+            53: [(15 + i, box(*g), "") for i, g in enumerate(GRID)],
+            54: [(21 + i, box(*g), "") for i, g in enumerate(GRID)],
+            55: [(27, box("L", 1), ""), (28, box("R", 1), "※ 메인보드 왼쪽 / 오른쪽에 DC모터 연결"), (29, box("L", 2), ""), (30, box("R", 2), "※ 센서 케이블 연결"), (99, box("L", 3), "완성")],
+        },
+        "extra": [],
+    },
     "mantis": {
         "volume": 2,
         "pages": {

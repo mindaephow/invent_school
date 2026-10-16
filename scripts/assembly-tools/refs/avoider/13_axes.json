@@ -1,0 +1,1 @@
+{"global": {"X": [55.0, -16.6], "Y": [-0.4, -55.0], "Z": [55.0, 26.0]}, "fit": {"from": "12_axes.json (12번 카메라 값을 옮김 — 13번은 12번과 같은 쪽에서 본 같은 모습)", "err_px": 10.86, "points": 5, "theta": -0.66, "phi": 1.19, "cols": "+X", "rows": "+Z", "moved_from": 12}, "no_rotate": true, "origin_cell": [1, 1]}

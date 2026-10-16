@@ -1,0 +1,1 @@
+{"global": {"X": [49.1, -24.8], "Y": [0.0, -55.0], "Z": [37.4, 40.3]}, "fit": {"from": "17번 — 17번 그림의 리벳·볼트 구멍 6점(평면 y 35) PnP fov 30", "err_px": 3.2, "points": 6, "theta": -0.6, "phi": 0.74, "cols": "+X", "rows": "+Z", "hand": false}, "no_rotate": true, "origin_cell": [1, 1]}

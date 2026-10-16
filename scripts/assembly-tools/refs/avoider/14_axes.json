@@ -1,0 +1,1 @@
+{"global": {"X": [53.3, 13.6], "Y": [-2.6, -54.9], "Z": [-52.4, 16.6]}, "fit": {"from": "14_P.json (판 구멍 링 4 + 바 리벳 3 + 큰기어 축 끝, 8점 비평면 PnP fov20)", "err_px": 8.21, "points": 8, "theta": 0.82, "phi": 1.28, "cols": "+X", "rows": "+Z"}, "no_rotate": true, "origin_cell": [1, 1]}
