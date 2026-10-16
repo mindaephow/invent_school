@@ -1,1 +1,1 @@
-{"global": {"X": [48.7, -25.5], "Y": [0.0, -55.0], "Z": [44.3, 32.7]}, "fit": {"from": "18번 — 책 그림과 화면을 나란히 보며 눈으로 맞춤(추정): 앞(+z)이 보는 쪽, 바퀴 아래", "err_px": null, "points": 0, "theta": -0.7, "phi": 0.9, "cols": "+X", "rows": "+Z", "hand": true}, "no_rotate": true, "origin_cell": [1, 1]}
+{"global": {"X": [55.0, -28.0], "Y": [-2.9, -55.0], "Z": [55.0, 48.7]}, "fit": {"from": "18_P.json", "err_px": 1.6, "points": 11, "theta": -0.59, "phi": 0.85, "cols": "+Z", "rows": "-X", "fov": 16}, "no_rotate": true, "origin_cell": [1, 1]}

@@ -6,6 +6,7 @@
 #   C 카메라 axes.json 의 fit.err_px ≤ 2.0, 점 4개 이상, "추정" 이 아니어야 한다. 아니면 ❌.
 #   E 증거  사용자 ✓ 이거나 책↔화면 비교 증거의 지문이 지금 내용과 같아야 한다.
 #   R 읽기 표 면·링·부품 칸이 채워져 있어야 한다.
+#   P 증명  <이름>_rules.json 에 "overlay_proof": true 가 있으면 번호마다 refs/<이름>/NN_3.jpg(overlay_check.py 로 모델을 책 그림에 겹친 증명 그림)이 있어야 한다.
 # 예외 승인: <이름>_approvals.json 에 {"<번호>": {"fits": "이유", "camera": "이유", "사용자 말씀": "사용자가 한 말 그대로"}} — "사용자 말씀" 이 없으면 인정하지 않는다. Claude 는 이 파일에 적지 않는다.
 # <이름>_rules.json 에 "rulecheck": true 가 있는 조립도만 ❌ 로 막는다(없는 옛 조립도는 ⚠ 로만 표시).
 import json, os, re, sys
@@ -16,6 +17,7 @@ FIX = {
     "격자": "python holefit.py <이름> <번호> <라벨> <칸> <줄> <모서리 8개> [어두운판] 로 규칙대로 다시 만든다(옵션 추가·손으로 만든 격자 금지). 기준 미달(판이 가려 구멍이 일부만 보임)이면 멈추지 말고 python infer_grid.py <이름> <번호> <라벨> <칸> <줄> 모서리8개 --판 <앞번호>:<라벨> --거울 <대칭번호> 줄 --링 'x,y;…' 로 앞·뒤 번호·대칭·링 정보를 모아 유추한다(05_조립 0-1). 유추로도 가설이 하나로 안 갈릴 때만 멈추고 시도·수치·필요한 추가 근거를 보고한다.",
     "카메라": "python axes_fit.py <이름> <번호> <라벨> <칸> <줄> <칸방향> <줄방향> 로 그 번호 격자에서 계산한다(오차 ≤2px, 점 4개 이상). 격자가 ❌ 면 격자부터 해결한다.",
     "증거": "화면에서 책과 나란히 비교한 뒤 python record_check.py <이름> <번호> <캡처.png> \"<비교 결과>\" 로 증거를 남긴다(내용이 바뀌었으면 다시).",
+    "증명": "python overlay_check.py <이름> <번호> 로 모델을 책 그림 위에 같은 카메라로 겹쳐 NN_3.jpg 를 만들고(점 오차 px), 부품 상자가 책 부품 위에 올라갔는지 눈으로 본 뒤 읽기 표 판단과정에 한 줄 적고 DB 에 올린다.",
     "읽기": "<이름>_read.json 의 그 번호 면·링·부품을 책에서 읽은 값으로 채운다.",
 }
 
@@ -111,6 +113,8 @@ def check(name, only=None):
         # R 읽기 표 ───────────────
         r = read.get(str(k), {}); miss = [f for f in ("면", "링", "부품") if not str(r.get(f, "")).strip()]
         items.append(("✅", "읽기 표", "채워짐") if not miss else (bad, "읽기 표", "빈 칸: " + ", ".join(miss)))
+        if rules.get("overlay_proof"):   # P 증명 — 책 그림 위 겹침 그림(NN_3.jpg)
+            items.append(("✅", "증명", "겹침 그림 있음(NN_3.jpg)") if os.path.exists(os.path.join(R, "%02d_3.jpg" % k)) else (bad, "증명", "책 그림 위 겹침 그림(NN_3.jpg)이 없음 — overlay_check.py 로 만든다"))
         if k in done:   # 사용자가 화면에서 직접 ✓ 한 번호는 사용자 승인으로 본다(❌ → ⚠)
             items = [("⚠" if sym == "❌" else sym, t, ("사용자 ✓ 로 승인됨 — " + why) if sym == "❌" else why) for sym, t, why in items]
         out[k] = items

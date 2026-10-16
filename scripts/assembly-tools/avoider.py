@@ -267,20 +267,20 @@ BODY18 = A.group("1~16번 조립품", [_q for _st in A.steps if _st.index <= 16 
 R_STAND = [[0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]   # 세우기: x(바퀴 쪽 −x)가 아래, z(두 유닛이 나란한 쪽)가 좌우, y(판 줄)가 앞뒤 — 완성 사진의 자세
 s18.move_made(BODY18, R_STAND, pivot=(0.0, 30.0, 37.5), shift=(0.0, 60.0, 0.0), dir=[0, 1, 0], hover=0.01, group="mm18stand")   # 로봇 세우기(발이 바닥 위 5mm)
 _pegs18 = []
-for _b in (BK14[0], BK14[1], COPY14.parts[_G14.parts.index(BK14[0])], COPY14.parts[_G14.parts.index(BK14[1])]):
+for _b in (BK3a, BK3b, COPY14.parts[_G14.parts.index(BK3a)], COPY14.parts[_G14.parts.index(BK3b)]):   # 팔이 꽂히는 돌기 = 탑 바깥 2단블록(3번 블록, x ±45) — 책 18번 점 13개 PnP 오차 2.56px(안쪽 블록 x ±30 이면 17.5px)
     for _p in _b.conn["pegs"]:
         _w = _b.world("peg", _p)
         if _p["id"] in ("p1", "p2") and _w["dir"][1] > 0.9: _pegs18.append((_b, _p["id"], _w["pos"]))
 R_ARM18 = [[0.0, 0.0, -1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]]   # 팔 판: 긴 쪽(열 1→9)이 앞(+z), 줄은 −x 쪽으로 늘어남. 열1·열3 구멍(같은 줄)이 2단블록 돌기 2개를 받는다
 _pk = {}
 for _b, _i, _w in _pegs18: _pk.setdefault(round(float(_w[0]), 1), []).append(_w)
-for (_xk, _ws), (_pl, _rv, _br, _bo, _nu), _row in zip(sorted(_pk.items(), reverse=True), ARM17, (1, 2)):   # 첫째 팔 = x +30 쪽 탑(줄1), 둘째 팔 = x −30 쪽 탑(줄2)
+for (_xk, _ws), (_pl, _rv, _br, _bo, _nu), _row in zip(sorted(_pk.items(), reverse=True), ARM17, (1, 2)):   # 첫째 팔 = x +45 쪽 탑(줄1), 둘째 팔 = x −45 쪽 탑(줄2)
     _zf = max(float(_w[2]) for _w in _ws)   # 앞쪽 돌기(열3)
-    _cx = _xk - (5.0 if _row == 1 else -5.0)
+    _cx = _xk + (5.0 if _row == 1 else -5.0)   # 돌기를 받는 줄이 안쪽(x ±45), 나머지 줄(x ±55)이 탑 바깥으로 걸친다(책 18번 PnP·19번 확대 그림)
     _pc17 = _pl.p.copy()
     _g = A.group("팔 %d(17번)" % _row, [_pl, *_rv, _br, _bo, _nu])
-    s18.move_made(_g, R_ARM18, pivot=_pc17, shift=(_cx - _pc17[0], float(_ws[0][1]) - _pc17[1], _zf + 20.0 - _pc17[2]), dir=[0, 1, 0], hover=60, group="mm18arm%d" % _row)
-A.steps[17].cam = (-0.7, 0.9, False, None, None, None); A.steps[17].camSrc = "eye"   # 눈으로 맞춤(추정)
+    s18.move_made(_g, R_ARM18, pivot=_pc17, shift=(_cx - _pc17[0], float(_ws[0][1]) - _pc17[1], _zf + 20.0 - _pc17[2]), dir=[0, 1, 0], hover=50, group="mm18arm%d" % _row)   # 띄움 50: 책 18번 PnP
+A.steps[17].cam = (-0.59, 0.85, False, None, None, None); A.steps[17].camSrc = "eye"   # 18_P.json 11점 PnP 오차 1.60px(점 둘 뺌), theta -0.59·phi 0.85
 # ── 번호별 사용 부품(교재 그림에서 읽음, 1~14번은 "2개 만들기"라 부품 합계는 2배). LIST 와 대조: 리벳 49 = (6:2+7:4+12:3+13:4)×2 + 17:4 + 19:8 + 21:8 + 24:3 일치 · 2단블록 8 = (3:2+14:2)×2 · 3단블록 6 = 3:1×2 + 21:4 · T축 4·작은기어 4·큰기어 4(4·11 번 ×2)·부시 6(5·9·11 ×2)·축 2·작은바퀴 2·DC모터 2·315프레임 2·115프레임 2 일치.
 #   프레임 종류(37·39·35·29·27프레임)는 그림 한 장씩으로는 아직 확정 못 한 번호가 있어 "(추정)" — 번호 작업 때 확대해 구멍 수를 세어 확정한다. 3P 케이블 2 는 3D 모델 없음(조립도 제외).
 USED = {1: "315프레임 1, DC모터 1 (1~14번 2개 만들기)", 2: "T축 1, 작은기어 1", 3: "2단블록 2, 3단블록 1", 4: "큰기어 1, T축 1", 5: "작은기어 1, 부시 1",
