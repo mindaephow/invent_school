@@ -560,14 +560,13 @@
   }
   function paintStatus() {
     const adm = isAdm();
-    const partialBuilt = !!def && def.steps.some((x, k) => k + 1 !== last() && !stepMade(x)) && def.steps.some((x) => stepMade(x));
     [$('asmSteps'), $('asmStageSteps')].forEach((box) => { if (!box) return;
       box.querySelectorAll('button[data-step]').forEach((b) => { const i = Number(b.dataset.step), st = adm ? stepStatus[i] : null, tag = i === last() ? '완성' : stepTag(i);
         b.textContent = tag + (st === 'done' ? ' ✓' : st === 'edit' ? ' 🛠' : '') + (adm ? warnMark(i) : '');
         // 작업 진행 표시(관리자만): 일부 번호만 만든 조립도에서 마무리하고 넘어간 번호는 파랑, 확인 필요(review)는 주황 — 안 만든 번호는 그대로 둔다
         const made = i !== last() && stepMade(def.steps[i - 1]);
         const review = !!(def.steps[i - 1] && def.steps[i - 1].review) && st !== 'done';   // 관리자가 ✅ 완료를 누르면 주황 → 파랑   // review: 만들었지만 마무리 안 됨(근거 약함·확인 필요) → 주황
-        b.style.color = adm && partialBuilt && made ? (review ? '#ea580c' : '#2563eb') : ''; b.style.fontWeight = adm && partialBuilt && made ? '700' : ''; }); });
+        b.style.color = adm && made ? (review ? '#ea580c' : '#2563eb') : ''; b.style.fontWeight = adm && made ? '700' : ''; }); });   // 완성(모든 번호를 만든 뒤)에도 색을 유지한다(사용자 지시 2026-10-16)
     paintWarn();
     splitBtnRows();
     const sb = $('asmStatusBtn'); if (!sb) return;
@@ -586,7 +585,7 @@
   // ── 관절(중심점으로 움직이는 곳) 보기·수정 — 관리자 전용 (2026-10-16 사용자 지시: 조립도에서 바로 다른 색으로 보고, 고칠 수 있게) ──────────
   // DB: ivs_assembly_joints(관절)·ivs_assembly_joint_groups(움직이는 묶음) — supabase/assembly_joints.sql.
   // 관절 위치(pivot·axis)는 part_a 부품 기준 "로컬" 좌표(mm)로 저장한다 — 팔을 들거나 유닛을 옮겨도 관절이 부품에 붙어 따라간다. 화면에서는 그 부품의 지금 자리·방향으로 바꿔 3D 에 칠한다.
-  //   색: 고정 축 = 보라 · 핀(묶음을 따라 움직임) = 파랑 · 구동 관절 = 빨강 · 고른 관절 = 노랑(구 + 축선)
+  //   색: 고정 축 = 보라 · 핀(묶음을 따라 움직임) = 파랑 · 모터 직결 구동 관절(메모에 [모터직결]) = 형광라임 · 고른 관절 = 노랑(구 + 축선)
   let jointsDB = { joints: [], groups: [] }, jointSel = null, jointDraft = null, jointOn = true, jointSel2 = null, grpDraft = null, jointPicked = null;
   const jqrot = (q, v) => { const x = q[0], y = q[1], z = q[2], w = q[3], tx = 2 * (y * v[2] - z * v[1]), ty = 2 * (z * v[0] - x * v[2]), tz = 2 * (x * v[1] - y * v[0]);
     return [v[0] + w * tx + (y * tz - z * ty), v[1] + w * ty + (z * tx - x * tz), v[2] + w * tz + (x * ty - y * tx)]; };
@@ -604,8 +603,8 @@
     if (!isAdm() || !jointOn || !def || step < 1) { b.jointLayer.set([]); return; }
     const list = [];
     jointsDB.joints.forEach((j) => { const row = jointSel === j.joint_id && jointDraft ? jointDraft : j; if (step < Number(j.step)) return;
-      const pi = lastLabels.indexOf(row.part_a); if (pi >= 0) list.push({ id: j.joint_id, partIndex: pi, kind: row.kind, driver: !!row.is_driver, selected: jointSel === j.joint_id }); });   // 관절이 가리키는 부품(part_a)을 칠한다
-    if (jointDraft && jointSel === '__new') { const pi = lastLabels.indexOf(jointDraft.part_a); if (pi >= 0) list.push({ id: '__new', partIndex: pi, kind: jointDraft.kind, driver: !!jointDraft.is_driver, selected: true }); }
+      const pi = lastLabels.indexOf(row.part_a); if (pi >= 0) list.push({ id: j.joint_id, partIndex: pi, kind: row.kind, driver: !!row.is_driver, motor: !!row.is_driver && String(row.note || '').includes('[모터직결]'), selected: jointSel === j.joint_id }); });   // 관절이 가리키는 부품(part_a)을 칠한다
+    if (jointDraft && jointSel === '__new') { const pi = lastLabels.indexOf(jointDraft.part_a); if (pi >= 0) list.push({ id: '__new', partIndex: pi, kind: jointDraft.kind, driver: !!jointDraft.is_driver, motor: !!jointDraft.is_driver && String(jointDraft.note || '').includes('[모터직결]'), selected: true }); }
     b.jointLayer.set(list, null);   // 선택은 일반 부품 선택 + 아래 __ivsOnPartClick 이 한다(관절 부품도 일반 부품처럼 선택되고, 관절 정보가 같이 열린다)
   }
   function loadJoints() {

@@ -237,27 +237,42 @@
 "noPart": false
 },
 "35": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 2,
+"59프레임": 1
+},
+"noPart": false
 },
 "36": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 2,
+"눈블록": 2,
+"15프레임": 1
+},
+"noPart": false
 },
 "37": {
-"parts": {},
-"noPart": true
+"parts": {
+"축": 2,
+"큰기어": 2,
+"데코바퀴": 2,
+"작은기어": 2,
+"부시": 2
+},
+"noPart": false
 },
 "38": {
 "parts": {},
-"noPart": true
+"noPart": false
 },
 "39": {
-"parts": {},
-"noPart": true
+"parts": {
+"메인보드": 1
+},
+"noPart": false
 },
 "40": {
 "parts": {},
-"noPart": true
+"noPart": false
 }
 }

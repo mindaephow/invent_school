@@ -5562,7 +5562,7 @@
     // 지금 고른 부품 하나의 화면 순서 번호(그룹·표시점이면 -1) — 조립 보기가 "선택한 부품을 관절로 등록"에 쓴다
     selectedPartIndex(){ return selected && !selected.isGroup && !selected.isMarker ? parts.indexOf(selected) : -1; },
     // 관절 표시(관리자): 관절이 가리키는 부품(T축·축·리벳 등) 자체를 색칠한다 — 점이 아니라 부품이 칠해져서 화면을 돌려도 부품 위에 그대로 있다.
-    //   list: [{id, partIndex(칠할 부품의 화면 순서), kind:'axis'|'pin', driver, selected}] — 고정 축=보라 · 핀=파랑 · 구동=빨강 · 고른 관절=노랑. 칠한 부품을 누르면 onPick(id).
+    //   list: [{id, partIndex(칠할 부품의 화면 순서), kind:'axis'|'pin', driver, selected}] — 관절=분홍 · 모터 직결 구동=형광라임 · 고른 관절=노랑. 칠한 부품을 누르면 onPick(id).
     jointLayer: {
       set(list, onPick){
         jointPickCb = onPick || null;
@@ -5570,7 +5570,7 @@
         jointTinted.length = 0; jointMeshes.length = 0;
         (list || []).forEach(j => {
           const p = parts[j.partIndex]; if (!p || !p.mesh) return;
-          const col = new THREE.Color(j.selected ? 0xffd400 : 0xff2bd6);   // 관절 부품은 모두 같은 색(분홍), 고른 것만 노랑
+          const col = new THREE.Color(j.selected ? 0xffd400 : (j.motor ? 0xb6ff00 : 0xff2bd6));   // 관절 부품은 분홍, 모터에 직접 연결된 관절(메모 [모터직결])만 형광라임(사용자 지시 2026-10-16), 고른 것만 노랑
           p.mesh.traverse(ch => {
             if (!ch.isMesh || !ch.material) return;
             const orig = ch.material, one = (m) => { const c = m.clone(); if (c.color) c.color.copy(col); if (c.emissive) { c.emissive.copy(col); c.emissiveIntensity = j.selected ? 0.6 : 0.35; } if (c.map) c.map = null; return c; };
