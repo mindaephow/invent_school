@@ -79,6 +79,19 @@ BOOKS = {
         },
         "extra": [],
     },
+    "battlerobot2": {
+        "volume": 2,
+        "pages": {
+            60: [(0, (350, 490, 1290, 1310), "교재 60쪽 맨 앞 완성품 사진 — 앞뒤·방향(메인보드 위, 바퀴 둘, 앞 큰 판 둘)은 여기서 확인"), (1, (75, 1330, 705, 1888), ""), (2, (720, 1330, 1355, 1888), "")],
+            61: [(3 + i, box(*g), "") for i, g in enumerate(GRID)],
+            62: [(9 + i, box(*g), "") for i, g in enumerate(GRID)],
+            63: [(15 + i, box(*g), "") for i, g in enumerate(GRID)],
+            64: [(21 + i, box(*g), "") for i, g in enumerate(GRID)],
+            65: [(27 + i, box(*g), "") for i, g in enumerate(GRID)],
+            66: [(33, box("L", 1), ""), (34, box("R", 1), ""), (35, box("L", 2), ""), (36, box("R", 2), ""), (37, box("L", 3), ""), (99, box("R", 3), "완성 — ※ 메인보드 왼쪽 / 오른쪽에 DC모터 연결")],
+        },
+        "extra": [],
+    },
     "mantis": {
         "volume": 2,
         "pages": {
