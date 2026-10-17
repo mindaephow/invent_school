@@ -5256,12 +5256,49 @@
       })(t0);
       return moves.length;
     },
+    // 관절 돌려 보기(관리자 지시 2026-10-17): 묶음(members = 화면 부품 순서 번호)을 pivot·axis 둘레로 step° 씩 한 바퀴 돌려 보며 묶음 밖 부품과 몸통 상자가 겹치는 각도·부품을 모은다. 화면의 부품은 움직이지 않는다(계산만).
+    jointTest(o){
+      const rnd = new Set(o.round || []);   // 둥근 부품(기어·바퀴·부시) 번호 — 정사각 상자 대신 원판(30° 간격 살 6개를 겹친 모양)으로 계산한다(관리자 지시 2026-10-17: "원을 원으로 계산해")
+      const cores = (part, idx) => { const c = coresOf(part); if (!c || !rnd.has(idx) || c.length !== 1) return c; const h = c[0].h, r = Math.max(h[0], h[2]), w = r * Math.sin(Math.PI / 12); const sp = []; for (let k = 0; k < 6; k++) sp.push({ c: c[0].c, h: [r, h[1], w], ry: k * 30 }); return sp; };
+      const mem = new Set(o.members || []), step = o.step || 15, ax = new THREE.Vector3(o.axis[0], o.axis[1], o.axis[2]).normalize(), pv = new THREE.Vector3(o.pivot[0], o.pivot[1], o.pivot[2]);
+      const out = { tested: 0, hits: {} };   // hits: "이동 부품 번호|막는 부품 번호" → 막힌 각도 목록
+      for (let deg = step; deg < 360; deg += step) {
+        const q = new THREE.Quaternion().setFromAxisAngle(ax, deg * Math.PI / 180); out.tested++;
+        mem.forEach((i) => { const a = parts[i], ca = cores(a, i); if (!ca) return;
+          const p0 = new THREE.Vector3(a.body.position.x, a.body.position.y, a.body.position.z).sub(pv).applyQuaternion(q).add(pv), q0 = new THREE.Quaternion(a.body.quaternion.x, a.body.quaternion.y, a.body.quaternion.z, a.body.quaternion.w).premultiply(q);
+          parts.forEach((b, j) => { if (mem.has(j)) return; const cb = cores(b, j); if (!cb) return;
+            if (window.IVS_COLLISION.boxesOverlap(ca, p0, q0, cb, b.body.position, b.body.quaternion, COLLISION_TOL)) { const k = i + '|' + j; (out.hits[k] = out.hits[k] || []).push(deg); } }); });
+      }
+      return out;
+    },
+    // 엑스레이(관리자 지시 2026-10-17: "눈으로 못 보는 걸 잡는다"): 지금 놓인 부품 전체를 훑어 겹침·공중에 뜸·안에 묻힘·좌우 짝 없음을 찾는다. labels = 화면 부품 순서의 이름(조립 보기의 lastLabels).
+    xray(labels){
+      const nm = (i) => (labels && labels[i]) || ((parts[i] && parts[i].type) || ('부품' + i)), bx = [];
+      parts.forEach((part, i) => { const mesh = part.mesh; if (!mesh || !mesh.geometry || mesh.visible === false) { bx.push(null); return; } mesh.updateMatrixWorld(true); if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox(); bx.push(mesh.geometry.boundingBox.clone().applyMatrix4(mesh.matrixWorld)); });
+      const ctr = (b) => b.getCenter(new THREE.Vector3()), r1 = (v) => [Math.round(v.x), Math.round(v.y), Math.round(v.z)];
+      const out = { overlaps: [], floating: [], hidden: [], asym: [], parts: bx.filter(Boolean).length };
+      // 겹침: 몸통 상자(design-collision)가 서로 파고든 쌍
+      parts.forEach((a, i) => { for (let j = i + 1; j < parts.length; j++) { const ca = coresOf(a), cb = coresOf(parts[j]); if (ca && cb && bx[i] && bx[j] && window.IVS_COLLISION.boxesOverlap(ca, a.body.position, a.body.quaternion, cb, parts[j].body.position, parts[j].body.quaternion, COLLISION_TOL)) out.overlaps.push({ a: nm(i), b: nm(j), at: r1(ctr(bx[i]).add(ctr(bx[j])).multiplyScalar(0.5)), i, j }); } });
+      // 공중에 뜸: 다른 어느 부품과도 2mm 안으로 닿지 않는 부품
+      bx.forEach((b, i) => { if (!b) return; const e = b.clone().expandByScalar(2); if (!bx.some((o, j) => j !== i && o && e.intersectsBox(o))) out.floating.push({ name: nm(i), at: r1(ctr(b)), i }); });
+      // 안에 묻힘: 여섯 방향 모두 바깥쪽에 다른 부품이 가리고 있는 부품(겉에서 안 보이는 후보)
+      const ax = ['x', 'y', 'z'];
+      bx.forEach((b, i) => { if (!b) return; let blocked = 0;
+        ax.forEach((a, k) => { const u = ax[(k + 1) % 3], v = ax[(k + 2) % 3]; [1, -1].forEach((sg) => { if (bx.some((o, j) => j !== i && o && (sg > 0 ? o.min[a] >= b.max[a] - 0.5 : o.max[a] <= b.min[a] + 0.5) && o.min[u] < b.max[u] && o.max[u] > b.min[u] && o.min[v] < b.max[v] && o.max[v] > b.min[v])) blocked++; }); });
+        if (blocked === 6) out.hidden.push({ name: nm(i), at: r1(ctr(b)), i }); });
+      // 좌우 짝 없음: 같은 종류 부품이 가운데(x=0) 거울 자리에 없는 부품(가운데에 걸친 부품은 제외)
+      const base = (s) => String(s).replace(/\s*\d+번.*$/, '').trim();
+      bx.forEach((b, i) => { if (!b) return; const c = ctr(b); if (Math.abs(c.x) < 3 || (b.min.x < -3 && b.max.x > 3)) return;
+        const mate = bx.some((o, j) => { if (j === i || !o || base(nm(j)) !== base(nm(i))) return false; const d = ctr(o); return Math.abs(d.x + c.x) < 2 && Math.abs(d.y - c.y) < 2 && Math.abs(d.z - c.z) < 2; });
+        if (!mate) out.asym.push({ name: nm(i), at: r1(c), i }); });
+      return out;
+    },
     // 스캔(관리자 지시 2026-10-17): 불투명한 면이 천천히 지나가며 그 층에 걸린 부품 수를 보여 준다. mode 'height' = 바닥에서 위로, 'sym' = 가운데(x=0)에서 좌우로(면 둘). 같은 버튼을 다시 누르면 멈춘다. scripts/assembly-tools/scan.py 와 같은 생각(부품 상자로 본다).
     scanSweep(mode, opts){
-      const o = Object.assign({ legMs: 5000, trips: 2 }, opts || {});
+      const o = Object.assign({ legMs: 5000, trips: 2, onDone: null }, opts || {}); let finished = false;   // onDone(결과 요약 | null=중간에 멈춤): 마무리 점검이 스캔 셋을 차례로 돌릴 때 쓴다
       if (window.__ivsScan) { const prev = window.__ivsScan; window.__ivsScan = null; prev.stop(); if (prev.mode === mode) { setStatus('스캔을 멈췄어요.', 'success'); return 'stopped'; } }
-      const boxes = [];
-      parts.forEach((part) => { const mesh = part.mesh; if (!mesh || !mesh.geometry || mesh.visible === false) return; mesh.updateMatrixWorld(true); if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox(); boxes.push(mesh.geometry.boundingBox.clone().applyMatrix4(mesh.matrixWorld)); });
+      const boxes = [], boxes_by_index = [], names = [];
+      parts.forEach((part, pi) => { const mesh = part.mesh; if (!mesh || !mesh.geometry || mesh.visible === false) return; mesh.updateMatrixWorld(true); if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox(); const bb = mesh.geometry.boundingBox.clone().applyMatrix4(mesh.matrixWorld); boxes.push(bb); boxes_by_index[pi] = bb; names.push((o.labels && o.labels[pi]) || part.type || ''); });
       if (!boxes.length) { setStatus('스캔할 부품이 없어요.', 'error'); return 'none'; }
       const all = new THREE.Box3(); boxes.forEach((b) => all.union(b));
       const mk = (w, h, color) => {
@@ -5270,11 +5307,13 @@
         const e = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(w, h)), new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.95 }));
         m.renderOrder = 998; e.renderOrder = 999; g.add(m); g.add(e); scene.add(g); return g;
       };
+      const xr = this.xray(o.labels), probs = [...xr.overlaps.flatMap((q) => [q.i, q.j]), ...xr.floating.map((q) => q.i), ...xr.asym.map((q) => q.i)];   // 이상 부품은 면이 지날 때 빨간 상자로 표시
+      const flash = [...new Set(probs)].map((i) => { const h = new THREE.Box3Helper(boxes_by_index[i], 0xef4444); h.visible = false; h.renderOrder = 1000; scene.add(h); return { i, h, b: boxes_by_index[i] }; }).filter((f) => f.b);
       const mar = 14, sx = all.max.x - all.min.x + mar * 2, sy = all.max.y - all.min.y + mar * 2, sz = all.max.z - all.min.z + mar * 2;
       const cx = (all.min.x + all.max.x) / 2, cy = (all.min.y + all.max.y) / 2, cz = (all.min.z + all.max.z) / 2;
-      const planes = [], cleanup = () => planes.forEach((g) => { scene.remove(g); g.traverse((q) => { if (q.geometry) q.geometry.dispose(); if (q.material) q.material.dispose(); }); });
+      const planes = [], cleanup = () => { flash.forEach((f) => { scene.remove(f.h); f.h.geometry.dispose(); f.h.material.dispose(); }); planes.forEach((g) => { scene.remove(g); g.traverse((q) => { if (q.geometry) q.geometry.dispose(); if (q.material) q.material.dispose(); }); }); };
       let raf = 0, stopped = false;
-      const st = { mode, stop() { stopped = true; cancelAnimationFrame(raf); cleanup(); } };
+      const st = { mode, stop() { stopped = true; cancelAnimationFrame(raf); cleanup(); if (!finished && o.onDone) { const f = o.onDone; o.onDone = null; f(null); } } };
       window.__ivsScan = st;
       const hit = (lo, hi, axis) => boxes.filter((b) => b.min[axis] < hi && b.max[axis] > lo).length;
       let hPlane = null, lPlane = null, rPlane = null, dPlane = null;
@@ -5283,24 +5322,34 @@
       else { lPlane = mk(sz, sy, 0xf97316); rPlane = mk(sz, sy, 0x6366f1); [lPlane, rPlane].forEach((g) => { g.rotation.y = Math.PI / 2; g.position.set(0, cy, cz); planes.push(g); }); }
       const t0 = performance.now(), legs = o.trips * 2, total = o.legMs * legs;
       const range = mode === 'height' ? (all.max.y - all.min.y) : mode === 'depth' ? (all.max.z - all.min.z) : Math.max(all.max.x, -all.min.x);
+      const stat = { zero: [], mism: [], n: 0, runs: [] }, seen = (arr, d, bad) => { const last = arr[arr.length - 1]; if (bad) { if (last && d - last[1] <= 3.5) last[1] = d; else arr.push([d, d]); } };   // 빈 층·좌우 다른 구간을 모은다
       const label = { height: '높이 스캔(바닥↔위)', depth: '앞뒤 스캔(앞↔뒤)', sym: '좌우 스캔(가운데↔좌우)' }[mode];
       (function frame(now) {
         if (stopped) return;
         const el = Math.min(total, now - t0), u = el / o.legMs, leg = Math.min(legs - 1, Math.floor(u)), tt = el >= total ? 1 : u - leg, k = leg % 2 === 0 ? tt : 1 - tt, d = range * k, th = 3, trip = Math.floor(leg / 2) + 1;
         const head = label + ' ' + trip + '/' + o.trips + '회 · ';
+        { const cur = mode === 'height' ? all.min.y + d : mode === 'depth' ? all.max.z - d : d, ax = mode === 'height' ? 'y' : mode === 'depth' ? 'z' : 'x';
+          flash.forEach((f) => { f.h.visible = mode === 'sym' ? ((f.b.min.x <= cur + th && f.b.max.x >= cur - th) || (f.b.min.x <= -cur + th && f.b.max.x >= -cur - th)) : (f.b.min[ax] <= cur + th && f.b.max[ax] >= cur - th); }); }
+        if (mode === 'height' && leg === 0) { const y0 = all.min.y + d, key = names.filter((_, k) => boxes[k].min.y <= y0 && boxes[k].max.y > y0).map((n) => String(n).replace(/\s*\d+번.*$/, '').trim()).sort().join('|'); const last = stat.runs[stat.runs.length - 1]; if (last && last.key === key) last.to = d; else stat.runs.push({ key, from: d, to: d }); }
         if (mode === 'height') {
           const y = all.min.y + d; hPlane.position.y = y;
-          setStatus(head + '바닥 위 ' + d.toFixed(0) + 'mm · 이 층을 지나는 부품 ' + hit(y - th / 2, y + th / 2, 'y') + '개', 'success');
+          const cn = hit(y - th / 2, y + th / 2, 'y'); if (leg === 0) { stat.n = Math.max(stat.n, cn); seen(stat.zero, d, cn === 0); }
+          setStatus(head + '바닥 위 ' + d.toFixed(0) + 'mm · 이 층을 지나는 부품 ' + cn + '개', 'success');
         } else if (mode === 'depth') {
           const z = all.max.z - d; dPlane.position.z = z;
-          setStatus(head + '맨 앞(+Z)에서 ' + d.toFixed(0) + 'mm 뒤 · 이 층을 지나는 부품 ' + hit(z - th / 2, z + th / 2, 'z') + '개', 'success');
+          const cn = hit(z - th / 2, z + th / 2, 'z'); if (leg === 0) { stat.n = Math.max(stat.n, cn); seen(stat.zero, d, cn === 0); }
+          setStatus(head + '맨 앞(+Z)에서 ' + d.toFixed(0) + 'mm 뒤 · 이 층을 지나는 부품 ' + cn + '개', 'success');
         } else {
           lPlane.position.x = d; rPlane.position.x = -d;
-          const l = hit(d - th / 2, d + th / 2, 'x'), r = hit(-d - th / 2, -d + th / 2, 'x');
+          const l = hit(d - th / 2, d + th / 2, 'x'), r = hit(-d - th / 2, -d + th / 2, 'x'); if (leg === 0) { stat.n = Math.max(stat.n, l, r); seen(stat.mism, d, l !== r); }
           setStatus(head + '가운데에서 ' + d.toFixed(0) + 'mm · 왼쪽(+X) ' + l + '개 / 오른쪽(−X) ' + r + '개' + (l === r ? '' : '  ⚠ 다름'), l === r ? 'success' : 'error');
         }
         if (el < total) raf = requestAnimationFrame(frame);
-        else setTimeout(() => { if (window.__ivsScan === st) { window.__ivsScan = null; st.stop(); setStatus(label + ' 끝(' + o.trips + '회 왕복).', 'success'); } }, 700);
+        else setTimeout(() => {
+          if (window.__ivsScan !== st) return;
+          window.__ivsScan = null; finished = true; const f = o.onDone; o.onDone = null; st.stop(); setStatus(label + ' 끝(' + o.trips + '회 왕복).', 'success');
+          if (f) f({ mode, label, range: Math.round(range), size: [Math.round(all.max.x - all.min.x), Math.round(all.max.y - all.min.y), Math.round(all.max.z - all.min.z)], min: [all.min.x, all.min.y, all.min.z].map(Math.round), max: [all.max.x, all.max.y, all.max.z].map(Math.round), maxHit: stat.n, zero: stat.zero.map((r) => [Math.round(r[0]), Math.round(r[1])]), mism: stat.mism.map((r) => [Math.round(r[0]), Math.round(r[1])]), parts: boxes.length, xray: xr, runs: stat.runs.map((r) => ({ from: Math.round(r.from), to: Math.round(r.to), comp: r.key ? r.key.split('|').reduce((m, k) => { m[k] = (m[k] || 0) + 1; return m; }, {}) : {} })) });
+        }, 700);
       })(t0);
       return 'ok';
     },

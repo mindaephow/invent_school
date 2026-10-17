@@ -408,6 +408,8 @@
     return out;
   }
   // 관절 점검(완성 화면 기준 — 부품이 모두 놓인 상태): 관절·묶음이 서로 맞게 이어져 있는지, 막대(19프레임) 길이가 두 핀 거리와 맞는지, 추정으로 남은 것이 없는지 본다
+  let lastAuditText = '';   // 마무리 점검 브리핑 마지막 결과(점검결과 보기 버튼이 다시 보여 준다)
+  const jointPass = {}, jointLineMap = {}, DONE_MARK = '[점검완료]';   // jointLineMap: 목록 줄 글 → 관절 번호(모달의 완료 체크가 어느 관절인지 알려 준다)   // 관절 번호 → 마무리 점검의 자동 검사(위치·돌려 보기) 통과 여부(true/false), 아직 안 돌렸으면 없음
   function jointAuditLines() {
     const out = [], J = jointsDB.joints || [], G = jointsDB.groups || [], have = new Set(lastLabels), miss = [], warn = [];
     if (!jointsDB.loaded) return ['… 관절: 아직 DB 에서 못 읽었어요(관리자 로그인과 supabase/assembly_joints.sql 실행을 확인하세요)'];
@@ -419,7 +421,7 @@
       if (j.group_id && !G.some((g) => g.group_id === j.group_id)) miss.push(j.name + ': 소속 묶음 "' + j.group_id + '" 이(가) 없음');
       if (j.rides_group_id && !G.some((g) => g.group_id === j.rides_group_id)) miss.push(j.name + ': 올라타는 묶음 "' + j.rides_group_id + '" 이(가) 없음');
       if (j.kind === 'pin' && !j.rides_group_id) miss.push(j.name + ': 핀인데 올라타는 묶음이 안 적힘');
-      if (/추정|확인 필요/.test(j.note || '')) warn.push(j.name + ' — 추정(확인 필요)');
+      if (/추정|확인 필요|점검완료/.test(j.note || '')) { const done = (j.note || '').indexOf(DONE_MARK) >= 0, ln = j.name + ' — ' + (jointPass[j.joint_id] === true ? '자동 검사 통과 ' : jointPass[j.joint_id] === false ? '⚠ 자동 검사에서 걸림(아래 관절 검사 참고) ' : '자동 검사는 🔍 마무리 점검에서 ') + (done ? '(점검완료)' : '(사용자 최종 점검 남음)'); warn.push(ln); jointLineMap['   · ' + ln] = j.joint_id; }
     });
     G.forEach((g) => {
       const root = J.find((j) => j.joint_id === g.root_joint_id);
@@ -439,21 +441,85 @@
     });
     out.push(miss.length ? '☐ 관절 빠진 것 ' + miss.length + '개' : '☑ 관절 점검 통과(이름·묶음·중심 관절·막대 길이)');
     miss.forEach((m) => out.push('   ☐ ' + m));
-    if (warn.length) { out.push('⚠ 추정으로 남은 관절 ' + warn.length + '개(확인 필요):'); warn.forEach((w) => out.push('   · ' + w)); }
+    if (warn.length) { const nd = warn.filter((w) => /\(점검완료\)$/.test(w)).length; out.push('👤 사용자 최종 점검 — 남음 ' + (warn.length - nd) + '개 · 완료 ' + nd + '개 (줄 오른쪽 체크로 완료 표시):'); warn.forEach((w) => out.push('   · ' + w)); }
     return out;
   }
-  function notice(msg, onClose) {
+  // 관절 검사(관리자 지시 2026-10-17: "추정·확인 필요는 스캔으로 확인이 안 되나?" → 추가): ① 축이 큰 기어·바퀴 같은 상대 부품 가운데를 지나는지 ② 축이 색칠할 부품 가운데를 지나는지 ③ 묶음을 한 바퀴 돌려 보며 막히는 곳이 없는지
+  function jointCheckLines() {
+    const b = bridge(), J = jointsDB.joints || [], G = jointsDB.groups || [], out = [];
+    if (!b || !b.jointTest || !jointsDB.loaded || !J.length) return out;
+    const nameOf = (i) => lastLabels[i] || ('부품' + i), baseOf = (nmx) => String(nmx).replace(/\s*\d+번.*$/, '').trim();
+    const dist = (p, o, a) => { const v = [p[0] - o[0], p[1] - o[1], p[2] - o[2]], l = Math.hypot(a[0], a[1], a[2]) || 1, u = [a[0] / l, a[1] / l, a[2] / l], c = [v[1] * u[2] - v[2] * u[1], v[2] * u[0] - v[0] * u[2], v[0] * u[1] - v[1] * u[0]]; return Math.hypot(c[0], c[1], c[2]); };
+    out.push('', '━ 🔩 관절 검사(위치·방향·돌려 보기) ━');
+    J.forEach((j) => {
+      const w = jointWorld(j); if (!w) { out.push('☐ ' + j.name + ': 색칠할 부품이 화면에 없어 못 봄'); return; }
+      const pa = partPose(j.part_a), pb = j.part_b ? partPose(j.part_b) : null, fails = [];
+      const da = pa ? dist(pa.pos, w.pos, w.axis) : 0, db = pb ? dist(pb.pos, w.pos, w.axis) : 0;
+      if (da > 1.5) fails.push('축이 ' + j.part_a + ' 가운데에서 ' + da.toFixed(1) + 'mm 벗어남');
+      if (pb && db > 3) fails.push('축이 ' + j.part_b + ' 가운데를 ' + db.toFixed(1) + 'mm 비껴감');
+      const gid = j.kind === 'pin' ? (j.rides_group_id || j.group_id) : j.group_id, g = G.find((x) => x.group_id === gid), mem = g ? (g.members || []).map((m) => lastLabels.indexOf(m.name)).filter((i) => i >= 0) : [];
+      let spin = '묶음 없음';
+      if (mem.length) {
+        const r = b.jointTest({ members: mem, pivot: w.pos, axis: w.axis, step: 10, round: lastLabels.map((l, i) => /기어|바퀴|부시/.test(l) ? i : -1).filter((i) => i >= 0) }), keys = Object.keys(r.hits);
+        if (!keys.length) spin = '한 바퀴(' + r.tested + '곳) 막힘 없음';
+        else { const by = {}; keys.forEach((k) => { const [i, jx] = k.split('|').map(Number); const t = baseOf(nameOf(i)) + '↔' + baseOf(nameOf(jx)); by[t] = Math.max(by[t] || 0, r.hits[k].length); });
+          const tot = Object.keys(by).map((t) => t + ' ' + by[t] + '곳'); spin = '돌리면 부딪힘: ' + tot.slice(0, 4).join(', '); const gears = Object.keys(by).every((t) => /기어↔.*기어|기어.*↔기어/.test(t)); if (gears) spin += ' (맞물리는 기어끼리라 정상)'; else fails.push(spin + ' — 몸통 상자가 넉넉해 오탐일 수 있으니 3D 로 확인'); }
+      }
+      jointPass[j.joint_id] = !fails.length;
+      out.push((fails.length ? '⚠ ' : '☑ ') + j.name + ': 축↔' + j.part_a + ' 오차 ' + da.toFixed(1) + 'mm' + (pb ? ', 축↔' + j.part_b + ' 오차 ' + db.toFixed(1) + 'mm' : '') + ' · ' + spin);
+      fails.forEach((f) => out.push('   ☐ ' + f));
+    });
+    return out;
+  }
+  // 모달의 관절 줄에 "완료" 체크를 단다(관리자). 체크하면 관절 메모에 [점검완료]를 붙여 DB 에 저장하고 글이 (점검완료)로 바뀐다. 다시 끄면 (사용자 최종 점검 남음)으로 돌아간다.
+  function jointLineHook(ln, d, paint) {
+    const jid = jointLineMap[ln]; if (!jid || !isAdm()) return;
+    const j = (jointsDB.joints || []).find((x) => x.joint_id === jid); if (!j) return;
+    const lab = document.createElement('label'); lab.style.cssText = 'margin-left:10px;font:600 12px sans-serif;color:#475569;cursor:pointer;white-space:nowrap;';
+    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = (j.note || '').indexOf(DONE_MARK) >= 0; cb.style.cssText = 'vertical-align:middle;margin-right:3px;';
+    lab.appendChild(cb); lab.appendChild(document.createTextNode('완료')); d.appendChild(lab);
+    let cur = ln;
+    cb.addEventListener('change', async () => {
+      const b = bridge(); if (!b || !b.jointStore) { cb.checked = !cb.checked; return; }
+      const want = cb.checked, base = String(j.note || '').split(DONE_MARK).join('').trim(), r = Object.assign({}, j); delete r.id; delete r.updated_at; delete r.updated_by; r.note = want ? (base + ' ' + DONE_MARK).trim() : base;
+      try {
+        const saved = await b.jointStore.saveJoint(r); const i = jointsDB.joints.findIndex((x) => x.joint_id === saved.joint_id); if (i >= 0) jointsDB.joints[i] = saved; Object.assign(j, saved);
+        const nl = want ? cur.replace('(사용자 최종 점검 남음)', '(점검완료)') : cur.replace('(점검완료)', '(사용자 최종 점검 남음)');
+        lastAuditText = lastAuditText.split(cur).join(nl); delete jointLineMap[cur]; jointLineMap[nl] = jid; cur = nl;
+        d.textContent = ''; const sp = document.createElement('span'); d.appendChild(sp); // 글만 다시 그린다
+        nl.split(/(\(사용자 최종 점검 남음\)|\(점검완료\))/).forEach((seg) => { if (!seg) return; const e = document.createElement('span'); e.textContent = seg; if (seg === '(사용자 최종 점검 남음)') e.style.color = '#ea580c'; else if (seg === '(점검완료)') e.style.color = '#16a34a'; d.appendChild(e); }); d.removeChild(sp); d.appendChild(lab);
+      } catch (e) { cb.checked = !want; alert(e.message); }
+    });
+  }
+  function notice(msg, onClose, opts) {
     const ov = document.createElement('div');
     ov.style.cssText = 'position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;';
     const bx = document.createElement('div');
     bx.style.cssText = 'background:#fff;border-radius:16px;padding:22px 28px 18px;min-width:240px;max-width:80vw;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.3);font:700 15px sans-serif;color:#111827;';
-    const p = document.createElement('div'); p.textContent = msg; p.style.cssText = 'margin-bottom:16px;line-height:1.5;white-space:pre-line;text-align:left;max-height:60vh;overflow:auto;';
+    const p = document.createElement('div'); p.style.cssText = 'margin-bottom:16px;line-height:1.5;white-space:pre-line;text-align:left;max-height:60vh;overflow:auto;';
+    if (opts && opts.rich) {   // 줄마다 나눠 그린다: (사용자 최종 점검 남음)은 주황, (점검완료)는 초록, 관절 줄에는 완료 체크(opts.lineHook)
+      String(msg).split(String.fromCharCode(10)).forEach((ln) => { const d = document.createElement('div'); d.style.cssText = 'min-height:1.2em;';
+        const paint = (txt) => { d.textContent = ''; txt.split(/(\(사용자 최종 점검 남음\)|\(점검완료\))/).forEach((seg) => { if (!seg) return; const sp = document.createElement('span'); sp.textContent = seg; if (seg === '(사용자 최종 점검 남음)') sp.style.color = '#ea580c'; else if (seg === '(점검완료)') sp.style.color = '#16a34a'; d.appendChild(sp); }); };
+        paint(ln); if (opts.lineHook) opts.lineHook(ln, d, paint); p.appendChild(d); });
+    } else p.textContent = msg;
     const ok = document.createElement('button'); ok.type = 'button'; ok.textContent = '확인';
     ok.style.cssText = 'padding:8px 32px;border-radius:999px;border:0;background:#2563eb;color:#fff;font:700 14px sans-serif;cursor:pointer;';
     const close = () => { ov.remove(); document.removeEventListener('keydown', onKey, true); if (onClose) onClose(); };
     const onKey = (e) => { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); } };
     ok.addEventListener('click', close); document.addEventListener('keydown', onKey, true);
-    bx.appendChild(p); bx.appendChild(ok); ov.appendChild(bx); document.body.appendChild(ov); ok.focus();
+    bx.appendChild(p);
+    if (opts && opts.copy) {   // 복사 버튼(2026-10-17 관리자 지시: 마무리 점검 브리핑을 복사): 내용을 클립보드에 넣는다
+      const cp = document.createElement('button'); cp.type = 'button'; cp.textContent = '📋 복사';
+      cp.style.cssText = 'padding:8px 22px;margin-right:10px;border-radius:999px;border:1px solid #cbd5e1;background:#fff;color:#111827;font:700 14px sans-serif;cursor:pointer;';
+      cp.addEventListener('click', async () => {
+        let done = false;
+        try { const ta = document.createElement('textarea'); ta.value = msg; ta.style.cssText = 'position:fixed;left:-9999px;top:0;'; document.body.appendChild(ta); ta.select(); done = document.execCommand('copy'); ta.remove(); } catch (e) { /* 아래 클립보드 API 로 다시 시도 */ }
+        if (!done) { try { await Promise.race([navigator.clipboard.writeText(msg).then(() => true), new Promise((r) => setTimeout(() => r(false), 1200))]).then((v) => { done = !!v; }); } catch (e) { /* 복사 못 하면 아래에서 알린다 */ } }
+        cp.textContent = done ? '✅ 복사됨' : '복사 실패'; setTimeout(() => { cp.textContent = '📋 복사'; }, 1800);
+      });
+      bx.appendChild(cp);
+    }
+    bx.appendChild(ok); ov.appendChild(bx); document.body.appendChild(ov); ok.focus();
   }
   window.__ivsNotice = notice;   // design-notes.js(그리기·메모)도 같은 안내 모달을 쓴다
   // 확인/취소 모달: 확인(또는 Enter)이면 true, 취소(또는 Esc)면 false 로 풀린다.
@@ -560,7 +626,7 @@
     // 3번 줄(2026-10-17 관리자 지시): 마무리 점검을 아래로 빼고 높이 스캔·좌우 스캔 버튼을 같은 줄에 둔다
     let row3 = $('asmAdminRow3');
     if (!row3) { row3 = document.createElement('div'); row3.id = 'asmAdminRow3'; row3.style.cssText = row2.style.cssText; row2.parentNode.insertBefore(row3, row2.nextSibling); }
-    ['asmAuditBtn', 'asmScanHBtn', 'asmScanDBtn', 'asmScanSBtn'].forEach((id) => { const e = $(id); if (e && e.parentNode !== row3) row3.appendChild(e); });
+    ['asmAuditBtn', 'asmAuditViewBtn', 'asmScanHBtn', 'asmScanDBtn', 'asmScanSBtn'].forEach((id) => { const e = $(id); if (e && e.parentNode !== row3) row3.appendChild(e); });
     row3.hidden = !isAdm();
   }
   function paintStatus() {
@@ -579,7 +645,7 @@
     { const tb = $('asmThumbBtn'); if (tb) tb.hidden = sb.hidden; }
     { const rb = $('asmReloadBtn'); if (rb) rb.hidden = !adm || step < 0; }
     { const ab = $('asmAuditBtn'); if (ab) ab.hidden = !adm || step < 0; }
-    ['asmScanHBtn', 'asmScanDBtn', 'asmScanSBtn'].forEach((id) => { const e = $(id); if (e) e.hidden = !adm || step < 1; });
+    ['asmAuditViewBtn', 'asmScanHBtn', 'asmScanDBtn', 'asmScanSBtn'].forEach((id) => { const e = $(id); if (e) e.hidden = !adm || step < 1; });
     { const jb = $('asmJointBtn'); if (jb) jb.hidden = !adm || step < 1; }
     { const fb = $('asmFreezeBtn'); if (fb) fb.hidden = sb.hidden; }
     const st = stepStatus[step]; sb.textContent = STATUS_LABEL[st] || '⬜ 상태 없음';
@@ -759,13 +825,68 @@
       });
     }
     { const ab = document.createElement('button'); ab.type = 'button'; ab.id = 'asmAuditBtn'; ab.hidden = true; ab.textContent = '🔍 마무리 점검';
-      ab.style.cssText = sb.style.cssText; ab.title = '지금까지 만든 번호를 한꺼번에 점검해요(관리자만). 완성 단계에 가면 저절로도 보여요';
+      ab.style.cssText = sb.style.cssText; ab.title = '지금까지 만든 번호를 한꺼번에 점검하고, 높이·앞뒤·좌우 스캔을 한 번씩 돌린 뒤 결과를 브리핑해요(관리자만). 완성 단계에 가면 점검만 저절로도 보여요';
       sb.parentNode.insertBefore(ab, sb);
-      ab.addEventListener('click', () => { if (def) notice(auditLines().join(String.fromCharCode(10))); }); }
+      ab.addEventListener('click', async () => {
+        if (!def) return;
+        const NL = String.fromCharCode(10), b2 = bridge();
+        // 마무리 점검(2026-10-17 관리자 지시): 스캔 셋(높이·앞뒤·좌우)을 한 번씩 천천히 돌린 뒤 결과를 브리핑으로 보여 준다
+        const res = [];
+        if (b2 && b2.scanSweep && step >= 1) {
+          ab.disabled = true; const keep = ab.textContent;
+          for (const m of ['height', 'depth', 'sym']) {
+            ab.textContent = '🔍 스캔 중… ' + (res.length + 1) + '/3';
+            const r = await new Promise((ok) => { const rv = b2.scanSweep(m, { trips: 1, legMs: 4500, onDone: ok, labels: lastLabels }); if (rv !== 'ok') ok(null); });
+            if (!r) break; res.push(r);
+          }
+          ab.textContent = keep; ab.disabled = false;
+        }
+        const jl = jointCheckLines();   // 관절 자동 검사를 먼저 돌려 두면 위 관절 목록에 통과 여부가 같이 나온다
+        const out = auditLines(); out.push('', '━ 🩻 엑스레이 브리핑(이 번호 ' + (step === last() ? '완성' : step) + ') ━');
+        if (res.length < 3) out.push('스캔이 중간에 멈춰서 ' + res.length + '/3개만 돌았어요.');
+        const xr = res[0] && res[0].xray, gap = (a) => a.map((x) => x[0] === x[1] ? x[0] + 'mm' : x[0] + '~' + x[1] + 'mm').join(', '), at = (v) => '(' + v.join(', ') + ')', more = (a, n) => a.length > n ? ' … 외 ' + (a.length - n) + '개' : '';
+        const base = (nmx) => String(nmx).replace(/\s*\d+번.*$/, '').trim();
+        if (xr) {
+          out.push(xr.overlaps.length ? '⚠ 겹침 ' + xr.overlaps.length + '쌍(서로 파고든 부품):' : '☑ 겹침 없음(몸통 상자 기준)');
+          xr.overlaps.slice(0, 8).forEach((q) => out.push('   · ' + q.a + ' ↔ ' + q.b + ' ' + at(q.at))); if (xr.overlaps.length > 8) out.push('   · …' + more(xr.overlaps, 8));
+          out.push(xr.floating.length ? '⚠ 공중에 뜬 부품 ' + xr.floating.length + '개(어느 부품과도 안 닿음):' : '☑ 공중에 뜬 부품 없음');
+          xr.floating.slice(0, 8).forEach((q) => out.push('   · ' + q.name + ' ' + at(q.at)));
+          out.push(xr.asym.length ? '⚠ 좌우 짝 없는 부품 ' + xr.asym.length + '개(가운데 거울 자리에 같은 부품이 없음 — 한쪽만 놓은 것일 수 있음):' : '☑ 좌우 짝이 모두 있음');
+          xr.asym.slice(0, 8).forEach((q) => out.push('   · ' + q.name + ' ' + at(q.at))); if (xr.asym.length > 8) out.push('   · …' + more(xr.asym, 8));
+          const hid = {}; xr.hidden.forEach((q) => { const k = base(q.name); hid[k] = (hid[k] || 0) + 1; });
+          out.push(xr.hidden.length ? '🕳 겉에서 안 보이는 안쪽 부품 ' + xr.hidden.length + '개: ' + Object.keys(hid).map((k) => k + ' ' + hid[k]).join(', ') : '🕳 안에 완전히 묻힌 부품 없음');
+        }
+        jl.forEach((l) => out.push(l));
+        res.forEach((r) => {
+          if (r.mode === 'height') {
+            out.push('⬆ 높이: 바닥 ' + r.min[1] + 'mm ~ 맨 위 ' + r.max[1] + 'mm(높이 ' + r.size[1] + 'mm) · ' + (r.zero.length ? '⚠ 비어 있는 층 ' + gap(r.zero) : '빈 층 없음'));
+            const runs = (r.runs || []).filter((q) => q.to - q.from >= 4 && Object.keys(q.comp).length).slice(0, 12);
+            runs.forEach((q) => out.push('   y ' + q.from + '~' + q.to + 'mm: ' + Object.keys(q.comp).slice(0, 6).map((k) => k + ' ' + q.comp[k]).join(', ') + (Object.keys(q.comp).length > 6 ? ' …' : '')));
+          }
+          else if (r.mode === 'depth') out.push('↕ 앞뒤: 앞 z ' + r.max[2] + 'mm ~ 뒤 z ' + r.min[2] + 'mm(길이 ' + r.size[2] + 'mm) · ' + (r.zero.length ? '⚠ 비어 있는 층 ' + gap(r.zero) : '빈 층 없음'));
+          else out.push('↔ 좌우: 폭 ' + r.size[0] + 'mm · ' + (r.mism.length ? '⚠ 왼쪽·오른쪽 부품 수가 다른 구간(가운데에서 거리) ' + gap(r.mism) : '왼쪽·오른쪽 개수가 끝까지 같음'));
+        });
+        lastAuditText = out.join(NL); notice(lastAuditText, null, { copy: true, rich: true, lineHook: jointLineHook });
+      }); }
+    { const vb = document.createElement('button'); vb.type = 'button'; vb.id = 'asmAuditViewBtn'; vb.hidden = true; vb.textContent = '📄 점검 결과 보기';
+      vb.style.cssText = sb.style.cssText; vb.title = '가장 최근 마무리 점검 브리핑을 다시 보여 줘요(스캔을 다시 돌리지 않아요, 관리자만)';
+      sb.parentNode.insertBefore(vb, sb);
+      vb.addEventListener('click', () => {
+        if (lastAuditText) { notice(lastAuditText, null, { copy: true, rich: true, lineHook: jointLineHook }); return; }
+        // 아직 마무리 점검을 안 돌렸으면 스캔 없이 계산만 빠르게 해서 같은 모양의 모달만 띄운다(점검·관절·엑스레이)
+        const NL = String.fromCharCode(10), b2 = bridge(), jl = jointCheckLines(), out = auditLines();
+        out.push('', '━ 🩻 엑스레이 브리핑(스캔 없이 계산만) ━');
+        const xr = b2 && b2.xray ? b2.xray(lastLabels) : null, at = (v) => '(' + v.join(', ') + ')';
+        if (xr) { out.push(xr.overlaps.length ? '⚠ 겹침 ' + xr.overlaps.length + '쌍:' : '☑ 겹침 없음(몸통 상자 기준)'); xr.overlaps.slice(0, 8).forEach((q) => out.push('   · ' + q.a + ' ↔ ' + q.b + ' ' + at(q.at)));
+          out.push(xr.floating.length ? '⚠ 공중에 뜬 부품 ' + xr.floating.length + '개:' : '☑ 공중에 뜬 부품 없음'); xr.floating.slice(0, 8).forEach((q) => out.push('   · ' + q.name + ' ' + at(q.at)));
+          out.push(xr.asym.length ? '⚠ 좌우 짝 없는 부품 ' + xr.asym.length + '개:' : '☑ 좌우 짝이 모두 있음'); xr.asym.slice(0, 8).forEach((q) => out.push('   · ' + q.name + ' ' + at(q.at))); }
+        jl.forEach((l) => out.push(l)); out.push('', '(높이·앞뒤·좌우 스캔 결과는 🔍 마무리 점검을 눌러야 나와요)');
+        notice(out.join(NL), null, { copy: true, rich: true, lineHook: jointLineHook });
+      }); }
     [['asmScanHBtn', '⬆ 높이 스캔', 'height', '바닥에서 위로 불투명한 면이 천천히 올라갔다 내려오기를 두 번 해요. 그 높이의 부품 수를 보여 줘요(관리자만). 다시 누르면 멈춰요'], ['asmScanDBtn', '↕ 앞뒤 스캔', 'depth', '맨 앞(+Z)에서 뒤로 면이 천천히 갔다 오기를 두 번 해요. 그 층의 부품 수를 보여 줘요(관리자만). 다시 누르면 멈춰요'], ['asmScanSBtn', '↔ 좌우 스캔', 'sym', '가운데(X=0)에서 좌우로 면 둘이 천천히 벌어졌다 오기를 두 번 해요. 양쪽 부품 수를 비교해요(관리자만). 다시 누르면 멈춰요']].forEach(([id, label, mode, tip]) => {
       const b0 = document.createElement('button'); b0.type = 'button'; b0.id = id; b0.hidden = true; b0.textContent = label; b0.style.cssText = sb.style.cssText; b0.title = tip;
       sb.parentNode.insertBefore(b0, sb);
-      b0.addEventListener('click', () => { const b2 = bridge(); if (b2 && b2.scanSweep) b2.scanSweep(mode); });
+      b0.addEventListener('click', () => { const b2 = bridge(); if (b2 && b2.scanSweep) b2.scanSweep(mode, { labels: lastLabels }); });
     });
     { const rb = document.createElement('button'); rb.type = 'button'; rb.id = 'asmReloadBtn'; rb.hidden = true; rb.textContent = '↻ 새로고침';
       rb.style.cssText = sb.style.cssText; rb.title = '지금 보는 단계 하나만 데이터를 다시 불러와요(관리자만). Shift+클릭 = 페이지 전체 새로고침';
