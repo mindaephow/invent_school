@@ -172,28 +172,39 @@
 "noPart": false
 },
 "24": {
-"parts": {},
-"noPart": true
+"parts": {
+"눈블록": 2,
+"리벳": 3,
+"15프레임": 1
+},
+"noPart": false
 },
 "25": {
-"parts": {},
-"noPart": true
+"parts": {
+"29프레임": 1,
+"39프레임": 1
+},
+"noPart": false
 },
 "26": {
 "parts": {},
-"noPart": true
+"noPart": false
 },
 "27": {
-"parts": {},
-"noPart": true
+"parts": {
+"메인보드": 1
+},
+"noPart": false
 },
 "28": {
 "parts": {},
 "noPart": true
 },
 "29": {
-"parts": {},
-"noPart": true
+"parts": {
+"IR센서": 2
+},
+"noPart": false
 },
 "30": {
 "parts": {},

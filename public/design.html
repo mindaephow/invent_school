@@ -5256,6 +5256,54 @@
       })(t0);
       return moves.length;
     },
+    // 스캔(관리자 지시 2026-10-17): 불투명한 면이 천천히 지나가며 그 층에 걸린 부품 수를 보여 준다. mode 'height' = 바닥에서 위로, 'sym' = 가운데(x=0)에서 좌우로(면 둘). 같은 버튼을 다시 누르면 멈춘다. scripts/assembly-tools/scan.py 와 같은 생각(부품 상자로 본다).
+    scanSweep(mode, opts){
+      const o = Object.assign({ legMs: 5000, trips: 2 }, opts || {});
+      if (window.__ivsScan) { const prev = window.__ivsScan; window.__ivsScan = null; prev.stop(); if (prev.mode === mode) { setStatus('스캔을 멈췄어요.', 'success'); return 'stopped'; } }
+      const boxes = [];
+      parts.forEach((part) => { const mesh = part.mesh; if (!mesh || !mesh.geometry || mesh.visible === false) return; mesh.updateMatrixWorld(true); if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox(); boxes.push(mesh.geometry.boundingBox.clone().applyMatrix4(mesh.matrixWorld)); });
+      if (!boxes.length) { setStatus('스캔할 부품이 없어요.', 'error'); return 'none'; }
+      const all = new THREE.Box3(); boxes.forEach((b) => all.union(b));
+      const mk = (w, h, color) => {
+        const g = new THREE.Group();
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.32, side: THREE.DoubleSide, depthWrite: false }));
+        const e = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(w, h)), new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.95 }));
+        m.renderOrder = 998; e.renderOrder = 999; g.add(m); g.add(e); scene.add(g); return g;
+      };
+      const mar = 14, sx = all.max.x - all.min.x + mar * 2, sy = all.max.y - all.min.y + mar * 2, sz = all.max.z - all.min.z + mar * 2;
+      const cx = (all.min.x + all.max.x) / 2, cy = (all.min.y + all.max.y) / 2, cz = (all.min.z + all.max.z) / 2;
+      const planes = [], cleanup = () => planes.forEach((g) => { scene.remove(g); g.traverse((q) => { if (q.geometry) q.geometry.dispose(); if (q.material) q.material.dispose(); }); });
+      let raf = 0, stopped = false;
+      const st = { mode, stop() { stopped = true; cancelAnimationFrame(raf); cleanup(); } };
+      window.__ivsScan = st;
+      const hit = (lo, hi, axis) => boxes.filter((b) => b.min[axis] < hi && b.max[axis] > lo).length;
+      let hPlane = null, lPlane = null, rPlane = null, dPlane = null;
+      if (mode === 'height') { hPlane = mk(sx, sz, 0x06b6d4); hPlane.rotation.x = -Math.PI / 2; hPlane.position.set(cx, all.min.y, cz); planes.push(hPlane); }
+      else if (mode === 'depth') { dPlane = mk(sx, sy, 0x22c55e); dPlane.position.set(cx, cy, all.max.z); planes.push(dPlane); }
+      else { lPlane = mk(sz, sy, 0xf97316); rPlane = mk(sz, sy, 0x6366f1); [lPlane, rPlane].forEach((g) => { g.rotation.y = Math.PI / 2; g.position.set(0, cy, cz); planes.push(g); }); }
+      const t0 = performance.now(), legs = o.trips * 2, total = o.legMs * legs;
+      const range = mode === 'height' ? (all.max.y - all.min.y) : mode === 'depth' ? (all.max.z - all.min.z) : Math.max(all.max.x, -all.min.x);
+      const label = { height: '높이 스캔(바닥↔위)', depth: '앞뒤 스캔(앞↔뒤)', sym: '좌우 스캔(가운데↔좌우)' }[mode];
+      (function frame(now) {
+        if (stopped) return;
+        const el = Math.min(total, now - t0), u = el / o.legMs, leg = Math.min(legs - 1, Math.floor(u)), tt = el >= total ? 1 : u - leg, k = leg % 2 === 0 ? tt : 1 - tt, d = range * k, th = 3, trip = Math.floor(leg / 2) + 1;
+        const head = label + ' ' + trip + '/' + o.trips + '회 · ';
+        if (mode === 'height') {
+          const y = all.min.y + d; hPlane.position.y = y;
+          setStatus(head + '바닥 위 ' + d.toFixed(0) + 'mm · 이 층을 지나는 부품 ' + hit(y - th / 2, y + th / 2, 'y') + '개', 'success');
+        } else if (mode === 'depth') {
+          const z = all.max.z - d; dPlane.position.z = z;
+          setStatus(head + '맨 앞(+Z)에서 ' + d.toFixed(0) + 'mm 뒤 · 이 층을 지나는 부품 ' + hit(z - th / 2, z + th / 2, 'z') + '개', 'success');
+        } else {
+          lPlane.position.x = d; rPlane.position.x = -d;
+          const l = hit(d - th / 2, d + th / 2, 'x'), r = hit(-d - th / 2, -d + th / 2, 'x');
+          setStatus(head + '가운데에서 ' + d.toFixed(0) + 'mm · 왼쪽(+X) ' + l + '개 / 오른쪽(−X) ' + r + '개' + (l === r ? '' : '  ⚠ 다름'), l === r ? 'success' : 'error');
+        }
+        if (el < total) raf = requestAnimationFrame(frame);
+        else setTimeout(() => { if (window.__ivsScan === st) { window.__ivsScan = null; st.stop(); setStatus(label + ' 끝(' + o.trips + '회 왕복).', 'success'); } }, 700);
+      })(t0);
+      return 'ok';
+    },
     // 바닥(모눈) 위 X·Z 방향선(원점 (0,0,0)에서 +와 − 양쪽으로)과 위쪽 Y — 위치를 말할 때 "+X쪽", "−Z쪽"처럼 기준으로 쓴다.
     axes(on, at, names){   // names: 조립도별 축 이름 바꿔 보이기(완성 사진 방향 기준) { X:[새 이름, 부호], Z:[...] } — 선 위치는 그대로, 글자·색만 바꾼다
       if (assemblyAxesGroup) { scene.remove(assemblyAxesGroup); assemblyAxesGroup.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } }); assemblyAxesGroup = null; }

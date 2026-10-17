@@ -63,7 +63,7 @@ def apply(A, name):
     _last_built = max([i for i, st2 in enumerate(A.steps, 1) if st2.parts] or [0])
     _evf = os.path.join(here, name + "_evidence.json"); _evid = json.load(open(_evf, encoding="utf-8")) if os.path.exists(_evf) else {}
     for k, st in enumerate(A.steps, 1):
-        if not st.parts and not st.kw.get("moveMade"):   # 새 부품이 없어도 앞 번호 부품을 옮겨 합치는 번호(18번 등)는 작업 점검을 붙인다(사용자 지시 2026-10-17: "18번에 작업점검은 어디 갔어?")
+        if not st.parts and not st.kw.get("moveMade") and not st.kw.get("madeNoPart"):   # 새 부품이 없어도 앞 번호 부품을 옮겨 합치는 번호(18번 등)는 작업 점검을 붙인다(사용자 지시 2026-10-17: "18번에 작업점검은 어디 갔어?")
             continue
         cnt = _counts(st.parts); cum.update(cnt)
         items = []   # (필수 여부, 통과, 문구)

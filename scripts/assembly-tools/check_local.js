@@ -46,8 +46,8 @@ if (process.argv[3]) {
   stepsAll.forEach((st, si) => {
     const step = si + 1;
     const upto = []; stepsAll.slice(0, step).forEach((s, k) => (s.parts || []).forEach((pt, i) => {
-      const mv = pt.move && pt.move.at <= step; const p = mv ? (pt.move.p || pt.p.map((v, j) => v + pt.move.by[j])) : pt.p;
-      upto.push({ key: keyOf(k + 1, i, pt.n), n: pt.n, p, r: (mv && pt.move.r) ? pt.move.r : (pt.r || [0, 0, 0]), step: k + 1, ref: pt });
+      const mvE = window.IVS_moveAt(pt, step), mv = !!mvE; const p = mv ? (mvE.p || pt.p.map((v, j) => v + mvE.by[j])) : pt.p;   // 여러 번 옮긴 부품은 그 단계 이전 마지막 이동(IVS_moveAt)
+      upto.push({ key: keyOf(k + 1, i, pt.n), n: pt.n, p, r: (mv && mvE.r) ? mvE.r : (pt.r || [0, 0, 0]), step: k + 1, ref: pt });
     }));
     const res = M.check(upto, conn);
     const prior = new Set(upto.filter(u => u.step < step).map(u => u.key));
@@ -55,7 +55,7 @@ if (process.argv[3]) {
     const arriving = [];
     stepsAll.forEach((s, k) => (s.parts || []).forEach((pt, i) => {
       const own = k + 1 === step && !pt.side && !(pt.move && pt.move.at <= step && false);
-      const settle = pt.side && pt.side.until === step, moved = pt.move && pt.move.at === step;
+      const settle = pt.side && pt.side.until === step, moved = window.IVS_moveIs(pt, step);
       if (own || settle || moved) arriving.push({ key: keyOf(k + 1, i, pt.n), pt, mode: moved ? 'move' : (settle ? 'settle' : 'own') });
     }));
     const arrSet = new Set(arriving.map(a => a.key));
@@ -64,7 +64,7 @@ if (process.argv[3]) {
       const outside = (k) => prior.has(k) && !arrSet.has(k); // 같이 합쳐지는 묶음 안의 결합은 빼고, 이미 있던 부품과의 결합만 본다
       const hasPrior = res.mated.some(m => (m.part === key && outside(m.into)) || (m.into === key && outside(m.part)));
       if (!hasPrior) return;
-      const ok = mode === 'move' ? (pt.move.marks || []).length : mode === 'settle' ? (pt.settleMarks || []).length : (pt.marks || []).length;
+      const ok = mode === 'move' ? (window.IVS_moveAt(pt, step).marks || []).length : mode === 'settle' ? (pt.settleMarks || []).length : (pt.marks || []).length;
       if (!ok) miss.push(`${step}단계 ${pt.n}(${key}): 앞 부품과 결합하는데 안내점(${mode === 'move' ? 'move.marks' : mode === 'settle' ? 'settleMarks' : 'marks'})이 없음 → 화살표가 안 나옴`);
     });
   });
@@ -79,13 +79,13 @@ if (process.argv[3]) {
     const step = si + 1;
     const placedAt = (pt, stp) => { // stp 단계가 끝난 뒤 pt 의 자세
       if (pt.side && stp < pt.side.until) return { p: pt.side.p, r: pt.side.r };
-      if (pt.move && stp >= pt.move.at) return { p: pt.move.p || pt.p.map((v, k) => v + pt.move.by[k]), r: pt.move.r || pt.r || [0, 0, 0] };
+      { const me = window.IVS_moveAt(pt, stp); if (me) return { p: me.p || pt.p.map((v, k) => v + me.by[k]), r: me.r || pt.r || [0, 0, 0] }; }
       return { p: pt.p, r: pt.r || [0, 0, 0] };
     };
     const arriving = [];
     steps.forEach((s2, k) => (s2.parts || []).forEach((pt, i) => {
       const own = k + 1 === step && !pt.side;
-      const settle = pt.side && pt.side.until === step, moved = pt.move && pt.move.at === step;
+      const settle = pt.side && pt.side.until === step, moved = window.IVS_moveIs(pt, step);
       if (own || settle || moved) arriving.push({ pt, k: k + 1, i, mode: moved ? 'move' : (settle ? 'settle' : 'own') });
     }));
     const prior = [];
@@ -96,10 +96,10 @@ if (process.argv[3]) {
     }));
     arriving.forEach(({ pt, mode, k, i }) => {
       const boxes = C.coreBoxes(pt.n, dims[pt.n] || [0, 0, 0]); if (!boxes) return;
-      const fin = mode === 'move' ? { p: pt.move.p || pt.p.map((v, j) => v + pt.move.by[j]), r: pt.move.r || pt.r || [0, 0, 0] } : { p: pt.p, r: pt.r || [0, 0, 0] };
-      const dir = mode === 'move' ? pt.move.dir : (mode === 'settle' ? (pt.settleDir || pt.dir) : pt.dir);
+      const me = mode === 'move' ? window.IVS_moveAt(pt, step) : null; const fin = mode === 'move' ? { p: me.p || pt.p.map((v, j) => v + me.by[j]), r: me.r || pt.r || [0, 0, 0] } : { p: pt.p, r: pt.r || [0, 0, 0] };
+      const dir = mode === 'move' ? me.dir : (mode === 'settle' ? (pt.settleDir || pt.dir) : pt.dir);
       if (!dir) return;
-      const hov = mode === 'move' ? (pt.move.hover || 22) : (pt.hover || (pt.recv ? 20 : 22));
+      const hov = mode === 'move' ? (me.hover || 22) : (pt.hover || (pt.recv ? 20 : 22));
       const d = norm(dir), q = quat(fin.r);
       for (const t of [1, 0.66, 0.33]) {
         const pos = { x: fin.p[0] + d[0] * hov * t, y: fin.p[1] + d[1] * hov * t, z: fin.p[2] + d[2] * hov * t };
@@ -119,8 +119,8 @@ if (process.argv[3]) {
   steps.forEach((st, si) => {
     const step = si + 1, upto = [];
     steps.slice(0, step).forEach((s, k) => (s.parts || []).forEach((pt, i) => {
-      const mv = pt.move && pt.move.at <= step; const p = mv ? (pt.move.p || pt.p.map((v, j) => v + pt.move.by[j])) : pt.p;
-      upto.push({ key: `${k + 1}.${i} ${pt.n}`, n: pt.n, p, r: (mv && pt.move.r) ? pt.move.r : (pt.r || [0, 0, 0]), step: k + 1, ref: pt });
+      const mvE = window.IVS_moveAt(pt, step), mv = !!mvE; const p = mv ? (mvE.p || pt.p.map((v, j) => v + mvE.by[j])) : pt.p;   // 여러 번 옮긴 부품은 그 단계 이전 마지막 이동(IVS_moveAt)
+      upto.push({ key: `${k + 1}.${i} ${pt.n}`, n: pt.n, p, r: (mv && mvE.r) ? mvE.r : (pt.r || [0, 0, 0]), step: k + 1, ref: pt });
     }));
     const res = M.check(upto, conn);
     const worlds = upto.map((u) => ({ u, w: conn[u.n] ? M.worldConnectors({ p: u.p, r: u.r }, conn[u.n]) : null }));

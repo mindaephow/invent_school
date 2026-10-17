@@ -378,7 +378,7 @@
   //   보는 것: 안 만든 번호 · 번호 설명 끝 "작업 점검" 블록의 ☐ 항목 · 카메라 출처(camSrc≠eye) · 그림 3장(NN·NN_1·NN_2, DB) · 확인 필요(review) 표시 · 사용자 ✅ 안 누른 번호.
   //   (읽기 표 빈칸·카메라 fit 오차·비교 증거 파일은 개발 PC 의 final_audit.py 가 보고, 그 결과는 마지막 번호 설명 끝 "작업 점검 전체"에 붙는다)
   // 만든 번호 판정: 새 부품이 있거나, 새 부품 없이 앞 번호 부품 묶음을 옮겨 합치는 번호(moveMade — 예: 사마귀로봇 32번 "18 + 31")도 만든 번호다
-  function stepMade(st) { return !!st && ((st.parts || []).length > 0 || (!!st.moveMade && Object.keys(st.moveMade).length > 0)); }
+  function stepMade(st) { return !!st && ((st.parts || []).length > 0 || (!!st.moveMade && Object.keys(st.moveMade).length > 0) || !!st.madeNoPart); }   // madeNoPart: 부품 없는 번호(전선 연결 등)를 번호 작업으로 끝낸 표시(어보이더 28·30번)
   function auditLines() {
     const NLC = String.fromCharCode(10), out = [], built = [], unbuilt = [];
     def.steps.forEach((st, k) => { (stepMade(st) ? built : unbuilt).push(k + 1); });
@@ -555,8 +555,13 @@
       row1.parentNode.insertBefore(row2, row1.nextSibling);
       row1.style.justifyContent = row2.style.justifyContent = 'flex-start';   // 두 줄 모두 왼쪽 정렬(2026-10-16 사용자 지시)
     }
-    ['asmStatusBtn', 'asmJointBtn', 'asmCamCopy', 'asmFreezeBtn', 'asmAuditBtn', 'asmReloadBtn', 'asmThumbBtn', 'asmMarkMove2'].forEach((id) => { const e = $(id); if (e && e.parentNode !== row2) row2.appendChild(e); });
+    ['asmStatusBtn', 'asmJointBtn', 'asmCamCopy', 'asmFreezeBtn', 'asmReloadBtn', 'asmThumbBtn', 'asmMarkMove2'].forEach((id) => { const e = $(id); if (e && e.parentNode !== row2) row2.appendChild(e); });
     row2.hidden = !isAdm();
+    // 3번 줄(2026-10-17 관리자 지시): 마무리 점검을 아래로 빼고 높이 스캔·좌우 스캔 버튼을 같은 줄에 둔다
+    let row3 = $('asmAdminRow3');
+    if (!row3) { row3 = document.createElement('div'); row3.id = 'asmAdminRow3'; row3.style.cssText = row2.style.cssText; row2.parentNode.insertBefore(row3, row2.nextSibling); }
+    ['asmAuditBtn', 'asmScanHBtn', 'asmScanDBtn', 'asmScanSBtn'].forEach((id) => { const e = $(id); if (e && e.parentNode !== row3) row3.appendChild(e); });
+    row3.hidden = !isAdm();
   }
   function paintStatus() {
     const adm = isAdm();
@@ -574,6 +579,7 @@
     { const tb = $('asmThumbBtn'); if (tb) tb.hidden = sb.hidden; }
     { const rb = $('asmReloadBtn'); if (rb) rb.hidden = !adm || step < 0; }
     { const ab = $('asmAuditBtn'); if (ab) ab.hidden = !adm || step < 0; }
+    ['asmScanHBtn', 'asmScanDBtn', 'asmScanSBtn'].forEach((id) => { const e = $(id); if (e) e.hidden = !adm || step < 1; });
     { const jb = $('asmJointBtn'); if (jb) jb.hidden = !adm || step < 1; }
     { const fb = $('asmFreezeBtn'); if (fb) fb.hidden = sb.hidden; }
     const st = stepStatus[step]; sb.textContent = STATUS_LABEL[st] || '⬜ 상태 없음';
@@ -756,6 +762,11 @@
       ab.style.cssText = sb.style.cssText; ab.title = '지금까지 만든 번호를 한꺼번에 점검해요(관리자만). 완성 단계에 가면 저절로도 보여요';
       sb.parentNode.insertBefore(ab, sb);
       ab.addEventListener('click', () => { if (def) notice(auditLines().join(String.fromCharCode(10))); }); }
+    [['asmScanHBtn', '⬆ 높이 스캔', 'height', '바닥에서 위로 불투명한 면이 천천히 올라갔다 내려오기를 두 번 해요. 그 높이의 부품 수를 보여 줘요(관리자만). 다시 누르면 멈춰요'], ['asmScanDBtn', '↕ 앞뒤 스캔', 'depth', '맨 앞(+Z)에서 뒤로 면이 천천히 갔다 오기를 두 번 해요. 그 층의 부품 수를 보여 줘요(관리자만). 다시 누르면 멈춰요'], ['asmScanSBtn', '↔ 좌우 스캔', 'sym', '가운데(X=0)에서 좌우로 면 둘이 천천히 벌어졌다 오기를 두 번 해요. 양쪽 부품 수를 비교해요(관리자만). 다시 누르면 멈춰요']].forEach(([id, label, mode, tip]) => {
+      const b0 = document.createElement('button'); b0.type = 'button'; b0.id = id; b0.hidden = true; b0.textContent = label; b0.style.cssText = sb.style.cssText; b0.title = tip;
+      sb.parentNode.insertBefore(b0, sb);
+      b0.addEventListener('click', () => { const b2 = bridge(); if (b2 && b2.scanSweep) b2.scanSweep(mode); });
+    });
     { const rb = document.createElement('button'); rb.type = 'button'; rb.id = 'asmReloadBtn'; rb.hidden = true; rb.textContent = '↻ 새로고침';
       rb.style.cssText = sb.style.cssText; rb.title = '지금 보는 단계 하나만 데이터를 다시 불러와요(관리자만). Shift+클릭 = 페이지 전체 새로고침';
       sb.parentNode.insertBefore(rb, sb);
