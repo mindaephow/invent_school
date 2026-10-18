@@ -626,8 +626,62 @@
     // 3번 줄(2026-10-17 관리자 지시): 마무리 점검을 아래로 빼고 높이 스캔·좌우 스캔 버튼을 같은 줄에 둔다
     let row3 = $('asmAdminRow3');
     if (!row3) { row3 = document.createElement('div'); row3.id = 'asmAdminRow3'; row3.style.cssText = row2.style.cssText; row2.parentNode.insertBefore(row3, row2.nextSibling); }
-    ['asmAuditBtn', 'asmAuditViewBtn', 'asmScanHBtn', 'asmScanDBtn', 'asmScanSBtn'].forEach((id) => { const e = $(id); if (e && e.parentNode !== row3) row3.appendChild(e); });
+    ['asmAuditBtn', 'asmAuditViewBtn', 'asmVerifyBtn', 'asmScanHBtn', 'asmScanDBtn', 'asmScanSBtn'].forEach((id) => { const e = $(id); if (e && e.parentNode !== row3) row3.appendChild(e); });
     row3.hidden = !isAdm();
+  }
+  // 검증 체크(관리자만, 2026-10-18 사용자 요청): verify_step.py 가 만든 public/assembly-verify/<조립도 id>.json 의 자동 점검 결과를 번호마다 보이고, 관리자가 항목마다 체크한다.
+  //   체크는 ivs_assembly_checks(issue_key = 'verify:<항목>', verdict = 'ok')에 저장 — 새 DB 표 없음. 여섯 항목을 다 체크한 번호는 번호판이 주황 → 파랑.
+  const VERIFY_ITEMS = ['홀라인', '카메라', '돌기↔구멍', '번호 대조 그림', '읽기 표', '증거'];
+  const verifyDone = (i) => VERIFY_ITEMS.every((t) => checkVerdicts[i + '|verify:' + t] === 'ok');
+  async function openVerifyModal(n0) {
+    const b2 = bridge(); if (!b2 || !b2.checkStore || !def) return;
+    let auto = {};
+    try { const r = await fetch('/assembly-verify/' + encodeURIComponent(def.id) + '.json?t=' + Date.now(), { cache: 'no-store' }); if (r.ok) auto = await r.json(); } catch (e) { /* 자동 점검 파일이 없어도 체크는 할 수 있다 */ }
+    try { checkVerdicts = (await b2.checkStore.load(def.id)) || checkVerdicts; } catch (e) { /* */ }
+    const ov = document.createElement('div'); ov.style.cssText = 'position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;';
+    const bx = document.createElement('div'); bx.style.cssText = 'background:#fff;border-radius:16px;padding:18px 22px 14px;width:min(760px,92vw);max-height:86vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.3);font:13px/1.45 sans-serif;color:#111827;';
+    const hd = document.createElement('div'); hd.style.cssText = 'font:700 16px sans-serif;margin-bottom:4px;'; hd.textContent = '☑ 검증 체크';
+    const hint = document.createElement('div'); hint.style.cssText = 'font-size:12px;color:#6b7280;margin-bottom:8px;'; hint.textContent = '왼쪽 체크 = 내가 확인함(저장됨). 오른쪽 ✅/⚠/❌ 는 verify_step.py 자동 점검 결과예요. 여섯 개를 다 체크하면 그 번호판이 파랑이 돼요.';
+    const list = document.createElement('div'); list.style.cssText = 'overflow:auto;flex:1;border-top:1px solid #e5e7eb;';
+    const total = def.steps.length, badge = { ok: '✅', warn: '⚠', fail: '❌' };
+    let cur = Math.min(Math.max(Number(n0) || step || 1, 1), total);   // 번호마다 모달: 지금 보는 번호의 체크만 보이고 ◀ ▶ 로 다른 번호로 간다
+    const nav = document.createElement('div'); nav.style.cssText = 'display:flex;align-items:center;gap:10px;margin:6px 0;';
+    const pv = document.createElement('button'), nx = document.createElement('button'), ct = document.createElement('b');
+    [pv, nx].forEach((b3) => { b3.type = 'button'; b3.style.cssText = 'padding:4px 14px;border-radius:999px;border:1px solid #cbd5e1;background:#fff;font:700 13px sans-serif;cursor:pointer;'; });
+    pv.textContent = '◀ 앞 번호'; nx.textContent = '뒤 번호 ▶'; ct.style.cssText = 'flex:1;text-align:center;font-size:14px;';
+    nav.appendChild(pv); nav.appendChild(ct); nav.appendChild(nx);
+    const drawStep = () => { list.textContent = ''; ct.textContent = cur + ' / ' + total + '번'; pv.disabled = cur <= 1; nx.disabled = cur >= total; [cur].forEach((n) => {
+      const a = auto[String(n)] || null, box = document.createElement('div'); box.style.cssText = 'border-bottom:1px solid #e5e7eb;padding:7px 2px;';
+      const head = document.createElement('div'); head.style.cssText = 'display:flex;align-items:center;gap:8px;font-weight:700;';
+      const all = document.createElement('input'); all.type = 'checkbox'; all.title = '이 번호의 여섯 항목 전체 체크/해제';
+      const ttl = document.createElement('span'); ttl.style.flex = '1';
+      const paintHead = () => { all.checked = verifyDone(n); ttl.textContent = n + '번 — ' + (stepMade(def.steps[n - 1]) ? '자동 점검: ' + (a ? a['상태'] + ' (' + a['시각'] + ')' : '아직 안 돌림') : '아직 안 만듦(작성 전)'); ttl.style.color = verifyDone(n) ? '#2563eb' : '#ea580c'; };
+      head.appendChild(all); head.appendChild(ttl); box.appendChild(head);
+      const rows = [];
+      VERIFY_ITEMS.forEach((t) => {
+        const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:8px;align-items:flex-start;margin:3px 0 0 24px;';
+        const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = checkVerdicts[n + '|verify:' + t] === 'ok';
+        const lab = document.createElement('div'); lab.style.cssText = 'flex:1;';
+        const res = a && a['항목'] ? a['항목'][t] : null, msg = a && a['내용'] ? a['내용'][t] : '';
+        const nm = document.createElement('b'); nm.textContent = t + ' '; lab.appendChild(nm);
+        const bd = document.createElement('span'); bd.textContent = (res ? badge[res] : '·') + ' ' + (msg || (a ? '' : '자동 점검 결과 없음')); bd.style.color = res === 'fail' ? '#b91c1c' : res === 'warn' ? '#b45309' : '#374151'; lab.appendChild(bd);
+        const save = async (on) => {
+          try { await b2.checkStore.set(def.id, n, 'verify:' + t, on ? 'ok' : null); if (on) checkVerdicts[n + '|verify:' + t] = 'ok'; else delete checkVerdicts[n + '|verify:' + t]; }
+          catch (e) { notice('저장에 실패했습니다: ' + e.message + ' (supabase/assembly_checks.sql 을 실행했는지 확인)'); cb.checked = !on; }
+          paintHead(); paintStatus();
+        };
+        cb.addEventListener('change', () => save(cb.checked)); rows.push([cb, save]);
+        row.appendChild(cb); row.appendChild(lab); box.appendChild(row);
+      });
+      all.addEventListener('change', async () => { for (const [cb, save] of rows) { if (cb.checked !== all.checked) { cb.checked = all.checked; await save(all.checked); } } });
+      paintHead(); list.appendChild(box);
+    }); };
+    pv.addEventListener('click', () => { cur -= 1; drawStep(); }); nx.addEventListener('click', () => { cur += 1; drawStep(); }); drawStep();
+    const ok = document.createElement('button'); ok.type = 'button'; ok.textContent = '닫기'; ok.style.cssText = 'margin-top:10px;align-self:center;padding:8px 32px;border-radius:999px;border:0;background:#2563eb;color:#fff;font:700 14px sans-serif;cursor:pointer;';
+    const close = () => { ov.remove(); document.removeEventListener('keydown', onKey, true); };
+    const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); } };
+    ok.addEventListener('click', close); document.addEventListener('keydown', onKey, true);
+    bx.appendChild(hd); bx.appendChild(hint); bx.appendChild(nav); bx.appendChild(list); bx.appendChild(ok); ov.appendChild(bx); document.body.appendChild(ov);
   }
   function paintStatus() {
     const adm = isAdm();
@@ -636,7 +690,7 @@
         b.textContent = tag + (st === 'done' ? ' ✓' : st === 'edit' ? ' 🛠' : '') + (adm ? warnMark(i) : '');
         // 작업 진행 표시(관리자만): 일부 번호만 만든 조립도에서 마무리하고 넘어간 번호는 파랑, 확인 필요(review)는 주황 — 안 만든 번호는 그대로 둔다
         const made = i !== last() && stepMade(def.steps[i - 1]);
-        const review = !!(def.steps[i - 1] && def.steps[i - 1].review) && st !== 'done';   // 관리자가 ✅ 완료를 누르면 주황 → 파랑   // review: 만들었지만 마무리 안 됨(근거 약함·확인 필요) → 주황
+        const review = !!(def.steps[i - 1] && def.steps[i - 1].review) && st !== 'done' && !verifyDone(i);   // 관리자가 ✅ 완료를 누르면 주황 → 파랑   // review: 만들었지만 마무리 안 됨(근거 약함·확인 필요) → 주황
         b.style.color = adm && made ? (review ? '#ea580c' : '#2563eb') : ''; b.style.fontWeight = adm && made ? '700' : ''; }); });   // 완성(모든 번호를 만든 뒤)에도 색을 유지한다(사용자 지시 2026-10-16)
     paintWarn();
     splitBtnRows();
@@ -645,7 +699,7 @@
     { const tb = $('asmThumbBtn'); if (tb) tb.hidden = sb.hidden; }
     { const rb = $('asmReloadBtn'); if (rb) rb.hidden = !adm || step < 0; }
     { const ab = $('asmAuditBtn'); if (ab) ab.hidden = !adm || step < 0; }
-    ['asmAuditViewBtn', 'asmScanHBtn', 'asmScanDBtn', 'asmScanSBtn'].forEach((id) => { const e = $(id); if (e) e.hidden = !adm || step < 1; });
+    ['asmAuditViewBtn', 'asmVerifyBtn', 'asmScanHBtn', 'asmScanDBtn', 'asmScanSBtn'].forEach((id) => { const e = $(id); if (e) e.hidden = !adm || step < 1; });
     { const jb = $('asmJointBtn'); if (jb) jb.hidden = !adm || step < 1; }
     { const fb = $('asmFreezeBtn'); if (fb) fb.hidden = sb.hidden; }
     const st = stepStatus[step]; sb.textContent = STATUS_LABEL[st] || '⬜ 상태 없음';
@@ -868,6 +922,10 @@
         });
         lastAuditText = out.join(NL); notice(lastAuditText, null, { copy: true, rich: true, lineHook: jointLineHook });
       }); }
+    { const kb = document.createElement('button'); kb.type = 'button'; kb.id = 'asmVerifyBtn'; kb.hidden = true; kb.textContent = '☑ 검증 체크';
+      kb.style.cssText = sb.style.cssText; kb.title = '번호마다 자동 점검(홀라인·카메라·돌기↔구멍·번호 대조 그림·읽기 표·증거) 결과를 보고, 내가 확인한 항목에 체크해요(관리자만, DB 저장). 여섯 개를 다 체크하면 번호판이 파랑으로 바뀌어요';
+      sb.parentNode.insertBefore(kb, sb);
+      kb.addEventListener('click', () => openVerifyModal(step)); }
     { const vb = document.createElement('button'); vb.type = 'button'; vb.id = 'asmAuditViewBtn'; vb.hidden = true; vb.textContent = '📄 점검 결과 보기';
       vb.style.cssText = sb.style.cssText; vb.title = '가장 최근 마무리 점검 브리핑을 다시 보여 줘요(스캔을 다시 돌리지 않아요, 관리자만)';
       sb.parentNode.insertBefore(vb, sb);
@@ -1090,7 +1148,7 @@
     // 이번 단계에 끼우는 부품과 그 끼워지는 자리를 화면 가운데에 크게 보여준다(나머지 부품은 배경)
     const focus = list.filter((d) => d.isNew).map((d) => d.pos).concat(guides.filter((g) => g.to).map((g) => g.to)); // 맞물림 방식 안내는 좌표가 없다(연결점이 부품에 붙어 있다)
     const stc = (step > 0 && step < last()) ? def.steps[step - 1].cam : null; // cam.tight: 이번에 끼우는 부분만 크게(교재가 그 부분만 크게 그린 단계)
-    { const axAt = stc && Array.isArray(stc.axes) ? stc.axes : null; const axNm = def.axisNames && step >= (def.axisNames.at || 1) ? def.axisNames : null; const axKey = (axAt ? axAt.join(',') : '') + (axNm ? '|n' : ''); // cam.axes: 이 단계의 기준점(방향선 원점) · def.axisNames: 이 단계부터 축 이름을 바꿔 보인다(완성 사진 방향 기준)
+    { const axAt = stc && Array.isArray(stc.axes) ? stc.axes : null; const _axn = def.axisNames; const axNm = Array.isArray(_axn) ? (_axn.filter((a) => step >= (a.at || 1) && (!a.until || step <= a.until)).pop() || null) : (_axn && step >= (_axn.at || 1) ? _axn : null); const axKey = (axAt ? axAt.join(',') : '') + (axNm ? '|' + JSON.stringify(axNm) : ''); // cam.axes: 이 단계의 기준점(방향선 원점) · def.axisNames: 이 단계부터 축 이름을 바꿔 보인다(완성 사진 방향 기준)
       if (axKey !== lastAxKey) { lastAxKey = axKey; b.axes(true, axAt, axNm); } }
     const viewActive = viewSlot !== null && viewSlot !== slotOfStep(step); // 다른 창고 화면을 볼 땐 그 단계의 확대 설정을 쓰지 않고 보이는 부품 전체에 맞춘다
     const camFocus = !viewActive && stc && Array.isArray(stc.focus) && stc.focus.length ? stc.focus : null; // cam.focus: 부품이 없는 단계 등에서 이 점들을 화면 가운데에 크게(조립 프로그램이 지정)

@@ -77,6 +77,7 @@ def process(step):
         if not _vs: _vs=[(_P[(c,r+1)][0]-_P[(c,r)][0],_P[(c,r+1)][1]-_P[(c,r)][1]) for (c,r) in _P if (c,r+1) in _P]; _off=90.0
         _a=math.degrees(math.atan2(np.mean([v[1] for v in _vs]),np.mean([v[0] for v in _vs]))) - _off
         _axr=D+nm+'_axes.json'; _AXj=json.load(open(_axr,encoding='utf-8')) if os.path.exists(_axr) else {}; _Xv=(_AXj.get('global') or {}).get(_AXj.get('rotate_to') or '')
+        _wr=lambda d_:((d_+90.0)%180.0)-90.0   # (2026-10-18: level 만 있고 rotate_to 가 없는 번호에서 _wr 가 정의되지 않아 오류 — 밖으로 옮김)
         _res=_a-90.0*round(_a/90.0)                     # 가장 가까운 수평·수직까지의 작은 각도
         if _Xv:
             # 가운데 줄·가운데 열 구멍을 지나는 직선의 방향으로 맞춘다 — 줄들은 원근 때문에 부채꼴로 퍼져 줄마다 각도가 다르므로(첫 줄 41°·가운데 줄 38°) 줄 평균이나 첫 줄이 아니라 축선이 지나는 가운데 줄·가운데 열을 쓴다

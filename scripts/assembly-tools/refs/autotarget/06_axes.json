@@ -1,0 +1,28 @@
+{
+ "global": {
+  "X": [
+   55.0,
+   -0.0
+  ],
+  "Y": [
+   0.0,
+   -46.3
+  ],
+  "Z": [
+   0.0,
+   29.7
+  ]
+ },
+ "fit": {
+  "from": "guess",
+  "note": "\uc810\uc774 \uac70\uc758 \ud55c \uc904\uc774\ub77c PnP \ubd88\uac00 \u2014 \uae30\uc5b4 \ud0c0\uc6d0(\uac00\ub85c 150\u00b7\uc138\ub85c 80)\uc73c\ub85c \uace0\ub3c4\ub9cc \uc9d0\uc791(theta 0, phi 1.0)",
+  "theta": 0.0,
+  "phi": 1.0
+ },
+ "no_rotate": true,
+ "no_lines": true,
+ "origin_cell": [
+  1,
+  1
+ ]
+}

@@ -3,5 +3,6 @@
 import hashlib, json
 
 def fp(st):
-    st = dict(st); st["note"] = str(st.get("note", "")).split("\n━ 작업 점검 ━")[0]
+    st = dict(st); st.pop("review", None); st.pop("reviewWhy", None)   # 번호판 색(주황/파랑) 표시용 플래그는 내용이 아니다 — 검증 상태가 바뀔 때마다 증거·✓ 지문이 깨지지 않게 뺀다(2026-10-18)
+    st["note"] = str(st.get("note", "")).split("\n━ 작업 점검 ━")[0]
     return hashlib.sha1(json.dumps(st, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()[:12]

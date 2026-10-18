@@ -92,6 +92,22 @@ BOOKS = {
         },
         "extra": [],
     },
+    "autotarget": {
+        "volume": 2,
+        "pages": {
+            69: [(0, (340, 460, 1300, 1290), "교재 69쪽 맨 앞 완성품 사진 — 앞뒤·방향(수직 기둥 위 팔, 아래 긴 고무줄 총 막대, 메인보드·바퀴)은 여기서 확인"), (1, (75, 1330, 705, 1888), ""), (2, (720, 1330, 1355, 1888), "")],
+            70: [(3 + i, box(*g), "") for i, g in enumerate(GRID)],
+            71: [(9 + i, box(*g), "") for i, g in enumerate(GRID)],
+            72: [(15 + i, box(*g), "") for i, g in enumerate(GRID)],
+            73: [(21 + i, box(*g), "") for i, g in enumerate(GRID)],
+            74: [(27 + i, box(*g), "") for i, g in enumerate(GRID)],
+            75: [(33 + i, box(*g), "") for i, g in enumerate(GRID)],
+            76: [(39 + i, box(*g), "") for i, g in enumerate(GRID)],
+            77: [(45 + i, box(*g), "") for i, g in enumerate(GRID)],
+            78: [(51, box("L", 1), ""), (52, box("R", 1), ""), (53, box("L", 2), ""), (54, box("R", 2), ""), (55, box("L", 3), ""), (99, box("R", 3), "완성 — INPUT A = IR센서, OUTPUT 1 = LED")],
+        },
+        "extra": [],
+    },
     "mantis": {
         "volume": 2,
         "pages": {
