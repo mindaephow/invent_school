@@ -15,6 +15,10 @@ print("앞 번호 카메라 오차 %.2fpx fov %d" % (e, fov))
 # 판 평면 점 → 앞 그림 픽셀
 gx, gz = np.meshgrid(np.linspace(-70, 105, 15), np.linspace(-15, 75, 10)); P3 = np.stack([gx.ravel(), np.full(gx.size, Y0), gz.ravel()], 1)
 P3 = P3[((np.abs(P3[:, 0]) <= 75) & (np.abs(P3[:, 2]) <= 15)) | ((P3[:, 0] >= 75) & (P3[:, 2] <= 75))]   # 실제 판 자리만(315프레임 + L자 39프레임) — 판 밖으로 외삽하면 오차가 커진다
+import os as _o
+if _o.environ.get("BOX"):   # BOX="x0,x1,z0,z1" — 다른 판(예: 59프레임 x −40~40·z 30~70)이면 그 사각형의 격자로 바꾼다
+    _x0, _x1, _z0, _z1 = [float(v) for v in _o.environ["BOX"].split(",")]
+    gx, gz = np.meshgrid(np.linspace(_x0, _x1, 9), np.linspace(_z0, _z1, 5)); P3 = np.stack([gx.ravel(), np.full(gx.size, Y0), gz.ravel()], 1)
 px0 = cv2.projectPoints(np.float32(P3 - cc), rv, tv, K, None)[0].reshape(-1, 2)
 sift = cv2.SIFT_create(4000); g0 = cv2.cvtColor(im0, cv2.COLOR_BGR2GRAY); g1 = cv2.cvtColor(im1, cv2.COLOR_BGR2GRAY)
 # 평면 위 영역만 쓰기: 앞 그림에서 판 평면 점들의 볼록 껍질 안
