@@ -7,7 +7,8 @@
 #   4 번호 대조 그림  책 링 ↔ 모델 구멍 번호를 적은 NN_4~ 그림(index.json idx≥3)이 있는가
 #   5 읽기 표   면·링·부품·방향·부품방향·대조·판단과정이 다 차 있는가, 판단과정에 근거(칸·px·표)가 있는가
 #   6 증거      record_check 증거가 지금 내용과 같은 지문인가(rulecheck 판정)
-# 마지막에 번호별 요약 표. ❌ 가 있으면 종료 코드 1. 결과는 <이름>_verify.json 에 번호별로 저장(상태·항목·그때의 내용 지문) —
+# 넘어가는 기준: 홀라인 ✅ + 번호 대조 그림 ✅ 이면 그 번호는 '통과'(번호판 파랑). 카메라·돌기↔구멍·읽기 표·증거는 참고 항목으로 ⚠·❌ 를 보고하되 막지 않는다.
+# 마지막에 번호별 요약 표. 홀라인·번호 대조 ❌ 가 있으면 종료 코드 1. 결과는 <이름>_verify.json 에 번호별로 저장(상태·항목·그때의 내용 지문) —
 #   python verify_step.py <이름> --표   → 통과 / 주의 / 실패 / 낡음(점검 뒤 내용이 바뀜) / 미검증 으로 55개 번호를 나눠 보여 준다.
 import sys, os, re, json, subprocess
 sys.stdout.reconfigure(encoding="utf-8")
@@ -42,13 +43,26 @@ def cam_of(n):
 summary = {}; msgs_by_step = {}
 for N in steps:
     print("═══ %s %d번 점검 ═══" % (name, N)); res = []; msgs_ = {}
-    def add(tag, ok, text): res.append((tag, ok)); msgs_[tag] = text; print("  %s %s — %s" % ({"ok": "✅", "warn": "⚠", "fail": "❌"}[ok], tag, text))
+    def add(tag, ok, text):   # 확인한 것 / 안 한 것 말투로 바꿔 저장한다 — 이 도구의 목적은 "책과 맞는지 확인"이고, 확인이 안 되면 무엇을 안 해서인지 남기는 것
+        _what = {"홀라인": ("책 그림의 구멍 줄(홀라인)을 맞춰 모델을 책 위에 겹쳐 비교할 수 있게 함", "책 그림의 구멍 줄(홀라인)을 정확히 맞추지 않아 모델과 책을 겹쳐 비교하지 못함"),
+                 "카메라": ("책과 같은 각도의 카메라를 풀어 모델을 책과 같은 각도로 봄", "책과 같은 각도의 카메라를 정확히 못 풀어 모델과 책의 각도 비교가 부정확함"),
+                 "돌기↔구멍": ("모델에서 새 부품의 돌기가 구멍에 들어가는지 숫자로 봄", "모델에서 돌기↔구멍이 맞는지 숫자로 못 봄/안 맞음"),
+                 "번호 대조 그림": ("책 링 번호와 모델 결합 구멍 번호가 같은지 그림으로 대조함", "책 링 번호와 모델 결합 구멍 번호를 그림으로 대조하지 않음"),
+                 "읽기 표": ("책에서 읽은 근거(링·방향·판단과정)를 읽기 표에 남김", "책에서 읽은 근거를 읽기 표에 다 남기지 않음"),
+                 "증거": ("3D 화면과 책을 나란히 본 기록을 남김", "3D 화면과 책을 나란히 본 기록이 없거나, 고친 뒤 다시 안 봄")}.get(tag, ("", ""))
+        text = ("확인함: " + _what[0] + " — " + text) if ok == "ok" else ("안 한 것: " + _what[1] + " (" + text + ")")
+        res.append((tag, ok)); msgs_[tag] = text; print("  %s %s — %s" % ({"ok": "✅", "warn": "⚠", "fail": "❌"}[ok], tag, text))
     # 1 홀라인
     f = jl(os.path.join(R, "fits", "%02d_P.json" % N))
     if not f: add("홀라인", "fail", "fits/%02d_P.json 없음" % N)
     else:
         tool = f.get("tool", "?"); err = f.get("err_px")
-        if tool == "blob-lattice": add("홀라인", "ok" if (err is not None and err <= 2.0) else "warn", "구멍 흰 조각 격자 %s개 평균 %spx(기준 2.0)" % (f.get("found"), err))
+        if tool == "via-later":   # 판이 없는 번호: 이 번호의 부품이 다시 보이는 뒤 번호의 홀라인·번호 대조가 통과하면 결합이 확인된 것으로 본다(사용자 2026-10-18)
+            _vv = (jl(os.path.join(here, name + "_verify.json")) or {}).get(str(f.get("via")), {})
+            add("홀라인", "ok" if _vv.get("상태") == "통과" else "warn", "뒤 번호 %s번 점검 %s 로 대신 확인(블록만 있는 번호)" % (f.get("via"), _vv.get("상태", "안 돌림")))
+            tool = None
+        if tool is None: pass
+        elif tool == "blob-lattice": add("홀라인", "ok" if (err is not None and err <= 2.0) else "warn", "구멍 흰 조각 격자 %s개 평균 %spx(기준 2.0)" % (f.get("found"), err))
         elif tool == "anchor-pnp": add("홀라인", "warn", "격자 아님 — 앵커 점으로 푼 값(⚠ 구멍 중심 검출 아님)")
         elif tool in ("manual", None, "?"): add("홀라인", "fail", "손으로 읽은 점 — 홀라인을 다시 맞춘다")
         else: add("홀라인", "ok", "도구 %s" % tool)
@@ -96,22 +110,55 @@ for N in steps:
 import time, stepfp
 vf = os.path.join(here, name + "_verify.json"); vdb = jl(vf) or {}
 for N, res in summary.items():
-    st = "실패" if any(o == "fail" for _, o in res) else ("주의" if any(o == "warn" for _, o in res) else "통과")
+    _d = dict(res); _must = [_d.get("홀라인"), _d.get("번호 대조 그림")]   # 넘어가는 기준(사용자 2026-10-18): 홀라인과 번호 대조 그림이 둘 다 통과면 통과. 나머지 항목은 참고(⚠·❌ 로 남겨 보고)
+    st = "통과" if all(o == "ok" for o in _must) else ("실패" if any(o == "fail" for o in _must) else "주의")
     vdb[str(N)] = {"상태": st, "항목": {t: o for t, o in res}, "지문": stepfp.fp(asm["steps"][N - 1]), "시각": time.strftime("%Y-%m-%d %H:%M"), "내용": msgs_by_step.get(N, {})}
 json.dump(vdb, open(vf, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-# 조립 보기의 "☑ 검증 체크" 모달이 읽는 사본: public/assembly-verify/<조립도 id>.json (지문은 뺀다)
+# 뒤 번호로 확인(사용자 2026-10-18, 같은 날 정정): "다음 번호가 진행됐다"는 것만으로는 증명이 아니다(내가 억지로 진행시켰을 수 있다).
+#   이 번호의 부품이 나오는 뒤 번호 책에서 **그 부품을 책과 실제로 비교한 그림**이 있어야 한다 — 그 기록을 <이름>_via.json 에 적는다:
+#     {"4": [{"step": 7, "image": "07_4.jpg", "what": "블록 셋 돌기 8개를 7번 책 돌기에 찍어 일치"}]}
+#   인정 조건: ① 기록한 그림 파일이 있고 ② 그 뒤 번호가 스스로 통과(홀라인·번호 대조)이고 ③ 그 번호 화면에 이 번호 부품이 실제로 보임. 기록이 없으면 '안 한 것'으로 남긴다.
+_steps = asm["steps"]; _NS = len(_steps)
+_via = jl(os.path.join(here, name + "_via.json")) or {}
+def _shows(n, m):
+    if str(n) in ((_steps[m - 1].get("hideMade")) or {}): return False
+    if _steps[m - 1].get("slot") == _steps[n - 1].get("slot"): return True
+    return any(str(k).split(":")[0] == str(n) for k in (_steps[m - 1].get("moveMade") or {}))
+def _own_pass(m):
+    e = vdb.get(str(m), {}); return e.get("상태") == "통과" and not e.get("확인")
+for _sk in sorted(vdb, key=int):
+    _n = int(_sk); _e = vdb[_sk]; _e.pop("확인", None); (_e.get("항목") or {}).pop("뒤 번호 확인", None)
+    if _own_pass(_n): continue
+    _recs = _via.get(str(_n)) or []; _good = [r for r in _recs if os.path.exists(os.path.join(R, r.get("image", "_없음_"))) and _own_pass(r.get("step", 0)) and _shows(_n, r.get("step", 0))]
+    if _good:
+        _e["확인"] = "뒤 번호 " + ", ".join("%s번(%s)" % (r["step"], r["image"]) for r in _good) + " 책에서 이 번호 부품을 비교해 확인"
+        _e["상태"] = "통과"; _e.setdefault("항목", {})["뒤 번호 확인"] = "ok"; _e.setdefault("내용", {})["뒤 번호 확인"] = "확인함: " + _e["확인"] + " — " + "; ".join(r.get("what", "") for r in _good)
+    else:
+        _conf = [m for m in range(_n + 1, _NS + 1) if _shows(_n, m)][:6]
+        _e.setdefault("항목", {})["뒤 번호 확인"] = "warn"
+        _e.setdefault("내용", {})["뒤 번호 확인"] = "안 한 것: 이 번호 부품이 나오는 뒤 번호(%s번) 책에서 이 부품을 책과 비교한 그림을 남기지 않음(<이름>_via.json 에 기록)" % (", ".join(str(v) for v in _conf) if _conf else "없음/안 찾음")
+        if _recs: _e["내용"]["뒤 번호 확인"] += " — 기록은 있으나 그림 없음·뒤 번호 미통과·화면에 안 보임 중 하나"
+json.dump(vdb, open(vf, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+# 조립 보기의 "☑ 검증 체크" 모달(관리자만)이 읽도록 ivs_assembly_checks 에 저장한다: issue_key = 'auto:<항목>', verdict = ok(통과) / fix(주의·실패), note = '상태|문장'.
+#   public 폴더에는 아무것도 쓰지 않는다 — 관리자만 보이게(사용자 지시 2026-10-18). 서비스 키는 .env.local.
 try:
+    import urllib.request
+    _env = dict(l.strip().split("=", 1) for l in open(os.path.join(here, "..", "..", ".env.local"), encoding="utf-8") if "=" in l and not l.startswith("#"))
+    _u = _env["SUPABASE_URL"].strip('"'); _k = _env["SUPABASE_SERVICE_ROLE_KEY"].strip('"')
     _txt = open(os.path.join(here, "..", "..", "public", "design-assemblies.js"), encoding="utf-8").read()
-    _pat = "cubo-[0-9]+-" + re.escape(name) + "(?![A-Za-z0-9_])"
-    _m = re.search(_pat, _txt)
+    _m = re.search("cubo-[0-9]+-" + re.escape(name) + "(?![A-Za-z0-9_])", _txt)
     if _m:
-        _pd = os.path.join(here, "..", "..", "public", "assembly-verify"); os.makedirs(_pd, exist_ok=True)
-        json.dump({k: {kk: vv for kk, vv in v.items() if kk != "지문"} for k, v in vdb.items()}, open(os.path.join(_pd, _m.group(0) + ".json"), "w", encoding="utf-8"), ensure_ascii=False)
-        print("모달용 사본:", "public/assembly-verify/" + _m.group(0) + ".json")
-except Exception as _e: print("모달용 사본을 못 썼다:", _e)
+        _rows = []
+        for _sk2, _e in vdb.items():
+            for _t, _o in (_e.get("항목") or {}).items():
+                _rows.append({"assembly_id": _m.group(0), "step": int(_sk2), "issue_key": "auto:" + _t, "verdict": "ok" if _o == "ok" else "fix", "note": _o + "|" + ((_e.get("내용") or {}).get(_t, "")), "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S+09:00")})
+        _rq = urllib.request.Request(_u + "/rest/v1/ivs_assembly_checks?on_conflict=assembly_id,step,issue_key", data=json.dumps(_rows).encode("utf-8"), method="POST",
+                                     headers={"apikey": _k, "Authorization": "Bearer " + _k, "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates,return=minimal"})
+        urllib.request.urlopen(_rq); print("검증 결과를 DB(관리자 표)에 저장:", len(_rows), "줄")
+except Exception as _e: print("검증 결과를 DB 에 못 썼다:", _e)
 print("═══ 요약 ═══"); tags = ["홀라인", "카메라", "돌기↔구멍", "번호 대조 그림", "읽기 표", "증거"]
 print("%-5s" % "번호" + "".join("%-12s" % t for t in tags))
 fails = 0
 for N, res in summary.items():
-    d = dict(res); print("%-5d" % N + "".join("%-12s" % {"ok": "✅", "warn": "⚠", "fail": "❌"}.get(d.get(t), "-") for t in tags)); fails += sum(1 for _, o in res if o == "fail")
+    d = dict(res); print("%-5d" % N + "".join("%-12s" % {"ok": "✅", "warn": "⚠", "fail": "❌"}.get(d.get(t), "-") for t in tags)); fails += sum(1 for t, o in res if o == "fail" and t in ("홀라인", "번호 대조 그림"))
 sys.exit(1 if fails else 0)

@@ -71,8 +71,12 @@ def main():
     for q in A.parts:
         nm = q.name.split(" ")[0]
         if q.step.index > N or nm in skip or nm not in COLORS or nm not in dims: continue
-        p = np.array(q.p, float) + hover.get(id(q), 0)
-        box(q.R, p, dims[nm], COLORS[nm])
+        p = np.array(q.p, float) + hover.get(id(q), 0); Rq = q.R
+        _po = ((getattr(q, "extra", None) or {}).get("poseAt") or {}).get(str(N))   # 본체를 세워 조립하는 번호(poseAt): 책 그림과 같은 세운 자세로 그린다(오토타깃 15번)
+        if _po:
+            from asmlib import euler_to_R
+            p = np.array(_po["p"], float) + hover.get(id(q), 0); Rq = euler_to_R(_po["r"])
+        box(Rq, p, dims[nm], COLORS[nm])
     for p in img: cv2.circle(im, (int(p[0]), int(p[1])), 4, (255, 255, 0), 1)
     lines = ["증명 — %d번 책 그림 위에 모델(1~%d번)을 같은 카메라로 겹침. 카메라 = 점 %d개 PnP 평균 %.2fpx·최대 %.1fpx (하늘색 동그라미 = 읽은 점). 빨강=315프레임 파랑 계열=판·블록 보라=팔 판 노랑=바퀴 등." % (N, N, len(obj), e, errs.max()),
              "읽은 점: " + str(f.get("name", ""))]

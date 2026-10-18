@@ -5822,6 +5822,12 @@
           const out = {}; (await res.json()).forEach(r => { if (r && r.verdict) out[r.step + '|' + r.issue_key] = r.verdict; }); return out;
         } catch (e) { return {}; }
       },
+      async loadFull(assemblyId){   // 검증 체크 모달용: 판정·설명·시각까지(관리자 RLS 표)
+        try {
+          const res = await fetch(SUPABASE_URL + '/rest/v1/ivs_assembly_checks?select=step,issue_key,verdict,note,updated_at&assembly_id=eq.' + encodeURIComponent(assemblyId), { headers: this._h() });
+          return res.ok ? await res.json() : [];
+        } catch (e) { return []; }
+      },
       // note: 글자가 있으면 판정과 함께 설명(이유)을 저장한다 / 없으면(undefined) 설명은 건드리지 않는다(설명 칸이 없는 DB 에서도 판정은 저장된다)
       async set(assemblyId, step, issueKey, verdict, note){
         const row = { assembly_id: assemblyId, step, issue_key: issueKey, verdict, updated_at: new Date().toISOString() };

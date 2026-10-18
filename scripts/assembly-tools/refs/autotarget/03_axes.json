@@ -2,30 +2,30 @@
  "global": {
   "X": [
    55.0,
-   -22.4
+   -21.8
   ],
   "Y": [
-   -2.6,
-   -51.3
+   -14.6,
+   -40.8
   ],
   "Z": [
-   33.8,
-   42.0
+   20.9,
+   53.2
   ]
  },
  "fit": {
-  "from": "02_P.json",
-  "note": "3\ubc88 \ub9c1 5\uc810\uc740 \ub2e8\ub3c5\uc73c\ub85c \ud480\ub9ac\uc9c0 \uc54a\uc544(\uce7813\u00b714 \ubc30\uc815 3.4px\u00b7\uce7814\u00b715 \ubc30\uc815 50px) 2\ubc88\uacfc \uac19\uc740 \uc2dc\uc810(L\uc790\uac00 \uc544\ub2cc \ub9c9\ub300 \uc870\ub9bd \u2014 2\ubc88\uacfc \uac19\uc740 \uc704\uce58\uc758 T\uc790 \ube14\ub85d\u00b7\ub9ac\ubcb3)\uc758 \uac01\ub3c4\ub97c \ubcf5\uc0ac \u26a0",
-  "theta": -0.68,
-  "phi": 0.88,
-  "err_px": 2.3,
-  "points": 5,
-  "roll_deg": 2.6
+  "from": "03_P.json",
+  "err_px": 0.06,
+  "points": 30,
+  "theta": -0.53,
+  "phi": 0.68,
+  "cols": "+X",
+  "rows": "+Z"
  },
  "no_rotate": true,
  "origin_cell": [
   1,
   1
  ],
- "no_lines": true
+ "naming": "\ud310\uc758 \uae34 \ucabd(\uce78) \ud640\ub77c\uc778 = X\uc120, \uc904 \ubc29\ud5a5 = Z\uc120(\uc774\ub984 \ubc14\uafb8\uc9c0 \uc54a\uc74c), \uce781 \uc9041 \uad6c\uba4d\uc5d0\uc11c \uacc4\uc0b0"
 }

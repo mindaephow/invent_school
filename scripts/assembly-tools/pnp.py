@@ -1,7 +1,7 @@
 import numpy as np, cv2, math
-def fit(obj,img,W,H,fov_deg):
+def fit(obj,img,W,H,fov_deg,cx=None,cy=None):   # cx,cy = 주점(책 그림이 잘려 있으면 한가운데가 아니다, 2026-10-19 _regcam.py)
     f=(H/2)/math.tan(math.radians(fov_deg)/2)
-    K=np.array([[f,0,W/2],[0,f,H/2],[0,0,1]],float)
+    K=np.array([[f,0,W/2 if cx is None else cx],[0,f,H/2 if cy is None else cy],[0,0,1]],float)
     obj=np.array(obj,float);img=np.array(img,float)
     best=None
     c=obj-obj.mean(0); planar=np.linalg.svd(c,compute_uv=False)[-1]<1e-6*max(1.0,np.abs(c).max())   # 한 평면 위의 점(어느 방향이든)은 EPNP 가 불안정 → IPPE 도 시도(2026-10-17, 배틀로봇 13번에서 평면 점이 19px 로 잘못 풀린 것을 발견)

@@ -73,7 +73,7 @@
       const hosts = new Set()
       mine.forEach((a) => {
         const pt = a.ref
-        const eff = pt.side || pt.move || pt.explode ? null : pt.dir // 옆자리·옮기기 단계는 방향 검사 제외
+        const eff = pt.side || pt.move || pt.explode || (pt.poseAt && pt.poseAt[si]) ? null : pt.dir // 옆자리·옮기기 단계는 방향 검사 제외 / poseAt 자세(몸을 세워 조립하는 단계)는 기본 자세와 띄우는 방향이 달라 제외(오토타깃 15번 2026-10-19)
         const myPegs = res.mated.filter((m) => m.part === a.key)
         const myHoles = res.mated.filter((m) => m.into === a.key)
         // 1) 방향 확인: dir 은 부품을 띄워 두는 방향이라 돌기는 그 반대(−dir)로 향해야 한다 / 받는 쪽(recv)이면 고정된 돌기가 +dir 쪽을 향해야 한다

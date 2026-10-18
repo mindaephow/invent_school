@@ -7,11 +7,17 @@ from pnp import fit, cam_from, angles
 name, N = sys.argv[1], int(sys.argv[2]); a = json.load(open(sys.argv[3], encoding="utf-8")); R = "refs/%s/" % name
 obj = np.array(a["obj"], float); img = a["img"]; im = cv2.imread(R + "%02d.jpg" % N); H, W = im.shape[:2]; cc = obj.mean(0)
 best = None
-for fov in range(14, 71, 2):
-    r = fit(obj - cc, img, W, H, fov)
+for fov in ([int(a["fov"])] if a.get("fov") else range(14, 71, 2)):   # anchors.json 에 fov 를 적으면 그 값으로 고정(점이 적고 한 평면에 가까운 번호 — 같은 시점인 앞 번호 풀이 fov 사용)
+    r = fit(obj - cc, img, W, H, fov, a.get("cx"), a.get("cy"))
     if r:
         e, rv, tv, K = r; C, fwd, up, right = cam_from(rv, tv)
-        if up[1] > 0 and (best is None or e < best[0]): best = (e, fov, rv, tv, K)
+        if (up[1] > 0 or a.get("free")) and (best is None or e < best[0]):   # free: 롤이 큰 책 그림(위쪽이 위인 조건 없음)
+             best = (e, fov, rv, tv, K)
+import os as _os
+_ff = R + "anchors/%02d_free.json" % N
+if a.get("free") and _os.path.exists(_ff):   # _freepnp.py 가 롤 제한 없이 여러 시작점으로 푼 해(rv·tv·fov)를 그대로 쓴다
+    _d = json.load(open(_ff, encoding="utf-8")); _f = (H / 2) / math.tan(math.radians(_d["fov"]) / 2); _K = np.array([[_f, 0, W / 2], [0, _f, H / 2], [0, 0, 1]], float)
+    cc = np.array(_d["cc"], float); best = (_d["err"], _d["fov"], np.array(_d["rv"], float).reshape(3, 1), np.array(_d["tv"], float).reshape(3, 1), _K)
 if not best: sys.exit("카메라를 못 풀었다")
 e, fov, rv, tv, K = best; C, fwd, up, right = cam_from(rv, tv); az, el, _ = angles(C + cc, cc)
 P = lambda q: cv2.projectPoints(np.float32([np.array(q, float) - cc]), rv, tv, K, None)[0][0][0]

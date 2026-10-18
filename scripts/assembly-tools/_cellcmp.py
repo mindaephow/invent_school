@@ -12,7 +12,7 @@ Pc = lambda c, r: cv2.perspectiveTransform(np.float32([[[c, r]]]), H)[0][0] * S
 im = cv2.imread("refs/%s/%02d.jpg" % (name, N)); out = cv2.resize(im, None, fx=S, fy=S, interpolation=cv2.INTER_CUBIC)
 for c in range(1, 19):
     for r in range(1, 10):
-        if c <= 15 and r > 3: continue
+        if c <= 15 and r > f.get("rows", 3): continue
         if c > 15 and r > 9: continue
         p = Pc(c, r); cv2.putText(out, "%d-%d" % (c, r), (int(p[0]) - 18, int(p[1]) + 5), 0, 0.5, (255, 0, 0), 1)
 src_py = open(name + ".py", encoding="utf-8").read(); cut = src_py.index("# ── 부품 체크")
@@ -23,7 +23,10 @@ for Pt in A.parts:
     for h in Pt.conn.get("pegs", []):
         w = Pt.world("peg", h)
         if abs(w["dir"][1]) < 0.7: continue
-        x, z = float(w["pos"][0]), float(w["pos"][2]); c, r = x / 10 + 8, z / 10 + 2
+        x, z = float(w["pos"][0]), float(w["pos"][2])
+        if "_sh12" in g and N < 12 and Pt.step.index <= 3: x -= float(g["_sh12"][0]); z -= float(g["_sh12"][2])   # 12번에서 합쳐 옮긴 215 조립은 그 앞 번호 시점 자리로 되돌린다
+        c, r = x / 10 + 8, z / 10 + 2   # 칸 = x/10+8, 줄 = z/10 + (줄수+1)/2 (이 도구는 3줄 판 기준 — 2줄 판은 줄 번호 −0.5)
+        if f.get("rows") == 2: r -= 0.5
         key = (round(c, 1), round(r, 1))
         if key in done or not (0.5 <= c <= 18.5): continue
         if c <= 15.5 and not (0.5 <= r <= 3.5): continue

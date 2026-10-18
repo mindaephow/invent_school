@@ -82,16 +82,21 @@
 "noPart": false
 },
 "13": {
-"parts": {},
-"noPart": true
+"parts": {
+"15프레임": 1
+},
+"noPart": false
 },
 "14": {
 "parts": {},
 "noPart": true
 },
 "15": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 2,
+"115프레임": 1
+},
+"noPart": false
 },
 "16": {
 "parts": {},

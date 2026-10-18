@@ -106,7 +106,7 @@ s2.move_made(_g2, np.eye(3), pivot=B1A.p.copy(), shift=(64.4, 0.0, -5.0), dir=[0
 s3 = SKEL[2]; s3.kw.pop("noPart", None)
 s3.note = "[교재 3] 리벳 하나를 T자 블록 위 구멍에 꽂고, 두 번째 215프레임을 얹어 양 끝을 이어요."
 RV3 = s3.attach("리벳", np.eye(3), {"p1": (B1B, "h1")}, rivet=True)
-STR3 = s3.recv("215프레임", np.eye(3), [(BL2, "p6"), (BL2, "p7"), (B1A, "p3"), (B1A, "p4"), (RV3, "p2")], p=(0.0, 17.5, 0.0), dir=[0, 1, 0], hover=40)
+STR3 = s3.recv("215프레임", np.eye(3), [(BL2, "p6"), (BL2, "p7"), (B1A, "p3"), (B1A, "p4"), (RV3, "p2")], p=(0.0, 17.5, 0.0), dir=[0, 1, 0], hover=46)   # 띄움 46: 3번 책 링을 정수 칸에 맞춘 높이(y 66)에서 잰 값)
 # ── 4 ── 교재 70쪽 4 (읽은 것 2026-10-18 — 창고 2: 3단블록 하나의 앞 구멍 둘(h1·h3, 간격 20)에 3단블록·2단블록의 끝 돌기가 들어간다)
 #   책 4번: 위쪽 3단블록(돌기 3개가 위, 구멍 면이 카메라 쪽)의 구멍 둘(링)으로 왼쪽 3단블록의 오른쪽 끝 돌기와 가운데 2단블록의 오른쪽 끝 돌기가 화살표로 온다. 세 블록의 돌기 면이 모두 위. 점 13개 PnP(오른쪽 위 블록 돌기 3·구멍 둘·끝, 왼쪽 두 블록 돌기·끝)로 방향 8가지×거리를 비교해 오차 9.3px·fov 40, 분해 거리 40mm 가 최소.
 s4 = SKEL[3]; s4.kw.pop("noPart", None)
@@ -167,7 +167,7 @@ C8 = s8.place("3단블록", np.eye(3), (0.0, 5.0, 0.0))
 R_L8 = np.array([[0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [-1.0, 0.0, 0.0]])   # 왼쪽 블록: 긴 쪽(local x)이 −Z(17프레임 쪽), 구멍이 위(y), 돌기 면이 ±X
 L8 = s8.place("3단블록", R_L8, (-30.0, 5.0, 10.0))   # 책 8번: 왼쪽 블록은 가운데 블록과 직각(앞으로 늘어짐) — 끝 돌기(p1)가 17프레임 구멍1(X −30)로 들어간다
 R_FV = np.array([[1.0, 0.0, 0.0], [0.0, 0.0, -1.0], [0.0, 1.0, 0.0]])   # 빨간 프레임을 세운다: local y(구멍 축) → Z, x → X
-F17 = s8.recv("17프레임", R_FV, [(C8, "p7"), (C8, "p8"), (L8, "p1")], p=(0.0, 5.0, -7.5), dir=[0, 0, -1], hover=40)
+F17 = s8.recv("17프레임", R_FV, [(C8, "p7"), (C8, "p8"), (L8, "p1")], p=(0.0, 5.0, -7.5), dir=[0, 0, -1], hover=52)
 F15 = s8.recv("15프레임", R_FV, [(C8, "p3"), (C8, "p5")], p=(10.0, 5.0, 7.5), dir=[0, 0, 1], hover=40)
 # ── 9 ── 교재 71쪽 9 (읽은 것 2026-10-18 — 7번 조립 + 8번 빨간 프레임 블록 조립 + T축 1: 8번 조립의 왼쪽 3단블록이 막대 위에 놓이고 아래에서 올라온 T축이 막대 구멍을 지나 블록 구멍으로 들어간다)
 #   책 9번: 막대 위 왼쪽에 큰기어(축이 위로 나옴), 모서리 쪽에 8번 조립(빨간 프레임 둘이 모서리 방향으로 늘어짐)이 떠 있고 링 둘 = 8번 조립 3단블록 구멍(위)과 막대 구멍(칸10 먼 줄, 확대해 센 값)이며, 막대 아래에서 T축이 올라온다.
@@ -209,8 +209,65 @@ _g1 = A.group("215프레임 조립(1~3번)", [_P for _P in A.parts if _P.step.in
 _pA = np.array(B1A.world("peg", next(_h for _h in B1A.conn["pegs"] if _h["id"] == "p1"))["pos"], float)   # T자 블록 돌기 둘 = 끼울 돌기
 _pB = np.array(B1B.world("peg", next(_h for _h in B1B.conn["pegs"] if _h["id"] == "p5"))["pos"], float)
 _hL1, _hL3 = np.array(BL5L.hole("h1")["pos"], float), np.array(BL5L.hole("h3")["pos"], float)
-_sh12 = np.array([_hL1[0] - 5.0 - _pA[0], _hL1[1] - _pA[1], _hL1[2] - _pA[2]])   # 돌기 밑동이 구멍 가운데에서 5mm 앞(−X)
-s12.move_made(_g1, np.eye(3), pivot=B1B.p.copy(), shift=tuple(float(_v) for _v in _sh12), dir=[-1, 0, 0], hover=40, group="mm12rods", marks={id(B1A): [[float(_v) for _v in _hL1]], id(B1B): [[float(_v) for _v in _hL3]]})
+_sh12 = np.array([_hL1[0] - 2.5 - _pA[0], _hL1[1] - _pA[1], _hL1[2] - _pA[2]])   # 돌기(길이 5) 가운데가 구멍 가운데에서 2.5mm 앞(−X): 돌기가 끝까지 들어가 215 조립 몸체 끝이 3단블록 옆면(x −75)에 닿는다(사용자 지시 2026-10-18 '12번 결합 꽉')
+s12.move_made(_g1, np.eye(3), pivot=B1B.p.copy(), shift=tuple(float(_v) for _v in _sh12), dir=[-1, 0, 0], hover=15, group="mm12rods", marks={id(B1A): [[float(_v) for _v in _hL1]], id(B1B): [[float(_v) for _v in _hL3]]})
+# ── 13 ── 교재 71쪽 13 (읽은 것 2026-10-18 — 12번에서 합친 막대 앞면(+Z)의 돌기 둘에 빨간 15프레임이 구멍 1·2 로 끼워진다)
+#   책 13번: 합친 자리 앞면에 돌기 둘(2단블록 p1·3단블록 p1, 간격 10)이 나와 있고 15프레임(빨간, 구멍 5)이 앞쪽(+Z)에 떠서 초록 링 둘(프레임 구멍 1·2)이 그 돌기로 화살표를 보낸다. 프레임 긴 쪽은 막대(X)와 같은 방향, 구멍 축은 Z.
+#   링 둘이 프레임 왼쪽 끝 구멍 1·2(확대해 센 값) = 돌기 x −80(2단블록 2번 p1)·−70(3단블록 p1) → 프레임 가운데 x −60, 돌기 길이 5 = 프레임 두께 5 라 끝까지 들어가 프레임 안쪽 면이 블록 앞면(z 15)에 닿는다(가운데 z 17.5).
+s13 = SKEL[12]; s13.kw.pop("noPart", None)
+s13.note = "[교재 13] 합친 막대 앞쪽 돌기 둘에 빨간 15프레임을 구멍 1·2 로 끼워요."
+F13 = s13.recv("15프레임", R_FV, [(B1B, "p1"), (BL5L, "p1")], p=(-60.0, 27.0, 17.5), dir=[0, 0, 1], hover=40)
+# ── 14 ── 교재 72쪽 14 (읽은 것 2026-10-19 — 새 부품 없음: 고무밴드(3D 모델 없음, 노란 관으로 그림)를 왼쪽 합친 자리의 돌기와 팔 끝 돌기에 건다)
+#   책 14번 확대: 노란 밴드가 합친 자리 왼쪽 돌기(2단블록 2번 p4, 책 픽셀 (70,605) → x −86·z 8)에서 시작해 15프레임(빨간) 위쪽 가장자리와 아래쪽으로 두 가닥이 오른쪽으로 가고, 팔(빨간 프레임 둘 사이) 끝 돌기(3단블록 6번 p1, x 54·z 30 부근)에 걸린다.
+#   ⚠ 밴드 경로는 책 그림에서 읽은 대략(두 가닥 = 프레임 위·아래), 부품과 겹치지 않게 프레임 면 바깥으로만 그렸다.
+s14 = SKEL[13]; s14.kw["madeNoPart"] = True   # 새 부품이 없는 번호 — noPart 는 그대로 둔다(검사 "부품이 하나도 없음" 통과)
+s14.note = "[교재 14] 고무밴드를 합친 막대 왼쪽 돌기에 끼우고 프레임 위·아래로 지나 팔 끝 돌기에 걸어요. (고무밴드는 3D 모델이 없어 노란 관으로 그려요)"
+_pk = lambda P, i: np.array(P.world("peg", next(_h for _h in P.conn["pegs"] if _h["id"] == i))["pos"], float)
+_LH14 = _pk(B1B, "p4"); _RH14 = _pk(C8, "p1")
+# 밴드는 매끈한 타원 모양의 닫힌 고리다(꺾임 없음 — 조절점 다각형을 Chaikin 으로 둥글린다). 물리적으로 들어갈 수 없는 곳 금지(수치 확인 _bandchk.py):
+#   위 가닥은 막대 위판(315프레임 y 32~37, z ≤15) 위(y ≥ 38.5)로 지나 15프레임·팔 프레임(y 22~32) 위로 오고, 아래 가닥은 아랫판(y 17~22) 아래(y ≤ 15.5)로 간다.
+#   왼쪽 끝은 돌기(2단블록 2번 p4, 축 x)의 끝 바깥을 감싸고, 오른쪽 끝은 팔 블록(3단블록 6번)의 끝 돌기 p1 이 두 빨간 프레임 사이로 나온 끝(프레임 사이 빈 틈)을 위에서 내려와 돌기 끝 바깥을 지나 아래로 돈다(책 14번 확대: 밴드가 프레임 사이에서 돌기 끝에 걸림).
+_Lc = _LH14 + [-1.0, 0.0, 0.0]; _Rc = _RH14.copy(); _aR = np.array(C8.world("peg", next(_h for _h in C8.conn["pegs"] if _h["id"] == "p1"))["dir"], float)
+_up14 = np.array([0.0, 1.0, 0.0]); _far14 = np.array([_aR[2], 0.0, -_aR[0]])
+_phi14 = np.linspace(0.0, math.pi, 9)
+_ringL = [np.array([-89.5, 27.0 + 5.2 * math.cos(_f), 10.2 - 5.2 * math.sin(_f)]) for _f in _phi14]                      # 왼쪽 돌기 몸통(x −92.5~−87.5) 둘레를 뒤쪽(−z)으로 반 바퀴: 위 → 뒤 → 아래 (돌기 안쪽 목에 걸린다)
+_ringR = [_Rc + _aR * 1.5 + 4.3 * (math.cos(_f) * _up14 + math.sin(_f) * _far14) for _f in _phi14[::-1]]             # 오른쪽 돌기 p1 몸통 둘레를 먼 쪽으로 반 바퀴: 아래 → 먼 쪽 → 위(프레임 사이 틈)
+_PB = _Rc + _aR * 1.0 + [0.0, -8.5, 0.0]; _PT = _Rc + _aR * 0.0 + [0.0, 8.5, 0.0]
+_ctl14 = [*_ringL, [-80.0, 16.0, 12.5], [-60.0, 13.5, 15.5], *[_PB * t + np.array([-60.0, 13.5, 15.5]) * (1 - t) for t in (0.25, 0.5, 0.75)], _PB, *_ringR, _PT, *[_PT * t + np.array([-60.0, 38.8, 15.5]) * (1 - t) for t in (0.75, 0.5, 0.25)], [-60.0, 38.8, 15.5], [-80.0, 38.5, 12.5]]   # 팽팽하게: 두 가닥은 걸린 곳 사이를 곧게 당긴 직선(위 가닥은 위판 위·프레임 위, 아래 가닥은 아랫판 아래·프레임 아래), 팔 쪽은 프레임 틈 바로 위·아래에서 돌기로 들어간다
+def _chaikin14(_P, _n=3):
+    _P = [np.array(_q, float) for _q in _P]
+    for _ in range(_n):
+        _Q = []
+        for _k in range(len(_P)):
+            _a, _b = _P[_k], _P[(_k + 1) % len(_P)]; _Q += [0.75 * _a + 0.25 * _b, 0.25 * _a + 0.75 * _b]
+        _P = _Q
+    return _P
+_band14 = _chaikin14(_ctl14, 1)
+s14.kw["bands"] = [{"pts": [[round(float(_v), 2) for _v in _q] for _q in _band14], "closed": True, "r": 0.8, "tight": True, "color": 0xfacc15}]
+# ── 15 ── 교재 72쪽 15 (읽은 것 2026-10-19 — 조립을 뒤쪽(−Z)에서 본 그림: 흰 115프레임을 막대 뒷면(−Z)에 리벳 둘과 돌기 하나로 붙인다)
+#   책 15번(리벳 (2)): 흰 15구멍 프레임이 막대 위에 떠서 초록 링 셋(프레임 구멍 1·14·15)이 리벳 둘(주황, 막대 뒷면 구멍에 꽂힘)과 회색 돌기 하나로 화살표를 보낸다. 링 사이 거리로 센 칸: 구멍 14·15 가 이웃(간격 10), 구멍 1 은 맨 왼쪽 끝.
+#   모델로 좁힌 것(pegprobe·구멍 방향): 막대 뒷면(−Z)에서 비어 있는 것은 3단블록 4번 p2(x −70, 돌기 −Z)와 3단블록 1번(왼쪽 끝 블록, 구멍축 Z) 구멍 h3(x −209.4)·2단블록 1번(구멍축 Z) 구멍(x −80) — 프레임 구멍 15 = x −70, 14 = x −80, 1 = x −210 과 맞는다.
+s15 = SKEL[14]; s15.kw.pop("noPart", None)
+s15.note = "[교재 15] 흰 115프레임을 막대 뒷면에 대고, 리벳 둘을 프레임 구멍에서 막대 뒷면 구멍(왼쪽 끝 블록·T자 블록)에 꽂고 프레임 오른쪽 끝 구멍에는 3단블록 뒤쪽 돌기가 들어가요."
+_nearh = lambda P, x0: min(P.conn["holes"], key=lambda _h: abs(float(P.world("hole", _h)["pos"][0]) - x0))["id"]
+RV15A = s15.attach("리벳", R_B1, {"p1": (BL2, _nearh(BL2, -209.4))}, hover=12, dir=[0, 0, -1], rivet=True)
+RV15B = s15.attach("리벳", R_B1, {"p1": (B1A, _nearh(B1A, -80.0))}, hover=12, dir=[0, 0, -1], rivet=True)
+F15 = s15.recv("115프레임", R_FV, [(BL5L, "p2"), (RV15A, "p2"), (RV15B, "p2")], p=(-140.0, 27.0, -17.5), dir=[0, 0, -1], hover=52)
+# 15·16번: 책에서 본체를 세워(뒷면 −Z 이 위로) 조립한다 — x축 +90° 로 세운다(y′ = −z, z′ = y). 이 자세는 poseAt 으로 15·16번에서만 준다(앞 번호·합친 자리 이동 12번은 그대로). 새 부품의 띄움 방향(dir)은 세운 자세의 위(+y).
+_RST = np.array([[1.0, 0.0, 0.0], [0.0, 0.0, -1.0], [0.0, 1.0, 0.0]]); _dimsb = json.load(open("dims.json", encoding="utf-8"))
+_stand_parts = [_q for _q in A.parts if _q.step.index <= 15]
+def _lowy(_q):
+    _d = np.array(_dimsb.get(_q.name.split(" ")[0], [0, 0, 0]), float) / 2.0; _Rn = _RST @ np.array(_q.R, float); _c = _RST @ np.array(_q.p, float)
+    return min((_c + _Rn @ np.array([_sx, _sy, _sz]) * _d)[1] for _sx in (-1, 1) for _sy in (-1, 1) for _sz in (-1, 1))
+_LST = -min(_lowy(_q) for _q in _stand_parts) + 0.3   # 세운 몸이 바닥(y 0)에 놓이게 올리는 높이
+STAND = {"R": _RST, "L": _LST}
+for _q in _stand_parts:
+    for _stp in (15, 16):
+        _q.extra.setdefault("poseAt", {})[str(_stp)] = {"p": rnd(_RST @ np.array(_q.p, float) + np.array([0.0, _LST, 0.0])), "r": R_to_euler(_RST @ np.array(_q.R, float))}
+for _q in (RV15A, RV15B, F15):
+    _q.extra["dir"] = [0.0, 1.0, 0.0]   # 세운 자세에서 위로 띄운다(책 15번: 흰 프레임·리벳이 위에서 내려온다)
+_band15 = [_RST @ np.array(_q, float) + np.array([0.0, _LST, 0.0]) for _q in _band14]
+s15.kw["bands"] = [{"pts": [[round(float(_v), 2) for _v in _q] for _q in _band15], "closed": True, "r": 0.8, "tight": True, "color": 0xfacc15}]
 # ── 번호판 글자색(2026-10-18): verify_step.py 가 저장한 autotarget_verify.json 에서 '통과'가 아닌 번호(주의·실패·아직 점검 안 함)는 주황(review), 통과는 파랑.
 #   번호를 고친 뒤 verify_step.py 를 다시 돌려 ❌ 0건·통과가 되면 다음 빌드에서 파랑으로 바뀐다. 아직 안 만든 번호(작성 전)는 색을 안 칠한다.
 import os as _os
@@ -220,13 +277,11 @@ for _n in range(1, 56):
     _e = _vdb.get(str(_n), {})
     if _e.get("상태") != "통과":
         SKEL[_n - 1].kw["review"] = True
-        _why = "; ".join("%s: %s" % (_t, _m) for _t, _m in (_e.get("내용") or {}).items() if _e.get("항목", {}).get(_t) != "ok") if _e else ""
-        SKEL[_n - 1].kw["reviewWhy"] = _why or "아직 verify_step.py 점검 안 함"
 # ── 카메라(2026-10-18): 번호마다 그 번호 그림의 점으로 풂 — 2번 링 5점 PnP(2.30px fov 22, 판 한 평면이라 방향각만 믿음), 3번은 2번과 같은 시점이라 각도 복사(⚠ 3번 링만으로는 3.4~50px), 4번 점 13개(9.0px), 5번은 구멍 조각 46개 홀라인(평균 0.65px)으로 격자를 다시 맞춰 PnP 0.36px fov 41 theta −0.41 phi 0.75 roll −1.8°(holefit 1.58px 격자가 구멍 가장자리에 앉은 거짓 통과여서 폐기),
 #   8번 점 7개(4.07px), 6번 = 짐작(기어 타원 모양으로 고도만), 7·9·10번 = 5번과 같은 시점의 L자 조립(특징점 일치: 7↔9 38개·scale 1.0·회전 −1.2°, 7↔5 11개, 9↔10 11개·scale 0.71)이라 5번 각도를 복사(⚠ 번호마다 새로 풀지 못함).
 _c = lambda th, ph, org=None: (th, ph, False, None, (tuple(float(_v) for _v in org) if org is not None else None), None)
-A.steps[1].cam = _c(-0.68, 0.88, STR2.hole("h1_1")["pos"]); A.steps[1].camSrc = "eye"
-A.steps[2].cam = _c(-0.68, 0.88, STR3.hole("h1_1")["pos"]); A.steps[2].camSrc = "eye"
+A.steps[1].cam = _c(-0.56, 0.67, (-70.0, 2.5, -5.0)); A.steps[1].camSrc = "eye"   # 2번: 막대 구멍 흰 조각 27개 홀라인 0.45px → PnP 0.12px fov 44 (이전 −0.68·0.88 은 틀린 값)
+A.steps[2].cam = _c(-0.53, 0.68, (-70.0, 17.5, -5.0)); A.steps[2].camSrc = "eye"   # 3번: 아래 막대 구멍 흰 조각 25개 홀라인 0.38px(먼 줄 시작 칸 가설 5가지 중 칸3 만 풀림) → PnP 0.06px fov 40 (이전은 2번 값 복사)
 A.steps[3].cam = _c(0.55, 0.97, (0.0, 10.0, 0.0)); A.steps[3].camSrc = "eye"
 A.steps[4].cam = _c(-0.41, 0.75, STR5.hole("h1_1")["pos"]); A.steps[4].camSrc = "eye"
 A.steps[5].cam = _c(0.0, 1.0); A.steps[5].camSrc = "guess"
@@ -234,7 +289,10 @@ A.steps[6].cam = _c(-0.22, 0.66, STR5.hole("h1_1")["pos"]); A.steps[6].camSrc = 
 A.steps[7].cam = _c(0.30, 1.14, (0.0, 5.0, 0.0)); A.steps[7].camSrc = "eye"
 A.steps[8].cam = _c(-0.32, 0.57, STR5.hole("h1_1")["pos"]); A.steps[8].camSrc = "eye"
 A.steps[9].cam = _c(-0.64, 0.79, STR5.hole("h1_1")["pos"]); A.steps[9].camSrc = "eye"
-A.steps[11].cam = _c(0.0, 1.0); A.steps[11].camSrc = "guess"   # 12번 카메라 미정(작업 중)
+A.steps[11].cam = _c(-0.69, 0.90, (-70.0, 37.0, -10.0)); A.steps[11].camSrc = "eye"   # 12번: 13번과 같은 시점(책 12·13번 L자 모양·기어 자리가 같다) — 13번 점 6개 풀이 복사(⚠ 12번 그림에서 따로 못 풂)
+A.steps[14].cam = _c(-0.71, 0.85, (-100.0, 60.0, 15.0)); A.steps[14].camSrc = "eye"   # 15번: 본체를 세운 자세(poseAt, x축 +90°)에서 리벳 둘·돌기 끝·왼쪽 끝 돌기·기어 축 두 끝 6점 PnP 10.7px fov 30 roll −3.2°(⚠ 롤이 거의 0 으로 풀려 세워서 그린 것이 맞음을 뒷받침, 점을 하나씩 빼면 theta −0.64~−0.79)
+A.steps[13].cam = _c(-0.71, 0.93, (-70.0, 37.0, -10.0)); A.steps[13].camSrc = "eye"   # 14번: 13번 책 그림과 위 판 특징점 46개 맞춤(_regcam.py, 잔차 0.97px)으로 푼 판 평면 PnP 1.51px fov 32 roll −2.3°(⚠ 13번 풀이에서 이어진 값)
+A.steps[12].cam = _c(-0.69, 0.90, (-70.0, 37.0, -10.0)); A.steps[12].camSrc = "eye"   # 13번: 39프레임 모서리 둘·리벳 윗면·왼쪽 끝 돌기·왼쪽 끝 위판 모서리·T축 부시 윗면 6점 PnP 1.14px fov 46 roll −2.8°(⚠ 점을 하나씩 빼면 theta −0.54~−0.79·phi 0.85~0.94, 점이 적음)
 A.steps[10].cam = _c(-0.39, 0.83, STR5.hole("h1_1")["pos"]); A.steps[10].camSrc = "eye"   # 11번: 위 판 윗면 점 8개 앵커 3.83px fov 30(⚠ 한 평면이라 fov 불확실)
 A.meta["lift"] = {"6": 95.0, "7": 95.0, "9": 95.0, "10": 20.0}   # 6번: 기어·부시가 축 아래에서 올라오는 분해도라 화면을 띄워 바닥 아래로 안 내려가게
 # ── 다른 창고에서 만든 것은 숨긴다(hideMade): 새 창고 번호는 앞 창고 부품이 같은 원점에 겹쳐 보이지 않게

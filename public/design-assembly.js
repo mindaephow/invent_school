@@ -629,59 +629,79 @@
     ['asmAuditBtn', 'asmAuditViewBtn', 'asmVerifyBtn', 'asmScanHBtn', 'asmScanDBtn', 'asmScanSBtn'].forEach((id) => { const e = $(id); if (e && e.parentNode !== row3) row3.appendChild(e); });
     row3.hidden = !isAdm();
   }
-  // 검증 체크(관리자만, 2026-10-18 사용자 요청): verify_step.py 가 만든 public/assembly-verify/<조립도 id>.json 의 자동 점검 결과를 번호마다 보이고, 관리자가 항목마다 체크한다.
-  //   체크는 ivs_assembly_checks(issue_key = 'verify:<항목>', verdict = 'ok')에 저장 — 새 DB 표 없음. 여섯 항목을 다 체크한 번호는 번호판이 주황 → 파랑.
-  const VERIFY_ITEMS = ['홀라인', '카메라', '돌기↔구멍', '번호 대조 그림', '읽기 표', '증거'];
-  const verifyDone = (i) => VERIFY_ITEMS.every((t) => checkVerdicts[i + '|verify:' + t] === 'ok');
-  async function openVerifyModal(n0) {
+  // 검증 체크 카드(관리자만, 2026-10-18 사용자 요청): 관리자면 화면에 떠 있고(머리줄을 끌어 옮김·접기 버튼), 지금 번호의 자동 점검 결과 중 안 된 항목을 체크박스로 보인다.
+  //   자동 점검 결과 = verify_step.py 가 ivs_assembly_checks 에 저장한 'auto:<항목>' 행(관리자 표). 내가 한 체크는 'verify:<항목>' 행(verdict ok). 새 DB 표 없음.
+  //   넘어가는 기준: 홀라인·번호 대조 그림 둘이 통과(자동 ✅ 또는 내가 체크)면 번호판 파랑.
+  const VERIFY_ITEMS = ['홀라인', '카메라', '돌기↔구멍', '번호 대조 그림', '읽기 표', '증거', '뒤 번호 확인'];   // (표시 이름은 아래 VERIFY_LABEL — DB 키는 그대로)
+  const VERIFY_LABEL = { '홀라인': '책 위 겹침 비교(홀라인)', '카메라': '책과 같은 각도(카메라)', '돌기↔구멍': '돌기↔구멍 맞물림', '번호 대조 그림': '책 링↔모델 구멍 번호 대조', '읽기 표': '읽은 근거 기록', '증거': '3D 화면↔책 나란히 본 기록', '뒤 번호 확인': '뒤 번호 책에서 맞게 나옴(다음 번호가 진행되면 맞은 것)' };
+  const VERIFY_MUST = ['홀라인', '번호 대조 그림'];
+  let verifyAuto = {}, verifyLoadedFor = '';   // verifyAuto: 번호 → { 항목: {이름: ok|warn|fail}, 내용: {이름: 문장}, 시각, 상태 }
+  const verifyVia = (i) => !!(verifyAuto[String(i)] && verifyAuto[String(i)]['항목'] && verifyAuto[String(i)]['항목']['뒤 번호 확인'] === 'ok');   // 뒤 번호 책에서 이 번호 부품이 맞게 나와 확인됨
+  const verifyDone = (i) => verifyVia(i) || VERIFY_MUST.every((t) => checkVerdicts[i + '|verify:' + t] === 'ok' || (verifyAuto[String(i)] && verifyAuto[String(i)]['항목'] && verifyAuto[String(i)]['항목'][t] === 'ok'));
+  async function loadVerifyAuto(force) {
     const b2 = bridge(); if (!b2 || !b2.checkStore || !def) return;
-    let auto = {};
-    try { const r = await fetch('/assembly-verify/' + encodeURIComponent(def.id) + '.json?t=' + Date.now(), { cache: 'no-store' }); if (r.ok) auto = await r.json(); } catch (e) { /* 자동 점검 파일이 없어도 체크는 할 수 있다 */ }
-    try { checkVerdicts = (await b2.checkStore.load(def.id)) || checkVerdicts; } catch (e) { /* */ }
-    const ov = document.createElement('div'); ov.style.cssText = 'position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;';
-    const bx = document.createElement('div'); bx.style.cssText = 'background:#fff;border-radius:16px;padding:18px 22px 14px;width:min(760px,92vw);max-height:86vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.3);font:13px/1.45 sans-serif;color:#111827;';
-    const hd = document.createElement('div'); hd.style.cssText = 'font:700 16px sans-serif;margin-bottom:4px;'; hd.textContent = '☑ 검증 체크';
-    const hint = document.createElement('div'); hint.style.cssText = 'font-size:12px;color:#6b7280;margin-bottom:8px;'; hint.textContent = '왼쪽 체크 = 내가 확인함(저장됨). 오른쪽 ✅/⚠/❌ 는 verify_step.py 자동 점검 결과예요. 여섯 개를 다 체크하면 그 번호판이 파랑이 돼요.';
-    const list = document.createElement('div'); list.style.cssText = 'overflow:auto;flex:1;border-top:1px solid #e5e7eb;';
-    const total = def.steps.length, badge = { ok: '✅', warn: '⚠', fail: '❌' };
-    let cur = Math.min(Math.max(Number(n0) || step || 1, 1), total);   // 번호마다 모달: 지금 보는 번호의 체크만 보이고 ◀ ▶ 로 다른 번호로 간다
-    const nav = document.createElement('div'); nav.style.cssText = 'display:flex;align-items:center;gap:10px;margin:6px 0;';
-    const pv = document.createElement('button'), nx = document.createElement('button'), ct = document.createElement('b');
-    [pv, nx].forEach((b3) => { b3.type = 'button'; b3.style.cssText = 'padding:4px 14px;border-radius:999px;border:1px solid #cbd5e1;background:#fff;font:700 13px sans-serif;cursor:pointer;'; });
-    pv.textContent = '◀ 앞 번호'; nx.textContent = '뒤 번호 ▶'; ct.style.cssText = 'flex:1;text-align:center;font-size:14px;';
-    nav.appendChild(pv); nav.appendChild(ct); nav.appendChild(nx);
-    const drawStep = () => { list.textContent = ''; ct.textContent = cur + ' / ' + total + '번'; pv.disabled = cur <= 1; nx.disabled = cur >= total; [cur].forEach((n) => {
-      const a = auto[String(n)] || null, box = document.createElement('div'); box.style.cssText = 'border-bottom:1px solid #e5e7eb;padding:7px 2px;';
-      const head = document.createElement('div'); head.style.cssText = 'display:flex;align-items:center;gap:8px;font-weight:700;';
-      const all = document.createElement('input'); all.type = 'checkbox'; all.title = '이 번호의 여섯 항목 전체 체크/해제';
-      const ttl = document.createElement('span'); ttl.style.flex = '1';
-      const paintHead = () => { all.checked = verifyDone(n); ttl.textContent = n + '번 — ' + (stepMade(def.steps[n - 1]) ? '자동 점검: ' + (a ? a['상태'] + ' (' + a['시각'] + ')' : '아직 안 돌림') : '아직 안 만듦(작성 전)'); ttl.style.color = verifyDone(n) ? '#2563eb' : '#ea580c'; };
-      head.appendChild(all); head.appendChild(ttl); box.appendChild(head);
-      const rows = [];
-      VERIFY_ITEMS.forEach((t) => {
-        const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:8px;align-items:flex-start;margin:3px 0 0 24px;';
-        const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = checkVerdicts[n + '|verify:' + t] === 'ok';
-        const lab = document.createElement('div'); lab.style.cssText = 'flex:1;';
-        const res = a && a['항목'] ? a['항목'][t] : null, msg = a && a['내용'] ? a['내용'][t] : '';
-        const nm = document.createElement('b'); nm.textContent = t + ' '; lab.appendChild(nm);
-        const bd = document.createElement('span'); bd.textContent = (res ? badge[res] : '·') + ' ' + (msg || (a ? '' : '자동 점검 결과 없음')); bd.style.color = res === 'fail' ? '#b91c1c' : res === 'warn' ? '#b45309' : '#374151'; lab.appendChild(bd);
-        const save = async (on) => {
-          try { await b2.checkStore.set(def.id, n, 'verify:' + t, on ? 'ok' : null); if (on) checkVerdicts[n + '|verify:' + t] = 'ok'; else delete checkVerdicts[n + '|verify:' + t]; }
-          catch (e) { notice('저장에 실패했습니다: ' + e.message + ' (supabase/assembly_checks.sql 을 실행했는지 확인)'); cb.checked = !on; }
-          paintHead(); paintStatus();
-        };
-        cb.addEventListener('change', () => save(cb.checked)); rows.push([cb, save]);
-        row.appendChild(cb); row.appendChild(lab); box.appendChild(row);
+    if (!force && verifyLoadedFor === def.id) return; verifyLoadedFor = def.id;
+    const auto = {};
+    try {
+      ((b2.checkStore.loadFull && await b2.checkStore.loadFull(def.id)) || []).forEach((r) => {
+        if (!r || String(r.issue_key).indexOf('auto:') !== 0) return;
+        const t = String(r.issue_key).slice(5), e = auto[String(r.step)] || (auto[String(r.step)] = { '항목': {}, '내용': {}, '시각': '', '상태': '통과' });
+        const parts = String(r.note || '').split('|'), st = parts[0] === 'warn' || parts[0] === 'fail' || parts[0] === 'ok' ? parts[0] : (r.verdict === 'ok' ? 'ok' : 'warn');
+        e['항목'][t] = st; e['내용'][t] = parts.slice(1).join('|');
+        const tm = String(r.updated_at || '').slice(0, 16).replace('T', ' '); if (tm > e['시각']) e['시각'] = tm;
       });
-      all.addEventListener('change', async () => { for (const [cb, save] of rows) { if (cb.checked !== all.checked) { cb.checked = all.checked; await save(all.checked); } } });
-      paintHead(); list.appendChild(box);
-    }); };
-    pv.addEventListener('click', () => { cur -= 1; drawStep(); }); nx.addEventListener('click', () => { cur += 1; drawStep(); }); drawStep();
-    const ok = document.createElement('button'); ok.type = 'button'; ok.textContent = '닫기'; ok.style.cssText = 'margin-top:10px;align-self:center;padding:8px 32px;border-radius:999px;border:0;background:#2563eb;color:#fff;font:700 14px sans-serif;cursor:pointer;';
-    const close = () => { ov.remove(); document.removeEventListener('keydown', onKey, true); };
-    const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); } };
-    ok.addEventListener('click', close); document.addEventListener('keydown', onKey, true);
-    bx.appendChild(hd); bx.appendChild(hint); bx.appendChild(nav); bx.appendChild(list); bx.appendChild(ok); ov.appendChild(bx); document.body.appendChild(ov);
+      Object.keys(auto).forEach((k) => { const it = auto[k]['항목'], must = VERIFY_MUST.map((t) => it[t]); auto[k]['상태'] = (it['뒤 번호 확인'] === 'ok' || must.every((o) => o === 'ok')) ? '통과' : must.some((o) => o === 'fail') ? '실패' : '주의'; });
+    } catch (e) { /* 자동 점검 결과를 못 읽어도 체크는 할 수 있다 */ }
+    verifyAuto = auto;
+  }
+  function paintVerify() {
+    let box = $('asmVerifyBox');
+    if (!isAdm() || step < 1 || !def) { if (box) box.hidden = true; return; }
+    if (verifyLoadedFor !== def.id) loadVerifyAuto().then(() => paintStatus());
+    if (!box) {
+      box = document.createElement('div'); box.id = 'asmVerifyBox';
+      box.style.cssText = 'position:fixed;right:16px;top:96px;z-index:60;width:350px;max-height:60vh;overflow:auto;background:#fff;border:2px solid #2563eb;border-radius:14px;padding:10px 12px;box-shadow:0 8px 28px rgba(0,0,0,.25);font:13px/1.45 sans-serif;color:#111827;';
+      try { const sp = JSON.parse(localStorage.getItem('ivs-asm-verify-pos') || 'null'); if (sp) { box.style.left = sp.left + 'px'; box.style.top = sp.top + 'px'; box.style.right = 'auto'; } } catch (e) { /* 위치를 못 읽어도 기본 자리 */ }
+      box.addEventListener('pointerdown', (ev) => {   // 머리줄을 잡고 끌면 옮긴다(위치는 이 브라우저에 기억)
+        const hd = ev.target.closest && ev.target.closest('[data-drag]'); if (!hd || ev.target.closest('button')) return;
+        const r = box.getBoundingClientRect(), dx = ev.clientX - r.left, dy = ev.clientY - r.top;
+        const mv = (e) => { const W = box.offsetWidth, left = Math.max(0, Math.min(window.innerWidth - W, e.clientX - dx)), top = Math.max(0, Math.min(window.innerHeight - 40, e.clientY - dy)); box.style.left = left + 'px'; box.style.top = top + 'px'; box.style.right = 'auto'; };
+        const up = () => { document.removeEventListener('pointermove', mv); document.removeEventListener('pointerup', up); try { localStorage.setItem('ivs-asm-verify-pos', JSON.stringify({ left: parseFloat(box.style.left), top: parseFloat(box.style.top) })); } catch (e) { /* */ } };
+        document.addEventListener('pointermove', mv); document.addEventListener('pointerup', up); ev.preventDefault();
+      });
+      document.body.appendChild(box);
+    }
+    let folded = false; try { folded = localStorage.getItem('ivs-asm-verify-folded') === '1'; } catch (e) { /* */ }
+    const n = step, a = verifyAuto[String(n)] || null, made = stepMade(def.steps[n - 1]);
+    box.hidden = false; box.innerHTML = '';
+    const state = !made ? '아직 안 만듦' : verifyDone(n) ? '맞음 확인 ✅' : a ? '확인 못 함 (' + (a['상태'] === '주의' ? '일부' : '대부분') + ' 안 함)' : '확인 전';
+    const h = document.createElement('div'); h.dataset.drag = '1'; h.style.cssText = 'display:flex;align-items:center;gap:6px;font-weight:700;cursor:move;user-select:none;touch-action:none;' + (folded ? '' : 'margin-bottom:6px;');
+    const ht = document.createElement('span'); ht.style.cssText = 'flex:1;color:' + (verifyDone(n) ? '#2563eb' : '#ea580c') + ';'; ht.textContent = '☑ 맞는지 확인 · ' + n + '번 — ' + state; h.appendChild(ht);
+    const mkb = (txt, title, fn) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = txt; b.title = title; b.style.cssText = 'padding:2px 9px;font-size:12px;font-weight:600;border-radius:999px;border:1px solid #d1d5db;background:#fff;color:#111827;cursor:pointer;'; b.addEventListener('click', fn); return b; };
+    h.appendChild(mkb('↻', '자동 점검 결과를 DB 에서 다시 읽어요(verify_step.py 를 돌린 뒤)', async () => { await loadVerifyAuto(true); paintStatus(); }));
+    h.appendChild(mkb(folded ? '▴ 펼치기' : '▾ 접기', '카드를 접거나 펼쳐요', () => { try { localStorage.setItem('ivs-asm-verify-folded', folded ? '0' : '1'); } catch (e) { /* */ } paintVerify(); }));
+    box.appendChild(h);
+    if (folded) return;
+    const hint = document.createElement('div'); hint.style.cssText = 'font-size:11.5px;color:#6b7280;margin-bottom:6px;'; hint.textContent = '책과 맞는지 확인한 것만 ✅로 남고, 확인이 안 된 건 "안 한 것"으로 이유를 적어요. ★ 둘(책 위 겹침 비교·번호 대조)이 확인되면(자동 또는 내가 체크) 번호판이 파랑이 돼요. 머리줄을 끌어 옮길 수 있어요.'; box.appendChild(hint);
+    if (!made) { const d = document.createElement('div'); d.style.cssText = 'color:#6b7280;'; d.textContent = '아직 안 만든 번호예요.'; box.appendChild(d); return; }
+    const todo = VERIFY_ITEMS.filter((t) => !(a && a['항목'] && a['항목'][t] === 'ok'));
+    if (!todo.length) { const okd = document.createElement('div'); okd.style.cssText = 'color:#16a34a;font-weight:700;'; okd.textContent = '✅ 책과 맞는지 전부 확인함 — 안 한 것 없음'; box.appendChild(okd); return; }
+    const badge = { ok: '✅', warn: '⚠', fail: '❌' };
+    todo.forEach((t) => {
+      const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:8px;align-items:flex-start;border-top:1px solid #e5e7eb;padding:5px 0;';
+      const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = checkVerdicts[n + '|verify:' + t] === 'ok';
+      const lab = document.createElement('div'); lab.style.cssText = 'flex:1;';
+      const res = a && a['항목'] ? a['항목'][t] : null, msg = a && a['내용'] ? a['내용'][t] : '';
+      const nm = document.createElement('b'); nm.textContent = (VERIFY_MUST.indexOf(t) >= 0 ? '★ ' : '') + (VERIFY_LABEL[t] || t) + ' '; lab.appendChild(nm);
+      const bd = document.createElement('span'); bd.textContent = (res ? badge[res] : '·') + ' ' + (msg || (a ? '' : '자동 점검 결과 없음')); bd.style.color = res === 'fail' ? '#b91c1c' : res === 'warn' ? '#b45309' : '#374151'; lab.appendChild(bd);
+      cb.addEventListener('change', async () => {
+        const b2 = bridge(), on = cb.checked; if (!b2 || !b2.checkStore) return;
+        try { await b2.checkStore.set(def.id, n, 'verify:' + t, on ? 'ok' : null); if (on) checkVerdicts[n + '|verify:' + t] = 'ok'; else delete checkVerdicts[n + '|verify:' + t]; }
+        catch (e) { notice('저장에 실패했습니다: ' + e.message + ' (supabase/assembly_checks.sql 을 실행했는지 확인)'); cb.checked = !on; }
+        paintStatus();
+      });
+      row.appendChild(cb); row.appendChild(lab); box.appendChild(row);
+    });
   }
   function paintStatus() {
     const adm = isAdm();
@@ -693,6 +713,7 @@
         const review = !!(def.steps[i - 1] && def.steps[i - 1].review) && st !== 'done' && !verifyDone(i);   // 관리자가 ✅ 완료를 누르면 주황 → 파랑   // review: 만들었지만 마무리 안 됨(근거 약함·확인 필요) → 주황
         b.style.color = adm && made ? (review ? '#ea580c' : '#2563eb') : ''; b.style.fontWeight = adm && made ? '700' : ''; }); });   // 완성(모든 번호를 만든 뒤)에도 색을 유지한다(사용자 지시 2026-10-16)
     paintWarn();
+    paintVerify();
     splitBtnRows();
     const sb = $('asmStatusBtn'); if (!sb) return;
     sb.hidden = !adm || step < 1;   // 완성에도 체크·모습 기록 버튼을 보인다(사용자 지시 2026-10-05)
@@ -922,10 +943,10 @@
         });
         lastAuditText = out.join(NL); notice(lastAuditText, null, { copy: true, rich: true, lineHook: jointLineHook });
       }); }
-    { const kb = document.createElement('button'); kb.type = 'button'; kb.id = 'asmVerifyBtn'; kb.hidden = true; kb.textContent = '☑ 검증 체크';
-      kb.style.cssText = sb.style.cssText; kb.title = '번호마다 자동 점검(홀라인·카메라·돌기↔구멍·번호 대조 그림·읽기 표·증거) 결과를 보고, 내가 확인한 항목에 체크해요(관리자만, DB 저장). 여섯 개를 다 체크하면 번호판이 파랑으로 바뀌어요';
+    { const kb = document.createElement('button'); kb.type = 'button'; kb.id = 'asmVerifyBtn'; kb.hidden = true; kb.textContent = '☑ 검증 카드';
+      kb.style.cssText = sb.style.cssText; kb.title = '검증 체크 카드를 다시 펼쳐 기본 자리로 가져와요(카드는 관리자 화면에 늘 떠 있어요)';
       sb.parentNode.insertBefore(kb, sb);
-      kb.addEventListener('click', () => openVerifyModal(step)); }
+      kb.addEventListener('click', () => { try { localStorage.setItem('ivs-asm-verify-folded', '0'); localStorage.removeItem('ivs-asm-verify-pos'); } catch (e) { /* */ } const bx = $('asmVerifyBox'); if (bx) { bx.style.left = ''; bx.style.top = '96px'; bx.style.right = '16px'; } paintVerify(); }); }
     { const vb = document.createElement('button'); vb.type = 'button'; vb.id = 'asmAuditViewBtn'; vb.hidden = true; vb.textContent = '📄 점검 결과 보기';
       vb.style.cssText = sb.style.cssText; vb.title = '가장 최근 마무리 점검 브리핑을 다시 보여 줘요(스캔을 다시 돌리지 않아요, 관리자만)';
       sb.parentNode.insertBefore(vb, sb);
