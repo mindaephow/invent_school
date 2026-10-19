@@ -492,7 +492,7 @@ if int(_osm.environ.get("AT_LAST", "99")) >= 32:
     _g31 = A.group("31번 조립", [A.steps[25].parts[_i] for _i in range(6, 12)] + list(A.steps[28].parts) + list(A.steps[29].parts) + list(A.steps[30].parts))
     _pg32 = np.array(GE29.p, float)
     _mk32 = {id(BL31): [list(np.array(P39B.hole("h8_1")["pos"], float))]}
-    s32.move_made(_g31, _M32, pivot=_pg32, shift=(-10.0 - _pg32[0], 30.0 - _pg32[1], 139.5 - _pg32[2]), dir=[0, 1, 0], hover=60, group="mm32unit31", marks=_mk32)   # 2026-10-20 34번 책(리벳·볼트 구멍이 흰 27프레임 칸에 10 간격으로 맞아야 함)에서 135→139.5 로 고침: 큰기어 가운데 z 139.5, 블록 z 154.5(P39B 구멍 z 150 과 4.5mm 어긋남 ⚠ 32번 책 링 8px 로는 가릴 수 없음)
+    s32.move_made(_g31, _M32, pivot=_pg32, shift=(-10.0 - _pg32[0], 30.0 - _pg32[1], 135.0 - _pg32[2]), dir=[0, 1, 0], hover=60, group="mm32unit31", marks=_mk32)   # 큰기어 z 135 — 블록 돌기가 위 39프레임 구멍 z 150 에 맞음(34번에서 z +4.5 밀려 칸 맞춤)
 if int(_osm.environ.get("AT_LAST", "99")) >= 33:
     # ── 33 ── 교재 75쪽 33 (읽은 것 2026-10-20 — 창고 3: 검은 27프레임(2×7) 윗줄 칸 3·5에 리벳 둘이 서고 3단블록이 위에서 내려와 구멍 둘로 리벳을 받고, 12볼트가 가운데 칸 4 를 지나 아래 너트로 조인다)
     #   책 33번(리벳 (2), 12볼트, 너트): 아래 검은 27프레임(7칸×2줄) 위 줄(먼 쪽)에 칸 3·5 리벳 둘(초록 링 바닥)·칸 4 노란 링(볼트·너트), 위 3단블록(긴 쪽이 판과 나란, 돌기 셋 줄이 카메라 쪽 +Z)이 구멍 h1·h3 로 리벳을 받고 h2 로 볼트가 지난다, 너트는 판 아래.
@@ -500,9 +500,10 @@ if int(_osm.environ.get("AT_LAST", "99")) >= 33:
     s33 = SKEL[32]; s33.kw.pop("noPart", None)
     s33.note = "[교재 33] 검은 27프레임 윗줄 칸 3·5 구멍에 리벳 둘을 꽂고, 3단블록을 위에서 끼운 뒤 12볼트를 가운데로 넣어 아래에서 너트로 조여요."
     PL33 = s33.place("27프레임", np.eye(3), (-120.0, 30.0, -90.0))
-    RV33 = [s33.attach("리벳", np.eye(3), {"p1": (PL33, _hh)}, rivet=True, hover=15) for _hh in ("h3_1", "h5_1")]
+    RV33 = [s33.attach("리벳", np.eye(3), {"p1": (PL33, _hh)}, rivet=True, hover=4) for _hh in ("h3_1", "h5_1")]
     for _r in RV33: _r.extra["joinOrder"] = 1
     BL33 = s33.recv("3단블록", np.eye(3), {"h1": (RV33[0], "p2"), "h3": (RV33[1], "p2")}, dir=[0, 1, 0], hover=21)
+    BL33.extra["pegTarget"] = True   # 사용자 지시 2026-10-20: 화살표가 블록에서 출발해 서 있는 리벳 끝으로 향한다(책 33번 — 리벳은 이미 판에 꽂혀 있다)
     BOLT33 = s33.attach("12볼트", np.eye(3), {"p1": (BL33, "h2")}, hover=28); BOLT33.extra["joinOrder"] = 3
     NUT33 = s33.attach("너트", np.eye(3), {"p1": (PL33, "h4_1")}, hover=24)
 if int(_osm.environ.get("AT_LAST", "99")) >= 34:
@@ -511,6 +512,8 @@ if int(_osm.environ.get("AT_LAST", "99")) >= 34:
     #   배치 읽기: 책 리벳 링을 브래킷 윗면 평면에 환산해 왼쪽 브래킷 리벳 줄 z≈192(+높이 보정), 오른쪽 z≈132, 판 7칸(60mm) 양 끝 칸 1·7 = 두 브래킷 리벳 줄, 볼트 구멍은 칸 2(왼쪽)·6(오른쪽) — 그래서 31번 조립을 32번에서 z +4.5 옮김(큰기어 z 139.5).
     s34 = SKEL[33]; s34.kw.pop("noPart", None)
     s34.note = "[교재 34] 두 브래킷 윗면 구멍에 리벳 4개를 꽂고, 33번 조립(27프레임+3단블록)을 위에서 얹은 뒤 8볼트 둘을 넣어 아래에서 너트로 조여요."
+    # 34번 책의 판 칸 10mm 간격(리벳 줄 z 192·132)에 맞추려고 31번 조립을 z +4.5 밀어 맞춘다(32번 책 링 판독의 4.5mm 오차 보정 — 큰기어 z 135 → 139.5, 블록 돌기는 39프레임 구멍에서 4.5mm 벗어남 ⚠)
+    s34.move_made(_g31, np.eye(3), pivot=np.array(GE29.p, float), shift=(0.0, 0.0, 4.5), dir=[0, 0, 1], hover=1, group="mm34unit31")
     _BK28, _BK31 = BR26[0][2], BR26[1][2]
     RV34 = [s34.attach("리벳", np.eye(3), {"p1": (_B, _h)}, rivet=True, hover=15) for _B, _h in ((_BK28, "h6"), (_BK28, "h5"), (_BK31, "h5"), (_BK31, "h6"))]
     for _r in RV34: _r.extra["joinOrder"] = 1
