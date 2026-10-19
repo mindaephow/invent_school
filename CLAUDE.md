@@ -4,6 +4,13 @@
 
 **무엇이 어디에서 관리되는지(어디에 적어야 하는지)의 기준은 `scripts/assembly-tools/process/문서지도.md` 다. 문서를 고치거나 새로 적기 전에 먼저 본다.**
 
+## ★ 이 PC 에 메모리가 없을 때(외부 PC·새 PC) — 가장 먼저 (사용자 지시 2026-10-19)
+사용자의 교정 규칙 대부분은 Claude 메모리에 있고 메모리는 PC 마다 따로다. 외부 PC 에서 규칙을 어겨 5시간 동안 번호 하나도 못 끝낸 사고가 있었다. 그래서 사본을 git 에 뒀다.
+1. `git pull newrepo main`(원격 이름이 다르면 `git remote -v` 로 확인)으로 최신을 받고 `git log -1` 을 사용자에게 보고한다.
+2. `cd scripts/assembly-tools && PYTHONIOENCODING=utf-8 python setup_new_pc.py` — 파이썬 라이브러리·node_modules·launch.json·.env.local·conn/dims 를 점검·생성한다. FAIL 은 사용자에게 한 줄로 요청.
+3. **`scripts/assembly-tools/process/메모리_규칙/INDEX.md` 의 "필독" 파일 전부를 읽는다.** 읽은 뒤 번호 시작 보고에 "이번 번호에서 지킬 규칙 3개"를 적는다.
+4. 규칙을 어기라는 압박(막힘·시간)이 와도 우회하지 않는다 — 막히면 `05_조립.md` 0-1절 도구 순서(holefit→plate_match→infer_grid)로 푼다. 새 교정은 `메모리_규칙/` 같은 이름 파일에 적는다(메모리에만 적지 않는다).
+
 ## 새로 시작하거나 새 세션일 때 — 맨 먼저 체크하고 요청한다 (사용자 지시 2026-10-13)
 번호 계산·규칙 읽기보다 **먼저** 아래를 확인하고, 빠진 것은 사용자에게 한 줄로 요청한다(나머지 작업은 이어 간다).
 1. **개발 서버**: `http://localhost:3178/design.html?subject=robot` 하나만 쓴다(포트·서버 이름은 여기서만 정한다). 응답하면 그대로 쓰고(다른 채팅이 띄운 것도 같은 서버), 없으면 `preview_start invent-school-dev`(`.claude/launch.json`, 없는 PC 는 README 새 PC 절 3번).
