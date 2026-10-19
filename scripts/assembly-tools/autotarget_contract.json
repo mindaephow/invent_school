@@ -165,8 +165,12 @@
 "noPart": false
 },
 "25": {
-"parts": {},
-"noPart": true
+"parts": {
+"37프레임": 1,
+"T축": 1,
+"작은기어": 1
+},
+"noPart": false
 },
 "26": {
 "parts": {},

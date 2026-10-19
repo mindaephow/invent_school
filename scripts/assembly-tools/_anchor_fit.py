@@ -21,9 +21,10 @@ if a.get("free") and _os.path.exists(_ff):   # _freepnp.py 가 롤 제한 없이
 if not best: sys.exit("카메라를 못 풀었다")
 e, fov, rv, tv, K = best; C, fwd, up, right = cam_from(rv, tv); az, el, _ = angles(C + cc, cc)
 P = lambda q: cv2.projectPoints(np.float32([np.array(q, float) - cc]), rv, tv, K, None)[0][0][0]
-pl = a["plate"]; cols, rows = pl["cols"], pl["rows"]; cx, cy, cz = pl["center"]; V = {"+X": (0, 1), "-X": (0, -1), "+Z": (2, 1), "-Z": (2, -1)}
+pl = a["plate"]; cols, rows = pl["cols"], pl["rows"]; cx, cy, cz = pl["center"]; V = {"+X": (0, 1), "-X": (0, -1), "+Z": (2, 1), "-Z": (2, -1), "+Y": (1, 1), "-Y": (1, -1)}   # +Y·-Y 는 서 있는 판(줄이 위아래, 2026-10-19 25번)
+LIFT = pl.get("lift", [0, 2.5, 0])   # 판 윗면(구멍이 보이는 면)까지 중심에서 올리는 벡터: 눕힌 판 기본 y 2.5, 서 있는 판은 [0,0,±2.5]
 def cell(c, r, y=0.0):
-    q = [cx, cy + y, cz]; q[V[pl["colDir"]][0]] += V[pl["colDir"]][1] * (c - (cols + 1) / 2) * 10; q[V[pl["rowDir"]][0]] += V[pl["rowDir"]][1] * (r - (rows + 1) / 2) * 10; return q
+    q = [cx + (LIFT[0] if y else 0), cy + (LIFT[1] if y else 0), cz + (LIFT[2] if y else 0)]; q[V[pl["colDir"]][0]] += V[pl["colDir"]][1] * (c - (cols + 1) / 2) * 10; q[V[pl["rowDir"]][0]] += V[pl["rowDir"]][1] * (r - (rows + 1) / 2) * 10; return q
 pts = []
 for c, r in [(cc_, rr) for rr in range(1, rows + 1) for cc_ in range(1, cols + 1)]:
     q = P(cell(c, r, 2.5)); pts.append([c, r, round(float(q[0]), 1), round(float(q[1]), 1)])
