@@ -256,8 +256,11 @@
 "noPart": false
 },
 "37": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 2,
+"115프레임": 2
+},
+"noPart": false
 },
 "38": {
 "parts": {},
