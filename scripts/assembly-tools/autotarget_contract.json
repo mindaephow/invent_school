@@ -215,8 +215,11 @@
 "noPart": false
 },
 "31": {
-"parts": {},
-"noPart": true
+"parts": {
+"3단블록": 1,
+"부시": 1
+},
+"noPart": false
 },
 "32": {
 "parts": {},
