@@ -319,8 +319,11 @@
 "noPart": false
 },
 "46": {
-"parts": {},
-"noPart": true
+"parts": {
+"27프레임": 1,
+"2단블록": 1
+},
+"noPart": false
 },
 "47": {
 "parts": {},

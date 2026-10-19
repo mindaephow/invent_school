@@ -681,6 +681,20 @@ if int(_osm.environ.get("AT_LAST", "99")) >= 45:
     RV45 = [s45.attach("리벳", _RRV45, {"p1": (BB45, _h)}, rivet=True) for _h in ("h1", "h2")]
     for _r in RV45: _r.extra["seated"] = True; _r.extra["noGuide"] = True; _r.extra["moveGuide"] = True; _r.extra["openEnd"] = True   # 책 45번: 리벳 둘은 이미 B 구멍에 꽂혀 있다(링은 뿌리 표시) — 바깥 끝은 46번에서 검은 판 구멍에 들어간다(그때까지 한쪽 끝만: openEnd)
     BA45 = s45.recv("2단블록", _RA45, [(BB45, "p2")], p=tuple(_O45 + np.array([0.0, 10.0, 25.0])), dir=[0, 0, -1], hover=25)   # A 최종 z 25(B 끝 돌기 p2 가 A 구멍 h1 에 들어가는 자리), 책 모양대로 −Z 로 25 띄움
+if int(_osm.environ.get("AT_LAST", "99")) >= 46:
+    # ── 46 ── 교재 77쪽 46 (⚠ 자세 미확정 — 창고 4: 검은 27프레임(7×2)을 눕히고, 45번 조립을 세로축으로 90° 돌려 B 돌기 둘이 판 왼쪽 끝 칸 1 줄 1·2 에, 2단블록 하나가 오른쪽 끝 칸 7 줄 1·2 에 아래 돌기로 꽂힌다)
+    #   판 홀라인 holefit 1.21px(9/14칸), 카메라 칸 +Z·줄 −X axes_fit 1.14px fov 30. 조립 자세는 24가지 × 책 특징점(리벳 둘·끝 돌기·컵) 맞춤에서 세로축 90° 가 최소(평균 40px, 다음 59px ⚠). 단일 블록은 같은 방법으로 컵 위·긴 쪽 줄 방향이 최소(18.8px). 책 링 (2,1) 하나는 설명 안 됨(⚠).
+    _O46 = np.array([0.0, 0.0, 0.0])   # 창고 4 안의 놓을 자리(AABB 탐색으로 정함)
+    s46 = SKEL[45]; s46.kw.pop("noPart", None)
+    s46.note = "[교재 46] 검은 27프레임 왼쪽 끝에 45번 조립을, 오른쪽 끝에 2단블록 하나를 아래 돌기로 꽂아요."
+    _RP46 = np.array([[0, 0, -1], [0, 1, 0], [1, 0, 0]], float)   # 27프레임: 국소 x(7칸) → +Z, z(2줄) → −X, y → +Y
+    PL46 = s46.place("27프레임", _RP46, tuple(_O46 + np.array([0.0, 2.5, 0.0])))
+    _RC46 = np.array([[-1, 0, 0], [0, 0, 1], [0, 1, 0]], float)   # 단일 2단블록: 긴 쪽 −X(줄 방향), 컵 위, 옆 큰 구멍 축 Z
+    BC46 = s46.attach("2단블록", _RC46, {"p6": (PL46, "h7_1"), "p5": (PL46, "h7_2")}, hover=45, dir=[0, 1, 0])
+    _R90 = np.array([[0, 0, -1], [0, 1, 0], [1, 0, 0]], float)    # 45번 조립을 세로축으로 돌림(국소 z'(B 길이) → −X, x' → +Z)
+    _g45 = A.group("45번 조립", list(s45.parts))
+    _pvB = np.array(BB45.p, float)
+    s46.move_made(_g45, _R90, pivot=_pvB, shift=tuple(float(v) for v in (_O46 + np.array([0.0, 10.0, -30.0]) - _pvB)), dir=[0, 1, 0], hover=36, group="mm46asm", marks={id(BB45): [list(_O46 + np.array([4.4, 5.0, -30.0])), list(_O46 + np.array([-5.6, 5.0, -30.0]))]})
 # ── 번호판 글자색(2026-10-18): verify_step.py 가 저장한 autotarget_verify.json 에서 '통과'가 아닌 번호(주의·실패·아직 점검 안 함)는 주황(review), 통과는 파랑.
 #   번호를 고친 뒤 verify_step.py 를 다시 돌려 ❌ 0건·통과가 되면 다음 빌드에서 파랑으로 바뀐다. 아직 안 만든 번호(작성 전)는 색을 안 칠한다.
 import os as _os
@@ -719,6 +733,7 @@ A.steps[24].cam = _c(-0.53, 0.98, (-40.0, 40.0, 200.0)); A.steps[24].camSrc = "e
 A.steps[23].cam = _c(-0.56, 0.93, (-20.0, 20.0, 150.0)); A.steps[23].camSrc = "eye"   # 24번: 책 24번 주황 리벳 끝 11점 앵커 PnP 2.12px fov 42 roll −1.9° (하나씩 빼도 theta −0.52~−0.59·phi 0.91~0.95), 링 둘은 앵커 밖 독립 확인 1.7~2.2px
 A.steps[17].cam = _c(0.49, 0.73, (0.0, 5.0, 80.0)); A.steps[17].camSrc = "eye"   # 18번: 새 리벳 링 4개로 푼 평면 격자(앵커 4점)·axes_fit 45점 0.46px roll −0.9°, 겹침 증명 8점 PnP 2.9px(아래 리벳 링 4 + 위 판 링 4)
 A.steps[16].cam = _c(0.62, 0.60, (0.0, 5.0, 80.0)); A.steps[16].camSrc = "eye"   # 17번: 흰 59프레임 격자 holesearch 1.90px(구멍 60%)·axes_fit 45점 1.54px roll −1.5°
+A.steps[45].cam = _c(-2.24, 0.71, (0.0, 30.0, 0.0)); A.steps[45].camSrc = "eye"   # 46번: 판 홀라인 holefit 14점 axes_fit 1.14px fov 30 roll 0.7°
 A.steps[44].cam = _c(-0.75, 0.75, (-60.0, 15.0, 60.0)); A.steps[44].camSrc = "eye"   # 45번: A 구멍 링·B 끝 돌기 면·B 리벳 링 2·컵 윗면 4 = 8점 PnP(띄움·컵 높이 같이 풂) 8.40px fov 43 roll −0.1°(⚠)
 A.steps[43].cam = _c(0.91, 0.88, (10.0, 6.0, -95.0)); A.steps[43].camSrc = "eye"   # 44번: 막대 리벳 2+블록 링 2+떠 있는 기어·부시 링 4+T축 끝 4(띄움 같이 풂) PnP 8.77px fov 32 roll −1.6°(⚠)
 A.steps[42].cam = _c(0.81, 0.87, (0.0, 21.0, -85.0)); A.steps[42].camSrc = "eye"   # 43번: 막대 양 끝 구멍 링 4(B 리벳 링 2·F 링 2) 평면 IPPE 0.59px fov 26
@@ -739,7 +754,7 @@ A.steps[12].cam = _c(-0.69, 0.90, (-70.0, 37.0, -10.0)); A.steps[12].camSrc = "e
 A.steps[10].cam = _c(-0.39, 0.83, STR5.hole("h1_1")["pos"]); A.steps[10].camSrc = "eye"   # 11번: 위 판 윗면 점 8개 앵커 3.83px fov 30(⚠ 한 평면이라 fov 불확실)
 A.meta["lift"] = {"6": 95.0, "7": 95.0, "9": 95.0, "10": 20.0, "19": 60.0, "21": 60.0, "23": 60.0, "44": 100.0}   # 44번: 큰기어(띄움 28)·T축(띄움 76·86)이 아래로 떠 있는 분해도라 화면을 띄운다   # 6번: 기어·부시가 축 아래에서 올라오는 분해도라 화면을 띄워 바닥 아래로 안 내려가게
 # ── 다른 창고에서 만든 것은 숨긴다(hideMade): 새 창고 번호는 앞 창고 부품이 같은 원점에 겹쳐 보이지 않게
-for _n, _hide in ((4, (1, 2, 3)), (5, (1, 2, 3)), (6, (1, 2, 3, 4, 5)), (7, (1, 2, 3)), (8, (1, 2, 3, 4, 5, 6, 7)), (9, (1, 2, 3)), (10, (1, 2, 3)), (11, (1, 2, 3)), (17, tuple(range(1, 17))), (18, tuple(range(1, 17))), (19, tuple(range(1, 17))), (20, tuple(range(1, 20))), (21, tuple(range(1, 17))), (22, tuple(range(1, 17))), (23, tuple(range(1, 17))), (24, tuple(range(1, 17))), (25, tuple(range(1, 17))), (26, tuple(range(1, 26))), (27, tuple(range(1, 26))), (28, tuple(range(1, 17))), (29, tuple(range(1, 29))), (30, tuple(range(1, 26)) + (27, 28)), (31, tuple(range(1, 26)) + (27, 28)), (32, tuple(range(1, 17))), (33, tuple(range(1, 33))), (34, tuple(range(1, 17))), (35, tuple(range(1, 35))), (36, tuple(range(1, 17))), (37, tuple(range(1, 17))), (38, tuple(range(1, 38))), (39, tuple(range(1, 17))), (40, tuple(range(1, 17))), (41, tuple(range(1, 41))), (42, tuple(range(1, 17))), (43, tuple(range(1, 43))), (44, tuple(range(1, 43))), (45, tuple(range(1, 45)))):
+for _n, _hide in ((4, (1, 2, 3)), (5, (1, 2, 3)), (6, (1, 2, 3, 4, 5)), (7, (1, 2, 3)), (8, (1, 2, 3, 4, 5, 6, 7)), (9, (1, 2, 3)), (10, (1, 2, 3)), (11, (1, 2, 3)), (17, tuple(range(1, 17))), (18, tuple(range(1, 17))), (19, tuple(range(1, 17))), (20, tuple(range(1, 20))), (21, tuple(range(1, 17))), (22, tuple(range(1, 17))), (23, tuple(range(1, 17))), (24, tuple(range(1, 17))), (25, tuple(range(1, 17))), (26, tuple(range(1, 26))), (27, tuple(range(1, 26))), (28, tuple(range(1, 17))), (29, tuple(range(1, 29))), (30, tuple(range(1, 26)) + (27, 28)), (31, tuple(range(1, 26)) + (27, 28)), (32, tuple(range(1, 17))), (33, tuple(range(1, 33))), (34, tuple(range(1, 17))), (35, tuple(range(1, 35))), (36, tuple(range(1, 17))), (37, tuple(range(1, 17))), (38, tuple(range(1, 38))), (39, tuple(range(1, 17))), (40, tuple(range(1, 17))), (41, tuple(range(1, 41))), (42, tuple(range(1, 17))), (43, tuple(range(1, 43))), (44, tuple(range(1, 43))), (45, tuple(range(1, 45))), (46, tuple(range(1, 45)))):
     A.steps[_n - 1].kw["hideMade"] = {str(_i): (("고무줄 총(1~16번, 창고 1)" if _i <= 16 else "바닥 판 조립(17~19번, 창고 2)") if _n >= 17 else ("막대 조립(1~3번, 창고 1)" if _i <= 3 else "L자 조립(4~7번, 창고 2)")) for _i in _hide}
 # 30~31번(창고 3): 26번 첫째 조립(부품 0~5번)은 28번에서 창고 2 로 옮겨졌으니 창고 3 화면에서는 숨긴다 — 둘째 조립(6~11번)만 보인다(부품 하나씩 숨기기: hideMade "26:순서")
 for _n in (30, 31):
