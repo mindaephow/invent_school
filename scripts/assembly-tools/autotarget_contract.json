@@ -207,8 +207,12 @@
 "noPart": false
 },
 "30": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 2,
+"12볼트": 1,
+"너트": 1
+},
+"noPart": false
 },
 "31": {
 "parts": {},
