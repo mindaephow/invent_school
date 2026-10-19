@@ -183,8 +183,13 @@
 "noPart": false
 },
 "27": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 2,
+"큰기어": 1,
+"12볼트": 1,
+"너트": 1
+},
+"noPart": false
 },
 "28": {
 "parts": {},
