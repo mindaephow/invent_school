@@ -13,6 +13,12 @@ for fov in ([int(a["fov"])] if a.get("fov") else range(14, 71, 2)):   # anchors.
         e, rv, tv, K = r; C, fwd, up, right = cam_from(rv, tv)
         if (up[1] > 0 or a.get("free")) and (best is None or e < best[0]):   # free: 롤이 큰 책 그림(위쪽이 위인 조건 없음)
              best = (e, fov, rv, tv, K)
+if a.get("ippe"):   # 한 평면(5점 이하·서 있는 부품 면 하나)은 평면 IPPE 로 두 해를 구해 위쪽이 위인(up>0) 해를 고른다(2026-10-20 29번 큰기어 면)
+    _f = (H / 2) / math.tan(math.radians(a["fov"]) / 2); _K = np.array([[_f, 0, W / 2], [0, _f, H / 2], [0, 0, 1]], float)
+    _n, _rvs, _tvs, _errs = cv2.solvePnPGeneric(obj - cc, np.array(img, float), _K, None, flags=cv2.SOLVEPNP_IPPE)
+    for _rv, _tv, _e in zip(_rvs, _tvs, _errs):
+        _C, _fw, _up, _rt = cam_from(_rv, _tv)
+        if _up[1] > 0 and (a.get("camY") is None or _C[1] + cc[1] > a["camY"]) and (best is None or float(np.ravel(_e)[0]) < best[0]): best = (float(np.ravel(_e)[0]), a["fov"], _rv, _tv, _K)
 import os as _os
 _ff = R + "anchors/%02d_free.json" % N
 if a.get("free") and _os.path.exists(_ff):   # _freepnp.py 가 롤 제한 없이 여러 시작점으로 푼 해(rv·tv·fov)를 그대로 쓴다

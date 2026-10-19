@@ -199,8 +199,12 @@
 "noPart": false
 },
 "29": {
-"parts": {},
-"noPart": true
+"parts": {
+"큰기어": 1,
+"T축": 1,
+"부시": 1
+},
+"noPart": false
 },
 "30": {
 "parts": {},
