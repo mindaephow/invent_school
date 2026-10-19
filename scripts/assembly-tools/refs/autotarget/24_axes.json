@@ -1,0 +1,31 @@
+{
+ "global": {
+  "X": [
+   49.5,
+   -7.3
+  ],
+  "Y": [
+   0.0,
+   -50.0
+  ],
+  "Z": [
+   -1.7,
+   50.0
+  ]
+ },
+ "fit": {
+  "from": "rivetA+circle1+circle2 (0-3 직접 세기, 2026-10-19 재확인)",
+  "err_px": null,
+  "points": 3,
+  "theta": null,
+  "phi": null,
+  "cols": "+X",
+  "rows": "+Z",
+  "roll_deg": null
+ },
+ "no_rotate": true,
+ "origin_cell": [
+  5,
+  3
+ ]
+}
