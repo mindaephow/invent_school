@@ -68,6 +68,7 @@ def process(step):
         out=cv2.warpAffine(crop,Mx,(W,H),flags=cv2.INTER_CUBIC,borderValue=(255,255,255)); vx,hy=W/2,H/2
         info={'err':0.0,'canvas':(W,H),'c1':'-','r1':'-','ref':'(점 없음)','res':round(res,2)}
         base=out.copy(); g=None
+        LOCDIR={}   # 점 없는 번호(2026-10-19 고침): lines() 가 읽는 LOCDIR 가 이 경로에서는 안 만들어져 global 축선만 있는 번호(12번)에서 NameError 가 났다
     else:
         ref=max(fits,key=lambda t:len(t[1]['pts'])); rl,rj=ref; pts=rj['pts']; cols,rows=rj['cols'],rj['rows']
         if not names: names=[rj.get('name') or '기준 판']   # fits 파일에 name 을 적어 두면 설명에 그 이름을 쓴다(판이 아닌 L 브래킷 등)

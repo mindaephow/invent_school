@@ -96,7 +96,7 @@ def apply(A, name):
         _ud = (k in _done) or _evok; _cur = (k == _last_built)
         _eye = [("화면 확대 확인", True), ("책 그림과 나란히 비교(칸 수 대조)", True), ("카메라 책과 대조", True), ("카메라가 짐작(guess)이 아님 — 책 그림에서 가까운 쪽·오른쪽·위를 읽고 정한 값(camSrc eye)", str(getattr(st, "camSrc", "guess")) != "guess")]
         for _txt, _okc in _eye:
-            items.append((not _cur, _ud, _txt + (" (사용자 ✓ 완료)" if k in _done else (" (비교 증거 있음)" if _evok else ""))))
+            items.append((not _cur, _ud and _okc, _txt + (" (사용자 ✓ 완료)" if k in _done else (" (비교 증거 있음)" if _evok else ""))))
         rows[k] = items
         for need, ok, txt in items:
             if need and not ok: blocking.append("%d번: %s" % (k, txt))
