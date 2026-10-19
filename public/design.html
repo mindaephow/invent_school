@@ -301,6 +301,9 @@
     perspective:260px; z-index:20;
   }
   .right-stack{ position:absolute; top:78px; right:12px; width:170px; z-index:21; display:flex; flex-direction:column; gap:8px; } /* 큐브 아래 오른쪽: 그룹 목록 → 창고 */
+  .right-stack .stack-fold{ align-self:flex-end; width:26px; height:26px; padding:0; border-radius:8px; border:1px solid var(--line,#d5dbe8); background:var(--card,#fff); color:var(--ink,#222); cursor:pointer; font-size:13px; line-height:1; box-shadow:0 1px 4px rgba(0,0,0,.12); }
+  .right-stack.folded{ width:26px; } /* 접으면 창고 카드가 오른쪽으로 숨고 펼침 버튼만 남는다(상태는 이 브라우저에 기억) */
+  .right-stack.folded > :not(.stack-fold){ display:none !important; }
   .right-stack .storage-box{ position:static; width:100%; }
   .group-list{ display:flex; flex-direction:column; gap:6px; }
   .group-row{ display:flex; justify-content:space-between; align-items:center; gap:8px; width:100%; padding:8px 11px; border-radius:12px; border:1px solid rgba(0,0,0,.08); background:#fff; font-weight:700; font-size:13px; box-shadow:0 3px 10px rgba(0,0,0,.10); cursor:pointer; text-align:left; }
@@ -624,6 +627,7 @@
           </div>
         </div>
         <div class="right-stack">
+          <button type="button" class="stack-fold" id="stackFold" title="창고 목록 접기·펼치기" aria-label="창고 목록 접기·펼치기" aria-expanded="false">◀</button>
           <div class="part-list storage-box" id="storageList" hidden style="display:none">
             <button type="button" class="part-list-head" id="storageHead" aria-expanded="true"><span>📦 창고 <b id="storageCount">0</b></span><span id="storageArrow">▾</span></button>
             <div class="part-list-body" id="storageBody"></div>
@@ -6320,4 +6324,14 @@
 <link rel="modulepreload" href="https://unpkg.com/three-bvh-csg@0.0.18/src/index.js">
 <link rel="modulepreload" href="parts-lab-viewer.js">
 <script type="module" src="parts-lab-viewer.js"></script>
-
+<script>
+(function(){ // 오른쪽 창고 목록 접기(기본 접힘, 사용자 지시 2026-10-20) — 상태는 localStorage 에 기억
+  function init(){ var rs=document.querySelector('.right-stack'), b=document.getElementById('stackFold'); if(!rs||!b) return;
+    var KEY='ivsStackFolded', folded=true;
+    try{ var v=localStorage.getItem(KEY); if(v!==null) folded=(v==='1'); }catch(e){}
+    function apply(){ rs.classList.toggle('folded',folded); b.textContent=folded?'◀':'▶'; b.setAttribute('aria-expanded',String(!folded)); }
+    b.addEventListener('click',function(){ folded=!folded; try{ localStorage.setItem(KEY,folded?'1':'0'); }catch(e){} apply(); });
+    apply(); }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
+})();
+</script>
