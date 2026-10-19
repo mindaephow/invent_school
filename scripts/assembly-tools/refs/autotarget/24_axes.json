@@ -1,31 +1,31 @@
 {
  "global": {
   "X": [
-   49.5,
-   -7.3
+   55.0,
+   -18.7
   ],
   "Y": [
-   0.0,
-   -50.0
+   -6.0,
+   -55.0
   ],
   "Z": [
-   -1.7,
-   50.0
+   28.8,
+   45.0
   ]
  },
  "fit": {
-  "from": "rivetA+circle1+circle2 (0-3 직접 세기, 2026-10-19 재확인)",
-  "err_px": null,
-  "points": 3,
-  "theta": null,
-  "phi": null,
+  "from": "24_P.json",
+  "err_px": 2.12,
+  "points": 11,
+  "theta": -0.56,
+  "phi": 0.93,
   "cols": "+X",
   "rows": "+Z",
-  "roll_deg": null
+  "roll_deg": -1.9
  },
  "no_rotate": true,
  "origin_cell": [
   5,
-  3
+  2
  ]
 }
