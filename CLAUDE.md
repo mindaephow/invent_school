@@ -9,7 +9,8 @@
 1. `git pull newrepo main`(원격 이름이 다르면 `git remote -v` 로 확인)으로 최신을 받고 `git log -1` 을 사용자에게 보고한다.
 2. `cd scripts/assembly-tools && PYTHONIOENCODING=utf-8 python setup_new_pc.py` — 파이썬 라이브러리·node_modules·launch.json·.env.local·conn/dims 를 점검·생성한다. FAIL 은 사용자에게 한 줄로 요청.
 3. **`scripts/assembly-tools/process/메모리_규칙/INDEX.md` 의 "필독" 파일 전부를 읽는다.** 읽은 뒤 번호 시작 보고에 "이번 번호에서 지킬 규칙 3개"를 적는다.
-4. 규칙을 어기라는 압박(막힘·시간)이 와도 우회하지 않는다 — 막히면 `05_조립.md` 0-1절 도구 순서(holefit→plate_match→infer_grid)로 푼다. 새 교정은 `메모리_규칙/` 같은 이름 파일에 적는다(메모리에만 적지 않는다).
+4. 세션 도중 사용자가 새로 바로잡으면 `메모리_규칙/동기화.md` 대로 적는다(메모리에만 적지 않는다). 사용자 PC 에서는 메모리를 고친 뒤 `python sync_memory_rules.py` 를 돌린다.
+5. 규칙을 어기라는 압박(막힘·시간)이 와도 우회하지 않는다 — 막히면 `05_조립.md` 0-1절 도구 순서(holefit→plate_match→infer_grid)로 푼다. 새 교정은 `메모리_규칙/` 같은 이름 파일에 적는다(메모리에만 적지 않는다).
 
 ## 새로 시작하거나 새 세션일 때 — 맨 먼저 체크하고 요청한다 (사용자 지시 2026-10-13)
 번호 계산·규칙 읽기보다 **먼저** 아래를 확인하고, 빠진 것은 사용자에게 한 줄로 요청한다(나머지 작업은 이어 간다).

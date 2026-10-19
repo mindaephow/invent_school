@@ -116,3 +116,4 @@
 - [홀라인은 양쪽 부품 모두](feedback_holeline_both_parts.md) — 받는 쪽·끼우는 쪽 격자 둘 다, 책 링 칸을 양쪽에서 세고 recv 에 구멍 id 명시(오토타깃 18번 2026-10-19)
 - [검증은 책 비교 → 다음 책 비교 먼저](feedback_verify_by_next_book_first.md) — 도구 목록 설명 말고 어느 책과 무엇이 같은지부터, 안 맞을 때만 규칙 점검(오토타깃 19번)
 - [카메라 돌려 직접 확인, 핑계 금지](feedback_check_all_angles_no_excuses.md) — 끝내기 전 4방향 스샷 확인(상시 허락), 되묻지 말고, 핑계는 스샷 증거로; 떠 있는 리벳=seated(오토타깃 18·19번)
+- [메모리→저장소 동기화](feedback_sync_memory_rules_to_repo.md) — 조립도 메모리를 고치면 sync_memory_rules.py 로 저장소 사본 갱신(외부 PC 용, 2026-10-19)
