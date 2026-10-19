@@ -7,7 +7,8 @@
 #   4 번호 대조 그림  책 링 ↔ 모델 구멍 번호를 적은 NN_4~ 그림(index.json idx≥3)이 있는가
 #   5 읽기 표   면·링·부품·방향·부품방향·대조·판단과정이 다 차 있는가, 판단과정에 근거(칸·px·표)가 있는가
 #   6 증거      record_check 증거가 지금 내용과 같은 지문인가(rulecheck 판정)
-# 넘어가는 기준: 홀라인 ✅ + 번호 대조 그림 ✅ 이면 그 번호는 '통과'(번호판 파랑). 카메라·돌기↔구멍·읽기 표·증거는 참고 항목으로 ⚠·❌ 를 보고하되 막지 않는다.
+# [2026-10-19 사용자 수정] 18번부터 넘어가는 기준 = ① 책 비교 증거(record_check) ✅ + ② 다음 책 대조(<이름>_via.json — 다음 책에서 이 조립이 적용된 모양을 비교, 모델이 아직 없으면 "book_only": true) ✅. 아래 규칙·도구 항목은 안 맞을 때 원인을 찾는 점검(결과에 '원인 점검'으로 표시)이다.
+# (옛 기준, 17번까지) 넘어가는 기준: 홀라인 ✅ + 번호 대조 그림 ✅ 이면 그 번호는 '통과'(번호판 파랑). 카메라·돌기↔구멍·읽기 표·증거는 참고 항목으로 ⚠·❌ 를 보고하되 막지 않는다.
 # 마지막에 번호별 요약 표. 홀라인·번호 대조 ❌ 가 있으면 종료 코드 1. 결과는 <이름>_verify.json 에 번호별로 저장(상태·항목·그때의 내용 지문) —
 #   python verify_step.py <이름> --표   → 통과 / 주의 / 실패 / 낡음(점검 뒤 내용이 바뀜) / 미검증 으로 55개 번호를 나눠 보여 준다.
 import sys, os, re, json, subprocess
@@ -45,6 +46,7 @@ for N in steps:
     print("═══ %s %d번 점검 ═══" % (name, N)); res = []; msgs_ = {}
     def add(tag, ok, text):   # 확인한 것 / 안 한 것 말투로 바꿔 저장한다 — 이 도구의 목적은 "책과 맞는지 확인"이고, 확인이 안 되면 무엇을 안 해서인지 남기는 것
         _what = {"홀라인": ("책 그림의 구멍 줄(홀라인)을 맞춰 모델을 책 위에 겹쳐 비교할 수 있게 함", "책 그림의 구멍 줄(홀라인)을 정확히 맞추지 않아 모델과 책을 겹쳐 비교하지 못함"),
+                 "양쪽 홀라인": ("결합하는 부품과 결합되는 부품 양쪽의 구멍 격자를 모두 그려 책 링 칸을 각각 셈", "받는 쪽·끼우는 쪽 중 한쪽 구멍 격자만 있음(fits/NN_*.json 이 2개 미만)"),
                  "카메라": ("책과 같은 각도의 카메라를 풀어 모델을 책과 같은 각도로 봄", "책과 같은 각도의 카메라를 정확히 못 풀어 모델과 책의 각도 비교가 부정확함"),
                  "돌기↔구멍": ("모델에서 새 부품의 돌기가 구멍에 들어가는지 숫자로 봄", "모델에서 돌기↔구멍이 맞는지 숫자로 못 봄/안 맞음"),
                  "번호 대조 그림": ("책 링 번호와 모델 결합 구멍 번호가 같은지 그림으로 대조함", "책 링 번호와 모델 결합 구멍 번호를 그림으로 대조하지 않음"),
@@ -93,6 +95,9 @@ for N in steps:
     if not lines: add("돌기↔구멍", "warn", "맞물림 줄 없음(합치는 번호거나 맞물림 안 찾음) — 눈으로 확인")
     elif bad: add("돌기↔구멍", "fail", "%d줄 ⚠: %s" % (len(bad), bad[0].strip()[:70]))
     else: add("돌기↔구멍", "ok", "%d줄 전부 ✅" % len(lines))
+    # 3-1 양쪽 홀라인(사용자 2026-10-19): 결합하는 부품·결합되는 부품 구멍 격자를 모두 그린다 — fits/NN_<라벨>.json 이 2개 이상
+    _fl = [x for x in os.listdir(os.path.join(R, "fits")) if re.match(r"%02d_[A-Za-z0-9]+\.json$" % N, x)] if os.path.isdir(os.path.join(R, "fits")) else []
+    add("양쪽 홀라인", "ok" if len(_fl) >= 2 else "warn", ("격자 %s" % sorted(_fl)) if len(_fl) >= 2 else "격자 %d개뿐(%s) — 받는 쪽과 끼우는 쪽 둘 다 필요" % (len(_fl), ",".join(_fl)))
     # 4 번호 대조 그림
     imgs = [x for x in index if x.get("step") == N and x.get("idx", 0) >= 3 and ("번호" in x.get("note", "") or "대조" in x.get("note", "") or "M" in x.get("note", ""))]
     add("번호 대조 그림", "ok" if imgs else "warn", ("idx %s" % [x["idx"] for x in imgs]) if imgs else "책 링↔모델 구멍 번호 대조 그림 없음(_cellcmp.py 또는 번호판 그림)")
@@ -110,7 +115,7 @@ for N in steps:
 import time, stepfp
 vf = os.path.join(here, name + "_verify.json"); vdb = jl(vf) or {}
 for N, res in summary.items():
-    _d = dict(res); _must = [_d.get("홀라인"), _d.get("번호 대조 그림")]   # 넘어가는 기준(사용자 2026-10-18): 홀라인과 번호 대조 그림이 둘 다 통과면 통과. 나머지 항목은 참고(⚠·❌ 로 남겨 보고)
+    _d = dict(res); _must = [_d.get("증거")] if N >= 18 else [_d.get("홀라인"), _d.get("번호 대조 그림")]   # 18번부터(사용자 2026-10-19): 통과 = 책 비교 증거 + 다음 책 대조. 홀라인·양쪽 홀라인·카메라·돌기↔구멍·번호 대조·읽기 표는 안 맞을 때 원인을 찾는 점검 항목이라 통과를 막지 않는다
     st = "통과" if all(o == "ok" for o in _must) else ("실패" if any(o == "fail" for o in _must) else "주의")
     vdb[str(N)] = {"상태": st, "항목": {t: o for t, o in res}, "지문": stepfp.fp(asm["steps"][N - 1]), "시각": time.strftime("%Y-%m-%d %H:%M"), "내용": msgs_by_step.get(N, {})}
 json.dump(vdb, open(vf, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
@@ -128,11 +133,15 @@ def _own_pass(m):
     e = vdb.get(str(m), {}); return e.get("상태") == "통과" and not e.get("확인")
 for _sk in sorted(vdb, key=int):
     _n = int(_sk); _e = vdb[_sk]; _e.pop("확인", None); (_e.get("항목") or {}).pop("뒤 번호 확인", None)
-    if _own_pass(_n): continue
-    _recs = _via.get(str(_n)) or []; _good = [r for r in _recs if os.path.exists(os.path.join(R, r.get("image", "_없음_"))) and _own_pass(r.get("step", 0)) and _shows(_n, r.get("step", 0))]
+    if _n < 18 and _own_pass(_n): continue
+    _recs = _via.get(str(_n)) or []; _good = [r for r in _recs if os.path.exists(os.path.join(R, r.get("image", "_없음_"))) and (r.get("book_only") or (_own_pass(r.get("step", 0)) and _shows(_n, r.get("step", 0))))]   # book_only = 다음 번호 모델은 아직 없고 그 책 그림에서 이 번호 조립이 적용된 모양을 비교한 기록(사용자 2026-10-19)
+    if _n >= 18 and _e.get("상태") == "통과" and not _good: _e["상태"] = "주의"   # 18번부터: 책 비교 증거만으로는 통과가 아니다 — 다음 책 대조도 필요
+    if _n >= 18 and _e.get("상태") != "통과":   # 안 맞을 때만 규칙 점검: 어느 규칙·도구 항목이 ⚠·❌ 인지 원인 후보로 적어 둔다
+        _e.setdefault("내용", {})["원인 점검"] = "규칙 점검 항목 중 ⚠·❌: " + (", ".join(t for t, o in (_e.get("항목") or {}).items() if o != "ok" and t not in ("뒤 번호 확인", "증거")) or "없음")
     if _good:
         _e["확인"] = "뒤 번호 " + ", ".join("%s번(%s)" % (r["step"], r["image"]) for r in _good) + " 책에서 이 번호 부품을 비교해 확인"
-        _e["상태"] = "통과"; _e.setdefault("항목", {})["뒤 번호 확인"] = "ok"; _e.setdefault("내용", {})["뒤 번호 확인"] = "확인함: " + _e["확인"] + " — " + "; ".join(r.get("what", "") for r in _good)
+        if _n < 18 or (_e.get("항목") or {}).get("증거") == "ok": _e["상태"] = "통과"
+        _e.setdefault("항목", {})["뒤 번호 확인"] = "ok"; _e.setdefault("내용", {})["뒤 번호 확인"] = "확인함: " + _e["확인"] + " — " + "; ".join(r.get("what", "") for r in _good)
     else:
         _conf = [m for m in range(_n + 1, _NS + 1) if _shows(_n, m)][:6]
         _e.setdefault("항목", {})["뒤 번호 확인"] = "warn"
@@ -156,7 +165,7 @@ try:
                                      headers={"apikey": _k, "Authorization": "Bearer " + _k, "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates,return=minimal"})
         urllib.request.urlopen(_rq); print("검증 결과를 DB(관리자 표)에 저장:", len(_rows), "줄")
 except Exception as _e: print("검증 결과를 DB 에 못 썼다:", _e)
-print("═══ 요약 ═══"); tags = ["홀라인", "카메라", "돌기↔구멍", "번호 대조 그림", "읽기 표", "증거"]
+print("═══ 요약 ═══"); tags = ["홀라인", "양쪽 홀라인", "카메라", "돌기↔구멍", "번호 대조 그림", "읽기 표", "증거"]
 print("%-5s" % "번호" + "".join("%-12s" % t for t in tags))
 fails = 0
 for N, res in summary.items():
