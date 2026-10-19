@@ -3,6 +3,7 @@
 <script src="/vendor/xlsx.full.min.js"></script>
 <script src="/vendor/supabase.min.js"></script>
 <script src="db-shim.js"></script>
+<script src="local-cache.js"></script>
 <style>
   :root{
     --bg:#F3F5F9;
@@ -224,6 +225,7 @@
     <button class="tab-btn" data-tab="curriculum">커리큘럼</button>
     <a class="tab-btn" href="design-select.html" style="text-decoration:none; cursor:pointer;">설계하기</a>
     <button class="tab-btn" id="partsTabBtn" data-tab="parts" hidden>부품 관리</button>
+    <button class="tab-btn" id="textbooksTabBtn" data-tab="textbooks" hidden>교재관리</button>
     <a class="tab-btn" id="adminLink" href="admin.html" hidden style="text-decoration:none; cursor:pointer; margin-left:auto;">본사 관리자</a>
   </nav>
 
@@ -379,6 +381,16 @@
         <div><label>사이즈</label><input id="partSize" placeholder="예: 15cm, M3" autocomplete="off"></div>
         <div><label>이미지 — 위/정면 샷 (SVG 코드, 선택)</label><textarea id="partImageSvg" rows="3" placeholder="&lt;svg&gt;...&lt;/svg&gt; 코드를 붙여넣으면 목록에 썸네일로 보여요." autocomplete="off"></textarea></div>
         <div><label>이미지 — 대각선(입체) 샷 (SVG 코드, 선택)</label><textarea id="partImageSvgDiagonal" rows="3" placeholder="&lt;svg&gt;...&lt;/svg&gt; 코드를 붙여넣으면 위 이미지 옆에 나란히 보여요." autocomplete="off"></textarea></div>
+        <div id="partSpecWrap">
+          <label>3D 모델 (부품 수리실에서 저장)</label>
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <button type="button" id="partSpecThumb" class="part-thumb" style="display:none;"></button>
+            <span id="partSpecStatus" class="item-sub" style="margin:0;"></span>
+            <button type="button" class="ghost" id="partSpecEditBtn">부품 수리실에서 등록</button>
+            <button type="button" class="ghost" id="partClearSpecBtn" hidden>삭제</button>
+          </div>
+          <p class="note" style="margin:4px 0 0;">3D 모양은 여기서 직접 못 그려요 — "부품 수리실"에서 만들거나 고치고, 잘못 저장됐으면 여기서 지울 수 있어요.</p>
+        </div>
         <div><label>학생 설계 화면에 대표로 보여줄 이미지</label>
           <div style="display:flex; gap:14px; align-items:center; padding-top:2px;">
             <label style="display:flex; align-items:center; gap:6px; font-weight:400;"><input type="radio" name="partPrimaryImage" value="front" checked> 위/정면 샷</label>
@@ -399,6 +411,13 @@
         <button type="button" data-subject-tab="aviation">항공</button>
       </div>
       <div class="crumbs" id="partCategoryTabs" hidden style="margin-top:6px;"></div>
+      <div style="display:flex; align-items:center; gap:8px; margin:8px 0;">
+        <button type="button" class="ghost" id="regenChangedThumbsBtn">🔍 바뀐 것만 그리기</button>
+        <button type="button" class="ghost" id="regenPickThumbsBtn">✅ 골라서 그리기</button>
+        <button type="button" class="ghost" id="regenMissingThumbsBtn">🖼 안 그려진 것만 그리기</button>
+        <button type="button" class="ghost" id="regenThumbsBtn">🔄 3D 썸네일 전체 다시 그리기</button>
+        <span class="note" id="regenThumbsMsg" style="margin:0;"></span>
+      </div>
       <div class="list" id="partListArea"></div>
       <p class="list-empty" id="partListEmpty" hidden>등록된 부품이 없어요.</p>
     </div>
@@ -424,6 +443,86 @@
     <div class="card">
       <div class="list" id="categoryListArea"></div>
       <p class="list-empty" id="categoryListEmpty" hidden>등록된 카테고리가 없어요.</p>
+    </div>
+  </section>
+
+  <section id="tab-textbooks" hidden>
+    <div class="card">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+        <h3 style="font-size:15px; margin:0;">교재 등록</h3>
+        <button type="button" class="ghost" id="toggleTextbookForm">+ 교재 등록</button>
+      </div>
+      <p class="note" style="margin-top:8px;">과목(로봇은 카테고리·권까지)을 고르고 교재를 등록하면, 설계 화면의 그 과목·권·차시에 실제 제목·필요 부품이 나타나요.</p>
+      <form id="textbookForm" class="add-form" hidden>
+        <div class="row2">
+          <div><label>과목</label><select id="textbookSubject" required><option value="robot">로봇</option><option value="goldberg">골드버그</option><option value="aviation">항공</option></select></div>
+          <div id="textbookCategoryWrap"><label>카테고리 (로봇만)</label><select id="textbookCategory"></select></div>
+        </div>
+        <div id="textbookVolumeWrap"><label>구분 번호 (선택 — 권·회차·단계 등 뭐든 숫자로, 비우면 구분 없음)</label><input id="textbookVolume" type="number" min="1" step="1" placeholder="예: 권이면 1, 3회차면 3"></div>
+        <div><label>교재 이름</label><input id="textbookName" required autocomplete="off" placeholder="예: 큐보 1권, 3회차 교재 등"></div>
+        <p class="note err" id="textbookMsg" hidden></p>
+        <button type="submit" class="primary" id="textbookSubmitBtn">등록</button>
+      </form>
+    </div>
+    <div class="card">
+      <div class="crumbs" id="textbookSubjectTabs">
+        <button type="button" class="current" data-subject-tab="robot">로봇</button>
+        <button type="button" data-subject-tab="goldberg">골드버그</button>
+        <button type="button" data-subject-tab="aviation">항공</button>
+      </div>
+      <div class="crumbs" id="textbookCategoryTabs" hidden style="margin-top:6px;"></div>
+      <div class="list" id="textbookListArea" style="margin-top:8px;"></div>
+      <p class="list-empty" id="textbookListEmpty" hidden>등록된 교재가 없어요.</p>
+    </div>
+    <div class="card" id="textbookChaptersCard" hidden>
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+        <h3 style="font-size:15px; margin:0;" id="textbookChaptersTitle">차시 목록</h3>
+        <button type="button" class="ghost" id="deleteTextbookBtn">이 교재 삭제</button>
+      </div>
+      <p class="note" id="textbookChaptersOk" hidden style="color:var(--present,#2e7d32); font-weight:600;"></p>
+      <div style="background:var(--panel); border-radius:8px; padding:10px; margin:8px 0; display:flex; flex-direction:column; gap:10px;">
+        <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+          <b style="font-size:12px; flex:none;">⚡ 부품 빠르게 배정</b>
+          <div id="quickAddPartWrap" style="position:relative; flex:none;">
+            <button type="button" id="quickAddPartSelect" style="min-width:150px; max-width:200px; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">부품 선택 ▾</button>
+            <div id="quickAddPartPanel" hidden style="position:absolute; z-index:50; top:100%; left:0; margin-top:4px; width:360px; max-width:90vw; background:#fff; border:1px solid #ccd; border-radius:10px; box-shadow:0 6px 20px rgba(0,0,0,.18); padding:8px;">
+              <input type="text" id="quickAddPartSearch" placeholder="🔍 부품 이름 검색" autocomplete="off" style="width:100%; box-sizing:border-box;">
+              <label class="item-sub" style="display:flex; align-items:center; gap:4px; margin:6px 0 0; cursor:pointer;"><input type="checkbox" id="quickAddShowAll"> 다른 권·카테고리 부품도 보기</label>
+              <div id="quickAddPartTabs" style="display:flex; flex-wrap:wrap; gap:4px; margin:6px 0;"></div>
+              <div id="quickAddPartChips" style="display:flex; flex-wrap:wrap; gap:5px; max-height:240px; overflow-y:auto;"></div>
+            </div>
+          </div>
+          <input type="number" id="quickAddPartQty" min="1" step="1" value="1" style="width:52px;">
+          <span class="item-sub" style="flex:none;">→</span>
+          <select id="quickAddPartChapter" style="max-width:160px;"></select>
+          <button type="button" class="primary" id="quickAddPartBtn">추가</button>
+          <span class="item-sub" id="quickAddPartMsg"></span>
+        </div>
+        <p class="note" style="margin:0;">부품·수량을 고른 채로 차시만 바꿔가며 "추가"를 누르면 여러 차시에 빠르게 배정할 수 있어요. 같은 부품을 또 추가하면 수량이 더해져요.</p>
+        <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+          <b style="font-size:12px; flex:none;">⚡ 엑셀로 부품 올리기</b>
+          <select id="quickXlsxChapter" style="max-width:200px;"></select>
+          <button type="button" class="primary" id="quickXlsxBtn">엑셀 선택해서 올리기</button>
+          <button type="button" class="ghost" id="quickXlsxSample">샘플 다운로드</button>
+          <button type="button" class="ghost" id="quickXlsxExport">등록된 부품 다운로드</button>
+          <span class="item-sub" id="quickXlsxMsg"></span>
+        </div>
+        <p class="note" style="margin:0;">"샘플 다운로드"로 받은 엑셀에는 부품 이름이 모두 적혀 있어요. <b>필요한 부품의 수량만</b> 채우고, 차시를 골라 올리면 수량이 적힌 부품만 그 차시의 필요 부품으로 배정돼요(수량이 빈 줄은 무시). 그 차시에 이미 있는 부품은 엑셀 수량으로 바뀌어요. "등록된 부품 다운로드"는 고른 차시의 부품만, "권 전체"를 고르면 모든 차시의 부품을 받아요.</p>
+        <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+          <b style="font-size:12px; flex:none;">⚡ 파일 빠르게 등록</b>
+          <select id="quickUploadChapterSelect" style="max-width:200px;"></select>
+          <button type="button" class="primary" id="quickUploadBtn">파일 선택해서 올리기</button>
+          <span class="item-sub" id="quickUploadMsg"></span>
+        </div>
+      </div>
+      <div id="textbookChaptersList" style="margin-top:8px;"></div>
+      <div style="display:flex; align-items:center; gap:6px; margin-top:8px;">
+        <button type="button" class="ghost" id="addChapterBtn">+ 차시 1개 추가</button>
+        <span class="item-sub">한번에</span>
+        <input type="number" id="addChapterBulkCount" min="1" step="1" value="12" style="width:56px;">
+        <button type="button" class="ghost" id="addChapterBulkBtn">개 비워두고 추가(제목은 나중에 입력)</button>
+      </div>
+      <p class="note err" id="textbookChaptersMsg" hidden></p>
     </div>
   </section>
   </div>
@@ -560,6 +659,7 @@
     const isAdmin = !!(session.user.app_metadata && session.user.app_metadata.role === 'admin');
     document.getElementById('adminLink').hidden = !isAdmin;
     document.getElementById('partsTabBtn').hidden = !isAdmin;
+    document.getElementById('textbooksTabBtn').hidden = !isAdmin;
     renderTeacherChip();
     renderHome();
     renderManage();
@@ -1466,9 +1566,21 @@
     const addVolBtn = (actionable && isNewHere) ? `<button type="button" class="ghost" data-add-volume="${escapeHtml(p.id)}">+ 다른 권에 등록</button>` : '';
     const editBtn = actionable ? `<button type="button" class="ghost" data-edit-part="${escapeHtml(p.id)}">수정</button>` : '';
     const delBtn = actionable ? `<button type="button" class="ghost" data-delete-part="${escapeHtml(p.id)}">삭제</button>` : '';
+    // spec.shapes(부품 수리실에서 만든 3D 모델)가 있으면 svg 아이콘 대신 3D를 우선 보여준다(사용자 지시:
+    // "부품수리실에서 새로 3D 모델이 업데이트 되면 보관해두고 대체된 3D모델을 보여줍니다") — svg 필드는
+    // 이 화면에서 건드리지 않으니(update_part로 매번 그대로 다시 보냄) 따로 옮기지 않아도 자동으로
+    // "보관"된 상태가 된다. 부품 수리실이 저장할 때 미리 그려서 넣어준 thumbnail3d가 있으면 그걸 그대로
+    // <img>로 꽂는다(사용자 지시: "썸네일을 매번그리지 말고 썸네일을 저장해두고 그데로 보여줘") — 목록을
+    // 열 때마다 3D를 다시 렌더링하지 않아서 더 빠르고, 탭을 왔다갔다 해도 안 사라진다. thumbnail3d가 아직
+    // 없는 옛날 부품만 예전처럼 renderPart3DThumbnails()가 그때그때 렌더링해서 채운다.
+    const has3d = !!(p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.length);
     const primarySvg = p.primaryImage === 'diagonal' ? p.imageSvgDiagonal : p.imageSvg;
     const thumbSrc = uniquifySvgIds(primarySvg || p.imageSvg || p.imageSvgDiagonal, p.id);
-    const thumb = thumbSrc ? `<button type="button" class="part-thumb" data-view-image="${escapeHtml(p.id)}">${thumbSrc}</button>` : '';
+    const thumb = has3d
+      ? (p.thumbnail3d
+          ? `<button type="button" class="part-thumb" data-view-image="${escapeHtml(p.id)}"><img src="${escapeHtml(p.thumbnail3d)}" style="width:100%;height:100%;object-fit:contain;"></button>`
+          : `<button type="button" class="part-thumb" data-view-image="${escapeHtml(p.id)}" data-thumb-3d="${escapeHtml(p.id)}"></button>`)
+      : (thumbSrc ? `<button type="button" class="part-thumb" data-view-image="${escapeHtml(p.id)}">${thumbSrc}</button>` : '');
     return `<div class="design-row" style="align-items:center;"><div class="item-main"><div class="item-title">${newBadge}${escapeHtml(p.icon ? p.icon + ' ' : '')}${escapeHtml(p.name)}</div><div class="item-sub">${escapeHtml(sub)}</div></div><div style="display:flex; align-items:center; gap:8px; flex:none; flex-wrap:wrap;">${thumb}${addVolBtn}${editBtn}${delBtn}</div></div>`;
   }
   // "+ 다른 권에 등록" 클릭 시 그 행 바로 아래 펼쳐지는 미니폼 — 권 번호·수량만 물어보고 부품의 다른 정보는
@@ -1490,6 +1602,7 @@
   // 카테고리(예: 큐보) 단위로 묶고, 그 안에서 권별 섹션 + 맨 끝에 전체 권 합친 누적 섹션을 보여준다
   // (큐보 2권을 만들려면 1권 부품도 있어야 하는 것처럼, 뒤 권은 앞 권 부품 위에 쌓이는 구조라서)
   let allParts = [];
+  const partFullCache = new Map(); // partId → get_part 전체 응답(3D 원본 파일 포함). 부품 탭을 열 때 비운다.
   let partSubjectTab = 'robot';
   let partCategoryTab = null;
   document.getElementById('partSubjectTabs').addEventListener('click', (e) => {
@@ -1570,10 +1683,846 @@
       document.getElementById('partListEmpty').hidden = parts.length > 0;
     }
     document.getElementById('partListArea').innerHTML = html;
+    renderPart3DThumbnails();
+  }
+  // spec.shapes가 있는 부품의 목록 썸네일을 실제 3D 렌더로 채운다. renderParts()가 다시 불릴 때마다
+  // 매번 새로 그리므로(권 탭 전환 등으로 자주 재호출됨) 화면에 남아있는 칸만 골라서 순서대로 채우고,
+  // parts-lab-viewer.js가 아직 안 떴으면(모듈 로딩 중) 잠깐 기다렸다 재시도한다.
+  // 목록은 spec을 "3D 모양이 있다는 표시"(partial)만 받아온다 — 실제 도형·3D 원본은 필요한 부품 하나씩만
+  // get_part로 받고 partFullCache에 보관한다. 원본이 빠진 채 그리면 기본 큐브가 나오므로 항상 이 함수로 얻는다.
+  async function getPartShapes(p){
+    const incomplete = p.spec.partial || p.spec.shapes.some((s) => s.type === 'import' && !s.fileDataUrl);
+    if (!incomplete) return p.spec.shapes;
+    let full = partFullCache.get(p.id);
+    if (!full) {
+      full = (await adminApi({ action: 'get_part', partId: p.id })).part;
+      if (full) partFullCache.set(p.id, full);
+    }
+    const shapes = full && full.spec && Array.isArray(full.spec.shapes) ? full.spec.shapes : null;
+    if (!shapes || shapes.some((s) => s.type === 'import' && !s.fileDataUrl)) throw new Error('3D 원본 파일을 받지 못했어요');
+    return shapes;
+  }
+  async function renderPart3DThumbnails(){
+    const btns = Array.from(document.querySelectorAll('[data-thumb-3d]'));
+    if (!btns.length) return;
+    if (!window.__partsLabViewer) {
+      setTimeout(renderPart3DThumbnails, 300);
+      return;
+    }
+    for (const btn of btns) {
+      const partId = btn.dataset.thumb3d;
+      const p = allParts.find((x) => x.id === partId);
+      if (!p || !document.body.contains(btn)) continue;
+      try {
+        const dataUrl = await window.__partsLabViewer.renderShapesThumbnail(await getPartShapes(p), 88);
+        // await 하는 동안(큰 STL일수록 오래 걸림) 사용자가 다른 탭을 눌러서 renderParts()가 다시 불리면
+        // 이 btn은 이미 문서에서 떨어져나간 헌 요소라 여기 값을 채워도 화면엔 반영이 안 됐다(사용자 지적:
+        // "썸네일이 아예 안 보인다니까" — 콘솔엔 에러가 없었던 이유이기도 함, 그냥 조용히 버려진 것).
+        // 캡처해둔 btn 대신, 지금 문서에 있는 같은 부품 id의 버튼을 다시 찾아서 채운다.
+        const liveBtn = document.querySelector('[data-thumb-3d="' + CSS.escape(partId) + '"]');
+        if (liveBtn) liveBtn.innerHTML = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:contain;">`;
+      } catch (e) { console.error('3D 썸네일 렌더 실패: ' + p.name, e); }
+    }
+  }
+  // 오늘 렌더링 로직(배경 투명화·중심 정렬)을 고친 뒤에도, 이미 저장돼 있는 옛 thumbnail3d 캐시는 그
+  // 전 버전 그대로 남아있어 화면에 계속 예전 모습으로 보였다(사용자 지적: "3D 부품들이 배경색상과
+  // 안맞는데?" / "중심으로 옮겼단느것들도 안되었고" — 코드는 고쳤지만 캐시된 이미지 자체를 다시 만들지
+  // 않으면 반영이 안 됨). 부품마다 다시 로그인해서 하나씩 저장하는 대신, 이 버튼 한 번으로 spec.shapes가
+  // 있는 부품 전부를 최신 렌더링 로직으로 다시 그려서 thumbnail3d만 갱신한다. update_part는 body에
+  // 안 담아 보낸 필드(spec 등)는 기존 값을 그대로 유지하지만, image_svg 등 몇몇 필드는 안 보내면 빈 값으로
+  // 덮어써지므로 allParts에 이미 있는 값을 전부 그대로 다시 실어 보낸다(사용자 데이터 유실 방지).
+  // onlyMissing: 저장된 thumbnail3d가 아직 없는 부품만 그린다(사용자 지시: "매번 다 그리지 말고 안그려진것만").
+  // 도형 내용의 지문 — 썸네일을 그릴 때 같이 저장해 두었다가, 다음에 도형이 바뀐 부품만 골라 다시 그리는 데 쓴다.
+  // 3D 원본 파일(fileDataUrl)은 길이와 끝 48자만 본다(통째로 해시하면 느리다).
+  function shapesKey(shapes){
+    const slim = shapes.map((sh) => {
+      if (!sh || typeof sh.fileDataUrl !== 'string') return sh;
+      const { fileDataUrl, ...rest } = sh;
+      return Object.assign(rest, { _f: fileDataUrl.length + ':' + fileDataUrl.slice(-48) });
+    });
+    const str = JSON.stringify(slim);
+    let h = 0x811c9dc5;
+    for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+    return (h >>> 0).toString(16) + '-' + str.length.toString(16);
+  }
+  // 썸네일 한 개 저장. skipList: 저장 응답으로 전체 부품 목록(26MB)을 매번 다시 만들지 않게 한다 — 48개를 연달아 저장하다
+  // DB 시간 초과(statement timeout)가 난 원인이었다. 그래도 시간 초과가 나면 잠깐 쉬고 두 번까지 다시 시도한다.
+  async function saveThumb(p, dataUrl, key){
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await adminApi({
+          action: 'update_part', partId: p.id, name: p.name, icon: p.icon, subject: p.subject,
+          category: p.category || '', color: p.color || '', size: p.size || '',
+          imageSvg: p.imageSvg || '', imageSvgDiagonal: p.imageSvgDiagonal || '',
+          primaryImage: p.primaryImage || 'front', volumes: p.volumes || [], thumbnail3d: dataUrl, thumbKey: key, skipList: true,
+        });
+        return;
+      } catch (e) {
+        if (attempt >= 2 || !/timeout|시간/i.test(e.message || '')) throw e;
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+    }
+  }
+  // mode: 'all' 전부 / 'missing' 썸네일이 없는 것만 / 'changed' 도형이 바뀐 것만(저장해 둔 지문과 비교) / 'pick' pickIds 로 고른 것만
+  async function regenThumbs(mode, pickIds){
+    const msg = document.getElementById('regenThumbsMsg');
+    const btns = ['regenThumbsBtn', 'regenMissingThumbsBtn', 'regenChangedThumbsBtn', 'regenPickThumbsBtn'].map((id) => document.getElementById(id)).filter(Boolean);
+    let targets = allParts.filter((p) => p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.length);
+    if (mode === 'missing') targets = targets.filter((p) => !p.thumbnail3d);
+    if (mode === 'pick') targets = targets.filter((p) => (pickIds || []).includes(p.id));
+    if (!targets.length) { msg.textContent = mode === 'missing' ? '안 그려진 부품이 없어요.' : mode === 'pick' ? '고른 부품이 없어요.' : '3D 모델이 있는 부품이 없어요.'; return; }
+    if (!window.__partsLabViewer) { msg.textContent = '3D 모듈이 아직 로딩 중이에요 — 잠시 후 다시 시도해주세요.'; return; }
+    btns.forEach((b) => { b.disabled = true; });
+    let done = 0, same = 0; const failedNames = [];
+    for (let i = 0; i < targets.length; i++) {
+      const p = targets[i];
+      msg.textContent = `${mode === 'changed' ? '바뀐 것 찾는 중' : '다시 그리는 중'}... (${i + 1}/${targets.length}) ${p.name}`;
+      try {
+        // 목록엔 3D 모양 원본이 없다 — 그대로 그리면 기본 큐브가 나오고 그 큐브가 thumbnail3d로 저장돼 버린다.
+        const shapes = await getPartShapes(p);
+        const key = shapesKey(shapes);
+        if (mode === 'changed' && p.thumbnail3d && p.thumbKey === key) { same++; continue; }
+        const dataUrl = await window.__partsLabViewer.renderShapesThumbnail(shapes, 88);
+        await saveThumb(p, dataUrl, key);
+        p.thumbKey = key; p.thumbnail3d = dataUrl;
+        done++;
+      } catch (e) { failedNames.push(p.name); console.error('썸네일 재생성 실패: ' + p.name, e); }
+    }
+    msg.textContent = `완료 — ${done}개 갱신` + (mode === 'changed' ? `, ${same}개는 바뀐 게 없어 건너뜀` : '') + (failedNames.length ? `, ${failedNames.length}개 실패(${failedNames.slice(0, 5).join(', ')}${failedNames.length > 5 ? ' …' : ''})` : '') + '.';
+    btns.forEach((b) => { b.disabled = false; });
+    loadParts();
+  }
+  // 골라서 그리기: 부품 이름 체크 목록을 열고, 고른 것만 다시 그린다
+  function togglePickBox(){
+    const old = document.getElementById('regenPickBox');
+    if (old) { old.remove(); return; }
+    const list = allParts.filter((p) => p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.length);
+    const box = document.createElement('div');
+    box.id = 'regenPickBox';
+    box.style.cssText = 'margin:6px 0 10px;padding:10px;border:1px solid #d6dbe6;border-radius:10px;background:#fff;';
+    box.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:6px 14px;max-height:200px;overflow:auto;">'
+      + list.map((p) => `<label style="font-size:13px;white-space:nowrap;"><input type="checkbox" value="${escapeHtml(p.id)}"> ${escapeHtml(p.name)}</label>`).join('')
+      + '</div><div style="margin-top:8px;display:flex;gap:8px;"><button type="button" class="ghost" id="regenPickGo">고른 것 그리기</button><button type="button" class="ghost" id="regenPickToggleAll">전체 선택/해제</button></div>';
+    document.getElementById('regenThumbsMsg').parentElement.after(box);
+    document.getElementById('regenPickGo').addEventListener('click', () => {
+      const ids = Array.from(box.querySelectorAll('input[type=checkbox]:checked')).map((c) => c.value);
+      box.remove();
+      regenThumbs('pick', ids);
+    });
+    document.getElementById('regenPickToggleAll').addEventListener('click', () => {
+      const cbs = Array.from(box.querySelectorAll('input[type=checkbox]'));
+      const all = cbs.every((c) => c.checked);
+      cbs.forEach((c) => { c.checked = !all; });
+    });
+  }
+  document.getElementById('regenThumbsBtn').addEventListener('click', () => regenThumbs('all'));
+  document.getElementById('regenMissingThumbsBtn').addEventListener('click', () => regenThumbs('missing'));
+  document.getElementById('regenChangedThumbsBtn').addEventListener('click', () => regenThumbs('changed'));
+  document.getElementById('regenPickThumbsBtn').addEventListener('click', togglePickBox);
+  // 교재관리 탭용 — 이름·과목만 받아서(SVG/스냅샷 제외) 빠르게 allParts만 채운다. 부품 탭은 열 때마다
+  // loadParts로 전체를 다시 받으니 여기서 가벼운 목록으로 덮어써도 문제없다.
+  async function loadPartsLite(){
+    try { allParts = (await adminApi({ action: 'list_parts', light: true })).parts || []; }
+    catch (err) { allParts = []; }
+  }
+  // 부품 관리 탭 열기 — 서버가 부품 목록을 만드는 데 1.5초 안팎이 걸려서(DB 처리 시간), 지난번에 받은 목록을
+  // 브라우저에 저장해 두었다가 탭을 열자마자 먼저 보여주고 뒤에서 최신 목록을 받아온다(사용자 지시:
+  // "빠르게 할수있는 방법이 있으면 그렇게"). 최신 목록이 저장본과 같으면 화면을 다시 그리지 않아 펼침 상태도 그대로다.
+  const PARTS_CACHE_KEY = 'ivs-parts-tab-cache-v1';
+  let partsShownJson = '', catsShownJson = '', partsTabOpenedOnce = false, partsSavedOnce = false;
+  async function openPartsTab(){
+    partFullCache.clear();
+    const listEl = document.getElementById('partListArea');
+    if (!partsTabOpenedOnce) {
+      partsTabOpenedOnce = true;
+      try {
+        // 저장본은 IndexedDB(local-cache.js)에 둔다 — 부품 썸네일 때문에 localStorage 5MB를 넘으면 저장이 조용히 실패해서
+        // 매번 새로 받는 것처럼 느렸다. 예전 localStorage 저장본이 있으면 그것도 읽는다.
+        let c = window.IVS_CACHE ? await window.IVS_CACHE.get(PARTS_CACHE_KEY) : null;
+        if (!c) { try { c = JSON.parse(localStorage.getItem(PARTS_CACHE_KEY) || 'null'); } catch (e) { c = null; } }
+        if (c && Array.isArray(c.parts) && c.parts.length && Array.isArray(c.categories)) {
+          robotCategories = c.categories; allParts = c.parts;
+          renderCategories(); renderParts(allParts);
+          partsShownJson = JSON.stringify(c.parts); catsShownJson = JSON.stringify(c.categories);
+        }
+      } catch (e) { /* 저장본이 없거나 깨졌으면 그냥 새로 받는다 */ }
+    }
+    try {
+      const [cats, parts] = await Promise.all([
+        adminApi({ action: 'list_robot_categories' }),
+        adminApi({ action: 'list_parts', stripSpecFiles: true }),
+      ]);
+      const catList = cats.categories || [], partList = parts.parts || [];
+      const cj = JSON.stringify(catList), pj = JSON.stringify(partList);
+      const changed = cj !== catsShownJson || pj !== partsShownJson || !listEl.innerHTML;
+      robotCategories = catList; allParts = partList;
+      if (changed) { renderCategories(); renderParts(allParts); }
+      catsShownJson = cj; partsShownJson = pj;
+      if (changed || !partsSavedOnce) {
+        partsSavedOnce = true;
+        if (window.IVS_CACHE) { window.IVS_CACHE.set(PARTS_CACHE_KEY, { categories: catList, parts: partList, savedAt: Date.now() }); try { localStorage.removeItem(PARTS_CACHE_KEY); } catch (e) { /* 예전 저장본 정리 */ } }
+        else { try { localStorage.setItem(PARTS_CACHE_KEY, JSON.stringify({ categories: catList, parts: partList })); } catch (e) { /* 용량 초과 등은 무시 */ } }
+      }
+    } catch (err) {
+      if (!listEl.innerHTML) { document.getElementById('partListEmpty').hidden = false; document.getElementById('partListEmpty').textContent = err.message; }
+    }
   }
   async function loadParts(){
-    try { renderParts((await adminApi({ action: 'list_parts' })).parts || []); }
+    // stripSpecFiles: 이 목록 화면은 has3d 여부·저장된 thumbnail3d만 보여주면 되고 3D 원본 파일
+    // (fileDataUrl, 부품마다 수백 KB~몇 MB)은 필요 없다 — 그런데도 전체를 매번 통째로 받아와서 카테고리
+    // 탭을 열 때마다 느렸다(사용자 지적: "큐보 부품리스트를 불러오는데 시간이 좀 걸리는데 최적화좀 해줘").
+    // 실제 3D를 그려야 하는 "크게 보기"는 openPartImageModal에서 get_part로 그 부품 하나만 따로 받는다.
+    try { renderParts((await adminApi({ action: 'list_parts', stripSpecFiles: true })).parts || []); }
     catch (err) { document.getElementById('partListArea').innerHTML = ''; document.getElementById('partListEmpty').hidden = false; document.getElementById('partListEmpty').textContent = err.message; }
+  }
+
+  // ===== 교재관리 (사용자 지시: "교재관리 추가해줘~ 과목중 선택해서 교재를 등록하고 각 교재 차시 제목
+  // 등록,수정,삭제 가능하게~ 중간에 몾입력한 차시도 추가 가능하게~ (차시별 위아래 이동 가능하게)" +
+  // "설계도 위 스샷부분과 연동이 되어야하고~ 부품하고도 연계가 되어야해" +
+  // "각 차시,권단위로 pdf파일이나 엑셀등의 서류 등록이 가능하게 해줘" + "다운로드도 가능하게") =====
+  // 부품 카탈로그와 같은 방식(모든 선생님 공유)의 회사 공통 자료. 과목(로봇은 카테고리+권)마다 교재를
+  // 여러 개 등록하고, 그 안에 차시(제목·필요 부품·첨부파일)를 순서대로 관리한다. 설계 화면(design.html)의
+  // 차시 카드·필요 부품 목록이 이 데이터를 읽어서 보여준다.
+  let allTextbooks = [];
+  let textbookSubjectTab = 'robot';
+  let textbookCategoryTab = null;
+  let selectedTextbookId = null;
+  let quickAddPartsByName = new Map();
+  let quickAddParts = [];
+  let quickAddPartsAll = [];
+  let quickAddShowAll = false;
+  let quickAddPartPickedName = '';
+  let quickAddPartTab = '전체';
+  // 사용자 지시: "부품리스트를 숫자들 부품을 위쪽으로 먼저 표시 그다음 ㄱㄴㄷㄹ, abcd 순서로" — 이름이
+  // 숫자로 시작하는 부품(15프레임, 215프레임 등)은 그 숫자 크기 순으로 먼저, 나머지는 가나다/알파벳
+  // 순으로 뒤에 오게 정렬한다.
+  function partSortKey(name){
+    const m = String(name || '').match(/^(\d+)/);
+    return m ? [0, Number(m[1]), name] : [1, 0, name];
+  }
+  // design.html의 ROBOT_PART_GROUPS/robotPartGroupTitle과 같은 분류 — 사용자 지시: "브라켓은
+  // 브라켓끼리 모아져있어야지~~ 프레임은 프레임끼리". datalist는 <optgroup> 헤더를 못 보여주지만, 같은
+  // 갈래끼리 목록에서 이어서 나오게는 할 수 있다.
+  const PART_PICKER_GROUPS = [
+    { title: '프레임', test: (n) => n.includes('프레임') },
+    { title: '브라켓', test: (n) => n.includes('브라켓') },
+    { title: '블록', test: (n) => n.includes('블록') },
+    { title: '바퀴', test: (n) => n.includes('바퀴') },
+    { title: '기어', test: (n) => n.includes('기어') },
+    { title: '축', test: (n) => n.includes('축') },
+    { title: '모터·서보', test: (n) => n.includes('모터') || n.includes('서보') },
+    { title: '센서', test: (n) => n.includes('센서') },
+    { title: '볼트·너트·부속', test: (n) => n.includes('볼트') || n.includes('너트') || n.includes('리벳') || n.includes('부시') },
+  ];
+  function partGroupIndex(name){
+    const n = name || '';
+    const idx = PART_PICKER_GROUPS.findIndex((g) => g.test(n));
+    return idx === -1 ? PART_PICKER_GROUPS.length : idx;
+  }
+  function sortPartsForPicker(list){
+    return list.slice().sort((a, b) => {
+      const ga = partGroupIndex(a.name), gb = partGroupIndex(b.name);
+      if (ga !== gb) return ga - gb;
+      const ka = partSortKey(a.name), kb = partSortKey(b.name);
+      if (ka[0] !== kb[0]) return ka[0] - kb[0];
+      if (ka[0] === 0) return ka[1] - kb[1];
+      return String(a.name || '').localeCompare(String(b.name || ''), 'ko');
+    });
+  }
+
+  function fillTextbookCategoryOptions(){
+    const sel = document.getElementById('textbookCategory');
+    const cur = sel.value;
+    const subject = document.getElementById('textbookSubject').value;
+    sel.innerHTML = robotCategories.filter((c) => c.subject === subject).map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`).join('');
+    sel.value = cur;
+  }
+  function syncTextbookFormVisibility(){
+    const isRobot = document.getElementById('textbookSubject').value === 'robot';
+    // 카테고리(로봇 브랜드 개념)는 로봇만 의미가 있지만, 구분 번호(권/회차 등)는 어느 과목이든 쓸 수
+    // 있게 한다(사용자 지적: "왜 로봇만이야???" / "어떤것도 다 되어야지 권일지 회차일지 모르자나").
+    document.getElementById('textbookCategoryWrap').hidden = !isRobot;
+    fillTextbookCategoryOptions();
+  }
+  document.getElementById('textbookSubject').addEventListener('change', syncTextbookFormVisibility);
+  document.getElementById('toggleTextbookForm').addEventListener('click', () => {
+    const f = document.getElementById('textbookForm');
+    f.hidden = !f.hidden;
+    document.getElementById('toggleTextbookForm').textContent = f.hidden ? '+ 교재 등록' : '숨기기';
+    if (!f.hidden) syncTextbookFormVisibility();
+  });
+  document.getElementById('textbookForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const msg = document.getElementById('textbookMsg');
+    msg.hidden = true;
+    const subject = document.getElementById('textbookSubject').value;
+    const category = subject === 'robot' ? document.getElementById('textbookCategory').value : '';
+    const volume = subject === 'robot' ? document.getElementById('textbookVolume').value : '';
+    const name = document.getElementById('textbookName').value.trim();
+    try {
+      const res = await adminApi({ action: 'add_textbook', subject, category, volume, name });
+      allTextbooks = res.textbooks || [];
+      document.getElementById('textbookForm').reset();
+      document.getElementById('textbookForm').hidden = true;
+      document.getElementById('toggleTextbookForm').textContent = '+ 교재 등록';
+      renderTextbookList();
+    } catch (err) { msg.textContent = err.message; msg.hidden = false; }
+  });
+  document.getElementById('textbookSubjectTabs').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-subject-tab]');
+    if (!btn) return;
+    textbookSubjectTab = btn.dataset.subjectTab;
+    textbookCategoryTab = null;
+    selectedTextbookId = null;
+    document.getElementById('textbookSubjectTabs').querySelectorAll('[data-subject-tab]').forEach((b) => b.classList.toggle('current', b === btn));
+    renderTextbookList();
+    renderChapters();
+  });
+  document.getElementById('textbookCategoryTabs').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-category-tab]');
+    if (!btn) return;
+    textbookCategoryTab = btn.dataset.categoryTab;
+    selectedTextbookId = null;
+    renderTextbookList();
+    renderChapters();
+  });
+  function renderTextbookList(){
+    const catTabsEl = document.getElementById('textbookCategoryTabs');
+    let items = allTextbooks.filter((t) => t.subject === textbookSubjectTab);
+    if (textbookSubjectTab === 'robot') {
+      const catKeys = robotCategories.filter((c) => c.subject === 'robot').map((c) => c.id);
+      items.forEach((t) => { if (t.category && !catKeys.includes(t.category)) catKeys.push(t.category); });
+      if (!textbookCategoryTab || !catKeys.includes(textbookCategoryTab)) textbookCategoryTab = catKeys[0] || null;
+      catTabsEl.hidden = catKeys.length === 0;
+      catTabsEl.innerHTML = catKeys.map((k) => `<button type="button" class="${k === textbookCategoryTab ? 'current' : ''}" data-category-tab="${escapeHtml(k)}">${escapeHtml(categoryLabel(k) || '기타')}</button>`).join('');
+      items = items.filter((t) => t.category === textbookCategoryTab);
+    } else {
+      catTabsEl.hidden = true; catTabsEl.innerHTML = ''; textbookCategoryTab = null;
+    }
+    items = items.slice().sort((a, b) => (a.volume || 0) - (b.volume || 0));
+    const el = document.getElementById('textbookListArea');
+    document.getElementById('textbookListEmpty').hidden = items.length > 0;
+    el.innerHTML = items.map((t) => `<div class="design-row" data-textbook-id="${escapeHtml(t.id)}" style="cursor:pointer;${t.id === selectedTextbookId ? ' background:var(--panel);' : ''}">
+      <div class="item-main"><div class="item-title">${escapeHtml(t.name)}</div><div class="item-sub">${t.volume ? t.volume + '권 · ' : ''}차시 ${t.chapters.length}개${(t.files && t.files.length) ? ' · 📎 첨부 ' + t.files.length + '개' : ''}</div></div>
+    </div>`).join('');
+    el.querySelectorAll('[data-textbook-id]').forEach((row) => row.addEventListener('click', () => {
+      selectedTextbookId = row.dataset.textbookId;
+      renderTextbookList();
+      renderChapters();
+    }));
+  }
+  function currentTextbook(){ return allTextbooks.find((t) => t.id === selectedTextbookId) || null; }
+  // Supabase Storage에 직접 업로드(관리자 API를 거치지 않음 — PDF/엑셀은 base64로 JSON에 실으면 너무
+  // 커지므로, STL 파일 때 겪은 것과 같은 종류의 용량 문제를 피하려고 파일 자체는 Storage에, DB엔 URL만
+  // 저장한다). textbook-files 버킷은 공개 읽기라 URL 그대로 다운로드 링크로 쓸 수 있다.
+  async function uploadTextbookFile(file){
+    // 저장소(textbook-files 버킷)에는 크기 제한이 없고, Supabase 기본 업로드 한도가 50MB 라 그 안에서 받는다(예전엔 20MB 로 막아서 큰 PDF 가 안 올라갔다).
+    if (file.size > 50 * 1024 * 1024) throw new Error('파일이 너무 커요(' + (file.size / 1048576).toFixed(0) + 'MB). 50MB 이하로 줄여서 올려주세요.');
+    const ext = (file.name.split('.').pop() || 'bin').toLowerCase();
+    const path = Date.now() + '_' + Math.random().toString(36).slice(2, 8) + '.' + ext;
+    const { error } = await db.client.storage.from('textbook-files').upload(path, file);
+    if (error) throw new Error(error.message);
+    const { data } = db.client.storage.from('textbook-files').getPublicUrl(path);
+    return { url: data.publicUrl, name: file.name };
+  }
+  function fileIcon(name){
+    const ext = ((name || '').split('.').pop() || '').toLowerCase();
+    if (ext === 'pdf') return '📕';
+    if (['xlsx', 'xls', 'csv'].includes(ext)) return '📗';
+    if (['doc', 'docx'].includes(ext)) return '📘';
+    if (['ppt', 'pptx'].includes(ext)) return '📙';
+    return '📄';
+  }
+  // 엑셀·워드·파워포인트는 브라우저 자체에 뷰어가 없어서 그냥 링크를 열면 다운로드만 되고 "열어볼" 수는
+  // 없다(사용자 지적: "엑셀이나 다른 파일은 못보나?? 기능이 없어?") — 이건 우리 코드 문제가 아니라
+  // 브라우저의 원천적 한계라, 마이크로소프트 오피스 온라인 뷰어(공개 URL이면 누구나 무료로 쓸 수 있는
+  // iframe 미리보기 서비스)로 우회해서 그 파일 형식만 이 뷰어 주소로 열어준다. PDF·이미지는 브라우저가
+  // 이미 볼 수 있으니 그대로 원본 링크를 연다.
+  const OFFICE_VIEWABLE_EXT = ['xlsx', 'xls', 'csv', 'docx', 'doc', 'pptx', 'ppt'];
+  function fileViewUrl(fileUrl, fileName){
+    const ext = ((fileName || fileUrl).split('.').pop() || '').toLowerCase();
+    if (OFFICE_VIEWABLE_EXT.includes(ext)) return 'https://view.officeapps.live.com/op/view.aspx?src=' + encodeURIComponent(fileUrl);
+    return fileUrl;
+  }
+  // 사용자 지시: "파일업로드는 pdf,워드,엑셀,ppt가 되게끔, 여러개 가능, 업로드 된거 썸네일로 보여주고,
+  // 다운로드, 미리보기 가능" — 파일 하나(fileUrl/fileName)가 아니라 여러 개(files 배열)를 칩 목록으로
+  // 보여준다. 칩 하나 삭제는 "필요 부품" 칩처럼 즉시 제거(개별 파일 하나라 되돌릴 수 없는 정도가 낮고,
+  // 다시 올리면 되므로 확인 단계 없이 바로 지운다) — 차시/교재 자체를 통째로 지우는 것과는 무게가 다름.
+  function filesListHtml(files, removeAttr){
+    if (!files || !files.length) return '<span class="item-sub">없음</span>';
+    return files.map((f, idx) => `<span class="pill" style="display:inline-flex; align-items:center; gap:4px;">
+      <a href="${escapeHtml(fileViewUrl(f.url, f.name))}" target="_blank" rel="noopener" style="font-size:12px; text-decoration:none;">${fileIcon(f.name)} ${escapeHtml(f.name)}</a>
+      <button type="button" class="ghost" ${removeAttr}="1" data-file-idx="${idx}" style="font-size:11px; padding:0 4px; line-height:1;" title="이 파일만 삭제">✕</button>
+    </span>`).join(' ');
+  }
+  // 삭제/파일제거 확인 상태를 버튼의 DOM(dataset)이 아니라 여기 변수에 둔다 — 다른 차시를 만지면
+  // renderChapters()가 목록 전체를 새로 그려서 버튼 DOM이 통째로 교체되는데, 확인 상태를 DOM에만
+  // 두면(예전의 armAction 방식) 그 사이에 상태가 사라져 "두 번 눌러도 확인 문구도 안 뜨고 삭제도 안
+  // 되는" 것처럼 보였다(사용자 지적: "회차 삭제를 클릭해도 확인 과정이 없고 삭제도 안됨"). 이 변수는
+  // 다시 그려도 그대로 남아있어서 확실히 동작한다.
+  let confirmingDeleteChapterId = null;
+  let expandedChapterIds = new Set();
+  function chapterRowHtml(tb, c, i){
+    const partsChips = (c.parts || []).map((p) => {
+      const part = allParts.find((x) => x.id === p.partId);
+      return `<span class="pill" data-remove-part="${escapeHtml(c.id)}" data-remove-part-id="${escapeHtml(p.partId)}" style="cursor:pointer;" title="눌러서 제거">${escapeHtml(part ? part.name : '(삭제된 부품)')} ×${p.qty} ✕</span>`;
+    }).join(' ');
+    const deleteLabel = confirmingDeleteChapterId === c.id ? '정말 삭제?(다시 클릭)' : '삭제';
+    // 사용자 지시: "접었다 펼수있게 평소에는 0차시 제목라인만 보이면 됨" — 차시가 많아지고 부품이 쌓일수록
+    // 목록이 너무 길어져서, 제목 줄(제목·이동·삭제)만 항상 보이고 첨부·필요 부품·삽입 버튼은 펼쳤을 때만
+    // 보이게 한다. 펼침 상태는 화면에서만 기억(저장 안 함) — 기본은 접힘.
+    const expanded = expandedChapterIds.has(c.id);
+    return `<div class="design-row" style="flex-direction:column; align-items:stretch; gap:6px; margin-bottom:10px; padding:10px; border:1px solid var(--line); border-radius:8px;" data-chapter-id="${escapeHtml(c.id)}">
+      <div style="display:flex; align-items:center; gap:6px;">
+        <button type="button" class="ghost" data-chapter-fold="1" style="font-size:11px; padding:2px 6px; flex:none;" title="${expanded ? '접기' : '펼치기'}">${expanded ? '▾' : '▸'}</button>
+        <span class="item-sub" style="flex:none; font-weight:700;">${i}차시</span>
+        <input type="text" value="${escapeHtml(c.title)}" data-chapter-title="1" style="flex:1;" placeholder="차시 제목">
+        <button type="button" class="ghost" data-chapter-up="1" ${i === 0 ? 'disabled' : ''}>▲</button>
+        <button type="button" class="ghost" data-chapter-down="1" ${i === tb.chapters.length - 1 ? 'disabled' : ''}>▼</button>
+        <button type="button" class="ghost${confirmingDeleteChapterId === c.id ? ' danger-armed' : ''}" data-chapter-delete="1">${deleteLabel}</button>
+      </div>
+      <div ${expanded ? '' : 'hidden'}>
+        <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-size:12px; margin-bottom:6px;">
+          <span class="item-sub" style="flex:none;">📎 첨부:</span>${filesListHtml(c.files, 'data-chapter-remove-file')}
+        </div>
+        <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:6px;">
+          <span class="item-sub" style="flex:none;">필요 부품:</span>
+          ${partsChips || '<span class="item-sub">없음</span>'}
+        </div>
+        <button type="button" class="ghost" data-insert-after="1" style="font-size:11px;">+ 이 아래에 차시 추가</button>
+      </div>
+    </div>`;
+  }
+  // 부품·차시 드롭다운은 재사용(전체를 다시 그리지 않음) — "부품→차시→추가"를 반복할 때(사용자 지시:
+  // "부품 -> 회차 -> 추가추가추가 이렇게 하면 더 편하고 깔끔할꺼 같아") 고른 값이 유지돼야 하므로, 목록이
+  // 바뀌어도(차시 추가/삭제 등) 옵션만 새로 채우고 이미 고른 값이 여전히 있으면 그대로 둔다.
+  // 부품 고르는 목록: 누르면 검색창 + 종류 탭 + 부품 칩이 뜨고, 고르면 닫힌다(사용자 지시: "검색어를 치면 계속
+  // 남아있어서 불편함 — 리스트에서 빨리 찾아서 선택만"). 검색어는 열 때마다 비워서 남지 않게 한다.
+  function renderQuickAddPartPanel(){
+    const q = document.getElementById('quickAddPartSearch').value.trim().toLowerCase();
+    const groupTitles = PART_PICKER_GROUPS.map((g) => g.title).concat(['기타']);
+    const groupOf = (name) => { const i = partGroupIndex(name); return i >= PART_PICKER_GROUPS.length ? '기타' : PART_PICKER_GROUPS[i].title; };
+    const source = quickAddShowAll ? quickAddPartsAll : quickAddParts;
+    const present = new Set(source.map((p) => groupOf(p.name)));
+    const tabs = ['전체'].concat(groupTitles.filter((t) => present.has(t)));
+    if (!tabs.includes(quickAddPartTab)) quickAddPartTab = '전체';
+    const tabBtn = (t) => `<button type="button" data-qa-tab="${escapeHtml(t)}" class="${t === quickAddPartTab ? 'primary' : 'ghost'}" style="padding:2px 9px; font-size:12px;">${escapeHtml(t)}</button>`;
+    document.getElementById('quickAddPartTabs').innerHTML = tabs.map(tabBtn).join('');
+    const list = source.filter((p) => (quickAddPartTab === '전체' || groupOf(p.name) === quickAddPartTab) && (!q || String(p.name).toLowerCase().includes(q)));
+    document.getElementById('quickAddPartChips').innerHTML = list.length
+      ? list.map((p) => `<button type="button" data-qa-part="${escapeHtml(p.name)}" class="ghost" style="padding:3px 9px; font-size:12px;${p.name === quickAddPartPickedName ? ' outline:2px solid #2b6be0;' : ''}">${escapeHtml(p.name)}</button>`).join('')
+      : '<span class="item-sub">일치하는 부품이 없어요.</span>';
+  }
+  function closeQuickAddPartPanel(){ document.getElementById('quickAddPartPanel').hidden = true; }
+  document.getElementById('quickAddPartSelect').addEventListener('click', () => {
+    const panel = document.getElementById('quickAddPartPanel');
+    if (!panel.hidden) { closeQuickAddPartPanel(); return; }
+    const search = document.getElementById('quickAddPartSearch');
+    search.value = '';
+    quickAddPartTab = '전체';
+    quickAddShowAll = false;
+    document.getElementById('quickAddShowAll').checked = false;
+    renderQuickAddPartPanel();
+    panel.hidden = false;
+    search.focus();
+  });
+  document.getElementById('quickAddPartSearch').addEventListener('input', renderQuickAddPartPanel);
+  document.getElementById('quickAddShowAll').addEventListener('change', (e) => { quickAddShowAll = e.target.checked; renderQuickAddPartPanel(); });
+  document.getElementById('quickAddPartSearch').addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeQuickAddPartPanel();
+    if (e.key === 'Enter') { e.preventDefault(); const first = document.querySelector('#quickAddPartChips [data-qa-part]'); if (first) first.click(); }
+  });
+  document.getElementById('quickAddPartPanel').addEventListener('click', (e) => {
+    const tab = e.target.closest('[data-qa-tab]');
+    if (tab) { quickAddPartTab = tab.dataset.qaTab; renderQuickAddPartPanel(); return; }
+    const chip = e.target.closest('[data-qa-part]');
+    if (chip) {
+      quickAddPartPickedName = chip.dataset.qaPart;
+      document.getElementById('quickAddPartSelect').textContent = quickAddPartPickedName + ' ▾';
+      closeQuickAddPartPanel();
+    }
+  });
+  document.addEventListener('click', (e) => { if (!e.target.closest('#quickAddPartWrap')) closeQuickAddPartPanel(); });
+  function fillQuickAddDropdowns(tb){
+    // 검색 가능한 <input list> + <datalist> 조합 — 이름을 입력하면 브라우저가 알아서 후보를 걸러준다
+    // (사용자 지시: "부품검색도 가능하게"). 고른 이름은 datalist의 옵션 텍스트일 뿐이라, 실제 저장에
+    // 쓰는 partId는 이름→id 맵(quickAddPartsByName)으로 따로 찾는다.
+    const sortedParts = sortPartsForPicker(allParts.filter((p) => p.subject === tb.subject));
+    // 사용자 지시: "해당꺼만 나와야하는데" — 이 교재의 카테고리·권에 등록된 부품(카테고리/권을 안 정한
+    // 공통 부품 포함)만 보여준다. 카테고리·권 정보가 없는 교재는 과목 전체.
+    const relevant = sortedParts.filter((p) =>
+      (!tb.category || !p.category || p.category === tb.category) &&
+      (tb.volume == null || !Array.isArray(p.volumes) || !p.volumes.length || p.volumes.some((v) => Number(v.volume) === Number(tb.volume))));
+    quickAddPartsAll = sortedParts;
+    quickAddPartsByName = new Map(sortedParts.map((p) => [p.name, p.id]));
+    quickAddParts = relevant;
+    if (!quickAddPartsByName.has(quickAddPartPickedName)) {
+      quickAddPartPickedName = '';
+      document.getElementById('quickAddPartSelect').textContent = '부품 선택 ▾';
+    }
+    renderQuickAddPartPanel();
+    const chapterOptionsHtml = tb.chapters.map((c, i) => `<option value="${escapeHtml(c.id)}">${i}차시${c.title ? ' · ' + escapeHtml(c.title) : ''}</option>`).join('');
+    const partChapterSel = document.getElementById('quickAddPartChapter');
+    const curPartChapter = partChapterSel.value;
+    partChapterSel.innerHTML = chapterOptionsHtml;
+    if ([...partChapterSel.options].some((o) => o.value === curPartChapter)) partChapterSel.value = curPartChapter;
+    const xlsxChapterSel = document.getElementById('quickXlsxChapter');
+    const curXlsxChapter = xlsxChapterSel.value;
+    // "권 전체"는 다운로드 전용(차시를 고르면 그 차시 부품만, 권 전체를 고르면 모든 차시). 올리기는 차시 하나를 골라야 한다.
+    xlsxChapterSel.innerHTML = '<option value="__all__">📘 ' + (tb.volume != null ? tb.volume + '권 ' : '') + '전체(다운로드용)</option>' + chapterOptionsHtml;
+    if ([...xlsxChapterSel.options].some((o) => o.value === curXlsxChapter)) xlsxChapterSel.value = curXlsxChapter;
+    else if (tb.chapters.length) xlsxChapterSel.value = tb.chapters[0].id; // 처음엔 첫 차시를 골라 둔다
+    const uploadChapterSel = document.getElementById('quickUploadChapterSelect');
+    const curUploadChapter = uploadChapterSel.value;
+    uploadChapterSel.innerHTML = '<option value="__whole__">📘 교재 전체(권 단위)</option>' + chapterOptionsHtml;
+    if ([...uploadChapterSel.options].some((o) => o.value === curUploadChapter)) uploadChapterSel.value = curUploadChapter;
+  }
+  function renderChapters(){
+    const card = document.getElementById('textbookChaptersCard');
+    const tb = currentTextbook();
+    if (!tb) { card.hidden = true; return; }
+    card.hidden = false;
+    document.getElementById('textbookChaptersTitle').textContent = tb.name + ' — 차시 목록';
+    fillQuickAddDropdowns(tb);
+    const list = document.getElementById('textbookChaptersList');
+    list.innerHTML = `<div class="design-row" style="align-items:center; margin-bottom:10px; flex-wrap:wrap;">
+      <div class="item-main"><div class="item-title">📎 교재 첨부파일(권 전체)</div></div>
+      <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">${filesListHtml(tb.files, 'data-tb-remove-file')}</div>
+    </div>` + (tb.chapters.length ? tb.chapters.map((c, i) => chapterRowHtml(tb, c, i)).join('') : '<p class="note">아직 차시가 없어요. 아래 "+ 차시 추가"를 눌러주세요.</p>');
+  }
+  function showChaptersOk(text){
+    const el = document.getElementById('textbookChaptersOk');
+    el.textContent = text;
+    el.hidden = false;
+    clearTimeout(el._t);
+    el._t = setTimeout(() => { el.hidden = true; }, 4000);
+  }
+  // 제목 칸에서 다른 칸으로 옮기면(blur) 저장 → 저장 끝나고 다시 그리기(renderChapters, 모든 입력칸을
+  // 새로 만듦) 순서라, 그 사이에 사용자가 이미 다음 칸을 클릭해 포커스를 옮겨놔도 다시 그리기가 그 포커스를
+  // 날려버려서 "두 번 클릭해야" 써지는 것처럼 보였다(사용자 지적: "클릭을 왜 두번을 해야 작성이
+  // 가능해???"). 저장 직전에 지금 포커스가 어느 차시의 어느 칸인지 기억해뒀다가, 다시 그린 뒤 그 자리에
+  // 포커스를 되돌려준다.
+  async function saveChapters(tb, chapters, okMsg){
+    const errEl = document.getElementById('textbookChaptersMsg');
+    errEl.hidden = true;
+    const active = document.activeElement;
+    const activeRow = active && active.closest && active.closest('[data-chapter-id]');
+    const focusInfo = activeRow ? { chapterId: activeRow.dataset.chapterId, field: active.dataset.chapterTitle ? 'title' : null, selStart: active.selectionStart, selEnd: active.selectionEnd } : null;
+    try {
+      const res = await adminApi({ action: 'update_textbook', textbookId: tb.id, chapters });
+      allTextbooks = res.textbooks || [];
+      renderTextbookList();
+      renderChapters();
+      if (focusInfo && focusInfo.field === 'title') {
+        const row = document.querySelector('[data-chapter-id="' + CSS.escape(focusInfo.chapterId) + '"]');
+        const input = row && row.querySelector('[data-chapter-title]');
+        if (input) { input.focus(); try { input.setSelectionRange(focusInfo.selStart, focusInfo.selEnd); } catch (e) {} }
+      }
+      // 사용자 지적: "완료도 없어서 창을 닫을 수도 없고 저장이 되었는지 알수도 없고" — 눈에 잘 띄는
+      // 완료 문구를 몇 초간 보여준다(제목 저장처럼 조용히 넘어가야 하는 경우는 okMsg를 안 준다).
+      if (okMsg) showChaptersOk(okMsg);
+    } catch (err) { errEl.textContent = err.message; errEl.hidden = false; }
+  }
+  async function saveTextbookFiles(tb, files, okMsg){
+    const errEl = document.getElementById('textbookChaptersMsg');
+    errEl.hidden = true;
+    try {
+      const res = await adminApi({ action: 'update_textbook', textbookId: tb.id, files });
+      allTextbooks = res.textbooks || [];
+      renderTextbookList();
+      renderChapters();
+      if (okMsg) showChaptersOk(okMsg);
+    } catch (err) { errEl.textContent = err.message; errEl.hidden = false; }
+  }
+  document.getElementById('addChapterBtn').addEventListener('click', () => {
+    const tb = currentTextbook();
+    if (!tb) return;
+    const arr = tb.chapters.concat([{ id: 'ch_' + Math.random().toString(36).slice(2, 10), title: '', parts: [] }]);
+    saveChapters(tb, arr, '차시를 추가했어요.');
+  });
+  // 사용자 지시: "그냥 차시를 여러개를 추가해두고 입력만 하게 해줘 불편하게 하지말고" — 한 개씩 추가
+  // 버튼을 여러 번 누르지 않고, 빈 차시를 한 번에 여러 개 만들어두면 제목만 채워 넣으면 되게 한다.
+  document.getElementById('addChapterBulkBtn').addEventListener('click', () => {
+    const tb = currentTextbook();
+    if (!tb) return;
+    const count = Math.max(1, Math.min(100, Math.round(Number(document.getElementById('addChapterBulkCount').value) || 12)));
+    const extra = Array.from({ length: count }, () => ({ id: 'ch_' + Math.random().toString(36).slice(2, 10), title: '', parts: [] }));
+    saveChapters(tb, tb.chapters.concat(extra), count + '개 차시를 추가했어요.');
+  });
+  document.getElementById('deleteTextbookBtn').addEventListener('click', function(){
+    const tb = currentTextbook();
+    if (!tb) return;
+    armAction(this, '정말 삭제?', async () => {
+      try {
+        const res = await adminApi({ action: 'delete_textbook', textbookId: tb.id });
+        allTextbooks = res.textbooks || [];
+        selectedTextbookId = null;
+        renderTextbookList();
+        renderChapters();
+      } catch (err) { const errEl = document.getElementById('textbookChaptersMsg'); errEl.textContent = err.message; errEl.hidden = false; }
+    });
+  });
+  // ⚡ 부품 빠르게 배정: 부품·수량을 고른 채로 차시만 바꿔가며 "추가"를 누르는 흐름(사용자 지시:
+  // "부품 -> 회차 -> 추가추가추가"). 같은 부품을 그 차시에 또 추가하면 수량을 더한다(사용자 지적:
+  // "부품을 추가하면 누적되서 계산이 되어야 하는데 해당제품의 수량만 새로 덮어써짐" / "리벳 1 + 리벳5는
+  // 리벳6이 되어야 한다는 말이야 각 차시에서").
+  document.getElementById('quickAddPartBtn').addEventListener('click', async () => {
+    const tb = currentTextbook();
+    if (!tb) return;
+    const partName = quickAddPartPickedName;
+    const partId = quickAddPartsByName.get(partName);
+    const qty = Math.max(1, Number(document.getElementById('quickAddPartQty').value) || 1);
+    const chapterId = document.getElementById('quickAddPartChapter').value;
+    const msgEl = document.getElementById('quickAddPartMsg');
+    if (!partId) { msgEl.textContent = '부품을 먼저 골라주세요.'; return; }
+    if (!chapterId) { msgEl.textContent = '차시를 먼저 골라주세요.'; return; }
+    const part = allParts.find((p) => p.id === partId);
+    const chapterIdx = tb.chapters.findIndex((c) => c.id === chapterId);
+    const arr = tb.chapters.map((c) => {
+      if (c.id !== chapterId) return c;
+      const parts = (c.parts || []).slice();
+      const idx = parts.findIndex((p) => p.partId === partId);
+      if (idx >= 0) parts[idx] = { partId, qty: parts[idx].qty + qty };
+      else parts.push({ partId, qty });
+      return Object.assign({}, c, { parts });
+    });
+    msgEl.textContent = '추가하는 중...';
+    // 사용자 지시: "부품배정했어요를 추가 버튼오른쪽에 표시를 해줘" — 완료 메시지를 위쪽의 공용 완료
+    // 배너(textbookChaptersOk, 화면 멀리 떨어져 있어 안 보임)가 아니라 버튼 바로 옆 이 자리에 직접
+    // 보여준다. (이전엔 저장을 기다리지도 않고 바로 지워버려서 메시지가 거의 안 보이기도 했음.)
+    await saveChapters(tb, arr);
+    msgEl.textContent = '✅ ' + (part ? part.name : '부품') + ' — ' + chapterIdx + '차시에 배정했어요.';
+    clearTimeout(msgEl._t);
+    msgEl._t = setTimeout(() => { msgEl.textContent = ''; }, 4000);
+  });
+  // ⚡ 엑셀로 부품 올리기(사용자 지시: "차시를 고르고 그 차시만 올리는 방식으로 / 부품명, 숫자 / 샘플을 다운받게"):
+  // 고른 차시 하나에 엑셀(또는 CSV)의 "부품명, 수량" 줄들을 배정한다. 부품 이름이 부품 관리에 있는 것과 같아야 하고,
+  // 못 찾은 이름·잘못된 수량은 건너뛰고 알려 준다. 그 차시에 이미 있는 부품은 엑셀 수량으로 바꾼다(다시 올려도 두 배가 되지 않게).
+  const normPartName = (s) => String(s == null ? '' : s).replace(/\s+/g, '').toLowerCase();
+  document.getElementById('quickXlsxSample').addEventListener('click', () => {
+    if (typeof XLSX === 'undefined') { document.getElementById('quickXlsxMsg').textContent = '엑셀 기능을 불러오지 못했어요. 새로고침해 주세요.'; return; }
+    const tb = currentTextbook();
+    if (!tb) return;
+    // 이 교재 과목에 등록된 부품 이름을 모두 적고 수량 칸은 비워 둔다 — 필요한 부품의 수량만 채워서 올린다.
+    const names = sortPartsForPicker(allParts.filter((p) => p.subject === tb.subject)).map((p) => p.name);
+    const rows = [['부품명', '수량'], ...names.map((n) => [n, ''])];
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{ wch: 22 }, { wch: 8 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '부품');
+    XLSX.writeFile(wb, '부품목록_샘플.xlsx');
+  });
+  // 이 교재의 차시별 필요 부품(교재 관리에 등록한 것)을 엑셀로 내려받는다(사용자 지시: 부품리스트와 수량, 로봇이름, 단계, 회차): 부품명, 수량, 로봇이름(차시 제목), 단계(교재 이름), 회차.
+  document.getElementById('quickXlsxExport').addEventListener('click', () => {
+    const msgEl = document.getElementById('quickXlsxMsg');
+    const tb = currentTextbook();
+    if (!tb) return;
+    if (typeof XLSX === 'undefined') { msgEl.textContent = '엑셀 기능을 불러오지 못했어요. 새로고침해 주세요.'; return; }
+    const rows = [['부품명', '수량', '로봇이름', '단계', '회차']];
+    const pickedId = document.getElementById('quickXlsxChapter').value; // 차시를 고르면 그 차시 부품만, 권 전체를 고르면 모든 차시
+    const only = pickedId && pickedId !== '__all__' ? pickedId : null;
+    tb.chapters.forEach((c, i) => {
+      if (only && c.id !== only) return;
+      (c.parts || []).forEach((cp) => {
+        const part = allParts.find((p) => p.id === cp.partId);
+        rows.push([part ? part.name : '(삭제된 부품)', cp.qty, c.title || '', tb.name, i + '차시']); // 로봇이름 = 차시 제목(예: 토끼), 단계 = 교재 이름(예: 큐보1단계)
+      });
+    });
+    if (rows.length === 1) { msgEl.textContent = '아직 등록된 부품이 없어요.'; clearTimeout(msgEl._t); msgEl._t = setTimeout(() => { msgEl.textContent = ''; }, 4000); return; }
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{ wch: 22 }, { wch: 8 }, { wch: 18 }, { wch: 14 }, { wch: 8 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '필요 부품');
+    XLSX.writeFile(wb, tb.name + (only ? '_' + tb.chapters.findIndex((c) => c.id === only) + '차시' : '') + '_필요부품.xlsx');
+    msgEl.textContent = '✅ ' + (rows.length - 1) + '줄을 내려받았어요.';
+    clearTimeout(msgEl._t);
+    msgEl._t = setTimeout(() => { msgEl.textContent = ''; }, 4000);
+  });
+  document.getElementById('quickXlsxBtn').addEventListener('click', () => {
+    const tb = currentTextbook();
+    if (!tb) return;
+    const chapterId = document.getElementById('quickXlsxChapter').value;
+    const msgEl = document.getElementById('quickXlsxMsg');
+    if (!chapterId || chapterId === '__all__') { msgEl.textContent = '올릴 차시를 먼저 골라주세요(권 전체는 다운로드용이에요).'; return; }
+    if (typeof XLSX === 'undefined') { msgEl.textContent = '엑셀 기능을 불러오지 못했어요. 새로고침해 주세요.'; return; }
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = '.xlsx,.xls,.csv';
+    input.addEventListener('change', () => {
+      const file = input.files && input.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+          const aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' });
+          // 첫 줄이 "부품명, 수량" 머리글이면 건너뛴다(머리글 이름은 몇 가지 별칭을 받는다). 머리글이 없으면 첫 두 칸을 그대로 쓴다.
+          const nameKeys = ['부품명', '부품', '이름', '부품이름', 'name'], qtyKeys = ['수량', '숫자', '개수', '갯수', 'qty', '수'];
+          let nameCol = 0, qtyCol = 1, start = 0;
+          const head = (aoa[0] || []).map(normPartName);
+          const ni = head.findIndex((c) => nameKeys.includes(c)), qi = head.findIndex((c) => qtyKeys.includes(c));
+          if (ni >= 0 && qi >= 0) { nameCol = ni; qtyCol = qi; start = 1; }
+          const sp = allParts.filter((p) => p.subject === tb.subject);
+          const byName = new Map(sp.map((p) => [normPartName(p.name), p]));
+          const want = new Map(); // partId → 수량(엑셀 안에서 같은 부품이 여러 줄이면 더한다)
+          const unknown = [], badQty = [];
+          for (let i = start; i < aoa.length; i++) {
+            const row = aoa[i] || [];
+            const rawName = String(row[nameCol] == null ? '' : row[nameCol]).trim();
+            if (row[qtyCol] === '' || row[qtyCol] == null || String(row[qtyCol]).trim() === '') continue; // 수량이 비어 있으면 필요 없는 부품 — 등록하지 않는다
+            const part = byName.get(normPartName(rawName));
+            if (!part) { unknown.push((i + 1) + '줄 "' + rawName + '"'); continue; }
+            const q = Number(row[qtyCol]);
+            if (!Number.isInteger(q) || q < 1) { badQty.push((i + 1) + '줄 "' + rawName + '" 수량 "' + row[qtyCol] + '"'); continue; }
+            want.set(part.id, (want.get(part.id) || 0) + q);
+          }
+          if (!want.size) { msgEl.textContent = '배정할 부품이 없어요.' + (unknown.length ? ' 못 찾은 이름: ' + unknown.join(', ') : '') + (badQty.length ? ' 수량 오류: ' + badQty.join(', ') : ''); return; }
+          const chapterIdx = tb.chapters.findIndex((c) => c.id === chapterId);
+          let changed = 0, added = 0;
+          const arr = tb.chapters.map((c) => {
+            if (c.id !== chapterId) return c;
+            const parts = (c.parts || []).slice();
+            want.forEach((qty, partId) => {
+              const idx = parts.findIndex((p) => p.partId === partId);
+              if (idx >= 0) { parts[idx] = { partId, qty }; changed++; } else { parts.push({ partId, qty }); added++; }
+            });
+            return Object.assign({}, c, { parts });
+          });
+          msgEl.textContent = '올리는 중...';
+          await saveChapters(tb, arr);
+          const problems = (unknown.length ? ' · 못 찾은 이름(건너뜀): ' + unknown.join(', ') : '') + (badQty.length ? ' · 수량 오류(건너뜀): ' + badQty.join(', ') : '');
+          msgEl.textContent = '✅ ' + chapterIdx + '차시에 ' + want.size + '종류를 배정했어요 (새로 ' + added + ', 수량 바꿈 ' + changed + ')' + problems;
+          clearTimeout(msgEl._t);
+          msgEl._t = setTimeout(() => { msgEl.textContent = ''; }, problems ? 15000 : 5000);
+        } catch (err) { msgEl.textContent = '엑셀을 읽지 못했어요: ' + err.message; }
+      };
+      reader.readAsArrayBuffer(file);
+    });
+    input.click();
+  });
+  // ⚡ 파일 빠르게 등록: 차시(또는 "교재 전체")를 고르고 파일을 선택하면 바로 그 자리에 업로드.
+  // 사용자 지시: "그냥 파일업로드 => 1회차,1권 이렇게 해서 연동하면 안되나?" + "여러개 가능" — 한 번에
+  // 여러 파일을 골라 순서대로 올리고, 전부 그 차시(또는 교재 전체)의 files 배열에 추가한다.
+  document.getElementById('quickUploadBtn').addEventListener('click', () => {
+    const tb = currentTextbook();
+    if (!tb) return;
+    const target = document.getElementById('quickUploadChapterSelect').value;
+    const msgEl = document.getElementById('quickUploadMsg');
+    if (!target) return;
+    const input = document.createElement('input');
+    input.type = 'file'; input.multiple = true; input.accept = '.pdf,.xlsx,.xls,.csv,.docx,.doc,.pptx,.ppt';
+    input.addEventListener('change', async () => {
+      const files = Array.from(input.files || []);
+      if (!files.length) return;
+      try {
+        const uploaded = [];
+        for (let i = 0; i < files.length; i++) {
+          msgEl.textContent = '올리는 중...(' + (i + 1) + '/' + files.length + ')';
+          uploaded.push(await uploadTextbookFile(files[i]));
+        }
+        const label = files.length > 1 ? files.length + '개 파일' : '"' + uploaded[0].name + '"';
+        let doneMsg;
+        if (target === '__whole__') {
+          await saveTextbookFiles(tb, (tb.files || []).concat(uploaded));
+          doneMsg = label + ' 교재 전체에 등록했어요.';
+        } else {
+          const chapterIdx = tb.chapters.findIndex((c) => c.id === target);
+          const arr = tb.chapters.map((c) => c.id === target ? Object.assign({}, c, { files: (c.files || []).concat(uploaded) }) : c);
+          await saveChapters(tb, arr);
+          doneMsg = label + ' — ' + chapterIdx + '차시에 등록했어요.';
+        }
+        // 사용자 지시: "부품배정했어요를 추가 버튼오른쪽에 표시를 해줘"와 같은 이유 — 완료 메시지를
+        // 버튼 바로 옆(quickUploadMsg)에 직접 보여준다.
+        msgEl.textContent = '✅ ' + doneMsg;
+        clearTimeout(msgEl._t);
+        msgEl._t = setTimeout(() => { msgEl.textContent = ''; }, 4000);
+      } catch (err) { msgEl.textContent = err.message; }
+    });
+    input.click();
+  });
+  // 제목 입력은 포커스를 잃을 때(blur) 저장 — 글자 하나 칠 때마다 서버에 저장하지 않는다.
+  document.getElementById('textbookChaptersList').addEventListener('change', (e) => {
+    const titleInput = e.target.closest('[data-chapter-title]');
+    if (titleInput) {
+      const tb = currentTextbook();
+      if (!tb) return;
+      const row = titleInput.closest('[data-chapter-id]');
+      const arr = tb.chapters.map((c) => c.id === row.dataset.chapterId ? Object.assign({}, c, { title: titleInput.value.trim() }) : c);
+      saveChapters(tb, arr);
+      return;
+    }
+  });
+  document.getElementById('textbookChaptersList').addEventListener('click', async (e) => {
+    const tb = currentTextbook();
+    if (!tb) return;
+    const foldBtn = e.target.closest('[data-chapter-fold]');
+    if (foldBtn) {
+      const row = foldBtn.closest('[data-chapter-id]');
+      const id = row.dataset.chapterId;
+      if (expandedChapterIds.has(id)) expandedChapterIds.delete(id); else expandedChapterIds.add(id);
+      renderChapters();
+      return;
+    }
+    const upBtn = e.target.closest('[data-chapter-up]');
+    const downBtn = e.target.closest('[data-chapter-down]');
+    if (upBtn || downBtn) {
+      const row = (upBtn || downBtn).closest('[data-chapter-id]');
+      const idx = tb.chapters.findIndex((c) => c.id === row.dataset.chapterId);
+      const swapWith = upBtn ? idx - 1 : idx + 1;
+      if (swapWith < 0 || swapWith >= tb.chapters.length) return;
+      const arr = tb.chapters.slice();
+      const tmp = arr[idx]; arr[idx] = arr[swapWith]; arr[swapWith] = tmp;
+      saveChapters(tb, arr);
+      return;
+    }
+    const delBtn = e.target.closest('[data-chapter-delete]');
+    if (delBtn) {
+      const row = delBtn.closest('[data-chapter-id]');
+      const id = row.dataset.chapterId;
+      if (confirmingDeleteChapterId === id) {
+        confirmingDeleteChapterId = null;
+        saveChapters(tb, tb.chapters.filter((c) => c.id !== id), '차시를 삭제했어요.');
+      } else {
+        confirmingDeleteChapterId = id;
+        renderChapters();
+      }
+      return;
+    }
+    const insertBtn = e.target.closest('[data-insert-after]');
+    if (insertBtn) {
+      const row = insertBtn.closest('[data-chapter-id]');
+      const idx = tb.chapters.findIndex((c) => c.id === row.dataset.chapterId);
+      const arr = tb.chapters.slice();
+      arr.splice(idx + 1, 0, { id: 'ch_' + Math.random().toString(36).slice(2, 10), title: '', parts: [] });
+      saveChapters(tb, arr, '차시를 삽입했어요.');
+      return;
+    }
+    const removeChip = e.target.closest('[data-remove-part]');
+    if (removeChip) {
+      const chapterId = removeChip.dataset.removePart;
+      const partId = removeChip.dataset.removePartId;
+      const arr = tb.chapters.map((c) => c.id !== chapterId ? c : Object.assign({}, c, { parts: (c.parts || []).filter((p) => p.partId !== partId) }));
+      saveChapters(tb, arr);
+      return;
+    }
+    const chRemoveFileBtn = e.target.closest('[data-chapter-remove-file]');
+    if (chRemoveFileBtn) {
+      const row = chRemoveFileBtn.closest('[data-chapter-id]');
+      const id = row.dataset.chapterId;
+      const idx = Number(chRemoveFileBtn.dataset.fileIdx);
+      const arr = tb.chapters.map((c) => c.id !== id ? c : Object.assign({}, c, { files: (c.files || []).filter((f, i) => i !== idx) }));
+      saveChapters(tb, arr, '첨부파일을 삭제했어요.');
+      return;
+    }
+    const tbRemoveFileBtn = e.target.closest('[data-tb-remove-file]');
+    if (tbRemoveFileBtn) {
+      const idx = Number(tbRemoveFileBtn.dataset.fileIdx);
+      saveTextbookFiles(tb, (tb.files || []).filter((f, i) => i !== idx), '첨부파일을 삭제했어요.');
+      return;
+    }
+  });
+  async function loadTextbooks(){
+    try { allTextbooks = (await adminApi({ action: 'list_textbooks' })).textbooks || []; renderTextbookList(); renderChapters(); }
+    catch (err) { document.getElementById('textbookListArea').innerHTML = ''; document.getElementById('textbookListEmpty').hidden = false; document.getElementById('textbookListEmpty').textContent = err.message; }
   }
 
   function fillPartCategoryOptions(){
@@ -1644,18 +2593,105 @@
     document.getElementById('partForm').hidden = true;
     document.getElementById('togglePartForm').textContent = '+ 부품 등록';
   });
+  // 3D 모델만 지우기 — 이름/색상/이미지 등 나머지 정보는 그대로 두고 spec(3D)·thumbnail3d만 비운다
+  // (사용자 지시: "3D 잘못저장된거 삭제할수 있어야 하는데"). 폼의 다른 입력칸이 수정 중이어도 그건 아직
+  // 저장 안 된 상태니, 서버에 보내는 값은 항상 지금 목록에 있는(=마지막으로 저장된) p를 그대로 쓴다.
+  document.getElementById('partClearSpecBtn').addEventListener('click', (e) => {
+    armDeleteButton(e.currentTarget, async () => {
+      const btn = e.currentTarget;
+      const partId = btn.dataset.partId;
+      const p = allParts.find((x) => x.id === partId);
+      if (!p) return;
+      btn.disabled = true;
+      try {
+        await adminApi({
+          action: 'update_part', partId: p.id,
+          name: p.name, icon: p.icon, subject: p.subject, category: p.category || '',
+          volumes: p.volumes || [], color: p.color, size: p.size,
+          imageSvg: p.imageSvg, imageSvgDiagonal: p.imageSvgDiagonal, primaryImage: p.primaryImage || 'front',
+          clearSpec: true,
+        });
+        btn.hidden = true;
+        document.getElementById('partSpecThumb').style.display = 'none';
+        document.getElementById('partSpecStatus').textContent = '3D 모델 없음';
+        document.getElementById('partSpecEditBtn').textContent = '부품 수리실에서 등록';
+        await loadParts();
+      } catch (err) {
+        alert(err.message);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
+  document.getElementById('partSpecThumb').addEventListener('click', (e) => {
+    const p = allParts.find((x) => x.id === e.currentTarget.dataset.partId);
+    if (p) openPartImageModal(p);
+  });
+  // "부품 수리실에서 등록/수정" — 3D 모양은 이 화면에서 직접 못 그리니, 그 과목의 부품 수리실을 새 탭으로
+  // 열어준다. 거기서 "기존 부품 열어서 교체"로 이름 검색해서 고르면 된다.
+  document.getElementById('partSpecEditBtn').addEventListener('click', (e) => {
+    const subject = e.currentTarget.dataset.subject || 'robot';
+    window.open('parts-lab.html?subject=' + encodeURIComponent(subject), '_blank');
+  });
+  // 부품 목록 카드와 수정 폼의 "3D 모델" 미리보기가 똑같이 쓰는 모달 열기 로직 — 하나로 모아서 양쪽에서
+  // 부른다(사용자 지시: "썸네일 보여주고 클릭하면 크게 보여주고").
+  async function openPartImageModal(p){
+    const has3d = p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.length;
+    // spec.shapes(3D 모델)가 있으면 svg 대신 그걸 보여준다 — 회전·줌·카메라 이동만 되는 뷰어(편집 도구
+    // 없음, renderShapesPreview에 붙는 건 OrbitControls뿐)이고, svg는 그대로 DB에 남아있으니 보관된
+    // 상태 그대로다(사용자 지시, 위 partRowHtml 주석 참고).
+    if (has3d) {
+      document.getElementById('imgModalTitle').textContent = [p.name, p.size].filter(Boolean).join(' · ');
+      document.getElementById('imgModalBody').innerHTML = '<canvas id="imgModal3dCanvas" width="600" height="600" style="width:100%;max-width:600px;aspect-ratio:1;touch-action:none;"></canvas><div class="note" id="imgModalNote" style="margin-top:6px;">불러오는 중...</div>';
+      document.getElementById('imgModalBackdrop').hidden = false;
+      // allParts는 stripSpecFiles로 받아와서(위 loadParts 참고) 'import' 도형이면 fileDataUrl이 빠져있다 —
+      // 실제로 그려야 하는 지금만 이 부품 하나를 get_part로 온전히 다시 받는다(목록 전체를 다시 무겁게
+      // 받지 않기 위함). 이미 fileDataUrl이 있으면(예: 방금 등록 직후) 다시 안 받는다.
+      const needsFull = p.spec.partial || p.spec.shapes.some((s) => s.type === 'import' && !s.fileDataUrl);
+      if (needsFull) {
+        try {
+          // 한 번 받은 3D 원본은 partFullCache에 따로 보관한다 — 목록이 다시 로드돼도(수정·탭 전환 때마다)
+          // allParts가 새로 채워지면서 원본이 사라져, 같은 부품을 열 때마다 매번 서버에서 다시 받고 있었다.
+          let full = partFullCache.get(p.id);
+          if (!full) {
+            full = (await adminApi({ action: 'get_part', partId: p.id })).part;
+            if (full) partFullCache.set(p.id, full);
+          }
+          if (full) {
+            p = Object.assign({}, p, full);
+            const idx = allParts.findIndex((x) => x.id === p.id);
+            if (idx !== -1) allParts[idx] = p;
+          }
+        } catch (err) {
+          const noteEl = document.getElementById('imgModalNote');
+          if (noteEl) { noteEl.className = 'note err'; noteEl.textContent = '3D 모델을 못 불러왔어요: ' + err.message; }
+          return;
+        }
+      }
+      if (!document.getElementById('imgModal3dCanvas')) return; // 받아오는 사이에 모달을 닫았으면 그만둔다
+      const noteEl = document.getElementById('imgModalNote');
+      if (noteEl) noteEl.textContent = '마우스로 드래그하면 회전, 휠로 확대/축소, 오른쪽 버튼 드래그로 이동돼요.';
+      const drawWhenReady = () => {
+        if (!document.getElementById('imgModal3dCanvas')) return;
+        if (!window.__partsLabViewer) { setTimeout(drawWhenReady, 300); return; }
+        window.__partsLabViewer.renderShapesPreview(document.getElementById('imgModal3dCanvas'), p.spec.shapes);
+      };
+      drawWhenReady();
+    } else if (p.imageSvg || p.imageSvgDiagonal) {
+      document.getElementById('imgModalTitle').textContent = [p.name, p.size].filter(Boolean).join(' · ');
+      const shots = [];
+      if (p.imageSvg) shots.push(`<div class="img-modal-shot"><div class="note" style="margin-bottom:6px;">위/정면${p.primaryImage !== 'diagonal' ? ' · 대표' : ''}</div>${uniquifySvgIds(p.imageSvg, p.id)}</div>`);
+      if (p.imageSvgDiagonal) shots.push(`<div class="img-modal-shot"><div class="note" style="margin-bottom:6px;">대각선(입체)${p.primaryImage === 'diagonal' ? ' · 대표' : ''}</div>${uniquifySvgIds(p.imageSvgDiagonal, p.id)}</div>`);
+      document.getElementById('imgModalBody').innerHTML = `<div class="img-modal-shots">${shots.join('')}</div>`;
+      document.getElementById('imgModalBackdrop').hidden = false;
+    }
+  }
   document.getElementById('partListArea').addEventListener('click', (e) => {
     const viewBtn = e.target.closest('[data-view-image]');
     if (viewBtn) {
       const p = allParts.find((x) => x.id === viewBtn.dataset.viewImage);
-      if (p && (p.imageSvg || p.imageSvgDiagonal)) {
-        document.getElementById('imgModalTitle').textContent = [p.name, p.size].filter(Boolean).join(' · ');
-        const shots = [];
-        if (p.imageSvg) shots.push(`<div class="img-modal-shot"><div class="note" style="margin-bottom:6px;">위/정면${p.primaryImage !== 'diagonal' ? ' · 대표' : ''}</div>${uniquifySvgIds(p.imageSvg, p.id)}</div>`);
-        if (p.imageSvgDiagonal) shots.push(`<div class="img-modal-shot"><div class="note" style="margin-bottom:6px;">대각선(입체)${p.primaryImage === 'diagonal' ? ' · 대표' : ''}</div>${uniquifySvgIds(p.imageSvgDiagonal, p.id)}</div>`);
-        document.getElementById('imgModalBody').innerHTML = `<div class="img-modal-shots">${shots.join('')}</div>`;
-        document.getElementById('imgModalBackdrop').hidden = false;
-      }
+      if (!p) return;
+      openPartImageModal(p);
       return;
     }
     const cancelBtn = e.target.closest('.qa-cancel');
@@ -1701,6 +2737,25 @@
       document.getElementById('partSize').value = p.size || '';
       document.getElementById('partImageSvg').value = p.imageSvg || '';
       document.getElementById('partImageSvgDiagonal').value = p.imageSvgDiagonal || '';
+      // 부품 수리실에서 만든 3D 모델(spec.shapes)이 있으면 썸네일로 보여주고(클릭하면 목록과 똑같은 큰
+      // 모달), 부품 수리실로 바로 이어지는 버튼과 삭제 버튼도 같이 둔다(사용자 지적: "썸네일 보여주고
+      // 클릭하면 크게 보여주고 등록,수정,삭제버튼이 다 있어야지"). 편집 화면 자체는 spec을 직접 다루지
+      // 않으니(수정 저장을 눌러도 spec은 그대로 보존됨) 3D 모델 생성/교체는 부품 수리실에서, 삭제만 여기서.
+      const has3d = !!(p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.length);
+      const thumbBtn = document.getElementById('partSpecThumb');
+      if (has3d && p.thumbnail3d) {
+        thumbBtn.style.display = '';
+        thumbBtn.innerHTML = `<img src="${escapeHtml(p.thumbnail3d)}" style="width:100%;height:100%;object-fit:contain;">`;
+      } else {
+        thumbBtn.style.display = 'none';
+        thumbBtn.innerHTML = '';
+      }
+      thumbBtn.dataset.partId = p.id;
+      document.getElementById('partSpecStatus').textContent = has3d ? '3D 모델 있음' : '3D 모델 없음';
+      document.getElementById('partSpecEditBtn').textContent = has3d ? '부품 수리실에서 수정' : '부품 수리실에서 등록';
+      document.getElementById('partSpecEditBtn').dataset.subject = p.subject || 'robot';
+      document.getElementById('partClearSpecBtn').hidden = !has3d;
+      document.getElementById('partClearSpecBtn').dataset.partId = p.id;
       const primaryRadio = document.querySelector('input[name="partPrimaryImage"][value="' + (p.primaryImage === 'diagonal' ? 'diagonal' : 'front') + '"]');
       if (primaryRadio) primaryRadio.checked = true;
       document.getElementById('partSubmitBtn').textContent = '수정 저장';
@@ -1715,8 +2770,12 @@
       catch (err) { alert(err.message); }
     });
   });
-  document.getElementById('imgModalClose').addEventListener('click', () => { document.getElementById('imgModalBackdrop').hidden = true; });
-  document.getElementById('imgModalBackdrop').addEventListener('click', (e) => { if (e.target.id === 'imgModalBackdrop') document.getElementById('imgModalBackdrop').hidden = true; });
+  // 닫을 때 imgModalBody를 비워서 안의 캔버스를 문서에서 실제로 제거한다 — 3D 뷰어(renderShapesPreview)의
+  // 렌더 루프는 "캔버스가 문서에 남아있는 동안만" 계속 돌게 되어 있어서, 그냥 hidden만 켜두면 안 보이는
+  // 채로 계속 그려지며 남는다.
+  function closeImgModal(){ document.getElementById('imgModalBackdrop').hidden = true; document.getElementById('imgModalBody').innerHTML = ''; }
+  document.getElementById('imgModalClose').addEventListener('click', closeImgModal);
+  document.getElementById('imgModalBackdrop').addEventListener('click', (e) => { if (e.target.id === 'imgModalBackdrop') closeImgModal(); });
 
   function categoryRowHtml(c){
     const desc = c.description ? `<div class="item-sub">${escapeHtml(c.description)}</div>` : '';
@@ -1799,9 +2858,15 @@
       document.getElementById('tab-attend').hidden = btn.dataset.tab !== 'attend';
       document.getElementById('tab-curriculum').hidden = btn.dataset.tab !== 'curriculum';
       document.getElementById('tab-parts').hidden = btn.dataset.tab !== 'parts';
+      document.getElementById('tab-textbooks').hidden = btn.dataset.tab !== 'textbooks';
       if (btn.dataset.tab === 'home') renderHome();
       if (btn.dataset.tab === 'curriculum') { loadCategories().then(() => { fillCurriculumCategoryOptions(curriculumSubjectSel.value, curriculumCategorySel); syncCurriculumSubjectUI(); renderCurriculumList(); }); }
-      if (btn.dataset.tab === 'parts') { loadCategories().then(loadParts); }
+      if (btn.dataset.tab === 'parts') openPartsTab();
+      if (btn.dataset.tab === 'textbooks') {
+        // 카테고리·부품·교재를 동시에 요청(예전엔 카테고리를 기다린 뒤에야 나머지를 요청해서 왕복이 두 번이었음)
+        // 부품은 화면에 필요한 이름만 받고, 부품 탭 화면을 다시 그리지도 않는다.
+        Promise.all([loadCategories(), loadPartsLite(), loadTextbooks()]).then(() => { renderTextbookList(); renderChapters(); });
+      }
     });
   });
 
@@ -1810,3 +2875,23 @@
   setAuthMode('login');
 })();
 </script>
+<!-- 부품 관리의 3D 모델 미리보기 전용(parts-lab-viewer.js) — 부품 수리실(parts-lab.html)과 똑같은 최신
+     three.js + CSG 스택을 이 페이지에도 별도로 불러온다(사용자 지시: "3D모델은 클릭했을경우 화면을
+     회전,줌,아웃,카메라 이동만 가능한 모달을 띄어서 보여줍니다"). import map은 반드시 modulepreload보다
+     먼저 와야 한다(2026-09-28, parts-lab.html에서 순서가 바뀌어 "스크립트 로딩 시간 초과"가 났던 적 있음
+     — 그대로 반복하지 말 것). -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.186.1/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.186.1/examples/jsm/",
+    "three-mesh-bvh": "https://unpkg.com/three-mesh-bvh@0.9.15/src/index.js",
+    "three-bvh-csg": "https://unpkg.com/three-bvh-csg@0.0.18/src/index.js"
+  }
+}
+</script>
+<link rel="modulepreload" href="https://unpkg.com/three@0.186.1/build/three.module.js">
+<link rel="modulepreload" href="https://unpkg.com/three-mesh-bvh@0.9.15/src/index.js">
+<link rel="modulepreload" href="https://unpkg.com/three-bvh-csg@0.0.18/src/index.js">
+<link rel="modulepreload" href="parts-lab-viewer.js">
+<script type="module" src="parts-lab-viewer.js"></script>

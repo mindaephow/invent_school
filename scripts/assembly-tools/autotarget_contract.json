@@ -1,0 +1,289 @@
+{
+"1": {
+"parts": {
+"2단블록": 2
+},
+"noPart": false
+},
+"2": {
+"parts": {
+"215프레임": 1,
+"3단블록": 1,
+"리벳": 1
+},
+"noPart": false
+},
+"3": {
+"parts": {
+"리벳": 1,
+"215프레임": 1
+},
+"noPart": false
+},
+"4": {
+"parts": {
+"3단블록": 2,
+"2단블록": 1
+},
+"noPart": false
+},
+"5": {
+"parts": {
+"315프레임": 1,
+"39프레임": 1,
+"3단블록": 2
+},
+"noPart": false
+},
+"6": {
+"parts": {
+"축": 1,
+"작은기어": 1,
+"부시": 1
+},
+"noPart": false
+},
+"7": {
+"parts": {
+"큰기어": 1
+},
+"noPart": false
+},
+"8": {
+"parts": {
+"3단블록": 2,
+"17프레임": 1,
+"15프레임": 1
+},
+"noPart": false
+},
+"9": {
+"parts": {
+"T축": 1
+},
+"noPart": false
+},
+"10": {
+"parts": {
+"315프레임": 1,
+"39프레임": 1
+},
+"noPart": false
+},
+"11": {
+"parts": {
+"작은기어": 1,
+"부시": 2
+},
+"noPart": false
+},
+"12": {
+"parts": {},
+"noPart": false
+},
+"13": {
+"parts": {
+"15프레임": 1
+},
+"noPart": false
+},
+"14": {
+"parts": {},
+"noPart": true
+},
+"15": {
+"parts": {
+"리벳": 2,
+"115프레임": 1
+},
+"noPart": false
+},
+"16": {
+"parts": {},
+"noPart": true
+},
+"17": {
+"parts": {
+"59프레임": 1,
+"리벳": 2,
+"19프레임": 1
+},
+"noPart": false
+},
+"18": {
+"parts": {
+"리벳": 4,
+"59프레임": 1
+},
+"noPart": false
+},
+"19": {
+"parts": {
+"713프레임": 1,
+"리벳": 2,
+"8볼트": 1,
+"너트": 1
+},
+"noPart": false
+},
+"20": {
+"parts": {
+"35프레임": 1,
+"리벳": 3,
+"37프레임": 1
+},
+"noPart": false
+},
+"21": {
+"parts": {
+"리벳": 2,
+"8볼트": 1,
+"너트": 1
+},
+"noPart": false
+},
+"22": {
+"parts": {
+"리벳": 4,
+"39프레임": 1
+},
+"noPart": false
+},
+"23": {
+"parts": {
+"리벳": 4,
+"39프레임": 1,
+"12볼트": 1,
+"너트": 1
+},
+"noPart": false
+},
+"24": {
+"parts": {},
+"noPart": true
+},
+"25": {
+"parts": {},
+"noPart": true
+},
+"26": {
+"parts": {},
+"noPart": true
+},
+"27": {
+"parts": {},
+"noPart": true
+},
+"28": {
+"parts": {},
+"noPart": true
+},
+"29": {
+"parts": {},
+"noPart": true
+},
+"30": {
+"parts": {},
+"noPart": true
+},
+"31": {
+"parts": {},
+"noPart": true
+},
+"32": {
+"parts": {},
+"noPart": true
+},
+"33": {
+"parts": {},
+"noPart": true
+},
+"34": {
+"parts": {},
+"noPart": true
+},
+"35": {
+"parts": {},
+"noPart": true
+},
+"36": {
+"parts": {},
+"noPart": true
+},
+"37": {
+"parts": {},
+"noPart": true
+},
+"38": {
+"parts": {},
+"noPart": true
+},
+"39": {
+"parts": {},
+"noPart": true
+},
+"40": {
+"parts": {},
+"noPart": true
+},
+"41": {
+"parts": {},
+"noPart": true
+},
+"42": {
+"parts": {},
+"noPart": true
+},
+"43": {
+"parts": {},
+"noPart": true
+},
+"44": {
+"parts": {},
+"noPart": true
+},
+"45": {
+"parts": {},
+"noPart": true
+},
+"46": {
+"parts": {},
+"noPart": true
+},
+"47": {
+"parts": {},
+"noPart": true
+},
+"48": {
+"parts": {},
+"noPart": true
+},
+"49": {
+"parts": {},
+"noPart": true
+},
+"50": {
+"parts": {},
+"noPart": true
+},
+"51": {
+"parts": {},
+"noPart": true
+},
+"52": {
+"parts": {},
+"noPart": true
+},
+"53": {
+"parts": {},
+"noPart": true
+},
+"54": {
+"parts": {},
+"noPart": true
+},
+"55": {
+"parts": {},
+"noPart": true
+}
+}

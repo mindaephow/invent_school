@@ -1,0 +1,1 @@
+{"global": {"X": [55.0, 27.3], "Y": [-0.4, -55.0], "Z": [-55.0, 45.4]}, "fit": {"from": "17_W.json", "err_px": 0.12, "points": 45, "theta": 0.67, "phi": 0.88, "cols": "+X", "rows": "-Z"}, "rotate_to": "X"}

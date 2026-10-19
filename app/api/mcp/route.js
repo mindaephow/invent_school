@@ -8,16 +8,17 @@
 // 같은 Next.js 프로젝트·같은 Vercel 배포 안에 들어있다 (static HTML은
 // public/에 두고, Next.js가 라우팅 없이 그대로 서빙).
 //
-// 노출 툴 9개:
+// 노출 툴 8개 + 큐보 조립 툴 6개:
 //   - list_tables       : Supabase DB 테이블 목록 조회
 //   - get_rows          : 임의 테이블 행 조회 (필터·검색·정렬·페이징)
 //   - upsert_row        : 임의 테이블 행 추가·수정
 //   - delete_row        : 임의 테이블 행 삭제 (되돌릴 수 없음)
 //   - update_part_spec  : ivs_part_catalog 한 행의 data.spec만 부분 수정 (image_svg·snapshot(s) 등 큰 필드는 서버에서 기존 값 유지)
-//   - update_part_image : ivs_part_catalog 한 행의 image_svg/image_svg_diagonal만 부분 수정 (다른 필드는 서버에서 기존 값 유지)
 //   - run_sql           : SQL 직접 실행 (위험 DDL 자동 차단, run_sql_query RPC 필요)
 //   - list_github_files : GitHub 저장소(mindaephow/invent_school) 경로별 파일 목록 조회
 //   - get_github_file   : GitHub 저장소 특정 파일 내용 조회
+// + 큐보 조립 도구(app/lib/cubo-assembly-tools.js): get_assembly_guide / get_assembly_reference / list_assemblies / get_assembly /
+//   validate_assembly / get_part_connectors / set_part_connectors — 설계 화면 "조립 보기" 작업용(조립 규칙·겹침 검사·돌기/구멍 연결점)
 //
 // 필요한 환경변수 (Vercel 프로젝트 설정 > Environment Variables, 메인 사이트와 같은 프로젝트):
 //   SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY  - public/index.html·public/design.html이 쓰는 것과 같은 프로젝트,
@@ -47,6 +48,8 @@
 import { createMcpHandler } from 'mcp-handler'
 import { createClient } from '@supabase/supabase-js'
 import { z } from 'zod'
+import { registerCuboAssemblyTools } from '../../lib/cubo-assembly-tools.js'
+import { registerCuboDesignTools } from '../../lib/cubo-design-tools.js'
 
 // Lazily created on first use (not at module load) so `next build` doesn't
 // crash when env vars aren't present at build time — only at request time.
@@ -236,29 +239,6 @@ const baseHandler = createMcpHandler(
     )
 
     server.registerTool(
-      'update_part_image',
-      {
-        title: '부품 image_svg/image_svg_diagonal 부분 수정',
-        description: 'update_part_image — ivs_part_catalog 한 행의 image_svg(정면용 도면)와 image_svg_diagonal(대각선용, 생략하면 image_svg와 동일하게 채움)만 교체한다. name·spec·snapshot(s) 등 다른 필드는 서버에서 기존 값을 그대로 읽어 유지하므로 다시 보낼 필요 없다.',
-        inputSchema: {
-          partId: z.string().describe('ivs_part_catalog 행 id'),
-          imageSvg: z.string().describe('새 image_svg 전체 SVG 마크업 문자열'),
-          imageSvgDiagonal: z.string().optional().describe('새 image_svg_diagonal. 생략하면 imageSvg와 같은 값을 씀'),
-        },
-      },
-      async ({ partId, imageSvg, imageSvgDiagonal }) => {
-        const sb = getSupabase()
-        const { data: existing, error: getErr } = await sb.from('ivs_part_catalog').select('data').eq('id', partId).maybeSingle()
-        if (getErr) return { content: [{ type: 'text', text: `❌ ${getErr.message}` }], isError: true }
-        if (!existing) return { content: [{ type: 'text', text: `❌ id="${partId}" 부품을 찾을 수 없음` }], isError: true }
-        const nextData = { ...existing.data, image_svg: imageSvg, image_svg_diagonal: imageSvgDiagonal || imageSvg }
-        const { error: updErr } = await sb.from('ivs_part_catalog').update({ data: nextData }).eq('id', partId)
-        if (updErr) return { content: [{ type: 'text', text: `❌ ${updErr.message}` }], isError: true }
-        return { content: [{ type: 'text', text: `✅ [ivs_part_catalog] id="${partId}" (${existing.data?.name || ''}) image_svg 갱신 완료` }] }
-      }
-    )
-
-    server.registerTool(
       'run_sql',
       {
         title: 'SQL 직접 실행',
@@ -280,6 +260,11 @@ const baseHandler = createMcpHandler(
       }
     )
 
+    // 큐보 조립 도구(조립 안내서·조립 단계·겹침 검사·부품 돌기/구멍 연결점)
+    registerCuboAssemblyTools(server, getSupabase)
+    // 큐보 3D 디자인 도구(부품 배치 만들기·끼우기 계산·검사·저장)
+    registerCuboDesignTools(server, getSupabase)
+
   },
   {
     instructions:
@@ -288,6 +273,8 @@ const baseHandler = createMcpHandler(
       'ivs_teachers/courses/students/records/curriculum/projects 테이블, 내용은 data jsonb에 있고 권한용 소유자 컬럼이 붙어 있음). ' +
       'ivs_part_catalog의 spec만 바꿀 땐 upsert_row(전체 교체) 대신 update_part_spec(부분 수정, 이미지 유지)을 쓸 것. ' +
       'GitHub 저장소(' + GITHUB_REPO + ') 파일 확인 도구(list_github_files/get_github_file)를 제공한다. ' +
+      '설계 화면의 교재 단계별 3D 조립도("조립 보기") 작업을 할 때는 먼저 get_assembly_guide 를 읽을 것 — 조립 규칙·좌표계·부품 측정 사실·작업 절차가 들어 있고, get_assembly/validate_assembly/get_part_connectors/set_part_connectors 로 단계 데이터 조회·겹침 검사·부품 돌기/구멍 연결점을 다루고, auto_assemble 은 부품 자세·카메라를 공간→판단→검사→수정 반복으로 자동 확정한다. ' +
+      '큐보 부품을 설계 화면에 자유롭게 배치(3D 디자인)하려면 먼저 get_design_guide 를 읽을 것 — compute_attach(돌기↔구멍 끼우기 위치·회전 계산)·validate_design(검사)·save_design(저장)·list_designs/get_design/list_teachers 가 있다. ' +
       '선생님/수업/학생/출석기록/커리큘럼 데이터를 조회·수정하거나 index.html·design.html 코드를 확인할 때 이 서버의 도구를 사용한다.',
   },
   { basePath: '/api', maxDuration: 30, verboseLogs: true }

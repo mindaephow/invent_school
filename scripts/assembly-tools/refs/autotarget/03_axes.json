@@ -1,0 +1,31 @@
+{
+ "global": {
+  "X": [
+   55.0,
+   -21.8
+  ],
+  "Y": [
+   -14.6,
+   -40.8
+  ],
+  "Z": [
+   20.9,
+   53.2
+  ]
+ },
+ "fit": {
+  "from": "03_P.json",
+  "err_px": 0.06,
+  "points": 30,
+  "theta": -0.53,
+  "phi": 0.68,
+  "cols": "+X",
+  "rows": "+Z"
+ },
+ "no_rotate": true,
+ "origin_cell": [
+  1,
+  1
+ ],
+ "naming": "\ud310\uc758 \uae34 \ucabd(\uce78) \ud640\ub77c\uc778 = X\uc120, \uc904 \ubc29\ud5a5 = Z\uc120(\uc774\ub984 \ubc14\uafb8\uc9c0 \uc54a\uc74c), \uce781 \uc9041 \uad6c\uba4d\uc5d0\uc11c \uacc4\uc0b0"
+}

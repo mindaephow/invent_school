@@ -1,0 +1,1599 @@
+// 조립 보기 — 교재 차시의 조립 순서를 단계별로(앞으로/뒤로/자동재생/역재생/번호로 바로가기) 보여준다.
+// 데이터는 design-assemblies.js, 설계 화면과의 연결(부품 놓기·카메라 등)은 design.html이 만드는 window.__ivsAssemblyBridge를 쓴다.
+//
+// 교재 그림처럼: 지금 단계에 새로 끼우는 부품은 제자리에서 살짝 띄워 두고(끼우기 직전) 초록 화살표와 구멍 원으로
+// "여기에 꽂아요"를 보여준다. 다음 단계로 넘어가면 제자리에 끼워지고, 맨 끝 "완성"에서는 전부 제자리에 놓인다.
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const PLAY_MS = 1100;
+  const HOVER_RECV = 20; // 프레임 같은 '구멍 받는 부품'이 움직일 때는 더 가까이 띄운다(너무 멀면 공중에 떠 보인다)
+  const HOVER = 22;      // 끼우기 직전 부품을 띄우는 거리(mm)
+  const PEG_DEPTH = 5;   // 돌기가 구멍 안으로 들어가는 깊이(mm) — 프레임 두께와 같다
+  let def = null;        // 지금 고른 차시에 맞는 조립 데이터
+  let catId = null;      // 지금 고른 카테고리 id (부품 이름으로 부품을 찾을 때 씀)
+  let lastAxKey = '';
+  let renderSeq = 0; // 단계를 다시 그릴 때마다 올려서, 늦게 도는 안내점 다시 붙이기가 옛 단계 것이면 건너뛴다
+  let savedCams = {};    // 관리자가 📷 로 저장한 단계별 시점 { 단계: { theta, phi, radius, target } } (표 ivs_assembly_cams)
+  let baseCam = null;    // 이 단계의 교재 시점(방향·높이각·보는 중심·거리) — 하단 카메라 표시줄용
+  let lastCamKey = '';   // 지금 단계에서 맞춰 둔 카메라 각도(theta|phi) — 바뀔 때만 돌린다
+  let viewing = false;   // 조립 보기 중인지
+  let step = 0;          // 0 = 빈 판, 1..N = 각 단계, N+1 = 완성
+  let snapshot = null;   // 조립 보기 들어가기 전 작업(닫으면 그대로 되돌린다)
+  let timer = null;      // setInterval 번호
+  let timerDir = 0;      // 자동재생 방향(1 앞으로, -1 뒤로, 0 멈춤)
+
+  function bridge() { return window.__ivsAssemblyBridge; }
+  function total() { return def ? def.steps.length : 0; }
+  function last() { return total() + 1; } // "완성" 단계 번호
+  const add = (p, d, k) => [p[0] + d[0] * k, p[1] + d[1] * k, p[2] + d[2] * k];
+  // 회전 행렬 ↔ 오일러각(도, ZYX) — def.xform(몸체를 세우는 것처럼 어느 단계부터 전체를 통째로 돌리고 옮기는 변환)에 쓴다
+  const DEG = Math.PI / 180;
+  const mmul = (a, b) => [0, 1, 2].map((i) => [0, 1, 2].map((j) => a[i][0] * b[0][j] + a[i][1] * b[1][j] + a[i][2] * b[2][j]));
+  const mvec = (m, v) => [0, 1, 2].map((i) => m[i][0] * v[0] + m[i][1] * v[1] + m[i][2] * v[2]);
+  function eulerToMat(r) {
+    const [a, b, c] = r.map((v) => v * DEG), ca = Math.cos(a), sa = Math.sin(a), cb = Math.cos(b), sb = Math.sin(b), cc = Math.cos(c), sc = Math.sin(c);
+    return mmul([[cc, -sc, 0], [sc, cc, 0], [0, 0, 1]], mmul([[cb, 0, sb], [0, 1, 0], [-sb, 0, cb]], [[1, 0, 0], [0, ca, -sa], [0, sa, ca]]));
+  }
+  function matToEuler(m) {
+    const sy = Math.max(-1, Math.min(1, -m[2][0])), ry = Math.asin(sy); let rx, rz;
+    if (Math.abs(sy) > 0.99999) { rz = 0; rx = Math.atan2(m[0][1] / sy, m[0][2] / sy); } else { rx = Math.atan2(m[2][1], m[2][2]); rz = Math.atan2(m[1][0], m[0][0]); }
+    const f = (v) => { v = Math.round(v / DEG * 10) / 10; return Object.is(v, -0) ? 0 : v; };
+    return [f(rx), f(ry), f(rz)];
+  }
+
+  // ── 로봇 뒤집기(def.flip): 교재가 "반대로 뒤집기"로 로봇을 뒤집어 그리는 차시용 ──
+  // 조립 데이터(p·r·marks·dir …)는 모두 "뒤집은 뒤(최종 방향)"로 적어 두고, def.flip.ranges 에 든 단계에서는 화면에 뒤집기 전 모양
+  // (교재가 그린 방향)으로 바꿔 보여 준다. 변환: (x,y,z) → (x, flip.y − y, flip.z − z), 회전은 x축 180° 뒤집기 — 두 번 하면 제자리라 양쪽 어느 방향이든 같은 식이다.
+  const D2R = Math.PI / 180;
+  function matFromEuler(r) {
+    const a = r[0] * D2R, b = r[1] * D2R, c = r[2] * D2R;
+    const cx = Math.cos(a), sx = Math.sin(a), cy = Math.cos(b), sy = Math.sin(b), cz = Math.cos(c), sz = Math.sin(c);
+    return [[cz * cy, cz * sy * sx - sz * cx, cz * sy * cx + sz * sx], [sz * cy, sz * sy * sx + cz * cx, sz * sy * cx - cz * sx], [-sy, cy * sx, cy * cx]];
+  }
+  function eulerFromMat(R) {
+    const sy = Math.max(-1, Math.min(1, -R[2][0]));
+    const ry = Math.asin(sy);
+    let rx, rz;
+    if (Math.abs(sy) < 0.99999) { rx = Math.atan2(R[2][1], R[2][2]); rz = Math.atan2(R[1][0], R[0][0]); } else { rx = Math.atan2(-R[1][2], R[1][1]); rz = 0; }
+    return [rx / D2R, ry / D2R, rz / D2R].map((v) => Math.round(v * 1e4) / 1e4 + 0);
+  }
+  function flipActive(target) { return !!(def && def.flip && (def.flip.ranges || []).some((rg) => target >= rg[0] && target <= rg[1])); }
+  function flipPt(pt, target) {
+    const f = def.flip;
+    const rg = (f.ranges || []).find((r) => target >= r[0] && target <= r[1]);
+    const fy = rg && rg[2] != null ? rg[2] : f.y; // 범위별로 바닥 기준이 다르면 ranges 의 [시작, 끝, y]
+    const P = (p) => [p[0], fy - p[1], f.z - p[2]];
+    const V = (v) => [v[0], -v[1], -v[2]];
+    const R = (r) => { const A = matFromEuler(r || [0, 0, 0]); return eulerFromMat([A[0], [-A[1][0], -A[1][1], -A[1][2]], [-A[2][0], -A[2][1], -A[2][2]]]); };
+    const o = Object.assign({}, pt);
+    o.p = P(pt.p); o.r = R(pt.r);
+    ['marks', 'faceMarks', 'settleMarks', 'holeMarks'].forEach((k) => { if (pt[k]) o[k] = pt[k].map(P); });
+    ['dir', 'settleDir'].forEach((k) => { if (pt[k]) o[k] = V(pt[k]); });
+    if (pt.side) o.side = Object.assign({}, pt.side, { p: P(pt.side.p), r: R(pt.side.r) });
+    if (pt.explode) { const e = pt.explode; o.explode = Object.assign({}, e, { offset: e.offset ? V(e.offset) : e.offset, from: e.from ? P(e.from) : e.from, marks: e.marks ? e.marks.map(P) : e.marks }); }
+    return o;
+  }
+
+  // 창고 카드: 이 단계에서 카메라에 안 보이게 치워 둔 부품을 게임 창고처럼 따로 보여 준다(사용자 지시 2026-10-04)
+  // 오른쪽 패널: 위의 "창고"(메인)는 평소에 비어 있다. 지금 안 보이는 묶음(예: 새 조립품을 만드는 동안 본체)은 창고로 옮기지 않고 창고 N번 자리에 그대로 둔다(사용자 지시 2026-10-04).
+  let storedSlotNow = 1;
+  function renderStorage(stored, thumb, kinds, slot, slots, thumbBy) {
+    storedSlotNow = slot === undefined ? 1 : slot;
+    const box = $('storageList'); if (!box) return;
+    const on = !!(def && def.guideMode === 'mates');
+    box.hidden = !on;
+    if (b_ready()) bridge().setStored && bridge().setStored(on ? { names: Object.keys(stored || {}), counts: stored || {}, thumb: thumb || null, slot: storedSlotNow, slots: slots || {}, thumbBy: thumbBy || {} } : null);
+    if (!on) return;
+    $('storageCount').textContent = '0';
+    $('storageBody').innerHTML = '<div class="required-summary" style="opacity:.55">비어 있음</div>';
+  }
+  function b_ready() { try { return !!bridge(); } catch (e) { return false; } }
+
+  // 창고 자리(사용자 지시 2026-10-04): 0번 = 메인(결합하는 곳), 1~5번 = 따로 만드는 자리. 부품이 지금 있는 자리 = 만든 단계의 자리, 합쳐지는 단계(side.until)가 지났으면 그 단계의 자리.
+  function slotOfStep(n) { if (n > def.steps.length && def.finalSlot !== undefined) return def.finalSlot; const st = def.steps[n - 1]; return st && st.slot !== undefined && st.slot !== null ? st.slot : 1; }
+  function effStepOf(pt, madeStep, upTo) { return pt.side && pt.side.until && upTo >= pt.side.until ? pt.side.until : madeStep; }
+  // 맞물림 방식 안내(def.guideMode === 'mates'): 연결점은 부품에 붙어 있는 고정된 자리(부품 DB 의 돌기·구멍)이고, 이번 단계에 결합할 자리일 때만 보인다.
+  // 제자리 자세로 돌기↔구멍이 맞물리는 쌍을 구하고, 그 쌍 중 지금 떨어져 있는(띄운 높이가 다른) 쌍만 안내한다. 마크·보정 값이 필요 없다.
+  function mateGuides(list, target) {
+    const b = bridge(), M = window.IVS_MATES;
+    if (!M || !M.check) return [];
+    const conn = {};
+    list.forEach((d) => { if (d.type && !conn[d.name]) { const c = b.connectors && b.connectors(d.type); if (c) conn[d.name] = c; } });
+    const keyed = list.map((d, i) => ({ key: '#' + i, n: d.name, p: d.final || d.pos, r: d.rot }));
+    const res = M.check(keyed, conn);
+    const off = (d) => (d.final ? [d.pos[0] - d.final[0], d.pos[1] - d.final[1], d.pos[2] - d.final[2]] : [0, 0, 0]);
+    const out = [], seen = new Set();
+    (res.mated || []).forEach((m) => {
+      const i = Number(String(m.part).slice(1)), j = Number(String(m.into).slice(1));
+      const a = list[i], c = list[j];
+      if (!a || !c || !(a.isNew || c.isNew)) return;
+      if (a.moveGroup && a.moveGroup === c.moveGroup) return; // moveGroup: 같은 단계에 한 덩어리로 같이 옮겨 붙는 부품끼리(머리·몸통 안쪽)는 안내하지 않는다 — 덩어리와 받는 판 사이만 안내(꼬마기사 14번)
+      const skipM = (a.skipMates || []).concat(c.skipMates || []);
+      if (skipM.length && (skipM.includes(a.name + '.' + m.peg) || skipM.includes(c.name + '.' + m.hole))) return; // skipMates: 교재가 안내 화살표를 그리지 않는 돌기(예: 3단블록 가운데 돌기)
+      const oa = off(a), oc = off(c);
+      if (Math.hypot(oa[0] - oc[0], oa[1] - oc[1], oa[2] - oc[2]) < 2) return; // 이미 붙어 있는(같이 움직이는) 쌍은 안내하지 않는다
+      const key = i + ':' + m.peg + '>' + j + ':' + m.hole;
+      if (seen.has(key)) return; seen.add(key);
+      const la = Math.hypot(oa[0], oa[1], oa[2]), lc = Math.hypot(oc[0], oc[1], oc[2]);
+      // 움직이는 쪽 = 나중에 결합하는 부품(순서가 큰 쪽), 같으면 더 멀리 띄운 쪽, 그것도 같으면 이번 단계에 새로 놓인 쪽
+      const mover = (a.order || 1) !== (c.order || 1) ? ((a.order || 1) > (c.order || 1) ? i : j) : (Math.abs(la - lc) > 0.5 ? (la > lc ? i : j) : (a.isNew ? i : j));
+      out.push({ mate: true, pegIdx: i, pegId: m.peg, holeIdx: j, holeId: m.hole, moverIdx: mover, idx: mover });
+    });
+    // 교재처럼 돌기·구멍 맞물림이 아닌 안내 화살표: 부품 데이터의 arrowFrom {name, hole, myHole} = 그 이름 부품의 hole 에서 출발해 이 부품의 myHole 로 도착(예: 1열브라켓 팔 구멍 → 부시)
+    list.forEach((d, i) => {
+      if (!d.arrowFrom || !d.isNew || (target !== undefined && d.step !== target)) return; // arrowFrom 은 그 부품이 놓이는 단계에서만(나중에 move 로 옮겨 붙는 단계에서 다시 나오지 않게 — 꼬마기사 21번)
+      const j = list.findIndex((x, k) => k !== i && x.name === d.arrowFrom.name && (d.arrowFrom.step === undefined || x.step === d.arrowFrom.step)); // step: 같은 이름 부품이 여럿일 때 그 단계에서 만든 것
+      if (j < 0) return;
+      out.push({ mate: true, pegKind: 'hole', pegIdx: j, pegId: d.arrowFrom.hole, holeIdx: i, holeId: d.arrowFrom.myHole, moverIdx: j, idx: i });
+    });
+    return out;
+  }
+
+  // 지금 화면 자세에서 맞물려 이어진 부품 덩어리(그룹) — [{ name, idx:[목록 번호…] }]. 떠 있는 새 부품은 맞물리지 않아 자동으로 빠지고, 옆자리 조립품은 따로 덩어리가 된다.
+  function mateComponents(list) {
+    const b = bridge(), M = window.IVS_MATES;
+    if (!M || !M.check) return [];
+    const conn = {};
+    list.forEach((d) => { if (d.type && !conn[d.name]) { const c = b.connectors && b.connectors(d.type); if (c) conn[d.name] = c; } });
+    const res = M.check(list.map((d, i) => ({ key: '#' + i, n: d.name, p: d.pos, r: d.rot })), conn);
+    const par = list.map((_, i) => i);
+    const find = (x) => { while (par[x] !== x) { par[x] = par[par[x]]; x = par[x]; } return x; };
+    (res.mated || []).forEach((m) => { const i = Number(String(m.part).slice(1)), j = Number(String(m.into).slice(1)); if (!isNaN(i) && !isNaN(j)) par[find(i)] = find(j); });
+    // 옆자리에서 따로 만드는 세트(같은 side.until)는 떠 있어서 맞물려 보이지 않아도 제자리에서 맞물리는 부품끼리 한 묶음이다 → 클릭하면 세트 전체가 잡힌다(사용자 지시 2026-10-04)
+    { const resF = M.check(list.map((d, i) => ({ key: '#' + i, n: d.name, p: d.fin || d.pos, r: d.finRot || d.rot })), conn);
+      (resF.mated || []).forEach((m) => { const i = Number(String(m.part).slice(1)), j = Number(String(m.into).slice(1)); if (!isNaN(i) && !isNaN(j) && list[i].sideUntil && list[i].sideUntil === list[j].sideUntil) par[find(i)] = find(j); }); }
+    const groups = {};
+    list.forEach((_, i) => { const r = find(i); (groups[r] = groups[r] || []).push(i); });
+    // 이름: 1단계 부품이 들어 있으면 본체, 아니면 그 묶음이 처음 만들어진 단계 번호로 N번 조립품
+    return Object.values(groups).filter((g) => g.length > 1).map((idx) => {
+      const first = Math.min(...idx.map((i) => list[i].step || 1));
+      const eff = Math.max(...idx.map((i) => list[i].eff || list[i].step || 1));
+      return { name: first === 1 ? '본체' : stepTag(first) + '번 조립품', idx, origin: slotOfStep(first), slot: (viewSlot !== null && viewSlot !== slotOfStep(step)) ? viewSlot : slotOfStep(step) }; // 지금 화면에 보이는 묶음은 모두 이 단계가 작업하는 창고 자리에 있다(결합하는 단계는 1·2번에 있던 것을 0번으로 끌어와 결합한다 — 사용자 지시 2026-10-04)
+    });
+  }
+
+  // target 단계까지의 부품 목록과, 이번 단계의 초록 안내(화살표·구멍 원)를 만든다.
+  // ───── 팔 당기기(투석기, 사용자 요청 2026-10-12): def.hinges = [{ id, name, keys:['단계:순서'…], pivot:[x,y,z], axis:[x,y,z], max, from }].
+  //   완성 화면의 슬라이더로 팔 부품 묶음을 pivot(T축)을 지나는 axis 선을 기준으로 당긴다(−각도 = 시계 방향). 고무줄(band.elastic)은 팔 구멍이 돌아간 자리를 따라 팽팽하게 다시 그린다.
+  const hingeAng = { arm: 0, motor: 0 }; let hingeActive = false, hingeBusy = false, hingeLoaded = false;
+  function elasticPts(el, ang, xf) {   // el: { pivot:[x,y], hole:[x,y], bush:[x,y], rb, bz, hz, off } — 구멍은 팔이 돈 만큼 pivot 둘레로 돌고, 줄은 구멍 → 부시 접선 직선 + 부시 바깥 감김(투석기 22번 고무줄과 같은 모양)
+    const t = xf ? xf.t : [0, 0, 0], a = -ang * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
+    const px = el.pivot[0] + t[0], py = el.pivot[1] + t[1];
+    const dx = el.hole[0] + t[0] - px, dy = el.hole[1] + t[1] - py;
+    const hx = px + dx * c - dy * s, hy = py + dx * s + dy * c, bx = el.bush[0] + t[0], by = el.bush[1] + t[1];
+    const rb = el.rb, bz = el.bz, hz = el.hz, hi = hy + el.off, lo = hy - el.off;
+    const tan = (sgn) => { const ex = bx - hx, ey = by - hy, L = Math.hypot(ex, ey), th = Math.atan2(ey, ex) + sgn * Math.asin(Math.min(0.99, rb / L)), tt = Math.sqrt(Math.max(1, L * L - rb * rb)); return [hx + tt * Math.cos(th), hy + tt * Math.sin(th)]; };
+    const lin = (A, B, n) => { const o = []; for (let k = 1; k < n; k++) o.push([A[0] + (B[0] - A[0]) * k / n, A[1] + (B[1] - A[1]) * k / n, A[2] + (B[2] - A[2]) * k / n]); return o; };
+    const lobe = (sg) => {
+      const T1 = tan(1), T2 = tan(-1); let a0 = Math.atan2(T1[1] - by, T1[0] - bx), a1 = Math.atan2(T2[1] - by, T2[0] - bx); if (a1 > a0) a1 -= 2 * Math.PI;
+      const arc = []; for (let k = 0; k < 9; k++) { const aa = a0 + (a1 - a0) * k / 8; arc.push([bx + rb * Math.cos(aa), by + rb * Math.sin(aa), bz * sg]); }
+      const first = [hx, hi, hz * sg], last = [hx, lo, hz * sg];
+      return [first].concat(lin(first, arc[0], 6), arc, lin(arc[arc.length - 1], last, 6), [last]);
+    };
+    const thruHi = [[hx, hi, -hz], [hx, hi, -2.5], [hx, hi, 2.5]], thruLo = [[hx, lo, 2.5], [hx, lo, -2.5]];
+    return thruHi.concat(lobe(1), thruLo, lobe(-1).reverse().slice(0, -1));
+  }
+  function setupHinge(list, b) {
+    const hs = def.hinges || [], arm = hs.find((h) => h.id === 'arm'), mot = hs.find((h) => h.id === 'motor'), bar = $('asmHingeBar');
+    hingeAng.arm = 0; hingeAng.motor = 0; hingeActive = false; hingeBusy = false; hingeLoaded = false;
+    if (!arm || step < (arm.from || 0) || !$('asmStageBar')) { if (bar) bar.hidden = true; return; }
+    let bar2 = bar;
+    if (!bar2) {
+      bar2 = document.createElement('div'); bar2.id = 'asmHingeBar'; bar2.style.cssText = 'display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:0 0 8px; padding:6px 10px; background:#fff7ed; border:1px solid #fdba74; border-radius:10px; font-size:13px; font-weight:700;';
+      bar2.innerHTML = '<button type="button" id="asmLoadBtn" style="padding:5px 14px; border-radius:10px; border:0; background:#f97316; color:#fff; font-weight:800;">장전</button><button type="button" id="asmFireBtn" style="padding:5px 14px; border-radius:10px; border:0; background:#dc2626; color:#fff; font-weight:800;">발사</button><span id="asmHingeName"></span><input type="range" id="asmHingeRange" min="0" step="0.5" style="flex:1; min-width:110px;"><input type="number" id="asmHingeNum" min="0" step="0.5" style="width:66px; padding:3px 6px; border:1px solid #cbd5e1; border-radius:8px; text-align:right;"><span>°</span><button type="button" class="ghost" id="asmHingeReset" style="padding:3px 10px;">원위치</button><span id="asmHingeHint" style="font-weight:600; color:#9a3412;"></span>';
+      $('asmStageBar').insertBefore(bar2, $('asmStageBar').firstChild);
+    }
+    bar2.hidden = false;
+    const idxOf = (h) => { const keys = new Set((h && h.keys) || []), r = []; list.forEach((d, i) => { if (keys.has(d.key)) r.push(i); }); return r; };
+    const xf = def.xform && step >= def.xform.at ? def.xform : null, T = xf ? xf.t : [0, 0, 0];
+    const pv = (h) => [h.pivot[0] + T[0], h.pivot[1] + T[1], h.pivot[2] + T[2]];
+    const armIdx = idxOf(arm), motIdx = idxOf(mot), armPv = pv(arm), motPv = mot ? pv(mot) : null;
+    const rng = $('asmHingeRange'), num = $('asmHingeNum'), mx = Number(arm.max) || 0;
+    $('asmHingeName').textContent = '팔 당기기'; rng.max = String(mx); num.max = String(mx); rng.value = '0'; num.value = '0';
+    $('asmHingeHint').textContent = '0° = 선 모양, ' + mx + '° = 브라켓에 걸림';
+    hingeActive = true;
+    const redraw = () => { if (b.bands) b.bands(bandsAt(step)); };
+    const setArm = (v) => {   // 당김 각도(°): 팔을 T축 선 기준으로 시계 방향(−)으로 돌린다
+      v = Math.min(Math.max(Number(v) || 0, 0), mx); const d = v - hingeAng.arm; if (!d) return;
+      b.hinge(armIdx, armPv, arm.axis || [0, 0, 1], -d * Math.PI / 180); hingeAng.arm = v; rng.value = String(Math.round(v * 10) / 10); num.value = String(Math.round(v * 10) / 10); redraw();
+    };
+    const setMotor = (v) => {   // 모터 각도(°): 큰기어 조립을 모터 출력축 선 기준으로 반시계(+)로 돌린다
+      if (!mot || !motIdx.length) return; const d = v - hingeAng.motor; if (!d) return;
+      b.hinge(motIdx, motPv, mot.axis || [0, 0, 1], d * Math.PI / 180); hingeAng.motor = v;
+    };
+    const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2), easeOut = (t) => 1 - Math.pow(1 - t, 3);
+    const tween = (from, to, ms, set, fn) => new Promise((res) => { const t0 = performance.now(); const f = (now) => { const k = Math.min(1, (now - t0) / ms); set(from + (to - from) * (fn || ease)(k)); if (k < 1) requestAnimationFrame(f); else res(); }; requestAnimationFrame(f); });
+    const lock = (on) => { hingeBusy = on; ['asmLoadBtn', 'asmFireBtn', 'asmHingeReset'].forEach((id) => { const e = $(id); if (e) e.disabled = on; }); rng.disabled = on; num.disabled = on; };
+    const load = async () => {   // 장전(사용자 지시 2026-10-12: 부품을 뚫고 지나갈 수 없다): 팔이 브라켓 자리(contact)까지 오면 → 모터(브라켓)가 뒤로 비켜 주고 → 팔이 브라켓 자리를 지나가면 → 모터가 제자리로 돌아와 팔을 붙잡는다
+      if (hingeBusy) return; lock(true);
+      const ct = Math.min(mx, Number(arm.contact) || mx * 0.9);
+      await tween(hingeAng.arm, ct, 1100, setArm);
+      await tween(0, Number((mot && mot.load) || 0), 450, setMotor);
+      await tween(hingeAng.arm, mx, 450, setArm);
+      await tween(hingeAng.motor, 0, 450, setMotor);
+      hingeLoaded = true; lock(false);
+    };
+    const fire = async () => {   // 발사: 모터가 크게 돌아 팔을 놓으면 고무줄이 줄어들며 팔이 튕겨 올라간다
+      if (hingeBusy) return;
+      if (!hingeLoaded && hingeAng.arm < mx - 0.5) await load();
+      if (hingeBusy) return; lock(true);
+      await tween(0, Number((mot && mot.fire) || 0), 500, setMotor);
+      await tween(hingeAng.arm, 0, 380, setArm, easeOut);
+      await tween(hingeAng.motor, 0, 500, setMotor);
+      hingeLoaded = false; lock(false);
+    };
+    $('asmLoadBtn').onclick = load; $('asmFireBtn').onclick = fire;
+    rng.oninput = () => { if (!hingeBusy) { setArm(rng.value); hingeLoaded = false; } };
+    num.onchange = () => { if (!hingeBusy) { setArm(num.value); hingeLoaded = false; } };
+    $('asmHingeReset').onclick = () => { if (!hingeBusy) { setMotor(0); setArm(0); hingeLoaded = false; } };
+  }
+  // 고무줄(step.bands)은 만든 번호부터 뒤 번호에도 이어서 그린다. bandsHideAt: 몸이 창고에 들어가 안 보이는 번호, bandsEnd: 줄을 푸는 번호.
+  function bandsAt(n) {
+    for (let k = Math.min(n, def.steps.length); k >= 1; k--) {
+      const st = def.steps[k - 1] || {};
+      if (st.bands) {
+        if ((st.bandsHideAt || []).indexOf(n) >= 0) return [];
+        const xf = def.xform && n >= def.xform.at ? def.xform : null;   // 부품처럼 줄도 xform(전체 이동·회전)을 같이 받는다 — 안 그러면 31번처럼 부품만 올라가고 줄이 제자리에 남는다
+        const mv = (v) => { if (!xf) return v; const w = mvec(xf.m, v); return [w[0] + xf.t[0], w[1] + xf.t[1], w[2] + xf.t[2]]; };
+        const hel = ((def.hinges || []).find((h) => h.elastic) || {}).elastic;
+        return st.bands.map((b) => Object.assign({}, b, { pts: (b.tight && hel && hingeActive ? elasticPts(hel, hingeAng.arm, xf) : (b.pts || []).map(mv)) }));
+      }
+      if (st.bandsEnd) return [];
+    }
+    return [];
+  }
+  function buildList(target) {
+    const b = bridge();
+    const list = [];
+    const guides = [];
+    const missing = [];
+    let storedThumb = null, storedEff = 0; const storedEffBy = {}, storedThumbBy = {}, storedSlotOvr = {}; // storedSlotOvr: 부품에 slot 을 직접 적은 보관 묶음의 창고(만든 단계의 창고 대신)
+    const storedTypes = {}; // 창고에 들어간 부품도 이미 쓴 부품이다 → 사용 부품 숫자·목록에 넣는다(종류 → 개수)
+    const stored = {};
+    const deferredShift = []; // 화살표 시작점을 먼저 결합하는 부품(리벳)의 떠 있는 자리로 옮기는 일 — 목록이 다 만들어진 뒤에 한다 // 이 단계에서 화면에서 치워 창고에 넣어 둔 부품(이름 → 개수)
+    const n = total();
+    const upTo = Math.min(target, n);
+    const flipOn = flipActive(target);
+    const viewS = (viewSlot !== null && viewSlot !== slotOfStep(upTo)) ? viewSlot : null; // 다른 창고 화면을 보는 중이면 그 창고에 있는 묶음만 그린다
+    let viewEff = 0; // 보는 창고의 묶음이 마지막으로 만들어진 단계(예: 창고 0 = 14번) — 그 단계의 마지막 시점으로 보여 준다
+    const slotByName = {}, slotOvr = {}; // slotOvr: 보관 이름 → 부품에 직접 적은 창고(복사해서 다른 창고에 보관)
+    // hideMade: 이번 단계 데이터에 { 만든 번호: 보관 이름 } 을 적으면 그 번호에서 만든 부품을 이번 단계에서 숨기고 창고에 둔다 — 새 창고에서 새 부분을 시작할 때 앞 번호(이미 ✓ 한 번호) 부품 데이터를 고치지 않고 이 번호에만 적는다(투석기 16번)
+    const hideMade = (def.steps[upTo - 1] && def.steps[upTo - 1].hideMade) || null;
+    // 부품 하나만 숨기려면 키를 "만든 번호:부품 순서"(예: "3:2", moveMade 키와 같다)로 적는다 — 번호 전체가 아닌 일부(예: 둘째 유닛)만 창고에 둘 때(✓ 번호의 부품 데이터는 못 고친다).
+    const hidHere = (p, made, pi) => !!((p.hideAt && p.hideAt.includes(upTo)) || (hideMade && (hideMade[made] !== undefined || (pi !== undefined && hideMade[made + ':' + pi] !== undefined))));
+    const storeOf = (p, made, pi) => ((p.hideAt && p.hideAt.includes(upTo)) ? ((p.store && typeof p.store === 'object' ? p.store[upTo] : p.store) || '보관 중') : (hideMade[made] !== undefined ? hideMade[made] : hideMade[made + ':' + pi]));
+    if (viewS !== null) def.steps.slice(0, upTo).forEach((s2, si2) => (s2.parts || []).forEach((p2, pi2) => { if (hidHere(p2, si2 + 1, pi2)) { const k2 = storeOf(p2, si2 + 1, pi2); slotByName[k2] = Math.max(slotByName[k2] || 0, effStepOf(p2, si2 + 1, upTo)); if (p2.slot !== undefined && p2.slot !== null) slotOvr[k2] = p2.slot; } }));
+    // 부품 번호("리벳 3/14"): design-faces.js 의 규칙 — 조립 MCP(get_part_faces)와 같은 번호
+    const { numOf } = window.IVS_FACES.numberParts(def.steps);
+    def.steps.slice(0, upTo).forEach((s, si) => {
+      (s.parts || []).forEach((pt0, pi) => {
+        const pt = flipOn && !pt0.noflip ? flipPt(pt0, target) : pt0; // 뒤집기 전 방향으로 보여 주는 단계(noflip: 로봇과 따로 만드는 손잡이는 그대로)
+        const type = b.resolve(pt.n, catId);
+        if (!type) { if (!missing.includes(pt.n)) missing.push(pt.n); return; }
+        if (pt.finalOnly && target <= n) return; // finalOnly: 완성 화면에서만 보이는 부품(예: 롤링봇 장전한 작은바퀴)
+        if (viewS !== null) { // 창고 화면 보기: 보관 중이던 묶음 중 이 창고에 있는 것만 보이고, 지금 작업하던 부품은 숨긴다
+          if (!hidHere(pt, si + 1, pi)) return;
+          const k3 = storeOf(pt, si + 1, pi);
+          if ((slotOvr[k3] !== undefined ? slotOvr[k3] : slotOfStep(slotByName[k3] || 0)) !== viewS) return;
+          viewEff = Math.max(viewEff, effStepOf(pt, si + 1, upTo));
+        } else if (hidHere(pt, si + 1, pi)) { const pick = (v) => (v && typeof v === 'object' ? v[upTo] : v); const k = storeOf(pt, si + 1, pi); stored[k] = (stored[k] || 0) + 1; storedTypes[type] = (storedTypes[type] || 0) + 1; storedEff = Math.max(storedEff, effStepOf(pt, si + 1, upTo)); storedEffBy[k] = Math.max(storedEffBy[k] || 0, effStepOf(pt, si + 1, upTo)); if (pt.slot !== undefined && pt.slot !== null) storedSlotOvr[k] = pt.slot; if (pick(pt.storeThumb)) { storedThumb = pick(pt.storeThumb); storedThumbBy[k] = storedThumb; } return; } // store·storeThumb 는 글자 하나 또는 {단계번호: 값} // hideAt: 이 단계에서는 따로 보관해 두고 안 보여준다(예: 비행기 6번은 5번까지 만든 본체와 따로 만드는 조립품)
+        const useSide = pt.side && upTo < pt.side.until;
+        const mvE = window.IVS_moveAt ? window.IVS_moveAt(pt, upTo) : pt.move; // 여러 번 옮긴 부품은 이 단계 이전 가장 마지막 이동
+        const moved = mvE && upTo >= mvE.at; // move: 옆자리에서 다 만든 뒤 다른 자리로 한 번 더 옮겨 붙는 단계(예: 풍차 상자를 몸체에 끼우기)
+        // move: { at, by } 평행 이동 또는 { at, p, r } 새 자세로 옮기기(회전 포함 — 예: 3륜바이크 7단계 샌드위치를 뒤집어 올림)
+        let base = useSide ? pt.side.p : (moved ? (mvE.p || add(pt.p, mvE.by || [0, 0, 0], 1)) : pt.p);
+        // lift: 다 만든 묶음(총몸·기둥)이 받침 위에 띄워져 있다가(from~at 직전 단계) at 단계에 위에서 내려와 결합한다(교재 29) — { from, at, by, dir, hover, marks }
+        if (pt.lift && !useSide && upTo >= (pt.lift.from || 0) && upTo < pt.lift.at) base = add(base, pt.lift.by || [0, 0, 0], 1);
+        if (pt.asideAt && pt.asideAt[upTo]) base = add(base, pt.asideAt[upTo], 1); // asideAt: 이 단계에서는 카메라 밖 옆자리에 치워 둔다(드라마 촬영처럼 화면엔 안 나오지만 옆에 있다) — 다음 단계에서 제자리
+        let rot = useSide ? pt.side.r : (moved && mvE.r ? mvE.r : pt.r);
+        if (pt.poseAt && pt.poseAt[target]) { base = pt.poseAt[target].p; rot = pt.poseAt[target].r; } // poseAt: 이 단계에서만 다른 자세(회전 포함)로 보여 준다(예: 롤링봇 27·28번은 팔 조립품을 눕혀서 조립 — 앞뒤 단계는 세운 자세)
+        // 이번 단계에 새로 놓이거나(또는 옆자리에서 제자리로 들어가는) 부품 — 완성 단계에선 없다
+        const isNew = target <= n && (si + 1 === target || (pt.side && pt.side.until === target) || (mvE && mvE.at === target) || (pt.lift && pt.lift.at === target));
+        let pos = base;
+        // 옆자리 조립품이 제자리로 합쳐지는 단계(settle)에는 settleDir(없으면 dir)로 띄우고, settleMarks(있는 부품만) 자리로 안내한다
+        const lowering = !!(pt.lift && pt.lift.at === target); // 위에서 내려와 결합하는 단계
+        const mvSrc = lowering ? pt.lift : mvE;
+        const moving = !!(mvE && mvE.at === target) || lowering;
+        const settling = !!(pt.side && !useSide) || moving;
+        const dirH = moving ? mvSrc.dir : (settling ? (pt.settleDir || pt.dir) : pt.dir);
+        // 앞 단계에서 만든 부품을 이번 단계에서 "결합되기 전" 모습으로 띄워 보여준다(예: 14단계 T축+기어를 15프레임 위로)
+        const ex = pt.explode && pt.explode.step === target ? pt.explode : null;
+        if (ex) {
+          pos = add(base, ex.offset, 1);
+          (ex.marks || []).forEach((m) => guides.push({ from: ex.from, to: m, dir: [0, -1, 0], idx: list.length }));
+        }
+        if (isNew && pt.seated && !lowering && !(moving && pt.moveGuide)) { // moveGuide: seated 부품이 move 로 옮겨 붙는 단계에서는 링만 칠하지 않고 화살표도 그린다(꼬마기사 14번 모터)
+          // seated: 교재가 이미 꽂아 둔 모양으로 그리는 부품(리벳 등) — 떠서 내려오지 않고 제자리에 두고, 꽂힌 구멍에 초록 원만 칠한다(교재 23·25·27)
+          (pt.marks || []).forEach((m) => guides.push({ from: m, to: m, dir: dirH || [0, 1, 0], idx: list.length, ringOnly: true }));
+        } else if (isNew && dirH && pt.noGuide) {
+          pos = add(base, dirH, (moving ? (mvSrc.hover || pt.hover) : pt.hover) || HOVER); // noGuide: 받는 판과 함께 떠서 오는 부품(판에 이미 박힌 리벳) — 따로 안내 화살표·점이 없다. 옮겨 붙는 단계(move)에서는 그 이동의 hover 를 따라 같은 묶음과 같이 뜬다(드롭체커 28번: 27번의 판 hover 30 이 남아 25프레임만 블록에서 떨어졌다)
+        } else if (isNew && dirH) {
+          // 띄우는 거리·돌기가 들어가는 깊이·판 두께는 부품마다 정할 수 있다(T축처럼 길게 꽂히는 것, 두꺼운 부시)
+          const hv = moving ? (mvSrc.hover || HOVER) : settling ? (pt.settleHover || HOVER) : (pt.hover || (pt.recv ? HOVER_RECV : HOVER)); // 합쳐지는 묶음은 모두 같은 거리로 띄워야 모양이 흐트러지지 않는다
+          const depth = pt.pegDepth || PEG_DEPTH;
+          pos = add(base, dirH, hv); // 끼우기 직전: 제자리에서 끼우는 방향으로 띄운다
+          const targets = moving ? (mvSrc.marks || []) : settling ? (pt.settleMarks || []) : (pt.marks && pt.marks.length ? pt.marks : [base]);
+          // 화살표는 띄워 놓은 부품의 돌기 끝(구멍에 들어갈 깊이만큼 아래)에서 시작해 구멍 위 원으로 들어간다
+          const myOrder = settling ? (pt.settleOrder || 1) : (pt.joinOrder || 1); // settleOrder: 합쳐지는 묶음이 같은 단계의 다른 부품(리벳)보다 나중에 내려올 때 2
+          // 받는 부품(호스트)이 이 점 근처인지: 끼우는 방향 축 위로 14 이내이고, 축에서 옆으로 4 이내(옆 구멍의 돌기를 잘못 잡지 않게)
+          const near = (f, m) => { const d = [f[0] - m[0], f[1] - m[1], f[2] - m[2]]; const u = dirH || [0, 1, 0]; const ul = Math.hypot(u[0], u[1], u[2]) || 1; const al = (d[0] * u[0] + d[1] * u[1] + d[2] * u[2]) / ul; return Math.abs(al) < 14 && Math.hypot(d[0] - al * u[0] / ul, d[1] - al * u[1] / ul, d[2] - al * u[2] / ul) < 4; };
+          const hostShift = pt.guideShift ? () => pt.guideShift : (m) => { const h = list.find((q) => q.isNew && q.final && (q.order || 1) < myOrder && near(q.final, m)); return h ? [h.pos[0] - h.final[0], h.pos[1] - h.final[1], h.pos[2] - h.final[2]] : null; };
+          if (pt.recv && !pt.pegTarget) { // pegTarget: 구멍 받는 부품이 움직여도 교재처럼 화살표가 고정된 돌기 끝을 향하게 그린다(marks = 고정된 돌기 끝)
+            // 구멍을 받는 부품(프레임 등)이 움직일 때: 원은 떠 있는 부품의 구멍에, 화살표는 고정된 돌기 끝에서 그 구멍 쪽으로
+            // faceMarks: 돌기 끝이 판 바깥 면과 같은 높이가 아닐 때, 제자리에 끼운 뒤 판 바깥 면의 구멍 자리
+            const faces = !settling && pt.faceMarks ? pt.faceMarks : targets;
+            // 같은 단계에서 먼저 결합하는 부품(예: 리벳, joinOrder 가 더 작음)의 돌기에 끼우는 경우, 그 부품은 아직 떠 있으니 화살표는 떠 있는 돌기 끝에서 시작한다(사용자 지시 2026-10-04: 리벳이 중간에 보이고 위쪽 화살표는 리벳에서 끝난다)
+            targets.forEach((m, i) => { const g = { from: m, to: add(faces[i] || m, dirH, hv), dir: dirH, idx: list.length, both: pt.thick || 5 }; guides.push(g); deferredShift.push(() => { const sh = hostShift(m); if (sh) g.from = add(m, sh, 1); }); }); // 호스트(리벳)가 이 부품보다 뒤 단계 목록에 있어도 찾도록 목록을 다 만든 뒤 옮긴다
+          } else {
+            targets.forEach((m) => { const sh = hostShift(m) || [0, 0, 0]; guides.push({ from: add(m, dirH, hv - depth), to: add(m, sh, 1), dir: dirH, idx: list.length, stop: hostShift(m) ? 2.5 : 0 }); }); // 받는 부품이 먼저 떠 있으면(예: 판 위 리벳) 점도 떠 있는 구멍에
+          }
+        }
+        // holeMarks: 프레임 구멍에 고정된 결합 위치 원(교재처럼 판 구멍에 표시, 부품이 움직여도 그 자리)
+        if (isNew && !moving && pt.holeMarks) pt.holeMarks.forEach((m) => guides.push({ from: m, to: m, dir: dirH || [0, 1, 0], idx: list.length, ringOnly: true }));
+        list.push({ key: (si + 1) + ':' + (s.parts || []).indexOf(pt0), step: si + 1, eff: effStepOf(pt, si + 1, upTo), noFreeze: !!(pt.noFreeze && pt.noFreeze.includes(upTo)), name: pt.n, label: pt.n + ' ' + numOf.get(pt0) + '번', type, mount: 'floor', pos: pos.slice(), quat: b.quat(rot), rot: rot.slice(), isNew, final: (isNew && dirH) || ex ? base.slice() : null, order: settling ? (pt.settleOrder || 1) : (pt.joinOrder || (ex && ex.order) || 1), moveGroup: (moving && pt.moveGroup) || null, arrowFrom: pt.arrowFrom || null, skipMates: pt.skipMates || null, sideUntil: pt.side ? pt.side.until : null, fin: moved ? (pt.move.p || add(pt.p, pt.move.by || [0, 0, 0], 1)) : pt.p, finRot: (moved && pt.move.r) ? pt.move.r : pt.r }); // 합쳐지는 묶음(settle)은 모두 한꺼번에 내려온다 // ex: 14단계처럼 "결합 전"으로 띄운 부품도 제자리(결합 후)가 있다
+      });
+    });
+    deferredShift.forEach((fn) => fn());
+    // xform: 이 단계부터는 지금까지 만든 것 전체를 통째로 돌려서 놓는다(예: 풍차 몸체를 세워서 받침에 올리기). 부품 자리는 원래 좌표 그대로 두고 여기서 한꺼번에 변환한다.
+    const xf = def.xform && target >= def.xform.at ? def.xform : null;
+    if (xf) {
+      const T = (v) => { const w = mvec(xf.m, v); return [w[0] + xf.t[0], w[1] + xf.t[1], w[2] + xf.t[2]]; };
+      list.forEach((d) => {
+        if (d.noXform) return;
+        d.pos = T(d.pos); if (d.final) d.final = T(d.final);
+        d.rot = matToEuler(mmul(xf.m, eulerToMat(d.rot))); d.quat = b.quat(d.rot);
+      });
+      guides.forEach((g) => { g.from = T(g.from); g.to = T(g.to); g.dir = mvec(xf.m, g.dir); });
+    }
+    { const lf = def.lift && Number(def.lift[target]); if (lf) list.forEach((d) => { d.pos = [d.pos[0], d.pos[1] + lf, d.pos[2]]; if (d.final) d.final = [d.final[0], d.final[1] + lf, d.final[2]]; }); } // lift: 단계 번호 → 그 단계에서만 화면 전체를 y 로 띄운다(바닥 아래에서 올라와야 하는 새 부품이 있는 단계, 꼬마기사 23번)
+    const guidesOut = def.guideMode === 'mates' ? mateGuides(list, target) : guides;
+    return { list, guides: guidesOut, missing, stored, storedThumb, storedSlot: storedEff ? slotOfStep(storedEff) : 1, viewEff, storedSlots: Object.fromEntries(Object.keys(storedEffBy).map((k) => [k, storedSlotOvr[k] !== undefined ? storedSlotOvr[k] : slotOfStep(storedEffBy[k])])), storedThumbBy, storedTypes, targets: list.map((d) => d.final || null), orders: list.map((d) => d.order || 1) };
+  }
+
+  // 단계 이름표: label 이 있는 단계(예: "창고")는 이름으로, 나머지는 label 없는 단계만 세어 번호를 붙인다
+  function stepTag(i) { const st = def.steps[i - 1]; if (st && st.label) return st.label; let c = 0; for (let k = 0; k < i; k++) if (!(def.steps[k] && def.steps[k].label)) c++; return String(c); }
+  // 1, 2, 3 … 단계 번호 버튼(+ 마지막 "완성") — 눌러서 그 단계로 바로 가고, 지금 단계는 진하게 보인다.
+  // 관리자 전용 단계 상태(수정중/완료): DB(ivs_assembly_status)에 단계별로 저장하고, 단계 번호 버튼에 ✓(완료)·🛠(수정중)로 표시한다.
+  let stepStatus = {};
+  let posesDB = {}; // 단계별로 기록한 부품 모습 { 단계: { 부품 이름 번호: {p, q, r} } } (ivs_assembly_poses)
+  let lastLabels = []; // 지금 화면 부품 순서의 이름(모습 기록에 쓴다)
+  let thumbsDB = {}; // 창고 카드 썸네일 { '단계:창고': 사진 } (ivs_assembly_thumbs)
+  // 지금 단계의 창고 카드마다 "그 창고에서 가장 최근에 저장한 사진"을 보낸다(단계 데이터 slotThumb 은 사진이 없을 때의 대비)
+  function pushSlotThumbs() {
+    const b = bridge(); if (!b || !b.setSlotThumbs || !def) return;
+    const m = Object.assign({}, (step >= 1 && step < last() && def.steps[step - 1] && def.steps[step - 1].slotThumb) || {});
+    for (let n = 0; n <= 5; n++) {
+      for (let s2 = Math.min(step, last() - 1); s2 >= 1; s2--) {
+        const sl = def.steps[s2 - 1] ? def.steps[s2 - 1].slot : undefined;
+        if (sl === n && thumbsDB[s2 + ':' + n]) { m[n] = thumbsDB[s2 + ':' + n]; break; }
+      }
+    }
+    b.setSlotThumbs(m);
+  }
+  const isAdm = () => !!(window.__ivsIsAdmin && window.__ivsIsAdmin());
+  // 단계 설명 끝의 "━ 작업 점검 ━" 블록(번호마다 한 일 체크박스)은 관리자에게만 보인다(관리자 지시 2026-10-09). 일반 사용자에게는 그 앞까지만.
+  const noteView = (n) => { n = n || ''; if (isAdm()) return n; const i = n.indexOf(String.fromCharCode(10) + '━ 작업 점검 ━'); return i >= 0 ? n.slice(0, i) : n; };
+  // 안내 모달(확인 버튼 하나): 모습·교재 샷을 저장했을 때 확실히 알려 준다(사용자 지시 2026-10-05)
+  // 마무리 점검(관리자만): 완성에 갔을 때 저절로 돌고, "🔍 마무리 점검" 버튼으로도 돌린다(2026-10-16 관리자 지시). 작업을 막지 않고 목록만 보여 준다.
+  //   보는 것: 안 만든 번호 · 번호 설명 끝 "작업 점검" 블록의 ☐ 항목 · 카메라 출처(camSrc≠eye) · 그림 3장(NN·NN_1·NN_2, DB) · 확인 필요(review) 표시 · 사용자 ✅ 안 누른 번호.
+  //   (읽기 표 빈칸·카메라 fit 오차·비교 증거 파일은 개발 PC 의 final_audit.py 가 보고, 그 결과는 마지막 번호 설명 끝 "작업 점검 전체"에 붙는다)
+  // 만든 번호 판정: 새 부품이 있거나, 새 부품 없이 앞 번호 부품 묶음을 옮겨 합치는 번호(moveMade — 예: 사마귀로봇 32번 "18 + 31")도 만든 번호다
+  function stepMade(st) { return !!st && ((st.parts || []).length > 0 || (!!st.moveMade && Object.keys(st.moveMade).length > 0) || !!st.madeNoPart); }   // madeNoPart: 부품 없는 번호(전선 연결 등)를 번호 작업으로 끝낸 표시(어보이더 28·30번)
+  function auditLines() {
+    const NLC = String.fromCharCode(10), out = [], built = [], unbuilt = [];
+    def.steps.forEach((st, k) => { (stepMade(st) ? built : unbuilt).push(k + 1); });
+    const rng = (a) => a.length ? (a[0] + '~' + a[a.length - 1] + '번' + (a.length === a[a.length - 1] - a[0] + 1 ? '' : ' 중 ' + a.length + '개')) : '없음';
+    out.push('만든 번호 ' + built.length + '개(' + rng(built) + ')' + (unbuilt.length ? ' · 아직 안 만든 번호 ' + unbuilt.length + '개(' + rng(unbuilt) + ')' : ' · 전부 만듦'));
+    const rows = [];
+    built.forEach((n) => {
+      const st = def.steps[n - 1], miss = [], warn = [];
+      const note = st.note || '', mk = note.indexOf(NLC + '━ 작업 점검 ━');
+      if (mk < 0) miss.push('작업 점검 블록 없음');
+      else note.slice(mk).split(NLC).forEach((l) => { if (l.indexOf('☐ ') === 0) miss.push(l.slice(2)); });
+      if (st.camSrc !== 'eye') miss.push('카메라 출처가 eye 가 아님(' + (st.camSrc || '없음') + ')');
+      const have = (refsMeta && refsMeta[n]) ? refsMeta[n].map((r) => r.idx) : [];
+      [0, 1, 2].forEach((i) => { if (have.indexOf(i) < 0) miss.push('그림 ' + i + '번 DB 에 없음'); });
+      if (st.review) warn.push('확인 필요(마무리 안 됨)');
+      if (stepStatus[n] !== 'done') warn.push('사용자 ✅ 완료 아직 안 눌림');
+      rows.push([n, miss, warn]);
+    });
+    const bad = rows.filter((r) => r[1].length);
+    out.push(bad.length ? '☐ 빠진 것 있는 번호 ' + bad.length + '개: ' + bad.map((r) => r[0]).join(', ') : '☑ 빠진 것 없음(작업 점검 ☐·카메라 출처·그림 3장)');
+    bad.forEach((r) => r[1].forEach((x) => out.push('   ☐ ' + r[0] + '번: ' + x)));
+    const rv = rows.filter((r) => def.steps[r[0] - 1].review).map((r) => r[0]);
+    if (rv.length) out.push('⚠ 확인 필요(마무리 안 됨, 번호판 주황): ' + rv.join(', ') + '번');
+    const nd = rows.filter((r) => stepStatus[r[0]] !== 'done').map((r) => r[0]);
+    out.push(nd.length ? '… ✅ 완료 안 누른 번호 ' + nd.length + '개' : '✅ 모든 번호 완료');
+    jointAuditLines().forEach((l) => out.push(l));   // 관절·묶음 점검(2026-10-16 사용자 지시: 마무리 점검에 관절 부분 추가)
+    return out;
+  }
+  // 관절 점검(완성 화면 기준 — 부품이 모두 놓인 상태): 관절·묶음이 서로 맞게 이어져 있는지, 막대(19프레임) 길이가 두 핀 거리와 맞는지, 추정으로 남은 것이 없는지 본다
+  let lastAuditText = '';   // 마무리 점검 브리핑 마지막 결과(점검결과 보기 버튼이 다시 보여 준다)
+  const jointPass = {}, jointLineMap = {}, DONE_MARK = '[점검완료]';   // jointLineMap: 목록 줄 글 → 관절 번호(모달의 완료 체크가 어느 관절인지 알려 준다)   // 관절 번호 → 마무리 점검의 자동 검사(위치·돌려 보기) 통과 여부(true/false), 아직 안 돌렸으면 없음
+  function jointAuditLines() {
+    const out = [], J = jointsDB.joints || [], G = jointsDB.groups || [], have = new Set(lastLabels), miss = [], warn = [];
+    if (!jointsDB.loaded) return ['… 관절: 아직 DB 에서 못 읽었어요(관리자 로그인과 supabase/assembly_joints.sql 실행을 확인하세요)'];
+    if (!J.length) return ['☐ 관절: 등록된 관절이 없어요(🔩 관절 패널에서 부품을 눌러 등록)'];
+    out.push('🔩 관절 ' + J.length + '개 · 움직이는 묶음 ' + G.length + '개');
+    J.forEach((j) => {
+      if (!have.has(j.part_a)) miss.push(j.name + ': 색칠할 부품 "' + j.part_a + '" 이(가) 완성 화면에 없음');
+      if (j.part_b && !have.has(j.part_b)) miss.push(j.name + ': 이어진 부품 "' + j.part_b + '" 이(가) 완성 화면에 없음');
+      if (j.group_id && !G.some((g) => g.group_id === j.group_id)) miss.push(j.name + ': 소속 묶음 "' + j.group_id + '" 이(가) 없음');
+      if (j.rides_group_id && !G.some((g) => g.group_id === j.rides_group_id)) miss.push(j.name + ': 올라타는 묶음 "' + j.rides_group_id + '" 이(가) 없음');
+      if (j.kind === 'pin' && !j.rides_group_id) miss.push(j.name + ': 핀인데 올라타는 묶음이 안 적힘');
+      if (/추정|확인 필요|점검완료/.test(j.note || '')) { const done = (j.note || '').indexOf(DONE_MARK) >= 0, ln = j.name + ' — ' + (jointPass[j.joint_id] === true ? '자동 검사 통과 ' : jointPass[j.joint_id] === false ? '⚠ 자동 검사에서 걸림(아래 관절 검사 참고) ' : '자동 검사는 🔍 마무리 점검에서 ') + (done ? '(점검완료)' : '(사용자 최종 점검 남음)'); warn.push(ln); jointLineMap['   · ' + ln] = j.joint_id; }
+    });
+    G.forEach((g) => {
+      const root = J.find((j) => j.joint_id === g.root_joint_id);
+      if (g.kind === 'body' && !g.root_joint_id) miss.push('묶음 ' + g.name + ': 중심 관절이 안 정해짐');
+      else if (g.root_joint_id && !root) miss.push('묶음 ' + g.name + ': 중심 관절 "' + g.root_joint_id + '" 이(가) 없음');
+      (g.members || []).forEach((m) => { if (m && m.name && !have.has(m.name)) miss.push('묶음 ' + g.name + ': 부품 "' + m.name + '" 이(가) 완성 화면에 없음'); });
+      if (g.kind === 'link') {   // 막대 묶음: 양 끝 핀이 정확히 2개 있고, 두 핀 사이 거리가 막대 길이와 맞아야 한다(허용 ±2mm)
+        const pins = J.filter((j) => j.group_id === g.group_id && j.kind === 'pin');
+        if (pins.length !== 2) miss.push('막대 ' + g.name + ': 양 끝 핀 관절이 ' + pins.length + '개(2개여야 함)');
+        else { const a = jointWorld(pins[0]), b2 = jointWorld(pins[1]);
+          if (!a || !b2) miss.push('막대 ' + g.name + ': 핀 위치를 못 구함(색칠할 부품이 화면에 없음)');
+          else { const d = Math.hypot(a.pos[0] - b2.pos[0], a.pos[1] - b2.pos[1], a.pos[2] - b2.pos[2]); const L = Number(g.link_length);
+            if (!(L > 0)) miss.push('막대 ' + g.name + ': 길이(link_length)가 안 적힘');
+            else if (Math.abs(d - L) > 2) miss.push('막대 ' + g.name + ': 두 핀 거리 ' + (Math.round(d * 10) / 10) + 'mm ≠ 막대 길이 ' + L + 'mm');
+            else out.push('   ☑ 막대 ' + g.name + ': 두 핀 거리 ' + (Math.round(d * 10) / 10) + 'mm ≈ 길이 ' + L + 'mm'); } }
+      }
+    });
+    out.push(miss.length ? '☐ 관절 빠진 것 ' + miss.length + '개' : '☑ 관절 점검 통과(이름·묶음·중심 관절·막대 길이)');
+    miss.forEach((m) => out.push('   ☐ ' + m));
+    if (warn.length) { const nd = warn.filter((w) => /\(점검완료\)$/.test(w)).length; out.push('👤 사용자 최종 점검 — 남음 ' + (warn.length - nd) + '개 · 완료 ' + nd + '개 (줄 오른쪽 체크로 완료 표시):'); warn.forEach((w) => out.push('   · ' + w)); }
+    return out;
+  }
+  // 관절 검사(관리자 지시 2026-10-17: "추정·확인 필요는 스캔으로 확인이 안 되나?" → 추가): ① 축이 큰 기어·바퀴 같은 상대 부품 가운데를 지나는지 ② 축이 색칠할 부품 가운데를 지나는지 ③ 묶음을 한 바퀴 돌려 보며 막히는 곳이 없는지
+  function jointCheckLines() {
+    const b = bridge(), J = jointsDB.joints || [], G = jointsDB.groups || [], out = [];
+    if (!b || !b.jointTest || !jointsDB.loaded || !J.length) return out;
+    const nameOf = (i) => lastLabels[i] || ('부품' + i), baseOf = (nmx) => String(nmx).replace(/\s*\d+번.*$/, '').trim();
+    const dist = (p, o, a) => { const v = [p[0] - o[0], p[1] - o[1], p[2] - o[2]], l = Math.hypot(a[0], a[1], a[2]) || 1, u = [a[0] / l, a[1] / l, a[2] / l], c = [v[1] * u[2] - v[2] * u[1], v[2] * u[0] - v[0] * u[2], v[0] * u[1] - v[1] * u[0]]; return Math.hypot(c[0], c[1], c[2]); };
+    out.push('', '━ 🔩 관절 검사(위치·방향·돌려 보기) ━');
+    J.forEach((j) => {
+      const w = jointWorld(j); if (!w) { out.push('☐ ' + j.name + ': 색칠할 부품이 화면에 없어 못 봄'); return; }
+      const pa = partPose(j.part_a), pb = j.part_b ? partPose(j.part_b) : null, fails = [];
+      const da = pa ? dist(pa.pos, w.pos, w.axis) : 0, db = pb ? dist(pb.pos, w.pos, w.axis) : 0;
+      if (da > 1.5) fails.push('축이 ' + j.part_a + ' 가운데에서 ' + da.toFixed(1) + 'mm 벗어남');
+      if (pb && db > 3) fails.push('축이 ' + j.part_b + ' 가운데를 ' + db.toFixed(1) + 'mm 비껴감');
+      const gid = j.kind === 'pin' ? (j.rides_group_id || j.group_id) : j.group_id, g = G.find((x) => x.group_id === gid), mem = g ? (g.members || []).map((m) => lastLabels.indexOf(m.name)).filter((i) => i >= 0) : [];
+      let spin = '묶음 없음';
+      if (mem.length) {
+        const r = b.jointTest({ members: mem, pivot: w.pos, axis: w.axis, step: 10, round: lastLabels.map((l, i) => /기어|바퀴|부시/.test(l) ? i : -1).filter((i) => i >= 0) }), keys = Object.keys(r.hits);
+        if (!keys.length) spin = '한 바퀴(' + r.tested + '곳) 막힘 없음';
+        else { const by = {}; keys.forEach((k) => { const [i, jx] = k.split('|').map(Number); const t = baseOf(nameOf(i)) + '↔' + baseOf(nameOf(jx)); by[t] = Math.max(by[t] || 0, r.hits[k].length); });
+          const tot = Object.keys(by).map((t) => t + ' ' + by[t] + '곳'); spin = '돌리면 부딪힘: ' + tot.slice(0, 4).join(', '); const gears = Object.keys(by).every((t) => /기어↔.*기어|기어.*↔기어/.test(t)); if (gears) spin += ' (맞물리는 기어끼리라 정상)'; else fails.push(spin + ' — 몸통 상자가 넉넉해 오탐일 수 있으니 3D 로 확인'); }
+      }
+      jointPass[j.joint_id] = !fails.length;
+      out.push((fails.length ? '⚠ ' : '☑ ') + j.name + ': 축↔' + j.part_a + ' 오차 ' + da.toFixed(1) + 'mm' + (pb ? ', 축↔' + j.part_b + ' 오차 ' + db.toFixed(1) + 'mm' : '') + ' · ' + spin);
+      fails.forEach((f) => out.push('   ☐ ' + f));
+    });
+    return out;
+  }
+  // 모달의 관절 줄에 "완료" 체크를 단다(관리자). 체크하면 관절 메모에 [점검완료]를 붙여 DB 에 저장하고 글이 (점검완료)로 바뀐다. 다시 끄면 (사용자 최종 점검 남음)으로 돌아간다.
+  function jointLineHook(ln, d, paint) {
+    const jid = jointLineMap[ln]; if (!jid || !isAdm()) return;
+    const j = (jointsDB.joints || []).find((x) => x.joint_id === jid); if (!j) return;
+    const lab = document.createElement('label'); lab.style.cssText = 'margin-left:10px;font:600 12px sans-serif;color:#475569;cursor:pointer;white-space:nowrap;';
+    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = (j.note || '').indexOf(DONE_MARK) >= 0; cb.style.cssText = 'vertical-align:middle;margin-right:3px;';
+    lab.appendChild(cb); lab.appendChild(document.createTextNode('완료')); d.appendChild(lab);
+    let cur = ln;
+    cb.addEventListener('change', async () => {
+      const b = bridge(); if (!b || !b.jointStore) { cb.checked = !cb.checked; return; }
+      const want = cb.checked, base = String(j.note || '').split(DONE_MARK).join('').trim(), r = Object.assign({}, j); delete r.id; delete r.updated_at; delete r.updated_by; r.note = want ? (base + ' ' + DONE_MARK).trim() : base;
+      try {
+        const saved = await b.jointStore.saveJoint(r); const i = jointsDB.joints.findIndex((x) => x.joint_id === saved.joint_id); if (i >= 0) jointsDB.joints[i] = saved; Object.assign(j, saved);
+        const nl = want ? cur.replace('(사용자 최종 점검 남음)', '(점검완료)') : cur.replace('(점검완료)', '(사용자 최종 점검 남음)');
+        lastAuditText = lastAuditText.split(cur).join(nl); delete jointLineMap[cur]; jointLineMap[nl] = jid; cur = nl;
+        d.textContent = ''; const sp = document.createElement('span'); d.appendChild(sp); // 글만 다시 그린다
+        nl.split(/(\(사용자 최종 점검 남음\)|\(점검완료\))/).forEach((seg) => { if (!seg) return; const e = document.createElement('span'); e.textContent = seg; if (seg === '(사용자 최종 점검 남음)') e.style.color = '#ea580c'; else if (seg === '(점검완료)') e.style.color = '#16a34a'; d.appendChild(e); }); d.removeChild(sp); d.appendChild(lab);
+      } catch (e) { cb.checked = !want; alert(e.message); }
+    });
+  }
+  function notice(msg, onClose, opts) {
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;';
+    const bx = document.createElement('div');
+    bx.style.cssText = 'background:#fff;border-radius:16px;padding:22px 28px 18px;min-width:240px;max-width:80vw;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.3);font:700 15px sans-serif;color:#111827;';
+    const p = document.createElement('div'); p.style.cssText = 'margin-bottom:16px;line-height:1.5;white-space:pre-line;text-align:left;max-height:60vh;overflow:auto;';
+    if (opts && opts.rich) {   // 줄마다 나눠 그린다: (사용자 최종 점검 남음)은 주황, (점검완료)는 초록, 관절 줄에는 완료 체크(opts.lineHook)
+      String(msg).split(String.fromCharCode(10)).forEach((ln) => { const d = document.createElement('div'); d.style.cssText = 'min-height:1.2em;';
+        const paint = (txt) => { d.textContent = ''; txt.split(/(\(사용자 최종 점검 남음\)|\(점검완료\))/).forEach((seg) => { if (!seg) return; const sp = document.createElement('span'); sp.textContent = seg; if (seg === '(사용자 최종 점검 남음)') sp.style.color = '#ea580c'; else if (seg === '(점검완료)') sp.style.color = '#16a34a'; d.appendChild(sp); }); };
+        paint(ln); if (opts.lineHook) opts.lineHook(ln, d, paint); p.appendChild(d); });
+    } else p.textContent = msg;
+    const ok = document.createElement('button'); ok.type = 'button'; ok.textContent = '확인';
+    ok.style.cssText = 'padding:8px 32px;border-radius:999px;border:0;background:#2563eb;color:#fff;font:700 14px sans-serif;cursor:pointer;';
+    const close = () => { ov.remove(); document.removeEventListener('keydown', onKey, true); if (onClose) onClose(); };
+    const onKey = (e) => { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); } };
+    ok.addEventListener('click', close); document.addEventListener('keydown', onKey, true);
+    bx.appendChild(p);
+    if (opts && opts.copy) {   // 복사 버튼(2026-10-17 관리자 지시: 마무리 점검 브리핑을 복사): 내용을 클립보드에 넣는다
+      const cp = document.createElement('button'); cp.type = 'button'; cp.textContent = '📋 복사';
+      cp.style.cssText = 'padding:8px 22px;margin-right:10px;border-radius:999px;border:1px solid #cbd5e1;background:#fff;color:#111827;font:700 14px sans-serif;cursor:pointer;';
+      cp.addEventListener('click', async () => {
+        let done = false;
+        try { const ta = document.createElement('textarea'); ta.value = msg; ta.style.cssText = 'position:fixed;left:-9999px;top:0;'; document.body.appendChild(ta); ta.select(); done = document.execCommand('copy'); ta.remove(); } catch (e) { /* 아래 클립보드 API 로 다시 시도 */ }
+        if (!done) { try { await Promise.race([navigator.clipboard.writeText(msg).then(() => true), new Promise((r) => setTimeout(() => r(false), 1200))]).then((v) => { done = !!v; }); } catch (e) { /* 복사 못 하면 아래에서 알린다 */ } }
+        cp.textContent = done ? '✅ 복사됨' : '복사 실패'; setTimeout(() => { cp.textContent = '📋 복사'; }, 1800);
+      });
+      bx.appendChild(cp);
+    }
+    bx.appendChild(ok); ov.appendChild(bx); document.body.appendChild(ov); ok.focus();
+  }
+  window.__ivsNotice = notice;   // design-notes.js(그리기·메모)도 같은 안내 모달을 쓴다
+  // 확인/취소 모달: 확인(또는 Enter)이면 true, 취소(또는 Esc)면 false 로 풀린다.
+  //   opts.note 가 있으면 확인 위에 글 쓰는 칸이 생기고, 확인하면 { note: 적은 글(없으면 '') } 로, 취소하면 false 로 풀린다(칸 안에서 Enter 는 줄바꿈).
+  function ask(msg, opts) {
+    return new Promise((resolve) => {
+      const ov = document.createElement('div');
+      ov.style.cssText = 'position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;';
+      const bx = document.createElement('div');
+      bx.style.cssText = 'background:#fff;border-radius:16px;padding:22px 28px 18px;min-width:240px;max-width:80vw;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.3);font:700 15px sans-serif;color:#111827;';
+      const p = document.createElement('div'); p.textContent = msg; p.style.cssText = 'margin-bottom:16px;line-height:1.5;white-space:pre-line;';
+      const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:10px;justify-content:center;';
+      const mk = (label, bg, fg) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.style.cssText = 'padding:8px 26px;border-radius:999px;border:0;background:' + bg + ';color:' + fg + ';font:700 14px sans-serif;cursor:pointer;'; return b; };
+      const cancel = mk('취소', '#e5e7eb', '#111827'), ok = mk('확인', '#2563eb', '#fff');
+      const noteEl = opts && opts.note ? document.createElement('textarea') : null;
+      if (noteEl) { noteEl.rows = 3; noteEl.placeholder = opts.placeholder || '이유·설명 (선택) — 적지 않고 확인해도 돼요';
+        noteEl.style.cssText = 'display:block;width:100%;box-sizing:border-box;margin:0 0 14px;padding:8px 10px;font:400 13px/1.45 sans-serif;border:1px solid #d1d5db;border-radius:10px;resize:vertical;text-align:left;color:#111827;background:#fff;';
+        ['keydown', 'keyup', 'keypress'].forEach((ev) => noteEl.addEventListener(ev, (e) => { if (e.key !== 'Escape') e.stopPropagation(); })); } // 글을 쓰는 동안 화면 단축키가 움직이지 않게(Esc 만 취소로 간다)
+      const val = () => (noteEl ? { note: noteEl.value.trim() } : true);
+      const done = (v) => { ov.remove(); document.removeEventListener('keydown', onKey, true); resolve(v); };
+      const onKey = (e) => { if (e.key === 'Enter') { if (noteEl && e.target === noteEl) return; e.preventDefault(); e.stopPropagation(); done(val()); } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(false); } };
+      ok.addEventListener('click', () => done(val())); cancel.addEventListener('click', () => done(false)); document.addEventListener('keydown', onKey, true);
+      row.appendChild(cancel); row.appendChild(ok); bx.appendChild(p); if (noteEl) bx.appendChild(noteEl); bx.appendChild(row); ov.appendChild(bx); document.body.appendChild(ov); (noteEl || ok).focus();
+    });
+  }
+  // 자동 검사 경고(관리자 전용): public/design-warnings.js(scripts/assembly-tools/insertion_check.js 가 만듦)의 경고를 단계 번호 옆 ⚠로 보이고, 오른쪽 아래 카드에서 관리자가 "문제없음"/"해결요청"을 고른다. 고른 결과는 ivs_assembly_checks 에 저장.
+  let checkVerdicts = {}; // '단계|경고키' → 'ok' | 'fix'
+  const warnsOf = (i) => (def && window.IVS_ASM_WARNINGS && window.IVS_ASM_WARNINGS[def.id] && window.IVS_ASM_WARNINGS[def.id][i]) || [];
+  function warnMark(i) {
+    const w = warnsOf(i); if (!w.length) return '';
+    const v = w.map((x) => checkVerdicts[i + '|' + x.key]);
+    return v.some((x) => !x) ? ' ⚠' : v.some((x) => x === 'fix') ? ' 🔧' : '';
+  }
+  function paintWarn() {
+    let box = $('asmWarnBox');
+    const w = isAdm() && step >= 1 ? warnsOf(step).filter((x) => checkVerdicts[step + '|' + x.key] !== 'ok') : []; // 문제없음으로 고른 경고는 카드에서 뺀다
+    if (!w.length) { if (box) box.hidden = true; return; }
+    if (!box) {
+      box = document.createElement('div'); box.id = 'asmWarnBox';
+      box.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:60;width:330px;max-height:45vh;overflow:auto;background:#fff;border:2px solid #f59e0b;border-radius:14px;padding:10px 12px;box-shadow:0 8px 28px rgba(0,0,0,.25);font:13px/1.45 sans-serif;color:#111827;';
+      try { const sp = JSON.parse(localStorage.getItem('ivs-asm-warn-pos') || 'null'); if (sp) { box.style.left = sp.left + 'px'; box.style.top = sp.top + 'px'; box.style.right = 'auto'; box.style.bottom = 'auto'; } } catch (e) { /* 위치를 못 읽어도 기본 자리 */ }
+      // 머리줄을 잡고 끌면 옮긴다(위치는 이 브라우저에 기억)
+      box.addEventListener('pointerdown', (ev) => {
+        const hd = ev.target.closest && ev.target.closest('[data-drag]'); if (!hd || ev.target.closest('button')) return;
+        const r = box.getBoundingClientRect(), dx = ev.clientX - r.left, dy = ev.clientY - r.top;
+        const mv = (e) => {
+          const W = box.offsetWidth, H = Math.min(box.offsetHeight, 60), left = Math.max(0, Math.min(window.innerWidth - W, e.clientX - dx)), top = Math.max(0, Math.min(window.innerHeight - H, e.clientY - dy));
+          box.style.left = left + 'px'; box.style.top = top + 'px'; box.style.right = 'auto'; box.style.bottom = 'auto';
+        };
+        const up = () => { document.removeEventListener('pointermove', mv); document.removeEventListener('pointerup', up);
+          try { localStorage.setItem('ivs-asm-warn-pos', JSON.stringify({ left: parseFloat(box.style.left), top: parseFloat(box.style.top) })); } catch (e) { /* */ } };
+        document.addEventListener('pointermove', mv); document.addEventListener('pointerup', up); ev.preventDefault();
+      });
+      document.body.appendChild(box);
+    }
+    let folded = false; try { folded = localStorage.getItem('ivs-asm-warn-folded') === '1'; } catch (e) { /* */ }
+    box.hidden = false; box.innerHTML = '';
+    const h = document.createElement('div'); h.dataset.drag = '1'; h.style.cssText = 'display:flex;align-items:center;gap:8px;font-weight:700;cursor:move;user-select:none;touch-action:none;' + (folded ? '' : 'margin-bottom:6px;');
+    const ht = document.createElement('span'); ht.style.flex = '1'; ht.textContent = '⚠ 자동 검사 경고 · ' + step + '번째 단계' + (folded ? ' (' + w.length + '건)' : ''); h.appendChild(ht);
+    const fb = document.createElement('button'); fb.type = 'button'; fb.textContent = folded ? '▴ 펼치기' : '▾ 접기'; fb.title = '카드를 접거나 펼쳐요';
+    fb.style.cssText = 'padding:2px 9px;font-size:12px;font-weight:600;border-radius:999px;border:1px solid #d1d5db;background:#fff;color:#111827;cursor:pointer;';
+    fb.addEventListener('click', () => { try { localStorage.setItem('ivs-asm-warn-folded', folded ? '0' : '1'); } catch (e) { /* */ } paintWarn(); });
+    h.appendChild(fb); box.appendChild(h);
+    if (folded) return;
+    const hint = document.createElement('div'); hint.style.cssText = 'font-size:11.5px;color:#6b7280;margin-bottom:6px;'; hint.textContent = '몸통 상자 근사라 꺾인 프레임·서브 조립은 오경고일 수 있어요. 화면을 보고 골라 주세요.'; box.appendChild(hint);
+    w.forEach((x) => {
+      const v = checkVerdicts[step + '|' + x.key], row = document.createElement('div');
+      row.style.cssText = 'border-top:1px solid #e5e7eb;padding:6px 0;' + (v ? 'opacity:.65;' : '');
+      const t = document.createElement('div'); t.textContent = x.text; row.appendChild(t);
+      const bar = document.createElement('div'); bar.style.cssText = 'display:flex;gap:6px;margin-top:5px;align-items:center;';
+      const mk = (label, val, on) => {
+        const b = document.createElement('button'); b.type = 'button'; b.textContent = label;
+        b.style.cssText = 'padding:4px 10px;font-size:12px;font-weight:600;border-radius:999px;border:1px solid #d1d5db;background:' + (v === val ? on : '#fff') + ';color:' + (v === val ? '#fff' : '#111827') + ';cursor:pointer;';
+        b.addEventListener('click', async () => {
+          const b2 = bridge(); if (!b2 || !b2.checkStore || !def) return;
+          const next = v === val ? null : val, mine = step; // 같은 버튼을 다시 누르면 선택 취소
+          const asked = await ask(next === 'ok' ? '"문제없음"으로 저장할까요?\n저장하면 이 경고는 더 이상 보이지 않아요.' : next === 'fix' ? '"해결요청"으로 저장할까요?\n단계 번호 옆에 🔧가 표시돼요.' : '이 선택을 취소할까요?',
+            next ? { note: true, placeholder: next === 'ok' ? '문제가 아닌 이유 (선택) — 예: 부시가 구멍을 지나가는 것이라 문제없음' : '고쳐야 할 이유 (선택)' } : undefined);
+          if (!asked) return;
+          const noteTxt = next && asked.note ? asked.note : undefined; // 적은 글이 있을 때만 설명을 같이 저장한다(설명 칸이 없는 DB 에서도 판정은 저장된다)
+          try { await b2.checkStore.set(def.id, mine, x.key, next, noteTxt); if (next) checkVerdicts[mine + '|' + x.key] = next; else delete checkVerdicts[mine + '|' + x.key]; paintStatus(); }
+          catch (e) { notice('저장에 실패했습니다: ' + e.message + ' (supabase/assembly_checks.sql 을 실행했는지 확인)'); }
+        });
+        return b;
+      };
+      bar.appendChild(mk('✅ 문제없음', 'ok', '#16a34a')); bar.appendChild(mk('🔧 해결요청', 'fix', '#dc2626'));
+      if (v) { const s2 = document.createElement('span'); s2.style.cssText = 'font-size:11.5px;color:#6b7280;'; s2.textContent = v === 'ok' ? '문제없음으로 표시됨' : '해결요청됨'; bar.appendChild(s2); }
+      row.appendChild(bar); box.appendChild(row);
+    });
+  }
+  const STATUS_LABEL = { done: '✅ 완료', edit: '🛠 수정중' };
+  // 버튼 두 줄(2026-10-16 관리자 지시): 1번 줄 = 일반 사용자용(그리기·메모), 2번 줄 = 관리자용(상태·카메라·모습 기록·마무리 점검·새로고침·썸네일·표시하기·수정스샷)
+  function splitBtnRows() {
+    const sb = $('asmStatusBtn'); if (!sb) return;
+    let row2 = $('asmAdminRow');
+    if (!row2) {
+      const row1 = sb.parentNode; if (!row1) return;
+      row2 = document.createElement('div'); row2.id = 'asmAdminRow'; row2.style.cssText = row1.getAttribute('style') || '';
+      row1.parentNode.insertBefore(row2, row1.nextSibling);
+      row1.style.justifyContent = row2.style.justifyContent = 'flex-start';   // 두 줄 모두 왼쪽 정렬(2026-10-16 사용자 지시)
+    }
+    ['asmStatusBtn', 'asmJointBtn', 'asmCamCopy', 'asmFreezeBtn', 'asmReloadBtn', 'asmThumbBtn', 'asmMarkMove2'].forEach((id) => { const e = $(id); if (e && e.parentNode !== row2) row2.appendChild(e); });
+    row2.hidden = !isAdm();
+    // 3번 줄(2026-10-17 관리자 지시): 마무리 점검을 아래로 빼고 높이 스캔·좌우 스캔 버튼을 같은 줄에 둔다
+    let row3 = $('asmAdminRow3');
+    if (!row3) { row3 = document.createElement('div'); row3.id = 'asmAdminRow3'; row3.style.cssText = row2.style.cssText; row2.parentNode.insertBefore(row3, row2.nextSibling); }
+    ['asmAuditBtn', 'asmAuditViewBtn', 'asmVerifyBtn', 'asmScanHBtn', 'asmScanDBtn', 'asmScanSBtn'].forEach((id) => { const e = $(id); if (e && e.parentNode !== row3) row3.appendChild(e); });
+    row3.hidden = !isAdm();
+  }
+  // 검증 체크 카드(관리자만, 2026-10-18 사용자 요청): 관리자면 화면에 떠 있고(머리줄을 끌어 옮김·접기 버튼), 지금 번호의 자동 점검 결과 중 안 된 항목을 체크박스로 보인다.
+  //   자동 점검 결과 = verify_step.py 가 ivs_assembly_checks 에 저장한 'auto:<항목>' 행(관리자 표). 내가 한 체크는 'verify:<항목>' 행(verdict ok). 새 DB 표 없음.
+  //   넘어가는 기준: 홀라인·번호 대조 그림 둘이 통과(자동 ✅ 또는 내가 체크)면 번호판 파랑.
+  const VERIFY_ITEMS = ['홀라인', '카메라', '돌기↔구멍', '번호 대조 그림', '읽기 표', '증거', '뒤 번호 확인'];   // (표시 이름은 아래 VERIFY_LABEL — DB 키는 그대로)
+  const VERIFY_LABEL = { '홀라인': '책 위 겹침 비교(홀라인)', '카메라': '책과 같은 각도(카메라)', '돌기↔구멍': '돌기↔구멍 맞물림', '번호 대조 그림': '책 링↔모델 구멍 번호 대조', '읽기 표': '읽은 근거 기록', '증거': '3D 화면↔책 나란히 본 기록', '뒤 번호 확인': '뒤 번호 책에서 맞게 나옴(다음 번호가 진행되면 맞은 것)' };
+  const VERIFY_MUST = ['홀라인', '번호 대조 그림'];
+  let verifyAuto = {}, verifyLoadedFor = '';   // verifyAuto: 번호 → { 항목: {이름: ok|warn|fail}, 내용: {이름: 문장}, 시각, 상태 }
+  const verifyVia = (i) => !!(verifyAuto[String(i)] && verifyAuto[String(i)]['항목'] && verifyAuto[String(i)]['항목']['뒤 번호 확인'] === 'ok');   // 뒤 번호 책에서 이 번호 부품이 맞게 나와 확인됨
+  const verifyDone = (i) => verifyVia(i) || VERIFY_MUST.every((t) => checkVerdicts[i + '|verify:' + t] === 'ok' || (verifyAuto[String(i)] && verifyAuto[String(i)]['항목'] && verifyAuto[String(i)]['항목'][t] === 'ok'));
+  async function loadVerifyAuto(force) {
+    const b2 = bridge(); if (!b2 || !b2.checkStore || !def) return;
+    if (!force && verifyLoadedFor === def.id) return; verifyLoadedFor = def.id;
+    const auto = {};
+    try {
+      ((b2.checkStore.loadFull && await b2.checkStore.loadFull(def.id)) || []).forEach((r) => {
+        if (!r || String(r.issue_key).indexOf('auto:') !== 0) return;
+        const t = String(r.issue_key).slice(5), e = auto[String(r.step)] || (auto[String(r.step)] = { '항목': {}, '내용': {}, '시각': '', '상태': '통과' });
+        const parts = String(r.note || '').split('|'), st = parts[0] === 'warn' || parts[0] === 'fail' || parts[0] === 'ok' ? parts[0] : (r.verdict === 'ok' ? 'ok' : 'warn');
+        e['항목'][t] = st; e['내용'][t] = parts.slice(1).join('|');
+        const tm = String(r.updated_at || '').slice(0, 16).replace('T', ' '); if (tm > e['시각']) e['시각'] = tm;
+      });
+      Object.keys(auto).forEach((k) => { const it = auto[k]['항목'], must = VERIFY_MUST.map((t) => it[t]); auto[k]['상태'] = (it['뒤 번호 확인'] === 'ok' || must.every((o) => o === 'ok')) ? '통과' : must.some((o) => o === 'fail') ? '실패' : '주의'; });
+    } catch (e) { /* 자동 점검 결과를 못 읽어도 체크는 할 수 있다 */ }
+    verifyAuto = auto;
+  }
+  function paintVerify() {
+    let box = $('asmVerifyBox');
+    if (!isAdm() || step < 1 || !def) { if (box) box.hidden = true; return; }
+    if (verifyLoadedFor !== def.id) loadVerifyAuto().then(() => paintStatus());
+    if (!box) {
+      box = document.createElement('div'); box.id = 'asmVerifyBox';
+      box.style.cssText = 'position:fixed;right:16px;top:96px;z-index:60;width:350px;max-height:60vh;overflow:auto;background:#fff;border:2px solid #2563eb;border-radius:14px;padding:10px 12px;box-shadow:0 8px 28px rgba(0,0,0,.25);font:13px/1.45 sans-serif;color:#111827;';
+      try { const sp = JSON.parse(localStorage.getItem('ivs-asm-verify-pos') || 'null'); if (sp) { box.style.left = sp.left + 'px'; box.style.top = sp.top + 'px'; box.style.right = 'auto'; } } catch (e) { /* 위치를 못 읽어도 기본 자리 */ }
+      box.addEventListener('pointerdown', (ev) => {   // 머리줄을 잡고 끌면 옮긴다(위치는 이 브라우저에 기억)
+        const hd = ev.target.closest && ev.target.closest('[data-drag]'); if (!hd || ev.target.closest('button')) return;
+        const r = box.getBoundingClientRect(), dx = ev.clientX - r.left, dy = ev.clientY - r.top;
+        const mv = (e) => { const W = box.offsetWidth, left = Math.max(0, Math.min(window.innerWidth - W, e.clientX - dx)), top = Math.max(0, Math.min(window.innerHeight - 40, e.clientY - dy)); box.style.left = left + 'px'; box.style.top = top + 'px'; box.style.right = 'auto'; };
+        const up = () => { document.removeEventListener('pointermove', mv); document.removeEventListener('pointerup', up); try { localStorage.setItem('ivs-asm-verify-pos', JSON.stringify({ left: parseFloat(box.style.left), top: parseFloat(box.style.top) })); } catch (e) { /* */ } };
+        document.addEventListener('pointermove', mv); document.addEventListener('pointerup', up); ev.preventDefault();
+      });
+      document.body.appendChild(box);
+    }
+    let folded = false; try { folded = localStorage.getItem('ivs-asm-verify-folded') === '1'; } catch (e) { /* */ }
+    const n = step, a = verifyAuto[String(n)] || null, made = stepMade(def.steps[n - 1]);
+    box.hidden = false; box.innerHTML = '';
+    const state = !made ? '아직 안 만듦' : verifyDone(n) ? '맞음 확인 ✅' : a ? '확인 못 함 (' + (a['상태'] === '주의' ? '일부' : '대부분') + ' 안 함)' : '확인 전';
+    const h = document.createElement('div'); h.dataset.drag = '1'; h.style.cssText = 'display:flex;align-items:center;gap:6px;font-weight:700;cursor:move;user-select:none;touch-action:none;' + (folded ? '' : 'margin-bottom:6px;');
+    const ht = document.createElement('span'); ht.style.cssText = 'flex:1;color:' + (verifyDone(n) ? '#2563eb' : '#ea580c') + ';'; ht.textContent = '☑ 맞는지 확인 · ' + n + '번 — ' + state; h.appendChild(ht);
+    const mkb = (txt, title, fn) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = txt; b.title = title; b.style.cssText = 'padding:2px 9px;font-size:12px;font-weight:600;border-radius:999px;border:1px solid #d1d5db;background:#fff;color:#111827;cursor:pointer;'; b.addEventListener('click', fn); return b; };
+    h.appendChild(mkb('↻', '자동 점검 결과를 DB 에서 다시 읽어요(verify_step.py 를 돌린 뒤)', async () => { await loadVerifyAuto(true); paintStatus(); }));
+    h.appendChild(mkb(folded ? '▴ 펼치기' : '▾ 접기', '카드를 접거나 펼쳐요', () => { try { localStorage.setItem('ivs-asm-verify-folded', folded ? '0' : '1'); } catch (e) { /* */ } paintVerify(); }));
+    box.appendChild(h);
+    if (folded) return;
+    const hint = document.createElement('div'); hint.style.cssText = 'font-size:11.5px;color:#6b7280;margin-bottom:6px;'; hint.textContent = '책과 맞는지 확인한 것만 ✅로 남고, 확인이 안 된 건 "안 한 것"으로 이유를 적어요. ★ 둘(책 위 겹침 비교·번호 대조)이 확인되면(자동 또는 내가 체크) 번호판이 파랑이 돼요. 머리줄을 끌어 옮길 수 있어요.'; box.appendChild(hint);
+    if (!made) { const d = document.createElement('div'); d.style.cssText = 'color:#6b7280;'; d.textContent = '아직 안 만든 번호예요.'; box.appendChild(d); return; }
+    const todo = VERIFY_ITEMS.filter((t) => !(a && a['항목'] && a['항목'][t] === 'ok'));
+    if (!todo.length) { const okd = document.createElement('div'); okd.style.cssText = 'color:#16a34a;font-weight:700;'; okd.textContent = '✅ 책과 맞는지 전부 확인함 — 안 한 것 없음'; box.appendChild(okd); return; }
+    const badge = { ok: '✅', warn: '⚠', fail: '❌' };
+    todo.forEach((t) => {
+      const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:8px;align-items:flex-start;border-top:1px solid #e5e7eb;padding:5px 0;';
+      const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = checkVerdicts[n + '|verify:' + t] === 'ok';
+      const lab = document.createElement('div'); lab.style.cssText = 'flex:1;';
+      const res = a && a['항목'] ? a['항목'][t] : null, msg = a && a['내용'] ? a['내용'][t] : '';
+      const nm = document.createElement('b'); nm.textContent = (VERIFY_MUST.indexOf(t) >= 0 ? '★ ' : '') + (VERIFY_LABEL[t] || t) + ' '; lab.appendChild(nm);
+      const bd = document.createElement('span'); bd.textContent = (res ? badge[res] : '·') + ' ' + (msg || (a ? '' : '자동 점검 결과 없음')); bd.style.color = res === 'fail' ? '#b91c1c' : res === 'warn' ? '#b45309' : '#374151'; lab.appendChild(bd);
+      cb.addEventListener('change', async () => {
+        const b2 = bridge(), on = cb.checked; if (!b2 || !b2.checkStore) return;
+        try { await b2.checkStore.set(def.id, n, 'verify:' + t, on ? 'ok' : null); if (on) checkVerdicts[n + '|verify:' + t] = 'ok'; else delete checkVerdicts[n + '|verify:' + t]; }
+        catch (e) { notice('저장에 실패했습니다: ' + e.message + ' (supabase/assembly_checks.sql 을 실행했는지 확인)'); cb.checked = !on; }
+        paintStatus();
+      });
+      row.appendChild(cb); row.appendChild(lab); box.appendChild(row);
+    });
+  }
+  function paintStatus() {
+    const adm = isAdm();
+    [$('asmSteps'), $('asmStageSteps')].forEach((box) => { if (!box) return;
+      box.querySelectorAll('button[data-step]').forEach((b) => { const i = Number(b.dataset.step), st = adm ? stepStatus[i] : null, tag = i === last() ? '완성' : stepTag(i);
+        b.textContent = tag + (st === 'done' ? ' ✓' : st === 'edit' ? ' 🛠' : '') + (adm ? warnMark(i) : '');
+        // 작업 진행 표시(관리자만): 일부 번호만 만든 조립도에서 마무리하고 넘어간 번호는 파랑, 확인 필요(review)는 주황 — 안 만든 번호는 그대로 둔다
+        const made = i !== last() && stepMade(def.steps[i - 1]);
+        const review = !!(def.steps[i - 1] && def.steps[i - 1].review) && st !== 'done' && !verifyDone(i);   // 관리자가 ✅ 완료를 누르면 주황 → 파랑   // review: 만들었지만 마무리 안 됨(근거 약함·확인 필요) → 주황
+        b.style.color = adm && made ? (review ? '#ea580c' : '#2563eb') : ''; b.style.fontWeight = adm && made ? '700' : ''; }); });   // 완성(모든 번호를 만든 뒤)에도 색을 유지한다(사용자 지시 2026-10-16)
+    paintWarn();
+    paintVerify();
+    splitBtnRows();
+    const sb = $('asmStatusBtn'); if (!sb) return;
+    sb.hidden = !adm || step < 1;   // 완성에도 체크·모습 기록 버튼을 보인다(사용자 지시 2026-10-05)
+    { const tb = $('asmThumbBtn'); if (tb) tb.hidden = sb.hidden; }
+    { const rb = $('asmReloadBtn'); if (rb) rb.hidden = !adm || step < 0; }
+    { const ab = $('asmAuditBtn'); if (ab) ab.hidden = !adm || step < 0; }
+    ['asmAuditViewBtn', 'asmVerifyBtn', 'asmScanHBtn', 'asmScanDBtn', 'asmScanSBtn'].forEach((id) => { const e = $(id); if (e) e.hidden = !adm || step < 1; });
+    { const jb = $('asmJointBtn'); if (jb) jb.hidden = !adm || step < 1; }
+    { const fb = $('asmFreezeBtn'); if (fb) fb.hidden = sb.hidden; }
+    const st = stepStatus[step]; sb.textContent = STATUS_LABEL[st] || '⬜ 상태 없음';
+    sb.style.background = st === 'done' ? '#16a34a' : st === 'edit' ? '#f59e0b' : ''; sb.style.color = st ? '#fff' : '';
+    sb.title = '이 단계의 상태(관리자만 보여요): 누를 때마다 상태 없음 → 수정중 → 완료 → 상태 없음. DB에 저장돼요';
+    // 📷 카메라·❄ 모습 기록: 이 단계에 저장해 둔 값이 있으면 연두색으로 표시한다(관리자 지시 2026-10-11 — 완료 버튼처럼 저장 여부가 보이게)
+    [['asmCamCopy', !!savedCams[step]], ['asmFreezeBtn', !!posesDB[step]]].forEach(([id, on]) => { const e = $(id); if (!e) return; e.style.background = on ? '#84cc16' : ''; e.style.color = on ? '#fff' : ''; e.style.borderColor = on ? '#65a30d' : ''; });
+  }
+  // ── 관절(중심점으로 움직이는 곳) 보기·수정 — 관리자 전용 (2026-10-16 사용자 지시: 조립도에서 바로 다른 색으로 보고, 고칠 수 있게) ──────────
+  // DB: ivs_assembly_joints(관절)·ivs_assembly_joint_groups(움직이는 묶음) — supabase/assembly_joints.sql.
+  // 관절 위치(pivot·axis)는 part_a 부품 기준 "로컬" 좌표(mm)로 저장한다 — 팔을 들거나 유닛을 옮겨도 관절이 부품에 붙어 따라간다. 화면에서는 그 부품의 지금 자리·방향으로 바꿔 3D 에 칠한다.
+  //   색: 고정 축 = 보라 · 핀(묶음을 따라 움직임) = 파랑 · 모터 직결 구동 관절(메모에 [모터직결]) = 형광라임 · 고른 관절 = 노랑(구 + 축선)
+  let jointsDB = { joints: [], groups: [] }, jointSel = null, jointDraft = null, jointOn = true, jointSel2 = null, grpDraft = null, jointPicked = null;
+  const jqrot = (q, v) => { const x = q[0], y = q[1], z = q[2], w = q[3], tx = 2 * (y * v[2] - z * v[1]), ty = 2 * (z * v[0] - x * v[2]), tz = 2 * (x * v[1] - y * v[0]);
+    return [v[0] + w * tx + (y * tz - z * ty), v[1] + w * ty + (z * tx - x * tz), v[2] + w * tz + (x * ty - y * tx)]; };
+  const jqinv = (q) => [-q[0], -q[1], -q[2], q[3]];
+  const jesc = (t) => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+  const jr2 = (v) => Math.round(Number(v) * 100) / 100;
+  function partPose(name) { const b = bridge(); if (!b || !b.serialize) return null; const i = lastLabels.indexOf(name); if (i < 0) return null; const s2 = b.serialize()[i]; return s2 && s2.pos && s2.quat ? { pos: s2.pos, quat: s2.quat } : null; }
+  function jointWorld(j) { const P = partPose(j.part_a); if (!P) return null;
+    const lp = jqrot(P.quat, [Number(j.pivot_x), Number(j.pivot_y), Number(j.pivot_z)]), ax = jqrot(P.quat, [Number(j.axis_x), Number(j.axis_y), Number(j.axis_z)]);
+    return { pos: [P.pos[0] + lp[0], P.pos[1] + lp[1], P.pos[2] + lp[2]], axis: ax }; }
+  function jointLocal(partA, wpos, waxis) { const P = partPose(partA); if (!P) return null; const qi = jqinv(P.quat);
+    const lp = jqrot(qi, [wpos[0] - P.pos[0], wpos[1] - P.pos[1], wpos[2] - P.pos[2]]), la = jqrot(qi, waxis); return { pos: lp, axis: la }; }
+  function paintJoints() {
+    const b = bridge(); if (!b || !b.jointLayer) return;
+    if (!isAdm() || !jointOn || !def || step < 1) { b.jointLayer.set([]); return; }
+    const list = [];
+    jointsDB.joints.forEach((j) => { const row = jointSel === j.joint_id && jointDraft ? jointDraft : j; if (step < Number(j.step)) return;
+      const pi = lastLabels.indexOf(row.part_a); if (pi >= 0) list.push({ id: j.joint_id, partIndex: pi, kind: row.kind, driver: !!row.is_driver, motor: !!row.is_driver && String(row.note || '').includes('[모터직결]'), selected: jointSel === j.joint_id }); });   // 관절이 가리키는 부품(part_a)을 칠한다
+    if (jointDraft && jointSel === '__new') { const pi = lastLabels.indexOf(jointDraft.part_a); if (pi >= 0) list.push({ id: '__new', partIndex: pi, kind: jointDraft.kind, driver: !!jointDraft.is_driver, motor: !!jointDraft.is_driver && String(jointDraft.note || '').includes('[모터직결]'), selected: true }); }
+    b.jointLayer.set(list, null);   // 선택은 일반 부품 선택 + 아래 __ivsOnPartClick 이 한다(관절 부품도 일반 부품처럼 선택되고, 관절 정보가 같이 열린다)
+  }
+  function loadJoints() {
+    const b = bridge(); jointsDB = { joints: [], groups: [] }; jointSel = null; jointDraft = null; jointSel2 = null; grpDraft = null;
+    if (!isAdm() || !b || !b.jointStore || !def) { paintJoints(); return; }
+    const mine = def.id; b.jointStore.load(mine).then((m) => { if (!def || def.id !== mine) return; jointsDB = Object.assign({ joints: [], groups: [] }, m || {}, { loaded: true }); paintJoints(); paintJointPanel(); if (viewing && step === last()) render(); });   // 완성 화면이면 마무리 점검의 관절 줄을 다시 그린다
+  }
+  function jointOptions(list, key, cur, blank) { return (blank ? '<option value="">' + jesc(blank) + '</option>' : '') + list.map((g) => '<option value="' + jesc(g[key]) + '"' + (g[key] === cur ? ' selected' : '') + '>' + jesc(g.name ? g.name + ' (' + g[key] + ')' : g[key]) + '</option>').join(''); }
+  function paintJointPanel() {
+    const el = $('asmJointPanel'); if (!el || el.hidden) return;
+    const J = jointDraft || jointsDB.joints.find((j) => j.joint_id === jointSel) || null, isNew = jointSel === '__new';
+    const w = J ? jointWorld(J) : null, inp = 'width:62px;padding:2px 4px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;', txt = 'width:100%;padding:3px 5px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;box-sizing:border-box;', btn = 'padding:4px 10px;border-radius:8px;border:1px solid #94a3b8;background:#f8fafc;font-size:12px;font-weight:600;cursor:pointer;';
+    const n3 = (a, id) => [0, 1, 2].map((k) => '<input id="' + id + k + '" type="number" step="0.5" value="' + (a ? jr2(a[k]) : '') + '" style="' + inp + '">').join(' ');
+    let h = '<div data-jtdrag="1" title="제목 줄을 끌어서 옮겨요" style="display:flex;align-items:center;gap:8px;margin-bottom:6px;cursor:move;user-select:none;touch-action:none;"><b style="font-size:13px;">🔩 관절 (관리자) ⠿</b><label style="margin-left:auto;font-weight:600;"><input id="jtOn" type="checkbox"' + (jointOn ? ' checked' : '') + '> 화면에 칠하기</label><button id="jtClose" style="' + btn + '">닫기</button></div>';
+    h += '<div style="color:#475569;margin-bottom:6px;">관절 부품(T축·축·리벳)은 모두 <b style="color:#d11fb0">분홍</b>으로 칠해져요. 고른 관절은 <b style="color:#b8860b">노랑</b>. 3D 화면에서 부품을 누르면 그 부품의 일반 정보와 함께 관절 정보가 여기에 나와요. 중심·축 숫자는 이 번호 화면 기준(mm)이에요.</div>';
+    { const si = bridge() && bridge().selectedPartIndex ? bridge().selectedPartIndex() : -1, sn = (jointPicked && lastLabels.indexOf(jointPicked) >= 0) ? jointPicked : (si >= 0 ? lastLabels[si] : '');
+      const already = sn ? jointsDB.joints.filter((j) => j.part_a === sn) : [];
+      h += '<div style="background:#fdf2f8;border:1px solid #f0abfc;border-radius:8px;padding:6px 8px;margin-bottom:6px;"><div style="font-weight:700;">부품을 눌러 관절로 등록</div><div style="margin:3px 0;">고른 부품: <b>' + (sn ? jesc(sn) : '없음 — 아래 🎯 를 누르고 3D 화면의 부품을 누르세요') + '</b>' + (already.length ? ' <span style="color:#b45309;">(이미 관절 ' + already.map((j) => jesc(j.name)).join(', ') + ')</span>' : '') + '</div><div style="display:flex;gap:6px;"><button id="jtPick" style="' + btn + '" title="누른 뒤 3D 화면에서 부품 하나를 누르세요">🎯 3D 화면에서 부품 찍기</button><button id="jtReg" style="' + btn + '"' + (sn ? '' : ' disabled') + '>🔩 이 부품을 관절로 등록</button></div></div>'; }
+    h += '<div style="display:flex;gap:6px;margin-bottom:6px;"><select id="jtSel" style="' + txt + '"><option value="">— 관절 고르기 (' + jointsDB.joints.length + '개) —</option>' + jointsDB.joints.map((j) => '<option value="' + jesc(j.joint_id) + '"' + (j.joint_id === jointSel ? ' selected' : '') + '>' + (j.step > step ? '· ' : '') + jesc(j.name) + ' (' + jesc(j.joint_id) + ', ' + j.step + '번~)</option>').join('') + '</select><button id="jtNew" style="' + btn + '">+ 새 관절</button></div>';
+    if (J) {
+      h += '<div style="display:grid;grid-template-columns:78px 1fr;gap:4px 6px;align-items:center;">';
+      h += '<span>이름표</span><input id="jtId" style="' + txt + '" value="' + jesc(J.joint_id) + '"' + (isNew ? '' : ' readonly') + '>';
+      h += '<span>이름</span><input id="jtName" style="' + txt + '" value="' + jesc(J.name) + '">';
+      h += '<span>시작 번호</span><input id="jtStep" type="number" style="' + inp + '" value="' + jesc(J.step) + '">';
+      h += '<span>종류</span><span><select id="jtKind"><option value="axis"' + (J.kind === 'axis' ? ' selected' : '') + '>고정 축(판에 고정)</option><option value="pin"' + (J.kind === 'pin' ? ' selected' : '') + '>핀(묶음을 따라 움직임)</option></select> <label><input id="jtDrv" type="checkbox"' + (J.is_driver ? ' checked' : '') + '> 구동</label></span>';
+      h += '<span>소속 묶음</span><select id="jtGrp" style="' + txt + '">' + jointOptions(jointsDB.groups, 'group_id', J.group_id, '(없음)') + '</select>';
+      h += '<span>올라타는 묶음</span><select id="jtRide" style="' + txt + '">' + jointOptions(jointsDB.groups, 'group_id', J.rides_group_id, '(없음)') + '</select>';
+      h += '<span>색칠할 부품 A</span><input id="jtPA" list="jtParts" style="' + txt + '" value="' + jesc(J.part_a) + '"><datalist id="jtParts">' + lastLabels.map((l) => '<option value="' + jesc(l) + '">').join('') + '</datalist>';
+      h += '<span>이어진 부품 B</span><input id="jtPB" list="jtParts" style="' + txt + '" value="' + jesc(J.part_b) + '">';
+      h += '<span>중심 x y z</span><span>' + n3(w && w.pos, 'jtP') + '</span>';
+      h += '<span>축 x y z</span><span>' + n3(w && w.axis, 'jtA') + '</span>';
+      h += '<span>각도 범위</span><span><input id="jtMin" type="number" style="' + inp + '" value="' + (J.min_angle == null ? '' : J.min_angle) + '" placeholder="최소"> ~ <input id="jtMax" type="number" style="' + inp + '" value="' + (J.max_angle == null ? '' : J.max_angle) + '" placeholder="최대"> 도</span>';
+      h += '<span>메모</span><textarea id="jtNote" rows="3" style="' + txt + '">' + jesc(J.note || '') + '</textarea></div>';
+      h += (w ? '' : '<div style="color:#b91c1c;margin-top:4px;">이 번호 화면에는 색칠할 부품 A("' + jesc(J.part_a) + '")가 없어서 위치를 못 그려요. 부품이 있는 번호로 가거나 이름을 고쳐 주세요.</div>');
+      h += '<div style="display:flex;gap:6px;margin-top:8px;"><button id="jtSave" style="' + btn + 'background:#2563eb;color:#fff;border-color:#2563eb;">저장</button>' + (isNew ? '' : '<button id="jtDel" style="' + btn + 'color:#b91c1c;">삭제</button>') + '<button id="jtCam" style="' + btn + '" title="화면 가운데(카메라가 보는 점)로 중심을 옮겨요">중심을 화면 가운데로</button></div>';
+    }
+    h += '<details style="margin-top:10px;"' + (jointSel2 ? ' open' : '') + '><summary style="cursor:pointer;font-weight:700;">움직이는 묶음 (' + jointsDB.groups.length + '개)</summary><div style="margin-top:6px;">';
+    h += '<div style="display:flex;gap:6px;margin-bottom:6px;"><select id="gpSel" style="' + txt + '"><option value="">— 묶음 고르기 —</option>' + jointOptions(jointsDB.groups, 'group_id', jointSel2) + '</select><button id="gpNew" style="' + btn + '">+ 새 묶음</button></div>';
+    if (grpDraft) { const G = grpDraft;
+      h += '<div style="display:grid;grid-template-columns:78px 1fr;gap:4px 6px;align-items:center;"><span>이름표</span><input id="gpId" style="' + txt + '" value="' + jesc(G.group_id) + '"' + (jointSel2 === '__new' ? '' : ' readonly') + '>';
+      h += '<span>이름</span><input id="gpName" style="' + txt + '" value="' + jesc(G.name) + '">';
+      h += '<span>종류</span><span><select id="gpKind"><option value="body"' + (G.kind === 'body' ? ' selected' : '') + '>덩어리(축 기준 회전)</option><option value="link"' + (G.kind === 'link' ? ' selected' : '') + '>막대(양 끝 관절 사이)</option></select> 길이 <input id="gpLen" type="number" style="' + inp + '" value="' + (G.link_length == null ? '' : G.link_length) + '"></span>';
+      h += '<span>바깥 묶음</span><select id="gpPar" style="' + txt + '">' + jointOptions(jointsDB.groups.filter((g) => g.group_id !== G.group_id), 'group_id', G.parent_group_id, '(없음)') + '</select>';
+      h += '<span>중심 관절</span><select id="gpRoot" style="' + txt + '">' + jointOptions(jointsDB.joints.map((j) => ({ group_id: j.joint_id, name: j.name })), 'group_id', G.root_joint_id, '(없음)') + '</select>';
+      h += '<span>부품들</span><textarea id="gpMem" rows="4" style="' + txt + '" placeholder="한 줄에 부품 하나(예: 215프레임 1번)">' + jesc((G.members || []).map((m) => m.name).join(String.fromCharCode(10))) + '</textarea>';
+      h += '<span>메모</span><textarea id="gpNote" rows="2" style="' + txt + '">' + jesc(G.note || '') + '</textarea></div>';
+      h += '<div style="display:flex;gap:6px;margin-top:8px;"><button id="gpSave" style="' + btn + 'background:#2563eb;color:#fff;border-color:#2563eb;">묶음 저장</button>' + (jointSel2 === '__new' ? '' : '<button id="gpDel" style="' + btn + 'color:#b91c1c;">묶음 삭제</button>') + '<button id="gpFill" style="' + btn + '" title="지금 화면의 부품 이름들을 넣어요">지금 부품 이름 넣기</button></div>'; }
+    h += '</div></details><div id="jtMsg" style="margin-top:6px;color:#475569;"></div>';
+    el.innerHTML = h; wireJointPanel();
+  }
+  function jmsg(t, bad) { const m = $('jtMsg'); if (m) { m.textContent = t; m.style.color = bad ? '#b91c1c' : '#15803d'; } }
+  function readJointForm() {   // 폼의 값(이 번호 화면 기준 좌표)을 부품 A 기준 로컬 좌표 행으로 바꾼다
+    const g = (id) => { const e = $(id); return e ? e.value : ''; }, num = (id) => Number(g(id));
+    const a = [num('jtA0'), num('jtA1'), num('jtA2')], L = Math.hypot(a[0], a[1], a[2]) || 1, pa = g('jtPA');
+    const loc = jointLocal(pa, [num('jtP0'), num('jtP1'), num('jtP2')], [a[0] / L, a[1] / L, a[2] / L]);
+    const base = jointDraft || jointsDB.joints.find((j) => j.joint_id === jointSel) || {};
+    const row = Object.assign({}, base, { assembly_id: def.id, joint_id: g('jtId').trim(), name: g('jtName').trim(), step: Math.max(1, Math.round(num('jtStep')) || 1), kind: g('jtKind'), is_driver: !!($('jtDrv') && $('jtDrv').checked),
+      group_id: g('jtGrp') || null, rides_group_id: g('jtRide') || null, part_a: pa, part_b: g('jtPB').trim(), min_angle: g('jtMin') === '' ? null : num('jtMin'), max_angle: g('jtMax') === '' ? null : num('jtMax'), note: g('jtNote') });
+    if (loc) { row.pivot_x = jr2(loc.pos[0]); row.pivot_y = jr2(loc.pos[1]); row.pivot_z = jr2(loc.pos[2]); row.axis_x = Math.round(loc.axis[0] * 1000) / 1000; row.axis_y = Math.round(loc.axis[1] * 1000) / 1000; row.axis_z = Math.round(loc.axis[2] * 1000) / 1000; }
+    row._noLocal = !loc; return row;
+  }
+  function wireJointPanel() {
+    const b = bridge(), on = (id, ev, fn) => { const e = $(id); if (e) e.addEventListener(ev, fn); };
+    on('jtClose', 'click', () => { $('asmJointPanel').hidden = true; });
+    on('jtOn', 'change', (ev) => { jointOn = ev.target.checked; paintJoints(); });
+    on('jtSel', 'change', (ev) => { jointSel = ev.target.value || null; jointDraft = null; paintJoints(); paintJointPanel(); });
+    on('jtPick', 'click', () => { if (!b.pickPart) return; jmsg('3D 화면에서 부품 하나를 누르세요…'); b.pickPart((i) => { jointPicked = i >= 0 ? lastLabels[i] : null; paintJointPanel(); jmsg(i >= 0 ? '"' + lastLabels[i] + '" 를 골랐어요. 아래 "관절로 등록"을 누르세요.' : '부품을 못 찾았어요. 다시 🎯 를 누르고 부품을 누르세요.', i < 0); }); });
+    on('jtReg', 'click', () => { const si = b.selectedPartIndex ? b.selectedPartIndex() : -1; const pa0 = (jointPicked && lastLabels.indexOf(jointPicked) >= 0) ? jointPicked : (si >= 0 ? lastLabels[si] : ''); if (!pa0) { jmsg('먼저 🎯 로 부품 하나를 찍어 주세요.', true); return; }
+      const pa = pa0, P = partPose(pa); if (!P) { jmsg('부품 위치를 못 읽었어요.', true); return; }
+      const ids = new Set(jointsDB.joints.map((j) => j.joint_id)); let k = 1; const base = 'j_' + pa.replace(/\s+/g, '').replace(/[^0-9A-Za-z가-힣]/g, ''); let jid = base; while (ids.has(jid)) jid = base + '_' + (++k);
+      jointSel = '__new'; jointDraft = { assembly_id: def.id, joint_id: jid, name: pa + ' 관절', step: Math.max(1, step), group_id: null, kind: 'pin', rides_group_id: null, is_driver: false, part_a: pa, part_b: '', pivot_x: 0, pivot_y: 0, pivot_z: 0, axis_x: 0, axis_y: 1, axis_z: 0, min_angle: null, max_angle: null, note: '' };
+      paintJoints(); paintJointPanel(); jmsg('"' + pa + '" 를 관절로 올렸어요. 종류·이어진 부품 B 를 정하고 저장하세요.'); });
+    on('jtNew', 'click', () => { const cs = b.camState ? b.camState() : { target: [0, 0, 0] }, pa = lastLabels[0] || '';
+      jointSel = '__new'; jointDraft = { assembly_id: def.id, joint_id: '', name: '새 관절', step: Math.max(1, step), group_id: null, kind: 'pin', rides_group_id: null, is_driver: false, part_a: pa, part_b: '', pivot_x: 0, pivot_y: 0, pivot_z: 0, axis_x: 0, axis_y: 0, axis_z: 1, min_angle: null, max_angle: null, note: '' };
+      const lp = jointLocal(pa, cs.target, [0, 0, 1]); if (lp) { jointDraft.pivot_x = jr2(lp.pos[0]); jointDraft.pivot_y = jr2(lp.pos[1]); jointDraft.pivot_z = jr2(lp.pos[2]); jointDraft.axis_x = jr2(lp.axis[0]); jointDraft.axis_y = jr2(lp.axis[1]); jointDraft.axis_z = jr2(lp.axis[2]); }
+      paintJoints(); paintJointPanel(); });
+    ['jtP0', 'jtP1', 'jtP2', 'jtA0', 'jtA1', 'jtA2', 'jtKind', 'jtDrv', 'jtPA'].forEach((id) => on(id, 'input', () => { const r = readJointForm(); if (r._noLocal) return; jointDraft = r; paintJoints(); }));
+    on('jtCam', 'click', () => { const cs = b.camState(); ['jtP0', 'jtP1', 'jtP2'].forEach((id, k) => { const e = $(id); if (e) e.value = jr2(cs.target[k]); }); const r = readJointForm(); if (!r._noLocal) { jointDraft = r; paintJoints(); } });
+    on('jtSave', 'click', async () => { const r = readJointForm(); if (!r.joint_id || !r.name || !r.part_a || !r.part_b) { jmsg('이름표·이름·부품 A·부품 B 를 모두 적어 주세요.', true); return; }
+      if (r._noLocal) { jmsg('색칠할 부품 A 가 이 번호 화면에 없어서 위치를 못 저장해요. 부품이 있는 번호에서 저장해 주세요.', true); return; }
+      delete r._noLocal; delete r.id; delete r.updated_at; delete r.updated_by;
+      try { const saved = await b.jointStore.saveJoint(r); const i = jointsDB.joints.findIndex((j) => j.joint_id === saved.joint_id); if (i >= 0) jointsDB.joints[i] = saved; else jointsDB.joints.push(saved); jointSel = saved.joint_id; jointDraft = null; paintJoints(); paintJointPanel(); jmsg('저장했어요: ' + saved.name); }
+      catch (e) { jmsg(e.message, true); } });
+    on('jtDel', 'click', async () => { const j = jointsDB.joints.find((x) => x.joint_id === jointSel); if (!j || !window.confirm('관절 "' + j.name + '" 을(를) 지울까요?')) return;
+      try { await b.jointStore.removeJoint(def.id, j.joint_id); jointsDB.joints = jointsDB.joints.filter((x) => x.joint_id !== j.joint_id); jointSel = null; jointDraft = null; paintJoints(); paintJointPanel(); jmsg('지웠어요.'); } catch (e) { jmsg(e.message, true); } });
+    on('gpSel', 'change', (ev) => { jointSel2 = ev.target.value || null; grpDraft = jointSel2 ? JSON.parse(JSON.stringify(jointsDB.groups.find((g) => g.group_id === jointSel2) || null)) : null; paintJointPanel(); });
+    on('gpNew', 'click', () => { jointSel2 = '__new'; grpDraft = { assembly_id: def.id, group_id: '', name: '새 묶음', kind: 'body', link_length: null, parent_group_id: null, root_joint_id: null, members: [], note: '' }; paintJointPanel(); });
+    on('gpFill', 'click', () => { const e = $('gpMem'); if (e) e.value = lastLabels.join(String.fromCharCode(10)); });
+    on('gpSave', 'click', async () => { const g = (id) => ($(id) ? $(id).value : '');
+      const r = Object.assign({}, grpDraft, { assembly_id: def.id, group_id: g('gpId').trim(), name: g('gpName').trim(), kind: g('gpKind'), link_length: g('gpLen') === '' ? null : Number(g('gpLen')), parent_group_id: g('gpPar') || null, root_joint_id: g('gpRoot') || null,
+        members: g('gpMem').split(String.fromCharCode(10)).map((t) => t.trim()).filter(Boolean).map((t) => ({ name: t })), note: g('gpNote') });
+      if (!r.group_id || !r.name) { jmsg('묶음 이름표와 이름을 적어 주세요.', true); return; } delete r.id; delete r.updated_at; delete r.updated_by;
+      try { const saved = await b.jointStore.saveGroup(r); const i = jointsDB.groups.findIndex((x) => x.group_id === saved.group_id); if (i >= 0) jointsDB.groups[i] = saved; else jointsDB.groups.push(saved); jointSel2 = saved.group_id; grpDraft = JSON.parse(JSON.stringify(saved)); paintJointPanel(); jmsg('묶음을 저장했어요: ' + saved.name); } catch (e) { jmsg(e.message, true); } });
+    on('gpDel', 'click', async () => { const G = jointsDB.groups.find((x) => x.group_id === jointSel2); if (!G || !window.confirm('묶음 "' + G.name + '" 을(를) 지울까요?')) return;
+      try { await b.jointStore.removeGroup(def.id, G.group_id); jointsDB.groups = jointsDB.groups.filter((x) => x.group_id !== G.group_id); jointSel2 = null; grpDraft = null; paintJointPanel(); jmsg('지웠어요.'); } catch (e) { jmsg(e.message, true); } });
+  }
+  // 부품을 누르면(일반 선택은 그대로) 그 부품이 관절이면 관절 정보를 패널에 연다 — 관절이 아니면 패널이 열려 있을 때 "관절로 등록" 후보로 보여 준다
+  window.__ivsOnPartClick = (idx) => { if (!isAdm() || !def || step < 1 || idx < 0) return; const nm = lastLabels[idx]; if (!nm) return;
+    setTimeout(() => { const el = $('asmJointPanel'); if (!el) return; jointPicked = nm; const j = jointsDB.joints.find((x) => x.part_a === nm && step >= Number(x.step));
+      if (j) { jointSel = j.joint_id; jointDraft = null; el.hidden = false; } else if (!el.hidden) { jointSel = null; jointDraft = null; } else return;
+      paintJoints(); paintJointPanel(); }, 80); };
+  window.__ivsOnPartSelect = () => { const el = $('asmJointPanel'); if (!el || el.hidden || !isAdm()) return; clearTimeout(window.__jtSelT); window.__jtSelT = setTimeout(() => { const act = document.activeElement; if (act && el.contains(act) && /INPUT|TEXTAREA|SELECT/.test(act.tagName)) return; paintJointPanel(); }, 60); };   // 부품을 고르면 패널의 "고른 부품" 줄을 갱신
+  function wireJointDrag(el) {   // 제목 줄을 끌면 패널이 움직인다(2026-10-16 사용자 지시). 놓은 자리는 이 브라우저에 기억한다.
+    const KEY = 'ivs-joint-panel-pos';
+    const put = (x, y) => { const w = el.offsetWidth, h2 = Math.min(el.offsetHeight, window.innerHeight); x = Math.max(8 - w + 80, Math.min(window.innerWidth - 80, x)); y = Math.max(0, Math.min(window.innerHeight - 40, y)); el.style.left = x + 'px'; el.style.top = y + 'px'; el.style.right = 'auto'; el.style.bottom = 'auto'; };
+    try { const sv = JSON.parse(localStorage.getItem(KEY) || 'null'); if (sv && isFinite(sv.x) && isFinite(sv.y)) put(sv.x, sv.y); } catch (e) { /* 기억 못 해도 기본 자리에 뜬다 */ }
+    let drag = null;
+    el.addEventListener('pointerdown', (ev) => { const hd = ev.target.closest && ev.target.closest('[data-jtdrag]'); if (!hd || ev.target.closest('button,input,select,textarea,label')) return;
+      const r = el.getBoundingClientRect(); drag = { dx: ev.clientX - r.left, dy: ev.clientY - r.top, id: ev.pointerId }; try { el.setPointerCapture(ev.pointerId); } catch (e) { /* 캡처 못 해도 끌린다 */ } ev.preventDefault(); });
+    el.addEventListener('pointermove', (ev) => { if (!drag || ev.pointerId !== drag.id) return; put(ev.clientX - drag.dx, ev.clientY - drag.dy); });
+    const end = (ev) => { if (!drag || ev.pointerId !== drag.id) return; drag = null; try { const r = el.getBoundingClientRect(); localStorage.setItem(KEY, JSON.stringify({ x: Math.round(r.left), y: Math.round(r.top) })); } catch (e) { /* 저장 못 해도 괜찮다 */ } };
+    el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+  }
+  function ensureJointUI() {
+    if (!$('asmJointPanel')) { const el = document.createElement('div'); el.id = 'asmJointPanel'; el.hidden = true;
+      el.style.cssText = 'position:fixed;right:14px;bottom:14px;width:340px;max-height:80vh;overflow:auto;z-index:950;background:#fff;border:1px solid #cbd5e1;border-radius:12px;box-shadow:0 8px 28px rgba(15,23,42,.25);padding:10px 12px;font-size:12px;color:#0f172a;'; document.body.appendChild(el); wireJointDrag(el); }
+    if (!$('asmJointBtn') && $('asmStatusBtn')) { const jb = document.createElement('button'); jb.type = 'button'; jb.id = 'asmJointBtn'; jb.hidden = true; jb.textContent = '🔩 관절';
+      jb.style.cssText = $('asmStatusBtn').style.cssText; jb.title = '회전하는 관절(중심점)을 보고 고쳐요(관리자만). 관절 부품(T축·축·리벳)을 3D 화면에서 분홍색으로 칠해요';
+      $('asmStatusBtn').parentNode.insertBefore(jb, $('asmStatusBtn'));
+      jb.addEventListener('click', () => { const el = $('asmJointPanel'); el.hidden = !el.hidden; if (!el.hidden) { paintJoints(); paintJointPanel(); } }); }
+  }
+  function ensureStatusBtn() {
+    if ($('asmStatusBtn') || !$('asmMarkMove2')) return;
+    const sb = document.createElement('button'); sb.type = 'button'; sb.id = 'asmStatusBtn'; sb.hidden = true;
+    sb.style.cssText = 'padding:6px 12px;font-size:12px;font-weight:600;border-radius:999px;background:var(--panel);border:1px solid var(--panel-border);color:var(--ink);';
+    $('asmMarkMove2').parentNode.insertBefore(sb, $('asmMarkMove2'));
+    { const fb = document.createElement('button'); fb.type = 'button'; fb.id = 'asmFreezeBtn'; fb.hidden = true; fb.textContent = '❄ 모습 기록';
+      fb.style.cssText = sb.style.cssText; fb.title = '지금 부품들의 위치·회전을 이 단계의 모습으로 기록해요(관리자만). 기록한 단계는 열 때 이 모습으로 보여요. 기록한 단계에서 한 번 더 누르면 기록을 지워요';
+      sb.parentNode.insertBefore(fb, sb);
+      fb.addEventListener('click', async () => {
+        const b2 = bridge(); if (!b2 || !b2.poseStore || !def || step < 1) return;
+        if (posesDB[step]) { // 이미 기록한 단계에서 한 번 더 누르면 기록을 지운다(사용자 지시 2026-10-11) — 다시 누르면 새로 기록
+          const mine0 = step;
+          try { await b2.poseStore.remove(def.id, mine0); delete posesDB[mine0]; paintStatus(); b2.status(mine0 + '단계 모습 기록을 지웠어요. 이제 코드가 만든 자세로 보여요. 다시 누르면 새로 기록해요.', 'success'); notice('모습 기록을 지웠습니다.'); if (viewing && step === mine0) render(); }
+          catch (e) { b2.status('모습 기록 삭제 실패: ' + e.message, 'error'); }
+          return;
+        }
+        const ser = b2.serialize();
+        if (ser.length !== lastLabels.length) { b2.status('부품 수가 달라서 기록하지 못했어요. 단계를 다시 열고 눌러 주세요.', 'error'); return; }
+        const r1 = (v) => Math.round(v * 100) / 100, poses = {};
+        const lfS = (def.lift && Number(def.lift[step])) || 0; // 기록은 띄우기(def.lift) 전 자리로 저장한다 — 열 때 다시 띄운다
+        ser.forEach((x, i) => { poses[lastLabels[i]] = { p: [x.pos[0], x.pos[1] - lfS, x.pos[2]].map(r1), q: (x.quat || []).map((v) => Math.round(v * 100000) / 100000), r: (x.rot || []).map(r1) }; });
+        const mine = step;
+        try { await b2.poseStore.save(def.id, mine, poses); posesDB[mine] = poses; paintStatus(); b2.status(mine + '단계 부품 모습을 기록했어요. 이제 이 단계를 열면 이 모습으로 보여요.', 'success'); notice('모습이 저장되었습니다.'); }
+        catch (e) { b2.status('모습 기록 실패: ' + e.message + ' (supabase/assembly_poses.sql 을 실행했는지 확인)', 'error'); }
+      });
+    }
+    { const ab = document.createElement('button'); ab.type = 'button'; ab.id = 'asmAuditBtn'; ab.hidden = true; ab.textContent = '🔍 마무리 점검';
+      ab.style.cssText = sb.style.cssText; ab.title = '지금까지 만든 번호를 한꺼번에 점검하고, 높이·앞뒤·좌우 스캔을 한 번씩 돌린 뒤 결과를 브리핑해요(관리자만). 완성 단계에 가면 점검만 저절로도 보여요';
+      sb.parentNode.insertBefore(ab, sb);
+      ab.addEventListener('click', async () => {
+        if (!def) return;
+        const NL = String.fromCharCode(10), b2 = bridge();
+        // 마무리 점검(2026-10-17 관리자 지시): 스캔 셋(높이·앞뒤·좌우)을 한 번씩 천천히 돌린 뒤 결과를 브리핑으로 보여 준다
+        const res = [];
+        if (b2 && b2.scanSweep && step >= 1) {
+          ab.disabled = true; const keep = ab.textContent;
+          for (const m of ['height', 'depth', 'sym']) {
+            ab.textContent = '🔍 스캔 중… ' + (res.length + 1) + '/3';
+            const r = await new Promise((ok) => { const rv = b2.scanSweep(m, { trips: 1, legMs: 4500, onDone: ok, labels: lastLabels }); if (rv !== 'ok') ok(null); });
+            if (!r) break; res.push(r);
+          }
+          ab.textContent = keep; ab.disabled = false;
+        }
+        const jl = jointCheckLines();   // 관절 자동 검사를 먼저 돌려 두면 위 관절 목록에 통과 여부가 같이 나온다
+        const out = auditLines(); out.push('', '━ 🩻 엑스레이 브리핑(이 번호 ' + (step === last() ? '완성' : step) + ') ━');
+        if (res.length < 3) out.push('스캔이 중간에 멈춰서 ' + res.length + '/3개만 돌았어요.');
+        const xr = res[0] && res[0].xray, gap = (a) => a.map((x) => x[0] === x[1] ? x[0] + 'mm' : x[0] + '~' + x[1] + 'mm').join(', '), at = (v) => '(' + v.join(', ') + ')', more = (a, n) => a.length > n ? ' … 외 ' + (a.length - n) + '개' : '';
+        const base = (nmx) => String(nmx).replace(/\s*\d+번.*$/, '').trim();
+        if (xr) {
+          out.push(xr.overlaps.length ? '⚠ 겹침 ' + xr.overlaps.length + '쌍(서로 파고든 부품):' : '☑ 겹침 없음(몸통 상자 기준)');
+          xr.overlaps.slice(0, 8).forEach((q) => out.push('   · ' + q.a + ' ↔ ' + q.b + ' ' + at(q.at))); if (xr.overlaps.length > 8) out.push('   · …' + more(xr.overlaps, 8));
+          out.push(xr.floating.length ? '⚠ 공중에 뜬 부품 ' + xr.floating.length + '개(어느 부품과도 안 닿음):' : '☑ 공중에 뜬 부품 없음');
+          xr.floating.slice(0, 8).forEach((q) => out.push('   · ' + q.name + ' ' + at(q.at)));
+          out.push(xr.asym.length ? '⚠ 좌우 짝 없는 부품 ' + xr.asym.length + '개(가운데 거울 자리에 같은 부품이 없음 — 한쪽만 놓은 것일 수 있음):' : '☑ 좌우 짝이 모두 있음');
+          xr.asym.slice(0, 8).forEach((q) => out.push('   · ' + q.name + ' ' + at(q.at))); if (xr.asym.length > 8) out.push('   · …' + more(xr.asym, 8));
+          const hid = {}; xr.hidden.forEach((q) => { const k = base(q.name); hid[k] = (hid[k] || 0) + 1; });
+          out.push(xr.hidden.length ? '🕳 겉에서 안 보이는 안쪽 부품 ' + xr.hidden.length + '개: ' + Object.keys(hid).map((k) => k + ' ' + hid[k]).join(', ') : '🕳 안에 완전히 묻힌 부품 없음');
+        }
+        jl.forEach((l) => out.push(l));
+        res.forEach((r) => {
+          if (r.mode === 'height') {
+            out.push('⬆ 높이: 바닥 ' + r.min[1] + 'mm ~ 맨 위 ' + r.max[1] + 'mm(높이 ' + r.size[1] + 'mm) · ' + (r.zero.length ? '⚠ 비어 있는 층 ' + gap(r.zero) : '빈 층 없음'));
+            const runs = (r.runs || []).filter((q) => q.to - q.from >= 4 && Object.keys(q.comp).length).slice(0, 12);
+            runs.forEach((q) => out.push('   y ' + q.from + '~' + q.to + 'mm: ' + Object.keys(q.comp).slice(0, 6).map((k) => k + ' ' + q.comp[k]).join(', ') + (Object.keys(q.comp).length > 6 ? ' …' : '')));
+          }
+          else if (r.mode === 'depth') out.push('↕ 앞뒤: 앞 z ' + r.max[2] + 'mm ~ 뒤 z ' + r.min[2] + 'mm(길이 ' + r.size[2] + 'mm) · ' + (r.zero.length ? '⚠ 비어 있는 층 ' + gap(r.zero) : '빈 층 없음'));
+          else out.push('↔ 좌우: 폭 ' + r.size[0] + 'mm · ' + (r.mism.length ? '⚠ 왼쪽·오른쪽 부품 수가 다른 구간(가운데에서 거리) ' + gap(r.mism) : '왼쪽·오른쪽 개수가 끝까지 같음'));
+        });
+        lastAuditText = out.join(NL); notice(lastAuditText, null, { copy: true, rich: true, lineHook: jointLineHook });
+      }); }
+    { const kb = document.createElement('button'); kb.type = 'button'; kb.id = 'asmVerifyBtn'; kb.hidden = true; kb.textContent = '☑ 검증 카드';
+      kb.style.cssText = sb.style.cssText; kb.title = '검증 체크 카드를 다시 펼쳐 기본 자리로 가져와요(카드는 관리자 화면에 늘 떠 있어요)';
+      sb.parentNode.insertBefore(kb, sb);
+      kb.addEventListener('click', () => { try { localStorage.setItem('ivs-asm-verify-folded', '0'); localStorage.removeItem('ivs-asm-verify-pos'); } catch (e) { /* */ } const bx = $('asmVerifyBox'); if (bx) { bx.style.left = ''; bx.style.top = '96px'; bx.style.right = '16px'; } paintVerify(); }); }
+    { const vb = document.createElement('button'); vb.type = 'button'; vb.id = 'asmAuditViewBtn'; vb.hidden = true; vb.textContent = '📄 점검 결과 보기';
+      vb.style.cssText = sb.style.cssText; vb.title = '가장 최근 마무리 점검 브리핑을 다시 보여 줘요(스캔을 다시 돌리지 않아요, 관리자만)';
+      sb.parentNode.insertBefore(vb, sb);
+      vb.addEventListener('click', () => {
+        if (lastAuditText) { notice(lastAuditText, null, { copy: true, rich: true, lineHook: jointLineHook }); return; }
+        // 아직 마무리 점검을 안 돌렸으면 스캔 없이 계산만 빠르게 해서 같은 모양의 모달만 띄운다(점검·관절·엑스레이)
+        const NL = String.fromCharCode(10), b2 = bridge(), jl = jointCheckLines(), out = auditLines();
+        out.push('', '━ 🩻 엑스레이 브리핑(스캔 없이 계산만) ━');
+        const xr = b2 && b2.xray ? b2.xray(lastLabels) : null, at = (v) => '(' + v.join(', ') + ')';
+        if (xr) { out.push(xr.overlaps.length ? '⚠ 겹침 ' + xr.overlaps.length + '쌍:' : '☑ 겹침 없음(몸통 상자 기준)'); xr.overlaps.slice(0, 8).forEach((q) => out.push('   · ' + q.a + ' ↔ ' + q.b + ' ' + at(q.at)));
+          out.push(xr.floating.length ? '⚠ 공중에 뜬 부품 ' + xr.floating.length + '개:' : '☑ 공중에 뜬 부품 없음'); xr.floating.slice(0, 8).forEach((q) => out.push('   · ' + q.name + ' ' + at(q.at)));
+          out.push(xr.asym.length ? '⚠ 좌우 짝 없는 부품 ' + xr.asym.length + '개:' : '☑ 좌우 짝이 모두 있음'); xr.asym.slice(0, 8).forEach((q) => out.push('   · ' + q.name + ' ' + at(q.at))); }
+        jl.forEach((l) => out.push(l)); out.push('', '(높이·앞뒤·좌우 스캔 결과는 🔍 마무리 점검을 눌러야 나와요)');
+        notice(out.join(NL), null, { copy: true, rich: true, lineHook: jointLineHook });
+      }); }
+    [['asmScanHBtn', '⬆ 높이 스캔', 'height', '바닥에서 위로 불투명한 면이 천천히 올라갔다 내려오기를 두 번 해요. 그 높이의 부품 수를 보여 줘요(관리자만). 다시 누르면 멈춰요'], ['asmScanDBtn', '↕ 앞뒤 스캔', 'depth', '맨 앞(+Z)에서 뒤로 면이 천천히 갔다 오기를 두 번 해요. 그 층의 부품 수를 보여 줘요(관리자만). 다시 누르면 멈춰요'], ['asmScanSBtn', '↔ 좌우 스캔', 'sym', '가운데(X=0)에서 좌우로 면 둘이 천천히 벌어졌다 오기를 두 번 해요. 양쪽 부품 수를 비교해요(관리자만). 다시 누르면 멈춰요']].forEach(([id, label, mode, tip]) => {
+      const b0 = document.createElement('button'); b0.type = 'button'; b0.id = id; b0.hidden = true; b0.textContent = label; b0.style.cssText = sb.style.cssText; b0.title = tip;
+      sb.parentNode.insertBefore(b0, sb);
+      b0.addEventListener('click', () => { const b2 = bridge(); if (b2 && b2.scanSweep) b2.scanSweep(mode, { labels: lastLabels }); });
+    });
+    { const rb = document.createElement('button'); rb.type = 'button'; rb.id = 'asmReloadBtn'; rb.hidden = true; rb.textContent = '↻ 새로고침';
+      rb.style.cssText = sb.style.cssText; rb.title = '지금 보는 단계 하나만 데이터를 다시 불러와요(관리자만). Shift+클릭 = 페이지 전체 새로고침';
+      sb.parentNode.insertBefore(rb, sb);
+      // 지금 보는 단계 하나만 다시 불러온다(사용자 지시 2026-10-05: 15번을 고치면 15번만) — 페이지·다른 단계·카메라는 그대로. Shift 를 누르고 누르면 예전처럼 페이지 전체를 새로 불러온다.
+      rb.addEventListener('click', async (ev) => {
+        const fullReload = () => {
+          try { sessionStorage.setItem('ivs-asm-restore', JSON.stringify({ sel: [...document.querySelectorAll('select')].slice(0, 3).map((x) => x.value), step })); } catch (e) { /* 저장 못 해도 새로고침은 한다 */ }
+          notice('페이지를 새로 불러옵니다. 보던 차시와 단계는 다시 열려요.', () => location.reload());
+        };
+        if (ev.shiftKey || !def || step < 1 || step > def.steps.length) { fullReload(); return; }
+        const mine = step;
+        try {
+          const res = await fetch('design-assemblies.js?ts=' + Date.now(), { cache: 'no-store' });
+          if (!res.ok) throw new Error('데이터 파일을 못 읽었어요(' + res.status + ')');
+          const fake = {}; new Function('window', await res.text())(fake); // 파일은 window.IVS_ASSEMBLIES 에 넣기만 한다 — 가짜 window 에 받아 이 단계만 꺼낸다
+          const nd = (fake.IVS_ASSEMBLIES || []).find((x) => x.id === def.id), ns = nd && nd.steps && nd.steps[mine - 1];
+          if (!ns) throw new Error('새 데이터에서 ' + mine + '단계를 못 찾았어요');
+          const old = def.steps[mine - 1]; Object.keys(old).forEach((k) => delete old[k]); Object.assign(old, ns);
+          go(mine);
+          notice(mine + '단계만 다시 불러왔어요. 다른 단계와 화면 위치는 그대로예요. (Shift 를 누르고 누르면 페이지 전체를 새로 불러와요)');
+        } catch (e) { notice(mine + '단계를 다시 불러오지 못했어요: ' + e.message); }
+      });
+    }
+    { const tb = document.createElement('button'); tb.type = 'button'; tb.id = 'asmThumbBtn'; tb.hidden = true; tb.textContent = '📷 썸네일 저장';
+      tb.style.cssText = sb.style.cssText; tb.title = '지금 3D 화면을 이 단계 작업 창고의 썸네일로 저장해요(관리자만, 누를 때만 찍어요)';
+      sb.parentNode.insertBefore(tb, sb);
+      tb.addEventListener('click', async () => {
+        const b2 = bridge(); if (!b2 || !b2.thumbStore || !b2.snapshot || !def || curSlot < 0) return;
+        const img = b2.snapshot(300); if (!img) { b2.status('사진을 만들지 못했어요.', 'error'); return; }
+        const mine = step, mySlot = curSlot;
+        try { await b2.thumbStore.save(def.id, mine, mySlot, img); thumbsDB[mine + ':' + mySlot] = img; pushSlotThumbs(); b2.status(mine + '단계 · 창고 ' + mySlot + ' 썸네일을 저장했어요.', 'success'); notice('썸네일이 저장되었습니다. (' + mine + '단계 · 창고 ' + mySlot + ')'); }
+        catch (e) { b2.status('썸네일 저장 실패: ' + e.message + ' (supabase/assembly_thumbs.sql 을 실행했는지 확인)', 'error'); notice('썸네일 저장에 실패했습니다: ' + e.message); }
+      });
+    }
+    { // 위 줄 버튼 순서(사용자 지시 2026-10-05): 체크(상태) → 카메라 → 모습 기록 → 나머지
+      const par = sb.parentNode, first = $('asmFreezeBtn');
+      if (par && first) { par.insertBefore(sb, first); const cam = $('asmCamCopy'); if (cam) par.insertBefore(cam, first); }
+    }
+    sb.addEventListener('click', async () => {
+      const b2 = bridge(); if (!b2 || !b2.statusStore || !def) return;
+      const cur = stepStatus[step], next = !cur ? 'edit' : cur === 'edit' ? 'done' : null, mine = step;
+      try { await b2.statusStore.set(def.id, mine, next); if (next) stepStatus[mine] = next; else delete stepStatus[mine]; paintStatus(); notice(mine + '단계를 "' + (next === 'done' ? '완료' : next === 'edit' ? '수정중' : '상태 없음') + '"(으)로 저장했습니다.' + (next === 'done' ? ' 이제 이 단계는 확인이 끝난 단계로 보호돼요.' : '')); }
+      catch (e) { b2.status('상태 저장 실패: ' + e.message + ' (supabase/assembly_status.sql 을 실행했는지 확인)', 'error'); notice('상태 저장에 실패했습니다: ' + e.message); }
+    });
+  }
+  function buildStepButtons() {
+    [$('asmSteps'), $('asmStageSteps')].forEach((box) => {
+      box.innerHTML = '';
+      for (let i = 1; i <= last(); i++) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.dataset.step = String(i);
+        const tag = i === last() ? '완성' : stepTag(i), wide = tag.length > 1;
+        b.textContent = tag;
+        b.title = i === last() ? '완성된 모습' : tag + (wide ? ': ' : '단계: ') + noteView(def.steps[i - 1].note);
+        b.style.cssText = wide ? 'padding:5px 10px; font-size:13px;' : 'min-width:32px; padding:5px 0; font-size:13px;';
+        box.appendChild(b);
+      }
+    });
+    paintStatus();
+  }
+  // 왼쪽 카드의 "조립 순서" 목록 — 조립 보기를 열기 전에도 항상 보이고, 누르면 그 단계로 간다.
+  function buildOrderList() {
+    const ol = $('asmOrderList');
+    ol.innerHTML = '';
+    if (!def) return;
+    def.steps.forEach((s, i) => {
+      const li = document.createElement('li');
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.dataset.step = String(i + 1);
+      b.className = 'ghost';
+      b.style.cssText = 'width:100%; text-align:left; padding:3px 8px; border-radius:8px; font-size:12.5px; font-weight:400; white-space:pre-line;';
+      b.textContent = stepTag(i + 1) + '. ' + noteView(s.note);
+      li.appendChild(b);
+      ol.appendChild(li);
+    });
+  }
+  // 교재 참고 그림(관리자 전용, 표 ivs_assembly_refs): "조립 순서" 제목 오른쪽 "🖼 완성 사진"(교재 맨 앞 완성품 사진 = 앞·뒤·정면 기준)과, 그림이 있는 단계마다 목록 오른쪽 "🖼".
+  // 단계 그림은 교재 쪽에서 잘라 낸 것(필요하면 돌리거나 확대해 칸을 센 그림도)이다. 그림 자체는 단계를 눌러 열 때만 받는다.
+  let refsMeta = {}, refsFor = null;
+  function refModal(title, rows) {
+    const old = $('asmRefModal'); if (old) old.remove();
+    const ov = document.createElement('div'); ov.id = 'asmRefModal';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(15,23,42,.62);display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:16px;';
+    const box = document.createElement('div');
+    box.style.cssText = 'background:var(--panel,#fff);color:var(--ink,#111);border-radius:14px;max-width:min(1100px,100%);width:100%;padding:14px 16px 18px;box-shadow:0 12px 40px rgba(0,0,0,.35);';
+    const hd = document.createElement('div'); hd.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:8px;margin:0 0 10px;';
+    const h = document.createElement('b'); h.textContent = title; h.style.fontSize = '15px';
+    const x = document.createElement('button'); x.type = 'button'; x.textContent = '✕ 닫기'; x.className = 'ghost'; x.style.cssText = 'padding:4px 10px;font-size:12.5px;';
+    hd.appendChild(h); hd.appendChild(x); box.appendChild(hd);
+    if (!rows.length) { const p = document.createElement('p'); p.textContent = '등록된 그림이 없어요.'; box.appendChild(p); }
+    rows.forEach((r) => {
+      const fig = document.createElement('figure'); fig.style.cssText = 'margin:0 0 14px;';
+      if (r.label) { const lb = document.createElement('div'); lb.textContent = r.label; lb.style.cssText = 'font-weight:700;font-size:13px;margin:0 0 4px;'; fig.appendChild(lb); }
+      const im = document.createElement('img'); im.src = r.img; im.alt = r.label || '교재 그림'; im.style.cssText = 'display:block;max-width:100%;height:auto;border:1px solid var(--panel-border,#d6dce8);border-radius:8px;background:#fff;'; fig.appendChild(im);
+      if (r.note) { const cp = document.createElement('figcaption'); cp.textContent = r.note; cp.style.cssText = 'font-size:12.5px;line-height:1.4;margin:6px 0 0;color:var(--ink-soft,#445);white-space:pre-line;'; fig.appendChild(cp); }
+      box.appendChild(fig);
+    });
+    ov.appendChild(box); document.body.appendChild(ov);
+    const closeIt = () => { ov.remove(); document.removeEventListener('keydown', onKey); };
+    const onKey = (e) => { if (e.key === 'Escape') closeIt(); };
+    document.addEventListener('keydown', onKey);
+    x.addEventListener('click', closeIt); ov.addEventListener('click', (e) => { if (e.target === ov) closeIt(); });
+  }
+  async function showRefs(steps, title) {
+    const b = bridge(); if (!b || !b.refStore || !def) return;
+    refModal(title, [{ img: 'data:image/gif;base64,R0lGODlhAQABAAAAACw=', label: '불러오는 중…' }]);
+    try {
+      const rows = await b.refStore.get(def.id, steps);
+      rows.sort((a, c) => (a.step - c.step) || (String(a.note) < String(c.note) ? -1 : String(a.note) > String(c.note) ? 1 : 0)); // 설명 앞 ①②③④ 순서
+      const KIND = { '①': '① 교재 원본', '②': '② 1차 격자(원본 위, 원근 그대로)', '③': '③ 책 그림 작업 1', '④': '④ 책 그림 작업 2' };
+      refModal(title, rows.map((r) => ({ img: r.img, note: String(r.note || '').replace(/^[①②③④]\s*/, ''), label: r.step === 0 ? '교재 맨 앞 완성품 사진' : r.step === 99 ? '교재 마지막 쪽 "완성" 그림' : (KIND[String(r.note || '').charAt(0)] || (r.idx ? '그림 ' + (r.idx + 1) : '교재 그림')) })));
+    } catch (e) { refModal(title, []); const p = document.querySelector('#asmRefModal p'); if (p) p.textContent = '불러오지 못했어요: ' + e.message; }
+  }
+  function paintRefButtons() { // 관리자일 때만, 그림이 등록된 곳에만 버튼을 단다
+    const head = $('asmOrderHead'), ol = $('asmOrderList');
+    if (head) { const old = head.querySelector('.asm-ref-head'); if (old) old.remove(); head.style.cssText = 'margin:0 0 4px;display:flex;align-items:center;justify-content:space-between;gap:6px;'; }
+    if (ol) ol.querySelectorAll('.asm-ref-btn').forEach((e) => e.remove());
+    if (!def || !isAdm() || refsFor !== def.id) return;
+    const mk = (txt, title, fn, cls) => { const bt = document.createElement('button'); bt.type = 'button'; bt.className = 'ghost ' + cls; bt.textContent = txt; bt.title = title; bt.style.cssText = 'flex:none;padding:2px 8px;font-size:12px;font-weight:600;border-radius:999px;'; bt.addEventListener('click', (e) => { e.stopPropagation(); fn(); }); return bt; };
+    if (head && (refsMeta[0] || refsMeta[99])) head.appendChild(mk('🖼 완성 사진', '교재 맨 앞 완성품 사진과 마지막 "완성" 그림 보기(관리자 전용) — 앞·뒤·정면은 여기서 확인', () => showRefs([0, 99], '교재 완성품 사진'), 'asm-ref-head'));
+    if (ol) ol.querySelectorAll('li').forEach((li, i) => {
+      const n = i + 1; if (!refsMeta[n]) return;
+      li.style.cssText = 'display:flex;align-items:flex-start;gap:4px;'; const bb = li.querySelector('button'); if (bb) bb.style.flex = '1 1 auto';
+      li.appendChild(mk('🖼' + (refsMeta[n].length > 1 ? refsMeta[n].length : ''), n + '단계 교재 그림 보기(관리자 전용)', () => showRefs([n], n + '단계 교재 그림'), 'asm-ref-btn'));
+    });
+  }
+  function loadRefs() { // 조립도가 정해지면 어느 단계에 그림이 있는지만 받아 온다(그림은 누를 때 받는다)
+    const b = bridge(); refsMeta = {}; refsFor = null;
+    if (!def || !isAdm() || !b || !b.refStore) { paintRefButtons(); return; }
+    const mine = def.id;
+    b.refStore.meta(mine).then((m) => { if (!def || def.id !== mine) return; refsMeta = m || {}; refsFor = mine; paintRefButtons(); });
+  }
+  function markStepButtons() {
+    const myStep = step;
+    document.querySelectorAll('#asmOrderList button').forEach((b) => {
+      const cur = Number(b.dataset.step) === step;
+      b.style.fontWeight = cur ? '800' : '400';
+      b.style.background = cur ? 'var(--blueprint, #2b6be0)' : '';
+      b.style.color = cur ? '#fff' : '';
+      b.setAttribute('aria-current', cur ? 'step' : 'false');
+    });
+    document.querySelectorAll('#asmSteps button, #asmStageSteps button').forEach((b) => {
+      const n = Number(b.dataset.step);
+      const cur = n === step;
+      b.className = cur ? 'primary' : 'ghost';
+      b.style.opacity = n < step ? '0.75' : '1'; // 이미 지나온 단계는 살짝 연하게
+      b.setAttribute('aria-current', cur ? 'step' : 'false');
+    });
+    // 왼쪽 "조립 순서" 목록: 지금 단계의 설명이 목록 맨 위에 오게 맞춘다(관리자 지시 2026-10-05)
+    { const ol = $('asmOrderList'), cb = ol && ol.querySelector('button[aria-current="step"]');
+      if (cb) ol.scrollTop += cb.getBoundingClientRect().top - ol.getBoundingClientRect().top; }
+    // 오른쪽 작업 화면은 단계가 바뀔 때마다 맨 위로 되돌려, 3D 화면과 버튼 줄이 항상 같은 자리에 오게 한다(스크롤이 남아 밀려 보이던 문제)
+    { const stg = document.querySelector('.stage'); if (stg) { stg.scrollTop = 0; [120, 500, 1200].forEach((ms) => setTimeout(() => { if (step === myStep) stg.scrollTop = 0; }, ms)); } }   // 화면이 늦게 자리 잡는 동안(모델·창고 카드) 밀려 올라가도 다시 맨 위로
+    // 화면 위 단계 줄: 지금 단계가 가운데 오게 옆으로 밀어 준다
+    const box = $('asmStageSteps'), curBtn = box.querySelector('button[aria-current="step"]');
+    if (curBtn) box.scrollLeft = curBtn.offsetLeft - box.clientWidth / 2 + curBtn.offsetWidth / 2;
+  }
+
+  // 새로고침(F5)해도 보던 차시·번호로 돌아오도록 조립 보기 중 위치를 기억한다(사용자 지시 2026-10-14: "큐보2권 3차시 15번에서 새로고침하면 다시 그곳으로"). 조립 보기를 닫으면 지운다.
+  function saveLast() {
+    if (!viewing || step < 1) return;
+    try { localStorage.setItem('ivs-asm-last', JSON.stringify({ sel: [...document.querySelectorAll('select')].slice(0, 3).map((x) => x.value), step })); } catch (e) { /* 저장 못 해도 보기는 된다 */ }
+  }
+  // 단계 설명을 그리되 "⚠ 확인 필요" 줄은 주황 글씨로(2026-10-16 사용자 지시)
+  function paintNote(el, text) {
+    el.textContent = '';
+    String(text).split(String.fromCharCode(10)).forEach((ln, i) => {
+      if (i) el.appendChild(document.createTextNode(String.fromCharCode(10)));
+      if (ln.indexOf('⚠ 확인 필요') === 0) { const sp = document.createElement('span'); sp.style.cssText = 'color:#ea580c;font-weight:700;'; sp.textContent = ln; el.appendChild(sp); }
+      else el.appendChild(document.createTextNode(ln));
+    });
+  }
+  function render() {
+    saveLast();
+    const b = bridge();
+    const { list, guides, missing, stored, storedThumb, storedSlot, storedSlots, storedThumbBy, storedTypes, targets, orders, viewEff } = buildList(step);
+    window.__asmStored = storedTypes; // design.html 의 사용 부품 목록이 읽는다
+    { const sp = posesDB[step]; // ❄ 로 기록한 모습이 있으면 그 자리·자세로 보여 준다(제자리 target 은 그대로라 결합은 원래 자리로 된다)
+      if (sp) list.forEach((d) => { const o = d.noFreeze ? null : sp[d.label]; if (o && Array.isArray(o.p)) { d.pos = o.p.slice(); { const lf = def.lift && Number(def.lift[step]); if (lf) d.pos[1] += lf; } /* 화면 전체를 띄우는 단계(def.lift)는 ❄ 기록 자리도 같이 띄운다(안 띄우면 기록된 부품만 아래에 남아 연결이 끊겨 보인다) */ if (Array.isArray(o.r)) d.rot = o.r.slice(); if (Array.isArray(o.q)) d.quat = o.q.slice(); } });
+      lastLabels = list.map((d) => d.label); }
+    // 다른 창고 화면을 보는 중에도 오른쪽 카드는 모든 창고의 내용을 그대로 보여 준다(화면에 그리는 것은 보는 창고뿐, 나머지 창고는 개수만 표시)
+    const viewing0 = viewSlot !== null && viewSlot !== slotOfStep(step);
+    let viewLabel = '', viewThumb = '';
+    let storedP = stored, storedSlotP = storedSlot, storedSlotsP = storedSlots, storedThumbByP = storedThumbBy, kindsP = Object.keys(storedTypes || {}).length, ghostComps = [];
+    if (viewing0) {
+      const sv0 = viewSlot; viewSlot = null; let Rn, comps0 = []; try { Rn = buildList(step); comps0 = mateComponents(Rn.list); } finally { viewSlot = sv0; }
+      storedP = {}; Object.keys(Rn.stored || {}).forEach((k) => { if ((Rn.storedSlots || {})[k] !== sv0) storedP[k] = Rn.stored[k]; });
+      viewLabel = Object.keys(Rn.stored || {}).filter((k) => (Rn.storedSlots || {})[k] === sv0).join(', ');
+      viewThumb = (Object.keys(Rn.stored || {}).filter((k) => (Rn.storedSlots || {})[k] === sv0).map((k) => (Rn.storedThumbBy || {})[k]).filter(Boolean))[0] || ''; // 보는 창고의 썸네일도 그대로
+      storedSlotP = Rn.storedSlot; storedSlotsP = Rn.storedSlots; storedThumbByP = Rn.storedThumbBy; kindsP = Object.keys(Rn.storedTypes || {}).length;
+      ghostComps = comps0.filter((g) => g.slot !== sv0).map((g) => ({ name: g.name, slot: g.slot, ghost: true, n: g.idx.length, idx: [] }));
+    }
+    renderStorage(storedP, storedThumb, kindsP, storedSlotP, storedSlotsP, storedThumbByP);
+    pushSlotThumbs();
+    if (b.setViewSlot) b.setViewSlot(viewSlot !== null && viewSlot !== slotOfStep(step) ? viewSlot : null, viewLabel, viewThumb);
+    b.show(list.map(({ isNew, name, final, order, ...d }) => d), targets, orders, def.guideMode === 'mates' ? mateComponents(list).concat(ghostComps) : []);
+    // 지금 단계에 보이는 부품(끼우기 직전 위치 포함)에 카메라를 맞춘다 — 처음부터 너무 멀리서 보이지 않게
+    // 이번 단계에 끼우는 부품과 그 끼워지는 자리를 화면 가운데에 크게 보여준다(나머지 부품은 배경)
+    const focus = list.filter((d) => d.isNew).map((d) => d.pos).concat(guides.filter((g) => g.to).map((g) => g.to)); // 맞물림 방식 안내는 좌표가 없다(연결점이 부품에 붙어 있다)
+    const stc = (step > 0 && step < last()) ? def.steps[step - 1].cam : null; // cam.tight: 이번에 끼우는 부분만 크게(교재가 그 부분만 크게 그린 단계)
+    { const axAt = stc && Array.isArray(stc.axes) ? stc.axes : null; const _axn = def.axisNames; const axNm = Array.isArray(_axn) ? (_axn.filter((a) => step >= (a.at || 1) && (!a.until || step <= a.until)).pop() || null) : (_axn && step >= (_axn.at || 1) ? _axn : null); const axKey = (axAt ? axAt.join(',') : '') + (axNm ? '|' + JSON.stringify(axNm) : ''); // cam.axes: 이 단계의 기준점(방향선 원점) · def.axisNames: 이 단계부터 축 이름을 바꿔 보인다(완성 사진 방향 기준)
+      if (axKey !== lastAxKey) { lastAxKey = axKey; b.axes(true, axAt, axNm); } }
+    const viewActive = viewSlot !== null && viewSlot !== slotOfStep(step); // 다른 창고 화면을 볼 땐 그 단계의 확대 설정을 쓰지 않고 보이는 부품 전체에 맞춘다
+    const camFocus = !viewActive && stc && Array.isArray(stc.focus) && stc.focus.length ? stc.focus : null; // cam.focus: 부품이 없는 단계 등에서 이 점들을 화면 가운데에 크게(조립 프로그램이 지정)
+    const axPt = stc && Array.isArray(stc.axes) ? stc.axes : [0, 0, 0]; // 바닥 기준선(방향선) 자리 — 카메라가 보는 범위에 항상 같이 들어오게 한다
+    if (camFocus) b.frame(camFocus.concat([axPt]), camFocus.concat([axPt]));
+    else {
+      const f0 = focus.length ? focus : list.map((d) => d.pos);
+      b.frame(f0.concat(stc && stc.tight && !viewActive ? [axPt] : []), stc && stc.tight && !viewActive ? f0.concat([axPt]) : list.map((d) => d.pos));
+    }
+    if (stc && Array.isArray(stc.rings)) stc.rings.forEach((m) => guides.push({ from: m, to: m, dir: [0, 1, 0], idx: -1, ringOnly: true })); // cam.rings: 이 단계에 고정으로 칠할 결합 점(예: 받침 흰 판 구멍)
+    b.guides(guides);
+    if (b.bands) b.bands(bandsAt(step));   // 고무줄 같은 규격 없는 줄(노란 곡선) — 만든 번호 이후 계속 보인다
+    setupHinge(list, b);   // 팔 당기기 슬라이더(완성 화면에서)
+    // 앞 벽이 뒤쪽 끝에 있는 단계(flip)는 반대편에서 보여준다
+    // view: 기본 각도에서 90도×view 만큼 돌려서 보기 / cam: {theta, phi}로 교재 그림과 같은 각도를 직접 지정
+    const camStep = (viewActive && viewEff >= 1) ? viewEff : step; // 창고 화면 보기: 그 묶음이 마지막으로 만들어진 단계의 시점
+    const st = (camStep > 0 && camStep < last()) ? def.steps[camStep - 1] : null;
+    const view = (st && st.view) || 0;
+    const th = st && st.cam ? st.cam.theta : (def.camera ? def.camera.theta : 0) + view * Math.PI / 2;
+    const ph = st && st.cam ? st.cam.phi : (def.camera ? def.camera.phi : 1);
+    const camKey = th.toFixed(3) + '|' + ph.toFixed(3);
+    if (b.turn && def.camera) { b.turn(th, ph); lastCamKey = camKey; } // 단계를 열 때마다 그 단계의 시점으로 — 돌려 놓은 각도는 다음 단계로 넘어가지 않는다(사용자 지시 2026-10-03)
+    const sv = savedCams[camStep]; // 관리자가 저장한 시점(보는 중심·거리까지)이 있으면 그걸로 연다
+    if (sv && b.camera && Array.isArray(sv.target)) b.camera({ target: sv.target, radius: sv.radius, theta: sv.theta, phi: sv.phi });
+    { const myStep0 = step; setTimeout(() => { if (step === myStep0 && b.relabelGroups) b.relabelGroups(def.steps[myStep0 - 1] && def.steps[myStep0 - 1].groupSwap); }, 120); } // 그룹 이름은 왼쪽부터 1번
+    { const myStep = step, myTh = sv ? sv.theta : th, myPh = sv ? sv.phi : ph, mySrc = sv ? 'admin' : (st && st.camSrc ? st.camSrc : ''); // 교재 시점 = 단계 데이터의 방향·높이각 + 화면에 맞춘 보는 중심·거리. 카메라가 자리 잡은 뒤(0.15초) 저장해 하단 표시줄이 지금 시점과 비교한다
+      setTimeout(() => { if (step !== myStep || !b.camState) return; const cs = b.camState(); baseCam = { step: myStep, th: myTh, ph: myPh, target: cs.target, radius: cs.radius, src: mySrc }; }, 150); }
+    const n = total();
+    const curSt = step >= 1 ? def.steps[step - 1] : null, realN = def.steps.filter((q) => !q.label).length; // 창고·불러오기 같은 label 단계는 단계 번호에 넣지 않는다(사용자 지시 2026-10-04)
+    $('asmLabel').textContent = step === 0 ? '시작 전' : (step === last() ? '완성!' : (curSt && curSt.label ? curSt.label : stepTag(step) + ' / ' + realN + ' 단계'));
+    $('asmNote').textContent = step === 0 ? '빈 판에서 시작해요. ▶ 를 눌러 한 단계씩 만들어 봐요.'
+      : (step === last() ? '완성! 부품이 모두 제자리에 끼워졌어요.' + (isAdm() ? String.fromCharCode(10) + String.fromCharCode(10) + '━ 마무리 점검(관리자만) ━' + String.fromCharCode(10) + auditLines().join(String.fromCharCode(10)) : '') : noteView(def.steps[step - 1].note));
+    { const adm2 = !!(window.__ivsIsAdmin && window.__ivsIsAdmin()); ['asmCamCopy', 'asmCamReset'].forEach((id) => { const e2 = $(id); if (e2) e2.hidden = !adm2; }); } // 📷(시점 맞춤)는 본사 관리자 로그인일 때만 보인다(사용자 지시 2026-10-03)
+    $('asmSlider').value = String(step);
+    paintNote($('asmStageNote'), step === last() ? $('asmNote').textContent : $('asmLabel').textContent + ' · ' + $('asmNote').textContent);
+    markStepButtons();
+    $('asmFirst').disabled = $('asmPrev').disabled = step === 0;
+    $('asmNext').disabled = $('asmLast').disabled = step === last();
+    { const myJ = step; jointDraft = null; if (jointSel === '__new') jointSel = null; setTimeout(() => { if (step === myJ && isAdm()) { paintJoints(); paintJointPanel(); } }, 300); }   // 부품이 자리 잡은 뒤 관절을 칠한다
+    paintStatus();
+    curSlot = (step >= 1 && step < last() && def.steps[step - 1] && def.steps[step - 1].slot !== undefined) ? def.steps[step - 1].slot : ((step === last() && step >= 1 && def.finalSlot !== undefined) ? def.finalSlot : -1); setStudioTitle(true); if (b.setSlot) b.setSlot(curSlot); // (완성 화면의 작업 창고는 조립도 데이터 finalSlot)
+    { const hs = step >= 1 && def.steps[step - 1] ? def.steps[step - 1].history : ''; if (hs) $('asmNote').textContent += '  ▸ ' + hs; } // 내역: 창고로 갔는지 불러왔는지(단계 번호에는 넣지 않는다)
+    if (missing.length) $('asmNote').textContent += ' (부품을 못 찾았어요: ' + missing.join(', ') + ')';
+    // 화면 아래 단계 설명 칸에도 "작업 창고 N · 어디서 무엇을 가져오는지"를 한 줄 더 보여 준다(사용자 지시 2026-10-04: 각 번호마다 작업공간과 가져온 곳이 보여야 한다)
+    { const sn = $('asmStageNote'); const hs2 = step >= 1 && def.steps[step - 1] ? def.steps[step - 1].history : '';
+      if (sn && (curSlot >= 0 || hs2)) {
+        const ln = document.createElement('div'); ln.style.cssText = 'margin-top:4px; font-weight:800; color:#1e3a8a; font-size:13px;';
+        ln.textContent = (curSlot >= 0 ? '작업 창고 ' + curSlot : '') + (hs2 ? (curSlot >= 0 ? ' · ' : '') + hs2 : '');
+        sn.appendChild(ln);
+      } }
+  }
+
+  function stop() {
+    clearInterval(timer); clearTimeout(timer); timer = null; timerDir = 0;
+    $('asmPlay').textContent = '▶ 재생';
+    $('asmReverse').textContent = '◀ 역재생';
+    const br = bridge(); if (br && br.guideDots) br.guideDots(true); // 멈추면 초록 점이 다시 보인다
+  }
+  function go(target) {
+    viewSlot = null;
+    step = Math.max(0, Math.min(last(), target));
+    render();
+  }
+  // 재생: 화살표 표시 → 결합 → 다음 단계 화살표 표시 → 결합 … 을 쭉 이어서 보여준다(재생 중에는 초록 점을 숨기고 화살표만).
+  // 역재생은 단계를 거꾸로 한 칸씩 넘긴다.
+  const ARROW_MS = 1100, JOIN_MS = 700;
+  // 재생 속도(0.5×~3×): 숫자가 클수록 빠르다. 재생 도중에 바꿔도 다음 단계부터 바로 적용된다.
+  let speed = 1;
+  try { const v = Number(localStorage.getItem('ivs-asm-speed')); if (v >= 0.5 && v <= 3) speed = v; } catch (e) { /* 저장 못 해도 기본 속도 */ }
+  const arrowMs = () => ARROW_MS / speed, joinMs = () => JOIN_MS / speed;
+  function play(dir) {
+    const wasPlaying = timerDir === dir;
+    stop();
+    if (wasPlaying) return; // 같은 재생 버튼을 다시 누르면 멈춤
+    const b = bridge();
+    if (dir > 0 && step >= last()) step = 0;
+    if (dir < 0 && step <= 0) step = last();
+    if (dir > 0 && step === 0) step = 1; // 빈 판에서 바로 첫 단계 화살표부터
+    render();
+    timerDir = dir;
+    if (b && b.guideDots) b.guideDots(false); // 재생 중에는 화살표만(초록 점 숨김)
+    if (dir > 0) {
+      $('asmPlay').textContent = '⏸ 멈춤';
+      const tick = () => {
+        if (timerDir !== 1) return;
+        // 결합: 부품마다 순서 번호(joinOrder)가 있으면 작은 번호부터 하나씩(14단계: 15프레임이 올라가 결합 → 그다음 부시)
+        const orders = b.pendingOrders ? b.pendingOrders() : [1];
+        const jm = joinMs();
+        const joinOne = (k) => {
+          if (timerDir !== 1) return;
+          if (k >= orders.length) { afterJoin(); return; }
+          b.combineNew(Math.max(150, jm - 150), orders[k]);
+          timer = setTimeout(() => joinOne(k + 1), jm);
+        };
+        const afterJoin = () => {
+          if (timerDir !== 1) return;
+          const next = step + 1;
+          if (next > last()) { stop(); return; }
+          go(next); // 다음 단계 화살표 표시
+          if (next === last()) { stop(); return; }
+          timer = setTimeout(tick, arrowMs());
+        };
+        joinOne(0);
+      };
+      timer = setTimeout(tick, arrowMs());
+    } else {
+      $('asmReverse').textContent = '⏸ 멈춤';
+      const back = () => {
+        if (timerDir !== -1) return;
+        const next = step - 1;
+        if (next < 0) { stop(); return; }
+        go(next);
+        if (next === 0) { stop(); return; }
+        timer = setTimeout(back, PLAY_MS / speed);
+      };
+      timer = setTimeout(back, PLAY_MS / speed);
+    }
+  }
+
+  // 3D 작업 영역 제목: 평소엔 "스케치북". 큐보 조립도를 보는 동안만 "큐보 스튜디오"(다른 로봇은 이름이 달라서 바꾸지 않는다 - 사용자 지시 2026-10-03)
+  let curSlot = -1;
+  let viewSlot = null; // 오른쪽 창고 카드를 눌러 "그 창고 화면"을 보는 중(사용자 지시 2026-10-04). null = 지금 단계의 작업 창고 그대로 // 지금 단계가 작업하는 창고 자리(단계 데이터의 slot)
+  function setStudioTitle(on) {
+    const el = document.querySelector('.scene-title');
+    if (!el) return;
+    if (el.dataset.orig === undefined) el.dataset.orig = el.textContent;
+    el.textContent = (on && def && def.category === '큐보') ? '큐보 스튜디오' + (curSlot >= 0 ? ' · 창고 ' + curSlot + '번' : '') : el.dataset.orig; // 지금 작업하는 창고 자리(사용자 지시 2026-10-04: 2번을 선택한 다음 조립한다)
+  }
+  // ── 큐보 부품 전체 리스트(사용자 지시 2026-10-03): 등록된 큐보 부품 전부를 한 화면에 펼쳐 둔다. 조립도 엔진을 그대로 써서(닫기·부품 창·번호·🟢 연결점) 단계 하나짜리 가짜 조립도로 연다.
+  let catAny = null;
+  let lessonFound = false;
+  let connAutoOn = false; // 조립도를 열면서 연결점을 자동으로 켰는지(닫을 때 되돌리기 위해)
+  // "큐보 부품 전체 리스트" 버튼은 큐보를 고른 관리자에게만 보인다(사용자 지시 2026-10-03). 조립도가 없는 차시에서도 열 수 있어야 해서 상자도 같이 맞춘다.
+  function syncAllPartsBtn() {
+    const box = $('assemblyBox'), btn = $('asmAllParts');
+    if (!box || !btn) return;
+    const admin = !!(window.__ivsIsAdmin && window.__ivsIsAdmin());
+    const show = !!(catAny && catAny.name === '큐보' && admin);
+    btn.hidden = !show;
+    if (!viewing) box.hidden = !lessonFound && !show;
+  }
+  setInterval(syncAllPartsBtn, 1500); // 로그인이 늦게 끝나도 버튼이 맞게 나타난다
+  const ALL_PARTS_ORDER = ['15프레임', '17프레임', '19프레임', '25프레임', '27프레임', '29프레임', '35프레임', '37프레임', '39프레임', '59프레임', '115프레임', '215프레임', '315프레임', '515프레임', '713프레임', '90도 프레임', '135도 프레임', '반원프레임', '2단블록', '3단블록', '1열브라켓', '2열브라켓', '리벳', '축', 'T축', '부시', '너트', '8볼트', '12볼트', '서보고정볼트', '작은기어', '큰기어', '육각큰기어', '작은바퀴', '중간바퀴', '데코바퀴', '눈블록', 'DC모터', '서보모터', '서보혼', '둥근서보혼', 'IR센서', 'LED센서', '터치센서', '메인보드', '스프라켓', '캐터필러', '큐보분리기'];
+  const ALL_PARTS_FLIP = { '육각큰기어': [180, 0, 0] }; // 목록에서 육각이 위로 보이게 뒤집어 놓을 부품(사용자 지시 2026-10-03)
+  function buildAllPartsDef() {
+    const b = bridge();
+    if (!b || !b.listParts || !catAny) return null;
+    const all = b.listParts(catAny.id).filter((it) => it.size); // 3D 모델이 없는 부품(고무밴드·3P 케이블·리모컨 등 임시 상자 모양)은 목록에서 뺀다(사용자 지시 2026-10-03)
+    const rank = (n) => { const i = ALL_PARTS_ORDER.indexOf(n); return i < 0 ? 999 : i; };
+    all.sort((x, y) => rank(x.name) - rank(y.name) || String(x.name).localeCompare(String(y.name), 'ko'));
+    // 3D 공간(가로세로 ±750mm) 안에, 모든 부품을 바닥(y=0)에 붙여 놓는다. 크기는 실제 모델 크기(없으면 등록 크기)를 쓰고, 프레임부터 정해 둔 순서대로 줄을 채운다.
+    const HALF = 450, GAP = 20;
+    let x = -HALF, z = -HALF, rowD = 0, maxX = -HALF;
+    const parts = all.map((it) => {
+      const d = (window.IVS_PART_DEFS || {})[it.type] || {};
+      const sz = it.size || [d.w || 30, d.h || 10, d.d || 30];
+      const w = Math.max(sz[0], 20), h = sz[1], dd = Math.max(sz[2], 20);
+      if (x > -HALF && x + w > HALF) { x = -HALF; z += rowD + GAP; rowD = 0; }
+      const pt = { n: it.name, p: [x + w / 2, h / 2 + 0.01, z + dd / 2], r: (ALL_PARTS_FLIP[it.name] || [0, 0, 0]) };
+      x += w + GAP; rowD = Math.max(rowD, dd); maxX = Math.max(maxX, x);
+      return pt;
+    });
+    if (!parts.length) return null;
+    const cam = { theta: 0, phi: 0.45, focus: [[-HALF, 0, -HALF], [maxX, 0, z + rowD]], axes: [-HALF, 0, -HALF] };
+    return { id: 'cubo-all-parts', category: '큐보', volume: 0, chapter: '큐보 부품 전체 리스트', camera: { theta: 0, phi: 0.45, radius: Math.max(520, (maxX + HALF + z + HALF + rowD) * 0.42), target: [(maxX - HALF) / 2, 0, (z + rowD - HALF) / 2] }, steps: [{ note: '큐보 부품 전체 리스트 (' + parts.length + '종) — 부품을 누르면 이름과 면 번호가 나와요. 🟢 연결점 버튼으로 구멍·돌기를 확인하세요.', parts, cam }] };
+  }
+  async function openAllParts() {
+    if (viewing) close();
+    const b0 = bridge();
+    if (b0 && b0.listParts && catAny) { try { await b0.preload(b0.listParts(catAny.id).map((it) => it.name), catAny.id); } catch (e) { /* 못 받은 부품은 등록 크기로 */ } } // 실제 모델 크기를 알아야 바닥 아래로 안 내려간다
+    const d = buildAllPartsDef();
+    if (!d) { const b = bridge(); if (b) b.status('부품 목록을 아직 못 불러왔어요. 잠시 뒤에 다시 눌러 주세요.', 'warn'); return; }
+    def = d; catId = catAny.id;
+    buildOrderList(); buildStepButtons();
+    await open();
+    if (viewing) go(1); // 한 장짜리라 완성 화면 대신 1단계(펼친 전체 화면)로
+    { const cb = $('connToggle'); if (viewing && cb && !cb.hidden && cb.getAttribute('aria-pressed') !== 'true') { cb.click(); connAutoOn = true; } } // 부품 전체 리스트에서만 연결점(구멍·돌기 초록 원판)을 처음부터 켠다 — 일반 조립도는 그 단계의 결합 점만 보인다
+  }
+  async function open() {
+    const b = bridge();
+    if (!def || !b) return;
+    b.status('3D 부품을 불러오는 중이에요...', null);
+    // 등록된 3D 모델을 먼저 받아 두면 부품이 처음부터 제 모양으로 나온다(받는 동안 단순 모양이 잠깐 보이는 것을 막음)
+    const names = [...new Set(def.steps.flatMap((s) => (s.parts || []).map((pt) => pt.n)))];
+    const pf = window.__ivsPerf = window.__ivsPerf || {}; pf.asmOpenStart = Math.round(performance.now());
+    try { await b.preload(names, catId); } catch (e) { /* 못 받아도 단순 모양으로 계속 보여준다 */ }
+    pf.asmPreloaded = Math.round(performance.now());
+    if (!def || viewing) return;
+    snapshot = b.serialize();
+    viewing = true;
+    setStudioTitle(true);   // 큐보 조립도를 열면 3D 영역 제목이 "스케치북" -> "큐보 스튜디오"
+    lastCamKey = def.camera.theta.toFixed(3) + '|' + def.camera.phi.toFixed(3);
+    b.setViewing(true);
+    b.camera(def.camera);
+    $('asmBar').hidden = false;
+    { const adm = !!(window.__ivsIsAdmin && window.__ivsIsAdmin()); // 관리자만
+      if ($('asmMarkMove2')) $('asmMarkMove2').hidden = !adm;   // 📍 표시하기는 관리자만
+      if ($('asmMarkShot')) $('asmMarkShot').hidden = false; }   // 📸 스샷은 누구나(2026-10-16 사용자 지시)
+    $('asmStageBar').hidden = false;
+    $('historyPanel').hidden = true;
+    b.axes(true);
+    $('asmSlider').max = String(last());
+    buildStepButtons();
+    savedCams = {};
+    ensureStatusBtn(); ensureJointUI(); loadJoints(); posesDB = {}; if (b.poseStore) b.poseStore.load(def.id).then((m) => { posesDB = m || {}; paintStatus(); if (Object.keys(posesDB).length && viewing) render(); }); thumbsDB = {}; if (b.thumbStore) b.thumbStore.load(def.id).then((m) => { thumbsDB = m || {}; pushSlotThumbs(); }); checkVerdicts = {}; if (isAdm() && b.checkStore) b.checkStore.load(def.id).then((m) => { checkVerdicts = m || {}; paintStatus(); }); stepStatus = {}; if (isAdm() && b.statusStore) b.statusStore.load(def.id).then((m) => { stepStatus = m || {}; paintStatus(); });
+    if (b.camStore) b.camStore.load(def.id).then((m) => { savedCams = m || {}; paintStatus(); if (viewing) render(); }); // 관리자가 저장한 단계별 시점
+    if (refsFor !== def.id) loadRefs();
+    go(last()); // 처음엔 완성된 모습부터 보여준다
+    pf.asmOpened = Math.round(performance.now());
+    b.status('조립 보기 중이에요. 닫으면 하던 작업으로 돌아가요.', 'success');
+  }
+  function close() {
+    const b = bridge();
+    stop();
+    if (!viewing) return;
+    viewing = false;
+    try { localStorage.removeItem('ivs-asm-last'); } catch (e) { /* */ }
+    { const wb = $('asmWarnBox'); if (wb) wb.hidden = true; }
+    setStudioTitle(false);
+    $('asmBar').hidden = true;
+    const mm = $('asmMarkMove2'); if (mm && mm.dataset.on === '1') { mm.dataset.on = '0'; mm.textContent = '📍 표시하기'; mm.style.background = mm.style.color = ''; if (b) b.markMove(false); } // 닫을 땐 사진 없이 끈다
+    if ($('asmMarkMove2')) $('asmMarkMove2').hidden = $('asmMarkShot').hidden = true;
+    $('asmStageBar').hidden = true;
+    $('historyPanel').hidden = false;
+    if (b) b.axes(false);
+    if (b) { b.guides([]); if (b.bands) b.bands([]); b.restore(snapshot || []); b.setViewing(false); }
+    { const cb = $('connToggle'); if (connAutoOn && cb && cb.getAttribute('aria-pressed') === 'true') cb.click(); connAutoOn = false; } // 자동으로 켠 연결점은 닫을 때 같이 끈다(손으로 켠 건 그대로)
+    snapshot = null;
+  }
+
+  function stopPlayClick(fn) { return () => { stop(); fn(); }; }
+  document.addEventListener('DOMContentLoaded', () => {
+    if (!$('asmClose')) return;
+    $('asmClose').addEventListener('click', close);
+    if ($('asmAllParts')) $('asmAllParts').addEventListener('click', openAllParts);
+    const mm2 = $('asmMarkMove2');
+    const toggleMark = () => { const on = mm2.dataset.on !== '1'; mm2.dataset.on = on ? '1' : '0'; mm2.style.background = on ? '#f97316' : ''; mm2.style.color = on ? '#fff' : ''; mm2.textContent = on ? '📍 끝내기' : '📍 표시하기'; bridge().markMove(on); notice(on ? '표시 모드를 켰어요. 화면의 부품을 누르면 누른 자리에 주황 표시가 생기고, 다시 누르면 지워져요. 끝나면 [끝내기]를 누르세요.' : '표시 모드를 껐어요. 표시한 곳을 사진으로 남기려면 [수정스샷]을 누르세요.'); };
+    // 📸 수정스샷: 화면+번호+이동 목록을 한 장의 그림으로 만들어 클립보드에 복사하고 PNG로 내려받는다(번호 = 옮긴 순서)
+    // 안내는 화면 아래쪽 글줄이라 눈에 안 띄므로, 스케치북 한가운데 위에 잠깐 큼직하게도 띄운다
+    const toast = (msg, bad) => {
+      let t = $('asmShotToast');
+      if (!t) { t = document.createElement('div'); t.id = 'asmShotToast'; t.style.cssText = 'position:fixed;left:50%;top:20%;transform:translateX(-50%);z-index:60;max-width:80vw;padding:10px 16px;border-radius:12px;color:#fff;font:700 14px sans-serif;box-shadow:0 6px 24px rgba(0,0,0,.3);pointer-events:none;'; document.body.appendChild(t); }
+      t.style.background = bad ? '#dc2626' : '#16a34a'; t.textContent = msg; t.hidden = false;
+      clearTimeout(t._h); t._h = setTimeout(() => { t.hidden = true; }, 4500);
+    };
+    const shot = async () => {
+      const b = bridge();
+      const header = (def ? def.chapter : '') + ' 조립도 · ' + (step === last() ? '완성' : stepTag(step) + '단계');
+      let blob = null;
+      try { blob = await b.markCapture(header); } catch (e) { toast('사진 만들기 실패: ' + (e && e.message || e), true); notice('사진 만들기에 실패했습니다: ' + (e && e.message || e)); return; }
+      if (!blob) { toast('표시가 없어요. 먼저 "📍 표시하기"를 누르고 화면의 부품을 눌러 주황 표시를 만든 뒤 눌러 주세요.', true); notice('표시가 없어요. 먼저 [표시하기]를 누르고 화면의 부품을 눌러 주황 표시를 만든 뒤 눌러 주세요.'); return; }
+      let copied = false;
+      try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); copied = true; } catch (e) { /* 복사 권한이 없으면 다운로드만 */ }
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = '스샷_' + (def ? def.chapter : '') + '_' + (step === last() ? '완성' : stepTag(step) + '단계') + '.png';
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      toast(copied ? '📸 사진을 복사하고 내려받았어요 — Ctrl+V로 붙여넣어 보내 주세요' : '📸 사진을 내려받았어요(복사는 안 됐어요) — 파일을 보내 주세요');
+      notice(copied ? '스샷이 복사되고 내려받아졌습니다. Ctrl+V로 붙여넣어 보내 주세요.' : '스샷이 내려받아졌습니다(복사는 안 됐어요). 파일을 보내 주세요.');
+      b.status(copied ? '사진을 복사하고 내려받았어요. 붙여넣기(Ctrl+V)로 보내 주세요.' : '사진을 내려받았어요(복사는 안 됐어요). 파일을 보내 주세요.', 'success');
+    };
+
+    if (mm2) mm2.addEventListener('click', toggleMark);
+    if ($('asmMarkShot')) $('asmMarkShot').addEventListener('click', shot);
+    $('asmFirst').addEventListener('click', stopPlayClick(() => go(0)));
+    $('asmPrev').addEventListener('click', stopPlayClick(() => go(step - 1)));
+    $('asmNext').addEventListener('click', stopPlayClick(() => go(step + 1)));
+    $('asmLast').addEventListener('click', stopPlayClick(() => go(last())));
+    const sp = $('asmSpeed'), spl = $('asmSpeedLabel');
+    if (sp) { sp.value = String(speed); spl.textContent = speed + '×'; sp.addEventListener('input', () => { speed = Number(sp.value) || 1; spl.textContent = speed + '×'; try { localStorage.setItem('ivs-asm-speed', String(speed)); } catch (e) { /* 저장 못 해도 계속 */ } }); }
+    // 결합 소리 볼륨(0~100%): 저장해 두고, 손을 뗄 때 한 번 들려준다
+    const vol = $('asmVolume'), vl = $('asmVolumeLabel');
+    if (vol) {
+      let v = 50;
+      try { const s = localStorage.getItem('ivs-asm-volume'); if (s !== null && Number(s) >= 0 && Number(s) <= 100) v = Number(s); } catch (e) { /* 저장 못 해도 기본 볼륨 */ }
+      const apply = () => { window.__ivsSnapVolume = v / 100; vol.value = String(v); vl.textContent = v + '%'; };
+      apply();
+      vol.addEventListener('input', () => { v = Number(vol.value); apply(); try { localStorage.setItem('ivs-asm-volume', String(v)); } catch (e) { /* 계속 */ } });
+      vol.addEventListener('change', () => { if (window.__ivsPlaySnap) window.__ivsPlaySnap(); });
+    }
+    $('asmPlay').addEventListener('click', () => play(1));
+    $('asmReverse').addEventListener('click', () => play(-1));
+    $('asmSlider').addEventListener('input', (e) => { stop(); go(Number(e.target.value)); });
+    $('asmCombine').addEventListener('click', () => {
+      const r = bridge().combineSelected();
+      if (r === 'none') bridge().status('먼저 끼울 부품 하나를 눌러서 고르세요. 그룹은 [그룹 결합] 을 쓰세요.', 'warn');
+      else if (r === 'notTarget') bridge().status('이 부품은 이번 단계에서 끼우는 부품이 아니에요. 떠 있는 부품을 눌러 보세요.', 'warn');
+    });
+    $('asmCombineGroup').addEventListener('click', () => {
+      const r = bridge().combineGroup();
+      if (r === 'none') bridge().status('먼저 그룹을 눌러서 고르세요. 부품 하나는 [부품 결합] 을 쓰세요.', 'warn');
+      else if (r === 'notTarget') bridge().status('이 그룹에는 이번 단계에서 끼우는 부품이 없어요. 떠 있는 그룹을 눌러 보세요.', 'warn');
+    });
+    const placeOn = (wantGroup) => {
+      const r = bridge().placeOnPlane(wantGroup);
+      if (r === 'none') bridge().status('먼저 ' + (wantGroup ? '그룹' : '부품 하나') + '을(를) 눌러서 고르세요.', 'warn');
+      else if (r === 'wrong') bridge().status(wantGroup ? '그룹이 아니라 부품 하나를 골랐어요. 부품은 [부품 평면에 놓기] 를 쓰세요.' : '부품이 아니라 그룹을 골랐어요. 그룹은 [그룹 평면에 놓기] 를 쓰세요.', 'warn');
+    };
+    $('asmPlacePart').addEventListener('click', () => placeOn(false));
+    $('asmPlaceGroup').addEventListener('click', () => placeOn(true));
+    $('asmReset').addEventListener('click', () => { stop(); go(step); });
+    $('asmOrderList').addEventListener('click', async (e) => {
+      const b = e.target.closest('button[data-step]');
+      if (!b) return;
+      stop();
+      const n = Number(b.dataset.step);
+      if (!viewing) await open();
+      if (viewing) go(n);
+    });
+    $('asmStagePrev').addEventListener('click', stopPlayClick(() => go(step - 1)));
+    {
+      const row = document.querySelector('#asmStageBar .asm-stage-row');
+      if (row && !$('asmCamRead')) { // 현재 카메라: 방향(좌우)·높이(위아래 각도)·보고 있는 쪽·부품까지 거리 — 실시간(사용자 지시 2026-10-03)
+        const bar = $('asmStageBar');
+        const rd = document.createElement('div');
+        rd.id = 'asmCamRead'; rd.style.cssText = 'font-size:11px; color:#6b7280; margin:3px 2px 0; line-height:1.3;';
+        bar.appendChild(rd);
+        let last = '';
+        setInterval(() => {
+          if (!viewing) return;
+          const b3 = bridge(); if (!b3 || !b3.camState || !b3.camDistance) return;
+          const c = b3.camState(), d = b3.camDistance();
+          const deg = (r) => r * 180 / Math.PI;
+          const wrap = (a) => ((a + 180) % 360 + 360) % 360 - 180;
+          const f0 = (v) => Math.round(v);
+          const posOf = (th, ph, tg, r) => [tg[0] + r * Math.sin(ph) * Math.sin(th), tg[1] + r * Math.cos(ph), tg[2] + r * Math.sin(ph) * Math.cos(th)];
+          const sideOf = (th) => { const x = Math.sin(th), z = Math.cos(th); return (Math.abs(x) > 0.38 ? (x > 0 ? '+X' : '-X') : '') + (Math.abs(z) > 0.38 ? (z > 0 ? '+Z' : '-Z') : ''); };
+          const line = (title, th, ph, pos, ctr, tail) => title + ' · 방향 ' + f0(wrap(deg(th))) + '° · 높이각 ' + f0(90 - deg(ph)) + '° · ' + sideOf(th) + ' 쪽에서 봄 · 카메라 x ' + f0(pos[0]) + ' y(높이) ' + f0(pos[1]) + ' z ' + f0(pos[2]) + ' / 보는 중심 x ' + f0(ctr[0]) + ' y ' + f0(ctr[1]) + ' z ' + f0(ctr[2]) + (tail || '');
+          const lines = [];
+          if (baseCam && baseCam.step === step) {
+            const srcTxt = ''; // 카메라 출처 문구(눈대중·계산 등)는 화면에 적지 않는다 — 모든 카메라는 당연히 교재와 비슷하게 맞춘 것이다(사용자 지시 2026-10-04)
+            lines.push(line('교재 시점', baseCam.th, baseCam.ph, posOf(baseCam.th, baseCam.ph, baseCam.target, baseCam.radius), baseCam.target, srcTxt ? ' · ' + srcTxt : ''));
+          }
+          lines.push(line('지금 시점', c.theta, c.phi, d.pos, d.center, ' · ' + (d.toPart ? d.label + '까지 ' : '화면 중심까지 ') + f0(d.mm) + 'mm'));
+          if (baseCam && baseCam.step === step) {
+            const dAz = wrap(deg(c.theta) - deg(baseCam.th)), dEl = (90 - deg(c.phi)) - (90 - deg(baseCam.ph));
+            lines.push(Math.abs(dAz) < 1 && Math.abs(dEl) < 1 ? '교재 시점과 같은 각도입니다' : '교재 시점과 차이: 방향 ' + (dAz >= 0 ? '+' : '') + f0(dAz) + '° · 높이각 ' + (dEl >= 0 ? '+' : '') + f0(dEl) + '°');
+          }
+          const txt = lines.join('|');
+          if (txt !== last) { rd.innerHTML = ''; lines.forEach((t) => { const dv = document.createElement('div'); dv.textContent = t; rd.appendChild(dv); }); last = txt; }
+        }, 250);
+      }
+      if (row && !$('asmCamCopy')) { // 📷: 지금 보는 각도를 "카메라 N단계: theta … phi …"로 복사 — 교재와 같은 각도로 돌린 뒤 눌러 알려 주면 그 단계 카메라로 저장한다(camSrc user)
+        const cb = document.createElement('button');
+        cb.type = 'button'; cb.id = 'asmCamCopy'; cb.textContent = '📷 카메라';
+        cb.style.cssText = 'padding:6px 12px;font-size:12px;font-weight:600;border-radius:999px;background:var(--panel);border:1px solid var(--panel-border);color:var(--ink);'; // 위 줄 버튼들과 같은 모양
+        cb.title = '지금 각도를 이 단계 카메라로 복사'; cb.setAttribute('aria-label', '지금 카메라 각도 복사');
+        cb.title = '지금 보이는 모습(방향·높이각·밀기·확대)을 이 단계의 시점으로 저장 — 관리자 전용';
+        cb.addEventListener('click', async () => {
+          const b2 = bridge(); if (!b2 || !b2.camState) return;
+          const c = b2.camState(); const txt = '카메라 ' + step + '단계: theta ' + c.theta.toFixed(3) + ' phi ' + c.phi.toFixed(3);
+          try { if (navigator.clipboard) navigator.clipboard.writeText(txt).catch(() => {}); } catch (e) { /* 복사 못 해도 상관없다 */ }
+          if (!(window.__ivsIsAdmin && window.__ivsIsAdmin()) || !b2.camStore) { b2.status(txt + ' (복사됨)', 'success'); return; }
+          const r3 = (v) => Math.round(v * 1000) / 1000, r1 = (v) => Math.round(v * 10) / 10;
+          const cam = { theta: r3(c.theta), phi: r3(c.phi), radius: r1(c.radius), target: c.target.map(r1) };
+          const myStep = step;
+          try {
+            await b2.camStore.save(def.id, myStep, cam);
+            savedCams[myStep] = cam; paintStatus();
+            baseCam = { step: myStep, th: cam.theta, ph: cam.phi, target: cam.target, radius: cam.radius, src: 'admin' };
+            b2.status(myStep + '단계 시점을 저장했습니다. 이제 이 단계를 열면 이 모습으로 보여요.', 'success');
+            notice('교재 샷이 저장되었습니다.');
+          } catch (e) { b2.status('시점 저장에 실패했어요: ' + e.message, 'error'); }
+        });
+        { // 📷 카메라는 위 줄(체크·모습 기록 버튼이 있는 줄)로 옮겼다 — 체크 → 카메라 → 모습 기록 순서
+          const host = $('asmMarkMove2'), fz = $('asmFreezeBtn'), st0 = $('asmStatusBtn');
+          if (host) host.parentNode.insertBefore(cb, fz && fz.parentNode === host.parentNode ? fz : host); else row.appendChild(cb);
+          if (st0 && fz && st0.parentNode === fz.parentNode) fz.parentNode.insertBefore(st0, cb);
+          paintStatus();
+        }
+      }
+    }
+    $('asmStageNext').addEventListener('click', stopPlayClick(() => go(step + 1)));
+    $('asmStageSteps').addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-step]');
+      if (b) { stop(); go(Number(b.dataset.step)); }
+    });
+    $('asmSteps').addEventListener('click', async (e) => {
+      const b = e.target.closest('button[data-step]');
+      if (!b) return;
+      stop();
+      const n = Number(b.dataset.step);
+      if (!viewing) await open();
+      if (viewing) go(n);
+    });
+  });
+
+  // 차시 카드에서 카테고리·권·차시를 바꿀 때마다 design.html이 알려준다 — 맞는 조립 데이터가 있을 때만 버튼을 보여준다.
+  window.__ivsAssembly = {
+    onLessonChange(cat, volume, chapterTitle) {
+      const box = $('assemblyBox');
+      if (!box) return;
+      const title = String(chapterTitle || '').trim();
+      const found = (window.IVS_ASSEMBLIES || []).find((a) => a.category === cat.name && Number(a.volume) === Number(volume) && a.chapter === title) || null;
+      if (viewing && found !== def) close();
+      def = found;
+      window.__asmQtyOverride = (found && found.qtyOverride) || null; // 조립도 쪽 부품 개수가 책과 다를 때 {부품 이름: 개수}(design.html 의 필요 부품·사용 부품이 이 개수를 기준으로 하고 책 개수는 괄호로만 알린다)
+      catId = found ? cat.id : null;
+      catAny = cat;
+      lessonFound = !!found;
+      syncAllPartsBtn();
+      ['asmOrderHead', 'asmOrderList', 'asmSteps'].forEach((id) => { if ($(id)) $(id).style.display = found ? '' : 'none'; });
+      buildOrderList();
+      loadRefs(); // 관리자 전용 교재 참고 그림 버튼(🖼) — 로그인 정보가 늦게 오면 조립 보기를 열 때 한 번 더 시도한다
+      if (def) buildStepButtons(); // 번호 줄도 조립 보기를 열기 전부터 보인다
+      $('asmRules').innerHTML = (window.IVS_ASSEMBLY_RULES || []).map((r) => '<li>' + r + '</li>').join('');
+    },
+    isViewing() { return viewing; },
+    setViewSlot(n) { if (!viewing || !def || step < 1 || step >= last()) return; viewSlot = (n === slotOfStep(step) || n === viewSlot) ? null : n; render(); },
+  };
+  // 새로고침 버튼으로 다시 열었으면, 보던 차시(분류·권·차시 선택)와 단계를 자동으로 다시 연다
+  (function restoreAfterReload() {
+    let st = null; try { st = JSON.parse(sessionStorage.getItem('ivs-asm-restore') || 'null'); sessionStorage.removeItem('ivs-asm-restore'); } catch (e) { st = null; }
+    if (!st) { try { st = JSON.parse(localStorage.getItem('ivs-asm-last') || 'null'); } catch (e) { st = null; } } // 일반 새로고침: 마지막으로 보던 위치
+    if (!st || !Array.isArray(st.sel)) return;
+    let tries = 0;
+    const timer = setInterval(() => {
+      tries++;
+      const sels = [...document.querySelectorAll('select')].slice(0, 3);
+      const ready = sels.length === 3 && sels[2].options.length > 1 && sels[0].querySelector('option[value="' + st.sel[0] + '"]');
+      if (ready) {
+        clearInterval(timer);
+        [0, 1, 2].forEach((k) => { if (sels[k].value !== st.sel[k]) { sels[k].value = st.sel[k]; sels[k].dispatchEvent(new Event('change', { bubbles: true })); } });
+        let t2 = 0; const timer2 = setInterval(() => { t2++; const b = document.querySelector('#asmSteps button[data-step="' + st.step + '"]'); if (b) { clearInterval(timer2); b.click(); } else if (t2 > 40) clearInterval(timer2); }, 250);
+      } else if (tries > 60) clearInterval(timer);
+    }, 250);
+  })();
+})();

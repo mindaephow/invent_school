@@ -1,0 +1,1 @@
+{"global": {"X": [-55.0, -22.3], "Y": [1.6, -55.0], "Z": [55.0, -51.1]}, "fit": {"from": "12_G.json", "err_px": 1.32, "points": 5, "theta": -2.59, "phi": 0.92, "cols": "+X", "rows": "+Y"}, "no_rotate": true, "split": true, "origin_cell": [1, 1]}

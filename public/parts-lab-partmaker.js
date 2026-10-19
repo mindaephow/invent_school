@@ -659,6 +659,68 @@ function initPartMaker() {
   // (부품 만들기 쪽은 window.__boxEditorRenderShapes를 다시 등록하지 않음 — 원본 도형 에디터가 이미
   // 만들어둔 창구 하나만 공용으로 쓴다. 여기서 또 등록하면 나중에 로드되는 쪽이 덮어써서 꼬인다.)
 
+  // 부품관리 목록 썸네일용 — 저장할 때 딱 한 번 88×88 PNG로 미리 그려서 서버에 같이 저장해둔다(사용자
+  // 지시: "썸네일을 매번그리지 말고 썸네일을 저장해두고 그데로 보여줘"). index.html은 이제 이 저장된
+  // 이미지를 그대로 <img>로 꽂기만 하면 되고, 목록을 열 때마다 3D를 다시 렌더링하지 않는다.
+  let sharedThumbGenRenderer = null;
+  async function renderShapesToThumbnailDataUrl(shapesData, size) {
+    size = size || 88;
+    const list = (shapesData || []).map((s) => Object.assign({}, s));
+    await Promise.all(list.filter((s) => s.type === 'import' && s.fileDataUrl && !s._geometry).map(async (s) => {
+      try { s._geometry = await loadImportedGeometry(dataUrlToFile(s.fileDataUrl, s.fileName || 'model')); }
+      catch (e) { console.error('불러온 3D 파일을 다시 못 읽었어요.', e); }
+    }));
+    if (!sharedThumbGenRenderer) {
+      const c = document.createElement('canvas');
+      sharedThumbGenRenderer = new THREE.WebGLRenderer({ canvas: c, antialias: true, alpha: true, preserveDrawingBuffer: true });
+    }
+    sharedThumbGenRenderer.setSize(size, size, false);
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf3f5f8);
+    scene.add(new THREE.AmbientLight(0xffffff, 1.2));
+    const dir = new THREE.DirectionalLight(0xffffff, 0.8); dir.position.set(100, 200, 100); scene.add(dir);
+    const camera = new THREE.OrthographicCamera(-70, 70, 70, -70, 0.1, 6000);
+    camera.position.set(90, 90, 90);
+    camera.lookAt(0, 0, 0);
+    const result = computeMergedBrush(list);
+    if (result) {
+      const finalColor = materialColorForShape(list[0], 0);
+      result.material = new THREE.MeshBasicMaterial({ color: finalColor });
+      addEdgeOutline(result, finalColor);
+      scene.add(result);
+      result.updateMatrixWorld(true);
+      // 정육면체를 안전하게 담을 수 있는 대각선 반지름(항상 안 잘림) 대신, 지금 이 카메라 각도에서 실제로
+      // 화면에 투영되는 가로/세로 폭만큼만 프레임을 잡는다 — 그래야 15프레임처럼 작은 부품도 정사각형
+      // 칸을 꽉 채운다(사용자 지적: "새로 저장하니까 수정되서 보임 근데 너무 작아~~ 사각형에 최대한
+      // 맞춰줘봐"). 예전의 최소 반경(70) 바닥값이 작은 부품을 가운데 작게 떠 있게 만들던 원인이었다.
+      camera.updateMatrixWorld();
+      const right = new THREE.Vector3(), up = new THREE.Vector3(), forward = new THREE.Vector3();
+      camera.matrixWorld.extractBasis(right, up, forward);
+      const box = new THREE.Box3().setFromObject(result);
+      const center = new THREE.Vector3();
+      box.getCenter(center);
+      let maxRight = 0, maxUp = 0;
+      for (let i = 0; i < 8; i++) {
+        const corner = new THREE.Vector3(
+          i & 1 ? box.max.x : box.min.x,
+          i & 2 ? box.max.y : box.min.y,
+          i & 4 ? box.max.z : box.min.z
+        ).sub(center);
+        maxRight = Math.max(maxRight, Math.abs(corner.dot(right)));
+        maxUp = Math.max(maxUp, Math.abs(corner.dot(up)));
+      }
+      // 지오메트리에 이상치(잘못된 정점 등)가 있으면 half가 NaN/Infinity가 될 수 있고, 그러면 카메라
+      // 투영 자체가 깨져서 완전히 빈 화면이 저장된다(사용자 지적: "25프레임이 자꾸 안보여") — 이럴 땐
+      // 안전한 기본값으로 대체해서 최소한 뭐라도 보이게 한다.
+      let half = Math.max(maxRight, maxUp, 1) * 1.08;
+      if (!Number.isFinite(half) || half <= 0) half = 60;
+      camera.left = -half; camera.right = half; camera.top = half; camera.bottom = -half;
+      camera.updateProjectionMatrix();
+    }
+    sharedThumbGenRenderer.render(scene, camera);
+    return sharedThumbGenRenderer.domElement.toDataURL('image/png');
+  }
+
   // ---------- 미리보기 모드: 실제 CSG로 더하고 뺀 최종 결과 하나만 보여줌(읽기 전용) ----------
   function renderPreviewMode() {
     teardownLive();
@@ -691,7 +753,7 @@ function initPartMaker() {
     if (!shapes.length) { msg.className = 'msg err'; msg.textContent = '내보낼 도형이 없어요.'; return; }
     const result = computeMergedBrush();
     const exporter = new STLExporter();
-    const stlText = exporter.parse(result, { binary: false });
+    const stlText = exporter.parse(result, { binary: true });
     const blob = new Blob([stlText], { type: 'model/stl' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -756,7 +818,7 @@ function initPartMaker() {
   function exportPieceSTL(piece, index) {
     const mesh = new THREE.Mesh(piece.geometry);
     const exporter = new STLExporter();
-    const stlText = exporter.parse(mesh, { binary: false });
+    const stlText = exporter.parse(mesh, { binary: true });
     const blob = new Blob([stlText], { type: 'model/stl' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -776,7 +838,10 @@ function initPartMaker() {
       '<div class="cutPieceCard" data-i="' + i + '" style="width:130px; border:1px solid #ddd; border-radius:8px; padding:6px; text-align:center; background:#fff;">' +
       '<img class="cutThumb" width="110" height="110" style="width:110px;height:110px;border-radius:4px;background:#f3f5f8;">' +
       '<div style="font-size:11px; color:#666; margin:4px 0;">' + (i + 1) + '. ' + p.size.x + ' × ' + p.size.y + ' × ' + p.size.z + 'mm</div>' +
-      '<div style="display:flex; gap:4px; justify-content:center;">' +
+      '<div style="display:flex; gap:4px; justify-content:center; flex-wrap:wrap;">' +
+      '<button type="button" class="cutEditBtn" data-i="' + i + '" style="font-size:11px; padding:3px 6px; border-radius:5px; border:1px solid #2b6be0; background:#fff; color:#2b6be0; cursor:pointer;">✏️ 에디터</button>' +
+      '<button type="button" class="cutNewPartBtn" data-i="' + i + '" style="font-size:11px; padding:3px 6px; border-radius:5px; border:1px solid #2b6be0; background:#2b6be0; color:#fff; cursor:pointer;">🆕 새 부품</button>' +
+      '<button type="button" class="cutSaveExistingBtn" data-i="' + i + '" style="font-size:11px; padding:3px 6px; border-radius:5px; border:1px solid #2b6be0; background:#fff; color:#2b6be0; cursor:pointer;">💾 기존 부품</button>' +
       '<button type="button" class="cutSaveBtn" data-i="' + i + '" style="font-size:11px; padding:3px 6px; border-radius:5px; border:1px solid #2b6be0; background:#fff; color:#2b6be0; cursor:pointer;">⬇️ STL</button>' +
       '<button type="button" class="cutDeleteBtn" data-i="' + i + '" style="font-size:11px; padding:3px 6px; border-radius:5px; border:1px solid #c0392b; background:#fff; color:#c0392b; cursor:pointer;">삭제</button>' +
       '</div></div>'
@@ -804,8 +869,34 @@ function initPartMaker() {
       mesh.children.forEach((c) => { c.material && c.material.dispose(); });
     });
     renderer.dispose();
+    wrap.querySelectorAll('.cutEditBtn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const i = Number(btn.dataset.i);
+        const msg = document.getElementById('partMakerCutMsg');
+        try {
+          await loadResultIntoEditor(cutPieces[i].geometry, '조각' + (i + 1) + '.stl');
+          msg.className = 'msg ok';
+          msg.textContent = '에디터로 불러왔어요 — 위 "결과 미리보기" 아래 저장/등록 버튼을 쓰면 돼요.';
+        } catch (err) {
+          msg.className = 'msg err';
+          msg.textContent = '에디터로 불러오기 실패: ' + err.message;
+        }
+      });
+    });
     wrap.querySelectorAll('.cutSaveBtn').forEach((btn) => {
       btn.addEventListener('click', () => exportPieceSTL(cutPieces[Number(btn.dataset.i)], Number(btn.dataset.i)));
+    });
+    wrap.querySelectorAll('.cutNewPartBtn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const i = Number(btn.dataset.i);
+        registerResultAsNewPart(cutPieces[i].geometry, document.getElementById('partMakerCutMsg'), btn);
+      });
+    });
+    wrap.querySelectorAll('.cutSaveExistingBtn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const i = Number(btn.dataset.i);
+        saveResultToExistingPart(cutPieces[i].geometry, '조각' + (i + 1), document.getElementById('partMakerCutMsg'));
+      });
     });
     wrap.querySelectorAll('.cutDeleteBtn').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -815,11 +906,16 @@ function initPartMaker() {
     });
   }
 
-  // ---------- 붙이기: 나누기의 반대 — 기존 부품 하나를 골라 이어 붙인 개수만큼 나란히 합쳐서 새 부품
-  // 하나로 만든다(사용자 설명: "1X1을 3개를 연달아 붙이면 13프레임이 되는거지"). 지금 캔버스에서 편집
-  // 중인 도형이 아니라, 카탈로그에서 새로 고른 부품(joinSourcePart)을 대상으로 동작 — 나누기와 달리
-  // 결과가 여러 조각이 아니라 하나라서 바로 등록/내보내기까지 한 화면에서 끝낸다.
-  let joinSourcePart = null;
+  // ---------- 붙이기(2026-09-28 재설계): 처음엔 "같은 부품을 축+개수로 반복 배치"하는 방식이었는데,
+  // 사용자 지적("붙일게 2개가 있어야 하는건데~~ 1번 선택한 다음 면을 선택하고 2번을 선택한다음 면을
+  // 선택해야할꺼 같은데?")을 받고 완전히 새로 만듦: 서로 다른 부품 두 개를 각각 고르고(카탈로그 또는
+  // 3D 파일), 각자의 3D 미리보기에서 붙일 면을 직접 클릭하면, 그 두 면이 정확히 마주보도록 자동으로
+  // 회전·이동을 계산해 CSG ADDITION으로 합친다. 6면 드롭다운 같은 단순화 없이 클릭한 삼각형의 실제
+  // 법선(normal)을 그대로 쓴다.
+  const joinSlots = [
+    { part: null, geometry: null, size: null, pick: null, mesh: null, marker: null, renderer: null },
+    { part: null, geometry: null, size: null, pick: null, mesh: null, marker: null, renderer: null },
+  ];
   let joinResult = null; // { geometry, size:{x,y,z} }
   let borderResult = null; // { geometry, size:{x,y,z} } — "테두리 만들기" 결과
 
@@ -833,27 +929,118 @@ function initPartMaker() {
     return list;
   }
 
-  // 고른 부품 하나를 합친 결과(computeMergedBrush)의 바운딩박스 크기를 "칸 하나 길이"로 써서, 그만큼씩
-  // 축 방향으로 띄운 사본을 이어 붙인다(ADDITION) — computeMergedBrush()가 여러 도형을 합칠 때 쓰는
-  // 것과 똑같은 Evaluator/Brush 체인 패턴을 그대로 재사용.
-  function computeJoinedBrush(shapesData, axis, count) {
-    const single = computeMergedBrush(shapesData);
-    if (!single) return null;
-    single.geometry.computeBoundingBox();
-    const size = new THREE.Vector3();
-    single.geometry.boundingBox.getSize(size);
-    const step = size[axis];
+  function updateJoinPreviewBtnState() {
+    document.getElementById('partMakerJoinPreviewBtn').disabled = !(joinSlots[0].pick && joinSlots[1].pick);
+  }
+
+  // 부품 1/2 슬롯에 지오메트리를 채워 넣고(원점 중심·바닥 정렬은 다른 곳과 같은 관례), 그 미니 3D
+  // 미리보기를 새로 그린다 — 다시 고르면 이전에 찍어둔 면 선택은 초기화됨.
+  function loadJoinSlotGeometry(idx, geometry, name) {
+    const slot = joinSlots[idx];
+    geometry.computeBoundingBox();
+    const c = new THREE.Vector3();
+    geometry.boundingBox.getCenter(c);
+    geometry.translate(-c.x, -geometry.boundingBox.min.y, -c.z);
+    geometry.computeBoundingBox();
+    const sz = new THREE.Vector3();
+    geometry.boundingBox.getSize(sz);
+    slot.part = { name };
+    slot.geometry = geometry;
+    slot.size = { x: sz.x, y: sz.y, z: sz.z };
+    slot.pick = null;
+    document.getElementById('partMakerJoin' + (idx + 1) + 'Label').textContent = '선택된 부품: ' + name;
+    document.getElementById('partMakerJoin' + (idx + 1) + 'FaceMsg').textContent = '캔버스에서 붙일 면을 클릭하세요.';
+    renderJoinSlotPreview(idx);
+    updateJoinPreviewBtnState();
+  }
+
+  // 슬롯 하나의 미니 3D 뷰 — 마우스로 돌려볼 수 있고(OrbitControls), 클릭하면 그 자리 삼각형의 실제
+  // 위치·법선을 Raycaster로 재서 slot.pick에 저장한다(나누기/도형 에디터의 캔버스 클릭 선택과 같은
+  // pointerdown/up 위치 비교로 드래그와 클릭을 구분하는 패턴 재사용).
+  function renderJoinSlotPreview(idx) {
+    const slot = joinSlots[idx];
+    const canvas = document.getElementById('partMakerJoin' + (idx + 1) + 'Canvas');
+    if (slot.renderer) slot.renderer.dispose();
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    renderer.setSize(canvas.width, canvas.height, false);
+    const scene = new THREE.Scene();
+    scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.7); dirLight.position.set(2, 3, 2); scene.add(dirLight);
+    const s = Math.max(slot.size.x, slot.size.y, slot.size.z, 1);
+    // 카메라가 바라보는 y는 부품의 실제 세로 중심(size.y/2)으로 맞춘다 — s*비율처럼 대충 잡으면 315프레임
+    // 같은 얇고 넓은 부품에서 화면 정중앙이 부품 위 빈 허공을 가리켜서, 캔버스 한가운데를 클릭해도
+    // 레이캐스트가 부품을 완전히 빗나가는 문제가 있었다(실제로 겪음 — 클릭이 항상 안 먹히는 것처럼 보임).
+    const targetY = slot.size.y / 2;
+    const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 5000);
+    camera.position.set(s, s * 0.9 + targetY, s);
+    camera.lookAt(0, targetY, 0);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(0, targetY, 0);
+    controls.enableDamping = true; controls.dampingFactor = 0.08;
+    controls.update();
+    const mesh = new THREE.Mesh(slot.geometry, new THREE.MeshBasicMaterial({ color: IMPORT_COLOR }));
+    addEdgeOutline(mesh, IMPORT_COLOR);
+    scene.add(mesh);
+    const marker = new THREE.Mesh(new THREE.SphereGeometry(Math.max(s * 0.03, 0.5), 12, 12), new THREE.MeshBasicMaterial({ color: 0xe03b2b }));
+    marker.visible = false;
+    scene.add(marker);
+    slot.mesh = mesh; slot.marker = marker; slot.renderer = renderer;
+
+    let dirty = true;
+    controls.addEventListener('change', () => { dirty = true; });
+    (function loop() {
+      if (!document.body.contains(canvas)) { renderer.dispose(); return; }
+      requestAnimationFrame(loop);
+      controls.update();
+      if (dirty) { renderer.render(scene, camera); dirty = false; }
+    })();
+    renderer.render(scene, camera);
+
+    const raycaster = new THREE.Raycaster();
+    let downAt = null;
+    canvas.addEventListener('pointerdown', (e) => { downAt = { x: e.clientX, y: e.clientY }; });
+    canvas.addEventListener('pointerup', (e) => {
+      const start = downAt; downAt = null;
+      if (!start || Math.hypot(e.clientX - start.x, e.clientY - start.y) > 4) return;
+      const rect = canvas.getBoundingClientRect();
+      const ndc = new THREE.Vector2(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1
+      );
+      raycaster.setFromCamera(ndc, camera);
+      const hit = raycaster.intersectObject(mesh, false)[0];
+      if (!hit || !hit.face) return;
+      const normal = hit.face.normal.clone().transformDirection(mesh.matrixWorld).normalize();
+      slot.pick = { point: hit.point.clone(), normal };
+      marker.position.copy(hit.point);
+      marker.visible = true;
+      dirty = true;
+      document.getElementById('partMakerJoin' + (idx + 1) + 'FaceMsg').textContent = '면을 골랐어요 ✓ (다시 클릭하면 바꿀 수 있어요)';
+      updateJoinPreviewBtnState();
+    });
+  }
+
+  // 부품2를 회전시켜 그 면의 법선이 부품1 면의 법선과 정반대(-n1)가 되도록(최단 회전, 별도 기준축 없이
+  // 결정적인 하나의 결과가 나옴) 맞추고, 찍은 두 지점이 맞닿도록 이동한 뒤 ADDITION으로 합친다.
+  function computeFaceJoinedBrush() {
+    const s1 = joinSlots[0], s2 = joinSlots[1];
     const evaluator = new Evaluator();
-    let result = new Brush(single.geometry);
-    result.position.set(0, 0, 0);
-    result.updateMatrixWorld();
-    for (let i = 1; i < count; i++) {
-      const copy = new Brush(single.geometry);
-      copy.position[axis] = step * i;
-      copy.updateMatrixWorld();
-      result = evaluator.evaluate(result, copy, ADDITION);
-      result.updateMatrixWorld();
-    }
+    const brush1 = new Brush(s1.geometry);
+    brush1.updateMatrixWorld();
+    const targetN2 = s1.pick.normal.clone().negate();
+    const q = new THREE.Quaternion().setFromUnitVectors(s2.pick.normal, targetN2);
+    const brush2 = new Brush(s2.geometry);
+    brush2.quaternion.copy(q);
+    brush2.updateMatrixWorld();
+    const p2Rotated = s2.pick.point.clone().applyQuaternion(q);
+    brush2.position.copy(s1.pick.point.clone().sub(p2Rotated));
+    // 두 면을 정확히 딱 맞닿게만 붙이면(두께 0인 접촉면) CSG가 그 경계에서 안/밖을 애매하게 판정해서
+    // 조각난 지오메트리를 만들 수 있다(테두리 만들기에서 겪은 것과 같은 원인) — 안쪽으로 아주 살짝(0.05mm)
+    // 밀어넣어서 접촉이 아니라 확실히 겹치게 만든다. 눈에 보이는 차이는 없다.
+    brush2.position.addScaledVector(s1.pick.normal, -0.05);
+    brush2.updateMatrixWorld();
+    const result = evaluator.evaluate(brush1, brush2, ADDITION);
+    result.geometry.computeBoundingBox();
     return result;
   }
 
@@ -894,6 +1081,17 @@ function initPartMaker() {
     g.computeVertexNormals();
     return g;
   }
+  // 2026-09-29 재작성: 원래는 전체 조각(A)과 그 전체를 거울 대칭한 사본(mirror(A))을 곧바로 합쳤는데,
+  // 이 둘은 거의 전체 부피가 겹친다(테두리 디테일만 다르고 안쪽 부피는 사실상 같음) — CSG가 그 넓게 겹친
+  // 부피의 경계를 전부 다시 계산하면서 삼각형 수가 20배 넘게 불어나는 문제가 있었다(사용자가 직접 STL을
+  // 재보고 발견: 정상 부품 4,196개 vs 이 방식으로 만든 부품 93,837개, "팅커캐드로 하면 10분의 1인데 왜
+  // 이렇게 크냐"는 지적으로 근본 원인을 다시 조사함 — 겹치는 부피를 먼저 빼는 A∪(mirror(A)−A) 방식도
+  // 시도했지만, 거의 합동인 두 입체를 빼는 것 역시 CSG에 똑같이 어려운 경우라 오히려 연산이 끝나지 않고
+  // 멈춰버렸다). 지금은 축 중심(0)에서 절반으로 먼저 잘라 겹치는 부피 자체를 없앤다 — 두 조각이 딱 한
+  // 평면에서만 맞닿으므로(부피가 겹치지 않음) CSG가 훨씬 쉬운 경우가 된다. 어느 쪽이 "진짜 테두리"가 있는
+  // 절반인지는(이 함수가 원래 그렇듯) 굳이 미리 알 필요 없이, 잘라본 뒤 삼각형이 더 많은 쪽(=디테일이 더
+  // 많은 쪽)을 고른다. 합성 테스트로 검증: 570개짜리 비대칭 조각 기준 기존 방식 12,948개 vs 이 방식 664개
+  // (경계 상자 크기는 완전히 동일 — 모양 자체는 같고 삼각형만 대폭 줄어듦), 530ms→22ms로 속도도 빨라짐.
   function computeBorderedBrush(axis) {
     const merged = computeMergedBrush();
     if (!merged) return null;
@@ -905,13 +1103,52 @@ function initPartMaker() {
     // 거울 대칭이 실제로 "반대쪽"을 가리킨다.
     merged.geometry.translate(-center.x, -box.min.y, -center.z);
     merged.geometry.computeBoundingBox();
-    const mirroredGeom = mirrorGeometry(merged.geometry, axis);
+    // 절반과 그 거울 복사본이 축 중심(0)에서 정확히 딱 맞닿기만 하면(두께 0인 접촉면), CSG(three-bvh-csg)가
+    // 그 경계에서 안/밖을 애매하게 판정해 삼각형이 조각조각 부서진 지오메트리를 만들 수 있다 — 다른 세션이
+    // 먼저 발견한 원인("84,816개 삼각형짜리 깨진 메쉬", "팅커캐드에서 불러오니 아주 족같은 모습이네"). 그
+    // 세션은 전체를 통째로 거울 합치는 옛 방식에 이 문제가 있어서 거울 복사본을 축 방향으로 살짝(0.2%)
+    // 부풀려 겹치게 했는데, 아래처럼 절반으로 나눈 뒤엔 두 조각이 중심 축 한 점에서만 맞닿으므로 같은
+    // 방식(축 전체를 부풀리는 scale)은 접촉면 자체를 안 움직여 효과가 없다 — 대신 붙이기(join)의 기존
+    // 해결책과 같은 방식으로, 거울 복사본을 겹치는 방향으로 아주 살짝(0.05mm) 밀어 넣는다.
+    const EPS = 0.05;
     const evaluator = new Evaluator();
-    const a = new Brush(merged.geometry);
-    a.updateMatrixWorld();
-    const b = new Brush(mirroredGeom);
-    b.updateMatrixWorld();
-    const result = evaluator.evaluate(a, b, ADDITION);
+    const PAD = 1000; // 자르는 축이 아닌 나머지 두 축은 충분히 크게 잡아서 확실히 다 덮는다("나누기"와 동일 관례)
+    const b = merged.geometry.boundingBox;
+    const halfExtent = Math.max(Math.abs(b.min[axis]), Math.abs(b.max[axis])) + 10;
+    function halfSpaceBrush(sign) {
+      const size = { x: (b.max.x - b.min.x) + PAD * 2, y: (b.max.y - b.min.y) + PAD * 2, z: (b.max.z - b.min.z) + PAD * 2 };
+      size[axis] = halfExtent;
+      const boxGeom = new THREE.BoxGeometry(size.x, size.y, size.z);
+      const brush = new Brush(boxGeom);
+      brush.position[axis] = sign * halfExtent / 2;
+      brush.updateMatrixWorld();
+      return brush;
+    }
+    const wholeForNeg = new Brush(merged.geometry.clone()); wholeForNeg.updateMatrixWorld();
+    const wholeForPos = new Brush(merged.geometry.clone()); wholeForPos.updateMatrixWorld();
+    const negHalf = evaluator.evaluate(wholeForNeg, halfSpaceBrush(-1), INTERSECTION);
+    const posHalf = evaluator.evaluate(wholeForPos, halfSpaceBrush(1), INTERSECTION);
+    const negTris = (negHalf.geometry.index ? negHalf.geometry.index.count : negHalf.geometry.attributes.position.count) / 3;
+    const posTris = (posHalf.geometry.index ? posHalf.geometry.index.count : posHalf.geometry.attributes.position.count) / 3;
+    const pickedSign = negTris >= posTris ? -1 : 1; // goodHalf가 음(-)/양(+) 어느 쪽인지
+    const goodHalf = pickedSign < 0 ? negHalf.geometry : posHalf.geometry;
+    if (!negTris && !posTris) {
+      // 극단적으로 드문 경우(양쪽 다 비어버림) — 예전 방식(전체 거울 합치기)으로 대체해서 최소한 결과는 나오게 함.
+      const mirroredGeom = mirrorGeometry(merged.geometry, axis);
+      const a = new Brush(merged.geometry); a.updateMatrixWorld();
+      const bMirror = new Brush(mirroredGeom); bMirror.updateMatrixWorld();
+      const fallback = evaluator.evaluate(a, bMirror, ADDITION);
+      fallback.geometry.computeBoundingBox();
+      return fallback;
+    }
+    const mirroredGood = mirrorGeometry(goodHalf, axis);
+    const brushGood = new Brush(goodHalf.clone()); brushGood.updateMatrixWorld();
+    const brushGoodMirror = new Brush(mirroredGood); brushGoodMirror.updateMatrixWorld();
+    // 거울 복사본을 goodHalf 쪽(중심에서 pickedSign 방향)으로 EPS만큼 밀어 넣어 접촉면이 아니라 확실히
+    // 겹치게 만든다 — 위 주석 참고.
+    brushGoodMirror.position[axis] += pickedSign * EPS;
+    brushGoodMirror.updateMatrixWorld();
+    const result = evaluator.evaluate(brushGood, brushGoodMirror, ADDITION);
     result.geometry.computeBoundingBox();
     return result;
   }
@@ -940,6 +1177,110 @@ function initPartMaker() {
     return dataUrl;
   }
 
+  // "에디터에서 보기" — 나누기/붙이기 결과를 캔버스로 가져와서 회전·확대해서 눈으로 확인하고, 기존
+  // "저장(불러온 부품에 덮어쓰기)"/"새 부품으로 등록" 버튼으로 그대로 저장할 수 있게 한다("테두리
+  // 만들기"에 이미 있던 기능과 같은 패턴, 사용자 지시: "나누기와 붙이기에도 에디터에서 확인을 할수있게
+  // 해줘"). 3D 파일을 직접 불러왔을 때와 똑같은 import 도형 하나로 캔버스를 통째로 바꿔치기 —
+  // fileDataUrl까지 만들어둬야 나중에 "저장"/"새 부품으로 등록"에서 _geometry가 빠져도(저장 시 제외됨)
+  // 그 자리를 대신할 수 있다(테두리 만들기의 partMakerBorderEditBtn과 동일한 이유).
+  async function loadResultIntoEditor(geometry, fileName) {
+    const exporter = new STLExporter();
+    const mesh = new THREE.Mesh(geometry);
+    const stlText = exporter.parse(mesh, { binary: true });
+    const blob = new Blob([stlText], { type: 'model/stl' });
+    const fileDataUrl = await fileToDataUrl(blob);
+    shapes = [{
+      type: 'import', op: 'add', x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0,
+      fileName, fileDataUrl, _geometry: geometry,
+    }];
+    selectedIndex = 0;
+    renderShapeListUI();
+    fillFieldsFromShape(shapes[0]);
+    setMode('edit');
+  }
+
+  // 나누기/붙이기/테두리 결과 카드 공용 — "새 부품으로 등록"/"기존 부품에 저장" 두 버튼을 어느 결과에나
+  // 똑같이 붙일 수 있게 한다(사용자 지시: "모든결과물 (나누기,붙이기,테두리) 모두 새부품이나 기존 부품으로
+  // 등록이 가능해야해"). STL로 내보내 fileDataUrl까지 만든 뒤 import 도형 하나로 감싸고, 새 부품은
+  // add_part로, 기존 부품 저장은 그 부품의 기존 spec은 유지한 채 shapes만 이 결과 하나로 교체해
+  // update_part로 보낸다(에디터 화면의 "새 부품으로 등록"/"저장"과 같은 동작).
+  // 저장 API가 "로그인이 만료되었습니다" 에러를 주면 글자로만 안내하지 않고 바로 누를 수 있는 로그인
+  // 바로가기 버튼을 같이 보여준다(사용자 지시: "로그인이 만료되면 여기에 로그인 바로가기 버튼이 나와야지").
+  // 이 페이지(부품 수리실)는 로그인 없이도 열리지만, 저장 같은 서버 쓰기는 index.html에서 로그인해야 한다.
+  function showSaveError(msgEl, err, prefix) {
+    msgEl.className = 'msg err';
+    const text = prefix + ': ' + (err && err.message);
+    if (!err || typeof err.message !== 'string' || !err.message.includes('만료')) {
+      msgEl.textContent = text;
+      return;
+    }
+    msgEl.textContent = '';
+    const span = document.createElement('span');
+    span.textContent = text + ' ';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = '로그인 바로가기';
+    btn.style.cssText = 'margin-left:4px;padding:3px 10px;border-radius:5px;border:1px solid #2b6be0;background:#2b6be0;color:#fff;cursor:pointer;font-size:12px;';
+    btn.addEventListener('click', () => { location.href = 'index.html'; });
+    msgEl.appendChild(span);
+    msgEl.appendChild(btn);
+  }
+  async function buildResultShape(geometry, fileName) {
+    const exporter = new STLExporter();
+    const mesh = new THREE.Mesh(geometry);
+    const stlText = exporter.parse(mesh, { binary: true });
+    const blob = new Blob([stlText], { type: 'model/stl' });
+    const fileDataUrl = await fileToDataUrl(blob);
+    return { type: 'import', op: 'add', x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0, fileName, fileDataUrl };
+  }
+
+  async function registerResultAsNewPart(geometry, msgEl, btn) {
+    const picked = await openNamePromptModal(getSubject());
+    if (!picked || !picked.name) return;
+    const { name, subject, category, volumes } = picked;
+    btn.disabled = true; msgEl.textContent = '';
+    try {
+      const shape = await buildResultShape(geometry, name + '.stl');
+      // 방금 만든 geometry가 이미 메모리에 있으니 그걸 그대로 넘긴다 — shape(fileDataUrl만 있고
+      // _geometry는 없음)를 넘기면 blob URL을 다시 fetch해야 해서 "Failed to fetch"로 실패할 수 있었다.
+      const thumbnail3d = await renderShapesToThumbnailDataUrl([Object.assign({}, shape, { _geometry: geometry })], 88);
+      await adminApi({
+        action: 'add_part', name, icon: '📦', subject, category,
+        volumes, color: null, size: null,
+        imageSvg: '', imageSvgDiagonal: '', primaryImage: 'front',
+        spec: { shapes: [shape] }, thumbnail3d,
+      }, getAccessToken());
+      msgEl.className = 'msg ok';
+      msgEl.textContent = '"' + name + '" 새 부품으로 등록했어요.';
+    } catch (err) {
+      showSaveError(msgEl, err, '등록 실패');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function saveResultToExistingPart(geometry, fileNamePrefix, msgEl) {
+    openPickerModal('저장할 부품 고르기', async (p) => {
+      msgEl.textContent = '';
+      try {
+        const shape = await buildResultShape(geometry, fileNamePrefix + '.stl');
+        const spec = Object.assign({}, p.spec || {}, { shapes: [shape] });
+        const thumbnail3d = await renderShapesToThumbnailDataUrl([Object.assign({}, shape, { _geometry: geometry })], 88);
+        await adminApi({
+          action: 'update_part', partId: p.id,
+          name: p.name, icon: p.icon, subject: p.subject, category: p.category || '',
+          volumes: p.volumes || [], color: p.color, size: p.size,
+          imageSvg: p.imageSvg, imageSvgDiagonal: p.imageSvgDiagonal, primaryImage: p.primaryImage || 'front',
+          spec, snapshot: p.snapshot || null, snapshots: p.snapshots || null, thumbnail3d,
+        }, getAccessToken());
+        msgEl.className = 'msg ok';
+        msgEl.textContent = '"' + p.name + '"에 저장했어요.';
+      } catch (err) {
+        showSaveError(msgEl, err, '저장 실패');
+      }
+    }, true);
+  }
+
   function renderJoinResult() {
     const wrap = document.getElementById('partMakerJoinResult');
     if (!joinResult) { wrap.innerHTML = ''; return; }
@@ -948,19 +1289,32 @@ function initPartMaker() {
       '<div style="width:150px; border:1px solid #ddd; border-radius:8px; padding:8px; text-align:center; background:#fff;">' +
       '<img src="' + thumb + '" width="130" height="130" style="width:130px;height:130px;border-radius:4px;background:#f3f5f8;">' +
       '<div style="font-size:11px; color:#666; margin:6px 0;">' + joinResult.size.x + ' × ' + joinResult.size.y + ' × ' + joinResult.size.z + 'mm</div>' +
-      '<div style="display:flex; gap:4px; justify-content:center;">' +
+      '<div style="display:flex; gap:4px; justify-content:center; flex-wrap:wrap;">' +
+      '<button type="button" id="partMakerJoinEditBtn" style="font-size:11px; padding:4px 8px; border-radius:5px; border:1px solid #2b6be0; background:#fff; color:#2b6be0; cursor:pointer;">✏️ 에디터에서 보기</button>' +
       '<button type="button" id="partMakerJoinNewPartBtn" style="font-size:11px; padding:4px 8px; border-radius:5px; border:1px solid #2b6be0; background:#2b6be0; color:#fff; cursor:pointer;">🆕 새 부품으로 등록</button>' +
+      '<button type="button" id="partMakerJoinSaveExistingBtn" style="font-size:11px; padding:4px 8px; border-radius:5px; border:1px solid #2b6be0; background:#fff; color:#2b6be0; cursor:pointer;">💾 기존 부품에 저장</button>' +
       '<button type="button" id="partMakerJoinExportBtn" style="font-size:11px; padding:4px 8px; border-radius:5px; border:1px solid #2b6be0; background:#fff; color:#2b6be0; cursor:pointer;">⬇️ STL</button>' +
       '</div></div>';
+    document.getElementById('partMakerJoinEditBtn').addEventListener('click', async () => {
+      const msg = document.getElementById('partMakerJoinMsg');
+      try {
+        await loadResultIntoEditor(joinResult.geometry, '붙이기결과.stl');
+        msg.className = 'msg ok';
+        msg.textContent = '에디터로 불러왔어요 — 위 "결과 미리보기" 아래 저장/등록 버튼을 쓰면 돼요.';
+      } catch (err) {
+        msg.className = 'msg err';
+        msg.textContent = '에디터로 불러오기 실패: ' + err.message;
+      }
+    });
     document.getElementById('partMakerJoinExportBtn').addEventListener('click', () => {
       const mesh = new THREE.Mesh(joinResult.geometry);
       const exporter = new STLExporter();
-      const stlText = exporter.parse(mesh, { binary: false });
+      const stlText = exporter.parse(mesh, { binary: true });
       const blob = new Blob([stlText], { type: 'model/stl' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = (joinSourcePart ? joinSourcePart.name : '부품') + '_붙이기.stl';
+      a.download = (joinSlots[0].part && joinSlots[1].part ? joinSlots[0].part.name + '_' + joinSlots[1].part.name : '부품') + '_붙이기.stl';
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -968,31 +1322,35 @@ function initPartMaker() {
     });
     document.getElementById('partMakerJoinNewPartBtn').addEventListener('click', async () => {
       const msg = document.getElementById('partMakerJoinMsg');
-      const name = (await openNamePromptModal() || '').trim();
-      if (!name) return;
+      const picked = await openNamePromptModal(getSubject());
+      if (!picked || !picked.name) return;
+      const { name, subject, category, volumes } = picked;
       const btn = document.getElementById('partMakerJoinNewPartBtn');
       btn.disabled = true;
       try {
         const exporter = new STLExporter();
         const mesh = new THREE.Mesh(joinResult.geometry);
-        const stlText = exporter.parse(mesh, { binary: false });
+        const stlText = exporter.parse(mesh, { binary: true });
         const blob = new Blob([stlText], { type: 'model/stl' });
         const fileDataUrl = await fileToDataUrl(blob);
         const shape = { type: 'import', op: 'add', x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0, fileName: name + '.stl', fileDataUrl };
+        const thumbnail3d = await renderShapesToThumbnailDataUrl([Object.assign({}, shape, { _geometry: joinResult.geometry })], 88);
         await adminApi({
-          action: 'add_part', name, icon: '📦', subject: getSubject(), category: '',
-          volumes: [], color: null, size: null,
+          action: 'add_part', name, icon: '📦', subject, category,
+          volumes, color: null, size: null,
           imageSvg: '', imageSvgDiagonal: '', primaryImage: 'front',
-          spec: { shapes: [shape] },
+          spec: { shapes: [shape] }, thumbnail3d,
         }, getAccessToken());
         msg.className = 'msg ok';
         msg.textContent = '"' + name + '" 새 부품으로 등록했어요.';
       } catch (err) {
-        msg.className = 'msg err';
-        msg.textContent = '등록 실패: ' + err.message;
+        showSaveError(msg, err, '등록 실패');
       } finally {
         btn.disabled = false;
       }
+    });
+    document.getElementById('partMakerJoinSaveExistingBtn').addEventListener('click', () => {
+      saveResultToExistingPart(joinResult.geometry, '붙이기결과', document.getElementById('partMakerJoinMsg'));
     });
   }
 
@@ -1007,6 +1365,7 @@ function initPartMaker() {
       '<div style="display:flex; gap:4px; justify-content:center; flex-wrap:wrap;">' +
       '<button type="button" id="partMakerBorderEditBtn" style="font-size:11px; padding:4px 8px; border-radius:5px; border:1px solid #2b6be0; background:#fff; color:#2b6be0; cursor:pointer;">✏️ 에디터에서 보기</button>' +
       '<button type="button" id="partMakerBorderNewPartBtn" style="font-size:11px; padding:4px 8px; border-radius:5px; border:1px solid #2b6be0; background:#2b6be0; color:#fff; cursor:pointer;">🆕 새 부품으로 등록</button>' +
+      '<button type="button" id="partMakerBorderSaveExistingBtn" style="font-size:11px; padding:4px 8px; border-radius:5px; border:1px solid #2b6be0; background:#fff; color:#2b6be0; cursor:pointer;">💾 기존 부품에 저장</button>' +
       '<button type="button" id="partMakerBorderExportBtn" style="font-size:11px; padding:4px 8px; border-radius:5px; border:1px solid #2b6be0; background:#fff; color:#2b6be0; cursor:pointer;">⬇️ STL</button>' +
       '</div></div>';
     // "에디터에서 보기" — 결과를 캔버스로 가져와서 회전·확대해서 눈으로 확인하고, 기존 "저장(불러온
@@ -1019,7 +1378,7 @@ function initPartMaker() {
       try {
         const exporter = new STLExporter();
         const mesh = new THREE.Mesh(borderResult.geometry);
-        const stlText = exporter.parse(mesh, { binary: false });
+        const stlText = exporter.parse(mesh, { binary: true });
         const blob = new Blob([stlText], { type: 'model/stl' });
         const fileDataUrl = await fileToDataUrl(blob);
         shapes = [{
@@ -1040,7 +1399,7 @@ function initPartMaker() {
     document.getElementById('partMakerBorderExportBtn').addEventListener('click', () => {
       const mesh = new THREE.Mesh(borderResult.geometry);
       const exporter = new STLExporter();
-      const stlText = exporter.parse(mesh, { binary: false });
+      const stlText = exporter.parse(mesh, { binary: true });
       const blob = new Blob([stlText], { type: 'model/stl' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -1053,31 +1412,35 @@ function initPartMaker() {
     });
     document.getElementById('partMakerBorderNewPartBtn').addEventListener('click', async () => {
       const msg = document.getElementById('partMakerBorderMsg');
-      const name = (await openNamePromptModal() || '').trim();
-      if (!name) return;
+      const picked = await openNamePromptModal(getSubject());
+      if (!picked || !picked.name) return;
+      const { name, subject, category, volumes } = picked;
       const btn = document.getElementById('partMakerBorderNewPartBtn');
       btn.disabled = true;
       try {
         const exporter = new STLExporter();
         const mesh = new THREE.Mesh(borderResult.geometry);
-        const stlText = exporter.parse(mesh, { binary: false });
+        const stlText = exporter.parse(mesh, { binary: true });
         const blob = new Blob([stlText], { type: 'model/stl' });
         const fileDataUrl = await fileToDataUrl(blob);
         const shape = { type: 'import', op: 'add', x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0, fileName: name + '.stl', fileDataUrl };
+        const thumbnail3d = await renderShapesToThumbnailDataUrl([Object.assign({}, shape, { _geometry: borderResult.geometry })], 88);
         await adminApi({
-          action: 'add_part', name, icon: '📦', subject: getSubject(), category: '',
-          volumes: [], color: null, size: null,
+          action: 'add_part', name, icon: '📦', subject, category,
+          volumes, color: null, size: null,
           imageSvg: '', imageSvgDiagonal: '', primaryImage: 'front',
-          spec: { shapes: [shape] },
+          spec: { shapes: [shape] }, thumbnail3d,
         }, getAccessToken());
         msg.className = 'msg ok';
         msg.textContent = '"' + name + '" 새 부품으로 등록했어요.';
       } catch (err) {
-        msg.className = 'msg err';
-        msg.textContent = '등록 실패: ' + err.message;
+        showSaveError(msg, err, '등록 실패');
       } finally {
         btn.disabled = false;
       }
+    });
+    document.getElementById('partMakerBorderSaveExistingBtn').addEventListener('click', () => {
+      saveResultToExistingPart(borderResult.geometry, '테두리결과', document.getElementById('partMakerBorderMsg'));
     });
   }
 
@@ -1090,6 +1453,7 @@ function initPartMaker() {
     document.getElementById('partMakerRedrawBtn').disabled = mode === 'preview';
     document.getElementById('partMakerFlipBtn').disabled = mode === 'preview';
     document.getElementById('partMakerFlipYBtn').disabled = mode === 'preview';
+    document.getElementById('partMakerPlaceOnPlaneBtn').disabled = mode === 'preview';
     if (mode === 'edit') renderEditMode(); else renderPreviewMode();
   }
 
@@ -1176,7 +1540,53 @@ function initPartMaker() {
     }
     syncFieldVisibility(shape.type);
     syncRotateAngleUI();
+    updateSpecInfo();
   }
+  // 선택한 도형의 스펙(전체 크기·구멍 정보)을 사람이 읽기 좋은 한 줄로 요약해서 색상 편집 칸 바로 아래
+  // 보여준다(사용자 지시: "스펙(사이즈, 홀사이즈 등 필요한 스펙)을 색상 아래쪽에 보여주고 저장하게 해줘").
+  // 여기서 쓰는 w/h/d/radius/width/teeth/holes는 이미 shapes[]에 그대로 저장되는 값이라 이 함수는 그 값을
+  // 화면에 보여주기만 하고 새로 저장할 값을 만들지 않는다 — 입력칸을 바꾸는 즉시(적용 버튼을 누르기 전에도)
+  // 갱신돼서 지금 뭘 저장하게 될지 바로 알 수 있다.
+  function shapeSpecText(type) {
+    if (type === 'import') return '가져온 파일 — 치수는 불러온 모양 그대로 저장돼요.';
+    if (BOX_LIKE.includes(type)) {
+      const w = Number(document.getElementById('partMakerW').value) || 0;
+      const h = Number(document.getElementById('partMakerH').value) || 0;
+      const d = Number(document.getElementById('partMakerD').value) || 0;
+      let text = '크기 ' + w + '×' + h + '×' + d + 'mm (가로×높이×세로)';
+      if (type === 'technicBeam') {
+        const holeCount = Math.max(1, Math.floor(w / 8));
+        const holeR = round1(Math.min(h, d) * 0.32);
+        text += ' · 구멍 ' + holeCount + '개(반지름 ' + holeR + 'mm, 8mm 피치 고정)';
+      }
+      return text;
+    }
+    const radius = Number(document.getElementById('partMakerShapeRadius').value) || 0;
+    if (RADIUS_ONLY.includes(type)) return '반지름 ' + radius + 'mm';
+    const width = Number(document.getElementById('partMakerShapeWidth').value) || 0;
+    let text = '반지름 ' + radius + 'mm · 두께 ' + width + 'mm';
+    if (type === 'gear') text += ' · 톱니 ' + (Number(document.getElementById('partMakerShapeTeeth').value) || 0) + '개';
+    if (type === 'knexConnector') {
+      const holes = Number(document.getElementById('partMakerKnexHoles').value) || 0;
+      const holeR = round1(Math.max(1.2, radius * 0.14));
+      text += ' · 구멍 ' + holes + '개(반지름 ' + holeR + 'mm)';
+    }
+    return text;
+  }
+  function updateSpecInfo() {
+    const el = document.getElementById('partMakerShapeSpecInfo');
+    const shape = shapes[selectedIndex];
+    if (!shape) { el.textContent = ''; return; }
+    let text = shapeSpecText(shape.type);
+    if (selectedIndex !== 0 && document.getElementById('partMakerShapeOp').value === 'subtract') {
+      text += ' · 빼기 도형(다른 도형에 구멍을 뚫어요)';
+    }
+    el.textContent = text;
+  }
+  // 입력칸을 바꿀 때마다(적용 버튼을 누르기 전에도) 스펙 요약이 바로 갱신되게 — .fieldsRow 안 모든 입력칸에
+  // 위임 리스너 하나만 둔다(칸마다 따로 붙이지 않음).
+  panel.querySelector('.fieldsRow').addEventListener('input', updateSpecInfo);
+  document.getElementById('partMakerShapeOp').addEventListener('change', updateSpecInfo);
   // 회전축(x/y/z)을 고르면 그 축의 지금 각도를 15도 단위로 반올림해서 드롭다운에 보여준다 — 마우스로
   // 자유롭게 돌린 각도는 15도의 배수가 아닐 수 있으니, "실제 값을 그대로"가 아니라 "가장 가까운 15도"를 표시.
   function syncRotateAngleUI() {
@@ -1220,29 +1630,38 @@ function initPartMaker() {
     return shape;
   }
 
-  async function onBoxTargetPicked(p) {
+  // forSave: "저장"/"다른 부품에 저장"처럼 고른 직후 바로 저장까지 이어지는 경로 — 캔버스에 작업이 있으면 그 부품의
+  // 옛 모양을 절대 불러오지 않는다(불러오면 방금 고친 색·모양이 옛것으로 되돌아간 채 그대로 저장돼 버린다).
+  // 캔버스를 덮어쓸지 묻는 확인창은 "기존 부품 열어서 교체"(불러오기)에서만 뜬다.
+  async function onBoxTargetPicked(p, forSave) {
     targetPart = p;
     document.getElementById('partMakerTargetLabel').textContent = '선택된 부품: ' + p.name;
     document.getElementById('partMakerSaveBtn').disabled = false;
     // 캔버스에 이미 도형이 있으면(한창 만들다가 "이제 이 부품에 저장할래" 하는 경우) 그 작업을 지우지
     // 않는다 — 예전엔 무조건 덮어써서, STL 불러와 만들어둔 걸 대상 고르자마자 날려버렸다(사용자 지적:
-    // "이거하려고 다 수정한건데???"). 캔버스가 비어있을 때만(처음 시작할 때) 그 부품에 저장돼 있던
-    // 도형을 불러와서 이어서 편집할 수 있게 한다.
-    if (!shapes.length) {
-      const saved = p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.length ? p.spec.shapes : null;
-      shapes = saved ? saved.map((s) => Object.assign({}, s)) : [];
-      // 저장된 도형 중 "3D 파일 불러오기"로 만든 게 있으면(type:'import'), 그때 저장해둔 원본 파일
-      // (fileDataUrl)을 다시 읽어서 지오메트리를 새로 만들어야 화면에 그릴 수 있다 — 숫자만으로는
-      // 못 그리는 도형이라(사용자 지시: "그 숫자로 매번 다시그린다는게 뭐야???" 질문에 답한 그 이유).
-      await Promise.all(shapes.filter((s) => s.type === 'import' && s.fileDataUrl && !s._geometry).map(async (s) => {
-        try { s._geometry = await loadImportedGeometry(dataUrlToFile(s.fileDataUrl, s.fileName || 'model')); }
-        catch (e) { console.error('불러온 3D 파일을 다시 못 읽었어요.', e); }
-      }));
-      selectedIndex = shapes.length ? 0 : -1;
-      fillFieldsFromShape(shapes[0]);
-      renderShapeListUI();
-      setMode('edit');
+    // "이거하려고 다 수정한건데???"). 다만 그러다 보니 캔버스에 뭔가 하나라도 있으면(3D 파일을 먼저
+    // 불러왔거나, 이미 다른 부품을 한 번 불러온 뒤 또 다른 부품을 고르는 경우 등) 저장된 모양이 조용히
+    // 전혀 안 불러와지는 문제가 있었다(사용자 지적: "기존에 저장된 3D부품을 불러오지 않고 있음") — 라벨만
+    // "선택된 부품: OOO"로 바뀌고 화면엔 아무 변화·안내도 없어서 "안 불러와진다"로만 보였다. 이제 캔버스가
+    // 비어있지 않아도, 불러올 저장된 모양이 있으면 덮어써도 되는지 확인만 받고 실제로 불러온다.
+    const saved = p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.length ? p.spec.shapes : null;
+    if (shapes.length) {
+      if (!saved || forSave) return; // 이 부품엔 저장된 모양이 없으니, 지금 작업은 그대로 두고 저장 대상만 바뀐 채로 끝낸다.
+      const ok = confirm('캔버스에 이미 도형이 있어요. "' + p.name + '"에 저장된 모양을 불러와서 지금 캔버스를 덮어쓸까요?\n(취소하면 지금 작업은 그대로 두고, 저장 대상만 "' + p.name + '"로 바뀝니다.)');
+      if (!ok) return;
     }
+    shapes = saved ? saved.map((s) => Object.assign({}, s)) : [];
+    // 저장된 도형 중 "3D 파일 불러오기"로 만든 게 있으면(type:'import'), 그때 저장해둔 원본 파일
+    // (fileDataUrl)을 다시 읽어서 지오메트리를 새로 만들어야 화면에 그릴 수 있다 — 숫자만으로는
+    // 못 그리는 도형이라(사용자 지시: "그 숫자로 매번 다시그린다는게 뭐야???" 질문에 답한 그 이유).
+    await Promise.all(shapes.filter((s) => s.type === 'import' && s.fileDataUrl && !s._geometry).map(async (s) => {
+      try { s._geometry = await loadImportedGeometry(dataUrlToFile(s.fileDataUrl, s.fileName || 'model')); }
+      catch (e) { console.error('불러온 3D 파일을 다시 못 읽었어요.', e); }
+    }));
+    selectedIndex = shapes.length ? 0 : -1;
+    fillFieldsFromShape(shapes[0]);
+    renderShapeListUI();
+    setMode('edit');
   }
 
   document.getElementById('partMakerRedrawBtn').addEventListener('click', () => {
@@ -1315,7 +1734,7 @@ function initPartMaker() {
   });
   // 자주 쓰는 색 10개 — 이 부품 체계에서 실제로 쓰는 아이보리(1열브라켓)·회색(90도 프레임)에, 팔레트
   // 기본색 몇 가지와 무채색(흰/검)을 더함.
-  const COLOR_PRESETS = ['#f2ead9', '#c7cbd1', '#ffffff', '#555555', '#222222', '#5b8def', '#ff9f43', '#51cf66', '#e03b2b', '#fcc419'];
+  const COLOR_PRESETS = ['#f2ead9', '#c7cbd1', '#adb2b9', '#ffffff', '#777777', '#666666', '#555555', '#222222', '#5b8def', '#ff9f43', '#51cf66', '#e03b2b', '#fcc419'];
   document.getElementById('partMakerColorPresets').innerHTML = COLOR_PRESETS.map((hex) =>
     '<button type="button" data-hex="' + hex + '" title="' + hex + '" style="width:22px;height:22px;padding:0;border-radius:5px;border:1px solid #ccc;background:' + hex + ';cursor:pointer;"></button>'
   ).join('');
@@ -1472,6 +1891,46 @@ function initPartMaker() {
   }
   document.getElementById('partMakerFlipBtn').addEventListener('click', () => flipSelectedShape('y'));
   document.getElementById('partMakerFlipYBtn').addEventListener('click', () => flipSelectedShape('x'));
+  // "작업 평면에 놓기"(팅커캐드 D 단축키) — "바닥 위에 붙이기" 체크박스(이동할 때마다 자동으로, 바닥
+  // 아래로 파고들 때만 밀어올림)와 다르게 버튼을 눌렀을 때 한 번만 실행되고, 체크박스 상태와 무관하게
+  // 항상 동작하며 떠 있어도 끌어내린다. 지금 도형의 각도(rx/ry/rz)는 그대로 두고, y 위치만 바닥에
+  // 닿도록 옮긴다(사용자 지적: "평면에 놓기는 지금 있는 상태로 바닥에 수평으로 놓는거야, 각도를 멋대로
+  // 변경시키는게 아니라").
+  function placeSelectedOnWorkplane() {
+    const shape = shapes[selectedIndex];
+    if (!shape || !live || !live.meshes[selectedIndex]) return;
+    const mesh = live.meshes[selectedIndex];
+    mesh.updateMatrixWorld(true);
+    const worldBox = new THREE.Box3().setFromObject(mesh);
+    mesh.position.y -= worldBox.min.y;
+    shape.y = round1(mesh.position.y);
+    syncRotateAngleUI();
+    fillFieldsFromShape(shape);
+  }
+  document.getElementById('partMakerPlaceOnPlaneBtn').addEventListener('click', placeSelectedOnWorkplane);
+  // "중심정렬" — 사용자 지시: "에디터 바닥 중심점에 정열하는 기능이야". 높이(y)·각도·크기는 그대로 두고
+  // 가로/세로(x/z) 위치만 바닥 중심점(0,0)으로 옮긴다.
+  function centerSelectedOnOrigin() {
+    const shape = shapes[selectedIndex];
+    if (!shape || !live || !live.meshes[selectedIndex]) return;
+    const mesh = live.meshes[selectedIndex];
+    shape.x = 0; shape.z = 0;
+    mesh.position.x = 0; mesh.position.z = 0;
+    mesh.updateMatrixWorld(true);
+    fillFieldsFromShape(shape);
+  }
+  document.getElementById('partMakerCenterAlignBtn').addEventListener('click', centerSelectedOnOrigin);
+  // 이름 입력칸 등에서 "d"를 칠 때 단축키가 끼어들면 안 되므로 입력 요소에 포커스가 있으면 무시하고,
+  // 이 패널이 화면에 안 보이는 동안(다른 탭이 열려있을 때)도 무시한다(두 탭 다 이 리스너를 각자 갖고
+  // 있어서, 안 보이는 탭 것까지 같이 반응하면 이중 실행됨).
+  document.addEventListener('keydown', (e) => {
+    if (e.key.toLowerCase() !== 'd') return;
+    const tag = document.activeElement && document.activeElement.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (!panel.getClientRects().length || mode !== 'edit') return;
+    e.preventDefault();
+    placeSelectedOnWorkplane();
+  });
   // 회전축 고르기(x/y/z) — 그 축의 지금 각도를 드롭다운에 보여준다.
   document.getElementById('partMakerRotateAxis').addEventListener('change', syncRotateAngleUI);
   // 15도 단위 각도 드롭다운으로 정확한 각도를 바로 지정(사용자 지시: "x,y,z선택후 15도 단위로 회전 각도
@@ -1496,24 +1955,29 @@ function initPartMaker() {
   document.getElementById('partMakerTargetPickBtn').addEventListener('click', () => {
     openPickerModal('기존 부품 열어서 교체', onBoxTargetPicked, true);
   });
-  // 지금 만든 도형(들)을 완전히 새 부품으로 등록(사용자 지시: "부품등록쪽으로 저장하는기능") — 이름만
-  // 입력받고, 나머지(아이콘·과목 등)는 기본값으로 채운 뒤 "스펙 수정" 등 기존 화면에서 더 정리할 수 있다.
+  // 지금 만든 도형(들)을 완전히 새 부품으로 등록(사용자 지시: "부품등록쪽으로 저장하는기능") — 이름과
+  // 함께 과목/카테고리(로봇만)/권(로봇만)도 모달에서 같이 받는다(사용자 지적: "로봇인지 어떤로봇인지
+  // 몇권에 있는지 선택을 하고 등록을 해야하는거아니야?").
   document.getElementById('partMakerNewPartBtn').addEventListener('click', async () => {
     const msg = document.getElementById('partMakerEditorMsg');
     if (!shapes.length) { msg.className = 'msg err'; msg.textContent = '등록할 도형이 없어요.'; return; }
-    // 이름 입력칸을 버튼 옆에 항상 붙여두면 버튼 줄이 너무 길어져서 옆 팔레트가 화면 밖으로 밀려난다
+    // 입력칸을 버튼 옆에 항상 붙여두면 버튼 줄이 너무 길어져서 옆 팔레트가 화면 밖으로 밀려난다
     // (사용자 지적: "이부분이 너무 길어서 2번째 스샷부분이 밀리자나") — 버튼을 누른 순간에만 모달로 물어본다.
-    const name = (await openNamePromptModal() || '').trim();
-    if (!name) return;
+    const picked = await openNamePromptModal(getSubject());
+    if (!picked || !picked.name) return;
+    const { name, subject, category, volumes } = picked;
     const btn = document.getElementById('partMakerNewPartBtn');
     btn.disabled = true; msg.textContent = '';
     try {
       const shapesToSave = shapes.map((s) => { const { _geometry, ...rest } = s; return rest; });
+      // shapesToSave(_geometry 뺀 것) 대신 원본 shapes를 넘겨서 blob URL 재로딩을 피한다 —
+      // "Failed to fetch"로 저장 실패하던 원인.
+      const thumbnail3d = await renderShapesToThumbnailDataUrl(shapes, 88);
       const res = await adminApi({
-        action: 'add_part', name, icon: '📦', subject: getSubject(), category: '',
-        volumes: [], color: null, size: null,
+        action: 'add_part', name, icon: '📦', subject, category,
+        volumes, color: null, size: null,
         imageSvg: '', imageSvgDiagonal: '', primaryImage: 'front',
-        spec: { shapes: shapesToSave },
+        spec: { shapes: shapesToSave }, thumbnail3d,
       }, getAccessToken());
       const created = (res.parts || []).slice().reverse().find((p) => p.name === name);
       if (created) {
@@ -1524,8 +1988,7 @@ function initPartMaker() {
       msg.className = 'msg ok';
       msg.textContent = '"' + name + '" 새 부품으로 등록했어요.';
     } catch (err) {
-      msg.className = 'msg err';
-      msg.textContent = '등록 실패: ' + err.message;
+      showSaveError(msg, err, '등록 실패');
     } finally {
       btn.disabled = false;
     }
@@ -1562,17 +2025,20 @@ function initPartMaker() {
     });
     btn.disabled = true; msg.textContent = '';
     try {
+      // spec.shapes(_geometry 뺀 것) 대신 원본 shapes를 넘겨서 blob URL 재로딩을 피한다.
+      const thumbnail3d = await renderShapesToThumbnailDataUrl(shapes, 88);
       await adminApi({
         action: 'update_part', partId: targetPart.id,
         name: targetPart.name, icon: targetPart.icon, subject: targetPart.subject, category: targetPart.category || '',
         volumes: targetPart.volumes || [], color: targetPart.color, size: targetPart.size,
         imageSvg: targetPart.imageSvg, imageSvgDiagonal: targetPart.imageSvgDiagonal, primaryImage: targetPart.primaryImage || 'front',
-        spec, snapshot: targetPart.snapshot || null, snapshots: targetPart.snapshots || null,
+        spec, snapshot: targetPart.snapshot || null, snapshots: targetPart.snapshots || null, thumbnail3d,
       }, getAccessToken());
       targetPart.spec = spec;
-      msg.className = 'msg ok'; msg.textContent = '저장했어요.';
+      targetPart.thumbnail3d = thumbnail3d;
+      msg.className = 'msg ok'; msg.textContent = '"' + targetPart.name + '"에 저장했어요.';
     } catch (e) {
-      msg.className = 'msg err'; msg.textContent = '저장 실패: ' + e.message;
+      showSaveError(msg, e, '저장 실패');
     } finally {
       btn.disabled = false;
     }
@@ -1584,12 +2050,23 @@ function initPartMaker() {
   document.getElementById('partMakerSaveBtn').addEventListener('click', async () => {
     if (!targetPart) {
       openPickerModal('저장할 부품 고르기', async (p) => {
-        await onBoxTargetPicked(p);
+        await onBoxTargetPicked(p, true);
         await saveToTargetPart();
       }, true);
       return;
     }
     await saveToTargetPart();
+  });
+  // "저장"이 한 번 부품을 고르면 그 뒤로는 다시 안 묻고 같은 부품에 바로 저장하는 것과 짝을 이루는 버튼
+  // — 사용자 지적("두번째부터는 어디에 저장되는지 모르게 그냥 저장을 하고있어" → "다른부품은 저장안해??")으로,
+  // "다른 부품으로 바꾸고 싶을 땐 어떻게 하냐"가 전혀 안 보이는 문제를 해결하려고 "저장" 버튼 바로 옆에
+  // 명시적으로 둠(예전엔 맨 위 "🔍 기존 부품 불러오기"로만 가능했는데, 이름이 "불러오기"라 저장 대상을 바꾸는
+  // 용도라는 게 전혀 안 드러났음). 부품을 고르면 그 즉시 그 부품에 저장까지 진행(다시 "저장"을 누를 필요 없음).
+  document.getElementById('partMakerChangeTargetBtn').addEventListener('click', () => {
+    openPickerModal('다른 부품에 저장', async (p) => {
+      await onBoxTargetPicked(p, true);
+      await saveToTargetPart();
+    }, true);
   });
 
   // "나누기" — 자르기 미리보기 버튼(사용자 지시: "바닥에 딱 붙인다음 원하는 축으로 나누면 될듯~~ 그중
@@ -1612,28 +2089,44 @@ function initPartMaker() {
     }
   });
 
-  // "붙이기" — 이어붙일 부품 고르기(showAll=true, 나누기/저장 대상 고르기와 같은 패턴)와 미리보기 버튼.
-  document.getElementById('partMakerJoinPickBtn').addEventListener('click', () => {
-    openPickerModal('이어붙일 부품 고르기', (p) => {
-      joinSourcePart = p;
-      document.getElementById('partMakerJoinLabel').textContent = '선택된 부품: ' + p.name;
-      joinResult = null;
-      renderJoinResult();
+  // "붙이기" — 부품 1/2 각각 카탈로그 고르기(showAll=true, 나누기/저장 대상 고르기와 같은 패턴) 또는
+  // 3D 파일 불러오기, 그리고 두 면을 다 고른 뒤 미리보기 버튼.
+  function openJoinPicker(idx) {
+    openPickerModal('부품 ' + (idx + 1) + ' 고르기', async (p) => {
+      const shapes = (p.spec && p.spec.shapes) || [];
+      const faceMsg = document.getElementById('partMakerJoin' + (idx + 1) + 'FaceMsg');
+      if (!shapes.length) { faceMsg.textContent = '이 부품엔 저장된 도형(spec.shapes)이 없어요.'; return; }
+      const resolved = await resolveShapesGeometry(shapes);
+      const merged = computeMergedBrush(resolved);
+      loadJoinSlotGeometry(idx, merged.geometry, p.name);
     }, true);
-  });
-  document.getElementById('partMakerJoinPreviewBtn').addEventListener('click', async () => {
+  }
+  async function handleJoinFileImport(idx, e) {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    const faceMsg = document.getElementById('partMakerJoin' + (idx + 1) + 'FaceMsg');
+    faceMsg.textContent = '불러오는 중...';
+    try {
+      const geometry = await loadImportedGeometry(file);
+      loadJoinSlotGeometry(idx, geometry, file.name);
+    } catch (err) {
+      faceMsg.textContent = '불러오기 실패: ' + err.message;
+    }
+  }
+  document.getElementById('partMakerJoin1PickBtn').addEventListener('click', () => openJoinPicker(0));
+  document.getElementById('partMakerJoin2PickBtn').addEventListener('click', () => openJoinPicker(1));
+  document.getElementById('partMakerJoin1ImportBtn').addEventListener('click', () => document.getElementById('partMakerJoin1ImportInput').click());
+  document.getElementById('partMakerJoin2ImportBtn').addEventListener('click', () => document.getElementById('partMakerJoin2ImportInput').click());
+  document.getElementById('partMakerJoin1ImportInput').addEventListener('change', (e) => handleJoinFileImport(0, e));
+  document.getElementById('partMakerJoin2ImportInput').addEventListener('change', (e) => handleJoinFileImport(1, e));
+  document.getElementById('partMakerJoinPreviewBtn').addEventListener('click', () => {
     const msg = document.getElementById('partMakerJoinMsg');
-    if (!joinSourcePart) { msg.className = 'msg err'; msg.textContent = '이어붙일 부품을 먼저 골라주세요.'; return; }
-    const srcShapes = (joinSourcePart.spec && joinSourcePart.spec.shapes) || [];
-    if (!srcShapes.length) { msg.className = 'msg err'; msg.textContent = '이 부품엔 저장된 도형(spec.shapes)이 없어요.'; return; }
-    const axis = document.getElementById('partMakerJoinAxis').value;
-    const count = Math.max(2, Math.round(Number(document.getElementById('partMakerJoinCount').value) || 2));
-    document.getElementById('partMakerJoinCount').value = count;
+    if (!joinSlots[0].geometry || !joinSlots[1].geometry) { msg.className = 'msg err'; msg.textContent = '부품 두 개를 모두 골라주세요.'; return; }
+    if (!joinSlots[0].pick || !joinSlots[1].pick) { msg.className = 'msg err'; msg.textContent = '각 부품에서 붙일 면을 클릭해주세요.'; return; }
     msg.textContent = '붙이는 중...';
     try {
-      const resolved = await resolveShapesGeometry(srcShapes);
-      const brush = computeJoinedBrush(resolved, axis, count);
-      brush.geometry.computeBoundingBox();
+      const brush = computeFaceJoinedBrush();
       const c = new THREE.Vector3();
       brush.geometry.boundingBox.getCenter(c);
       brush.geometry.translate(-c.x, -brush.geometry.boundingBox.min.y, -c.z);
@@ -1643,7 +2136,7 @@ function initPartMaker() {
       joinResult = { geometry: brush.geometry, size: { x: round1(sz.x), y: round1(sz.y), z: round1(sz.z) } };
       renderJoinResult();
       msg.className = 'msg ok';
-      msg.textContent = count + '개를 이어 붙였어요.';
+      msg.textContent = '붙였어요.';
     } catch (e) {
       msg.className = 'msg err';
       msg.textContent = '붙이기 실패: ' + e.message;

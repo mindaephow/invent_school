@@ -1,0 +1,1 @@
+{"global": {"X": [55.0, -20.0], "Y": [0.7, -55.0], "Z": [55.0, 28.9]}, "fit": {"from": "03_P.json (3번 값을 옮김 — 4번은 판 오른쪽 끝이 큰기어·블록에 가려 격자를 못 맞춤)", "err_px": 2.15, "points": 6, "theta": -0.71, "phi": 1.12, "cols": "+X", "rows": "+Z", "moved_from": 3}, "no_rotate": true, "origin_cell": [1, 1]}

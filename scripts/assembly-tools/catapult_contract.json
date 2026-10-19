@@ -1,0 +1,231 @@
+{
+"1": {
+"parts": {
+"27프레임": 2,
+"3단블록": 6
+},
+"noPart": false
+},
+"2": {
+"parts": {
+"713프레임": 1
+},
+"noPart": false
+},
+"3": {
+"parts": {
+"17프레임": 2
+},
+"noPart": false
+},
+"4": {
+"parts": {
+"축": 2,
+"부시": 4
+},
+"noPart": false
+},
+"5": {
+"parts": {
+"리벳": 2,
+"17프레임": 1
+},
+"noPart": false
+},
+"6": {
+"parts": {
+"27프레임": 2
+},
+"noPart": false
+},
+"7": {
+"parts": {
+"515프레임": 1,
+"3단블록": 4,
+"2단블록": 2
+},
+"noPart": false
+},
+"8": {
+"parts": {
+"713프레임": 1,
+"515프레임": 1
+},
+"noPart": false
+},
+"9": {
+"parts": {
+"2단블록": 2
+},
+"noPart": false
+},
+"10": {
+"parts": {
+"2단블록": 2,
+"29프레임": 2
+},
+"noPart": false
+},
+"11": {
+"parts": {
+"축": 1,
+"부시": 2
+},
+"noPart": false
+},
+"12": {
+"parts": {
+"2단블록": 1
+},
+"noPart": false
+},
+"13": {
+"parts": {},
+"noPart": false
+},
+"14": {
+"parts": {
+"2단블록": 4
+},
+"noPart": false
+},
+"15": {
+"parts": {
+"리벳": 2,
+"1열브라켓": 2,
+"12볼트": 2,
+"너트": 2
+},
+"noPart": false
+},
+"16": {
+"parts": {
+"37프레임": 1,
+"리벳": 4,
+"59프레임": 1,
+"8볼트": 1,
+"너트": 1
+},
+"noPart": false
+},
+"17": {
+"parts": {
+"2단블록": 2
+},
+"noPart": false
+},
+"18": {
+"parts": {
+"15프레임": 2,
+"17프레임": 1
+},
+"noPart": false
+},
+"19": {
+"parts": {
+"215프레임": 2,
+"리벳": 2
+},
+"noPart": false
+},
+"20": {
+"parts": {
+"T축": 1,
+"부시": 1
+},
+"noPart": false
+},
+"21": {
+"parts": {
+"T축": 1,
+"부시": 1
+},
+"noPart": false
+},
+"22": {
+"parts": {},
+"noPart": true
+},
+"23": {
+"parts": {
+"3단블록": 3
+},
+"noPart": false
+},
+"24": {
+"parts": {
+"3단블록": 1
+},
+"noPart": false
+},
+"25": {
+"parts": {
+"59프레임": 1,
+"39프레임": 1
+},
+"noPart": false
+},
+"26": {
+"parts": {
+"DC모터": 1
+},
+"noPart": false
+},
+"27": {
+"parts": {
+"37프레임": 2
+},
+"noPart": false
+},
+"28": {
+"parts": {
+"17프레임": 1,
+"리벳": 2,
+"큰기어": 1
+},
+"noPart": false
+},
+"29": {
+"parts": {
+"1열브라켓": 1,
+"리벳": 2
+},
+"noPart": false
+},
+"30": {
+"parts": {
+"T축": 1
+},
+"noPart": false
+},
+"31": {
+"parts": {
+"중간바퀴": 1,
+"부시": 1
+},
+"noPart": false
+},
+"32": {
+"parts": {
+"중간바퀴": 1,
+"부시": 1
+},
+"noPart": false
+},
+"33": {
+"parts": {
+"315프레임": 1
+},
+"noPart": false
+},
+"34": {
+"parts": {
+"메인보드": 1
+},
+"noPart": false
+},
+"35": {
+"parts": {},
+"noPart": true
+}
+}

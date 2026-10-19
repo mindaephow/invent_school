@@ -648,6 +648,68 @@ function initBoxEditor() {
   }
   window.__boxEditorRenderShapes = renderShapesPreview;
 
+  // 부품관리 목록 썸네일용 — 저장할 때 딱 한 번 88×88 PNG로 미리 그려서 서버에 같이 저장해둔다(사용자
+  // 지시: "썸네일을 매번그리지 말고 썸네일을 저장해두고 그데로 보여줘"). index.html은 이제 이 저장된
+  // 이미지를 그대로 <img>로 꽂기만 하면 되고, 목록을 열 때마다 3D를 다시 렌더링하지 않는다.
+  let sharedThumbGenRenderer = null;
+  async function renderShapesToThumbnailDataUrl(shapesData, size) {
+    size = size || 88;
+    const list = (shapesData || []).map((s) => Object.assign({}, s));
+    await Promise.all(list.filter((s) => s.type === 'import' && s.fileDataUrl && !s._geometry).map(async (s) => {
+      try { s._geometry = await loadImportedGeometry(dataUrlToFile(s.fileDataUrl, s.fileName || 'model')); }
+      catch (e) { console.error('불러온 3D 파일을 다시 못 읽었어요.', e); }
+    }));
+    if (!sharedThumbGenRenderer) {
+      const c = document.createElement('canvas');
+      sharedThumbGenRenderer = new THREE.WebGLRenderer({ canvas: c, antialias: true, alpha: true, preserveDrawingBuffer: true });
+    }
+    sharedThumbGenRenderer.setSize(size, size, false);
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf3f5f8);
+    scene.add(new THREE.AmbientLight(0xffffff, 1.2));
+    const dir = new THREE.DirectionalLight(0xffffff, 0.8); dir.position.set(100, 200, 100); scene.add(dir);
+    const camera = new THREE.OrthographicCamera(-70, 70, 70, -70, 0.1, 6000);
+    camera.position.set(90, 90, 90);
+    camera.lookAt(0, 0, 0);
+    const result = computeMergedBrush(list);
+    if (result) {
+      const finalColor = materialColorForShape(list[0], 0);
+      result.material = new THREE.MeshBasicMaterial({ color: finalColor });
+      addEdgeOutline(result, finalColor);
+      scene.add(result);
+      result.updateMatrixWorld(true);
+      // 정육면체를 안전하게 담을 수 있는 대각선 반지름(항상 안 잘림) 대신, 지금 이 카메라 각도에서 실제로
+      // 화면에 투영되는 가로/세로 폭만큼만 프레임을 잡는다 — 그래야 15프레임처럼 작은 부품도 정사각형
+      // 칸을 꽉 채운다(사용자 지적: "새로 저장하니까 수정되서 보임 근데 너무 작아~~ 사각형에 최대한
+      // 맞춰줘봐"). 예전의 최소 반경(70) 바닥값이 작은 부품을 가운데 작게 떠 있게 만들던 원인이었다.
+      camera.updateMatrixWorld();
+      const right = new THREE.Vector3(), up = new THREE.Vector3(), forward = new THREE.Vector3();
+      camera.matrixWorld.extractBasis(right, up, forward);
+      const box = new THREE.Box3().setFromObject(result);
+      const center = new THREE.Vector3();
+      box.getCenter(center);
+      let maxRight = 0, maxUp = 0;
+      for (let i = 0; i < 8; i++) {
+        const corner = new THREE.Vector3(
+          i & 1 ? box.max.x : box.min.x,
+          i & 2 ? box.max.y : box.min.y,
+          i & 4 ? box.max.z : box.min.z
+        ).sub(center);
+        maxRight = Math.max(maxRight, Math.abs(corner.dot(right)));
+        maxUp = Math.max(maxUp, Math.abs(corner.dot(up)));
+      }
+      // 지오메트리에 이상치(잘못된 정점 등)가 있으면 half가 NaN/Infinity가 될 수 있고, 그러면 카메라
+      // 투영 자체가 깨져서 완전히 빈 화면이 저장된다(사용자 지적: "25프레임이 자꾸 안보여") — 이럴 땐
+      // 안전한 기본값으로 대체해서 최소한 뭐라도 보이게 한다.
+      let half = Math.max(maxRight, maxUp, 1) * 1.08;
+      if (!Number.isFinite(half) || half <= 0) half = 60;
+      camera.left = -half; camera.right = half; camera.top = half; camera.bottom = -half;
+      camera.updateProjectionMatrix();
+    }
+    sharedThumbGenRenderer.render(scene, camera);
+    return sharedThumbGenRenderer.domElement.toDataURL('image/png');
+  }
+
   // ---------- 미리보기 모드: 실제 CSG로 더하고 뺀 최종 결과 하나만 보여줌(읽기 전용) ----------
   function renderPreviewMode() {
     teardownLive();
@@ -680,7 +742,7 @@ function initBoxEditor() {
     if (!shapes.length) { msg.className = 'msg err'; msg.textContent = '내보낼 도형이 없어요.'; return; }
     const result = computeMergedBrush();
     const exporter = new STLExporter();
-    const stlText = exporter.parse(result, { binary: false });
+    const stlText = exporter.parse(result, { binary: true });
     const blob = new Blob([stlText], { type: 'model/stl' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -703,6 +765,7 @@ function initBoxEditor() {
     document.getElementById('boxRedrawBtn').disabled = mode === 'preview';
     document.getElementById('boxFlipBtn').disabled = mode === 'preview';
     document.getElementById('boxFlipYBtn').disabled = mode === 'preview';
+    document.getElementById('boxPlaceOnPlaneBtn').disabled = mode === 'preview';
     if (mode === 'edit') renderEditMode(); else renderPreviewMode();
   }
 
@@ -789,7 +852,53 @@ function initBoxEditor() {
     }
     syncFieldVisibility(shape.type);
     syncRotateAngleUI();
+    updateSpecInfo();
   }
+  // 선택한 도형의 스펙(전체 크기·구멍 정보)을 사람이 읽기 좋은 한 줄로 요약해서 색상 편집 칸 바로 아래
+  // 보여준다(사용자 지시: "스펙(사이즈, 홀사이즈 등 필요한 스펙)을 색상 아래쪽에 보여주고 저장하게 해줘").
+  // 여기서 쓰는 w/h/d/radius/width/teeth/holes는 이미 shapes[]에 그대로 저장되는 값이라 이 함수는 그 값을
+  // 화면에 보여주기만 하고 새로 저장할 값을 만들지 않는다 — 입력칸을 바꾸는 즉시(적용 버튼을 누르기 전에도)
+  // 갱신돼서 지금 뭘 저장하게 될지 바로 알 수 있다.
+  function shapeSpecText(type) {
+    if (type === 'import') return '가져온 파일 — 치수는 불러온 모양 그대로 저장돼요.';
+    if (BOX_LIKE.includes(type)) {
+      const w = Number(document.getElementById('boxW').value) || 0;
+      const h = Number(document.getElementById('boxH').value) || 0;
+      const d = Number(document.getElementById('boxD').value) || 0;
+      let text = '크기 ' + w + '×' + h + '×' + d + 'mm (가로×높이×세로)';
+      if (type === 'technicBeam') {
+        const holeCount = Math.max(1, Math.floor(w / 8));
+        const holeR = round1(Math.min(h, d) * 0.32);
+        text += ' · 구멍 ' + holeCount + '개(반지름 ' + holeR + 'mm, 8mm 피치 고정)';
+      }
+      return text;
+    }
+    const radius = Number(document.getElementById('shapeRadius').value) || 0;
+    if (RADIUS_ONLY.includes(type)) return '반지름 ' + radius + 'mm';
+    const width = Number(document.getElementById('shapeWidth').value) || 0;
+    let text = '반지름 ' + radius + 'mm · 두께 ' + width + 'mm';
+    if (type === 'gear') text += ' · 톱니 ' + (Number(document.getElementById('shapeTeeth').value) || 0) + '개';
+    if (type === 'knexConnector') {
+      const holes = Number(document.getElementById('knexHoles').value) || 0;
+      const holeR = round1(Math.max(1.2, radius * 0.14));
+      text += ' · 구멍 ' + holes + '개(반지름 ' + holeR + 'mm)';
+    }
+    return text;
+  }
+  function updateSpecInfo() {
+    const el = document.getElementById('shapeSpecInfo');
+    const shape = shapes[selectedIndex];
+    if (!shape) { el.textContent = ''; return; }
+    let text = shapeSpecText(shape.type);
+    if (selectedIndex !== 0 && document.getElementById('shapeOp').value === 'subtract') {
+      text += ' · 빼기 도형(다른 도형에 구멍을 뚫어요)';
+    }
+    el.textContent = text;
+  }
+  // 입력칸을 바꿀 때마다(적용 버튼을 누르기 전에도) 스펙 요약이 바로 갱신되게 — .fieldsRow 안 모든 입력칸에
+  // 위임 리스너 하나만 둔다(칸마다 따로 붙이지 않음).
+  panel.querySelector('.fieldsRow').addEventListener('input', updateSpecInfo);
+  document.getElementById('shapeOp').addEventListener('change', updateSpecInfo);
   // 회전축(x/y/z)을 고르면 그 축의 지금 각도를 15도 단위로 반올림해서 드롭다운에 보여준다 — 마우스로
   // 자유롭게 돌린 각도는 15도의 배수가 아닐 수 있으니, "실제 값을 그대로"가 아니라 "가장 가까운 15도"를 표시.
   function syncRotateAngleUI() {
@@ -833,29 +942,38 @@ function initBoxEditor() {
     return shape;
   }
 
-  async function onBoxTargetPicked(p) {
+  // forSave: "저장"/"다른 부품에 저장"처럼 고른 직후 바로 저장까지 이어지는 경로 — 캔버스에 작업이 있으면 그 부품의
+  // 옛 모양을 절대 불러오지 않는다(불러오면 방금 고친 색·모양이 옛것으로 되돌아간 채 그대로 저장돼 버린다).
+  // 캔버스를 덮어쓸지 묻는 확인창은 "기존 부품 열어서 교체"(불러오기)에서만 뜬다.
+  async function onBoxTargetPicked(p, forSave) {
     targetPart = p;
     document.getElementById('boxTargetLabel').textContent = '선택된 부품: ' + p.name;
     document.getElementById('boxSaveBtn').disabled = false;
     // 캔버스에 이미 도형이 있으면(한창 만들다가 "이제 이 부품에 저장할래" 하는 경우) 그 작업을 지우지
     // 않는다 — 예전엔 무조건 덮어써서, STL 불러와 만들어둔 걸 대상 고르자마자 날려버렸다(사용자 지적:
-    // "이거하려고 다 수정한건데???"). 캔버스가 비어있을 때만(처음 시작할 때) 그 부품에 저장돼 있던
-    // 도형을 불러와서 이어서 편집할 수 있게 한다.
-    if (!shapes.length) {
-      const saved = p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.length ? p.spec.shapes : null;
-      shapes = saved ? saved.map((s) => Object.assign({}, s)) : [];
-      // 저장된 도형 중 "3D 파일 불러오기"로 만든 게 있으면(type:'import'), 그때 저장해둔 원본 파일
-      // (fileDataUrl)을 다시 읽어서 지오메트리를 새로 만들어야 화면에 그릴 수 있다 — 숫자만으로는
-      // 못 그리는 도형이라(사용자 지시: "그 숫자로 매번 다시그린다는게 뭐야???" 질문에 답한 그 이유).
-      await Promise.all(shapes.filter((s) => s.type === 'import' && s.fileDataUrl && !s._geometry).map(async (s) => {
-        try { s._geometry = await loadImportedGeometry(dataUrlToFile(s.fileDataUrl, s.fileName || 'model')); }
-        catch (e) { console.error('불러온 3D 파일을 다시 못 읽었어요.', e); }
-      }));
-      selectedIndex = shapes.length ? 0 : -1;
-      fillFieldsFromShape(shapes[0]);
-      renderShapeListUI();
-      setMode('edit');
+    // "이거하려고 다 수정한건데???"). 다만 그러다 보니 캔버스에 뭔가 하나라도 있으면(3D 파일을 먼저
+    // 불러왔거나, 이미 다른 부품을 한 번 불러온 뒤 또 다른 부품을 고르는 경우 등) 저장된 모양이 조용히
+    // 전혀 안 불러와지는 문제가 있었다(사용자 지적: "기존에 저장된 3D부품을 불러오지 않고 있음") — 라벨만
+    // "선택된 부품: OOO"로 바뀌고 화면엔 아무 변화·안내도 없어서 "안 불러와진다"로만 보였다. 이제 캔버스가
+    // 비어있지 않아도, 불러올 저장된 모양이 있으면 덮어써도 되는지 확인만 받고 실제로 불러온다.
+    const saved = p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.length ? p.spec.shapes : null;
+    if (shapes.length) {
+      if (!saved || forSave) return; // 이 부품엔 저장된 모양이 없으니, 지금 작업은 그대로 두고 저장 대상만 바뀐 채로 끝낸다.
+      const ok = confirm('캔버스에 이미 도형이 있어요. "' + p.name + '"에 저장된 모양을 불러와서 지금 캔버스를 덮어쓸까요?\n(취소하면 지금 작업은 그대로 두고, 저장 대상만 "' + p.name + '"로 바뀝니다.)');
+      if (!ok) return;
     }
+    shapes = saved ? saved.map((s) => Object.assign({}, s)) : [];
+    // 저장된 도형 중 "3D 파일 불러오기"로 만든 게 있으면(type:'import'), 그때 저장해둔 원본 파일
+    // (fileDataUrl)을 다시 읽어서 지오메트리를 새로 만들어야 화면에 그릴 수 있다 — 숫자만으로는
+    // 못 그리는 도형이라(사용자 지시: "그 숫자로 매번 다시그린다는게 뭐야???" 질문에 답한 그 이유).
+    await Promise.all(shapes.filter((s) => s.type === 'import' && s.fileDataUrl && !s._geometry).map(async (s) => {
+      try { s._geometry = await loadImportedGeometry(dataUrlToFile(s.fileDataUrl, s.fileName || 'model')); }
+      catch (e) { console.error('불러온 3D 파일을 다시 못 읽었어요.', e); }
+    }));
+    selectedIndex = shapes.length ? 0 : -1;
+    fillFieldsFromShape(shapes[0]);
+    renderShapeListUI();
+    setMode('edit');
   }
 
   document.getElementById('boxRedrawBtn').addEventListener('click', () => {
@@ -928,7 +1046,7 @@ function initBoxEditor() {
   });
   // 자주 쓰는 색 10개 — 이 부품 체계에서 실제로 쓰는 아이보리(1열브라켓)·회색(90도 프레임)에, 팔레트
   // 기본색 몇 가지와 무채색(흰/검)을 더함.
-  const COLOR_PRESETS = ['#f2ead9', '#c7cbd1', '#ffffff', '#555555', '#222222', '#5b8def', '#ff9f43', '#51cf66', '#e03b2b', '#fcc419'];
+  const COLOR_PRESETS = ['#f2ead9', '#c7cbd1', '#adb2b9', '#ffffff', '#777777', '#666666', '#555555', '#222222', '#5b8def', '#ff9f43', '#51cf66', '#e03b2b', '#fcc419'];
   document.getElementById('colorPresets').innerHTML = COLOR_PRESETS.map((hex) =>
     '<button type="button" data-hex="' + hex + '" title="' + hex + '" style="width:22px;height:22px;padding:0;border-radius:5px;border:1px solid #ccc;background:' + hex + ';cursor:pointer;"></button>'
   ).join('');
@@ -1085,6 +1203,46 @@ function initBoxEditor() {
   }
   document.getElementById('boxFlipBtn').addEventListener('click', () => flipSelectedShape('y'));
   document.getElementById('boxFlipYBtn').addEventListener('click', () => flipSelectedShape('x'));
+  // "작업 평면에 놓기"(팅커캐드 D 단축키) — 사용자 지시: "D는 각도를 수평을 만들고 바닥에 두는거야".
+  // "바닥 위에 붙이기" 체크박스(이동할 때마다 자동으로, 바닥 아래로 파고들 때만 밀어올림)와 다르게
+  // 버튼을 눌렀을 때 한 번만 실행되고, 체크박스 상태와 무관하게 항상 동작하며 떠 있어도 끌어내린다.
+  // 지금 도형의 각도(rx/ry/rz)는 그대로 두고, y 위치만 바닥에 닿도록 옮긴다(사용자 지적: "평면에 놓기는
+  // 지금 있는 상태로 바닥에 수평으로 놓는거야, 각도를 멋대로 변경시키는게 아니라").
+  function placeSelectedOnWorkplane() {
+    const shape = shapes[selectedIndex];
+    if (!shape || !live || !live.meshes[selectedIndex]) return;
+    const mesh = live.meshes[selectedIndex];
+    mesh.updateMatrixWorld(true);
+    const worldBox = new THREE.Box3().setFromObject(mesh);
+    mesh.position.y -= worldBox.min.y;
+    shape.y = round1(mesh.position.y);
+    syncRotateAngleUI();
+    fillFieldsFromShape(shape);
+  }
+  document.getElementById('boxPlaceOnPlaneBtn').addEventListener('click', placeSelectedOnWorkplane);
+  // "중심정렬" — 사용자 지시: "에디터 바닥 중심점에 정열하는 기능이야". 높이(y)·각도·크기는 그대로 두고
+  // 가로/세로(x/z) 위치만 바닥 중심점(0,0)으로 옮긴다.
+  function centerSelectedOnOrigin() {
+    const shape = shapes[selectedIndex];
+    if (!shape || !live || !live.meshes[selectedIndex]) return;
+    const mesh = live.meshes[selectedIndex];
+    shape.x = 0; shape.z = 0;
+    mesh.position.x = 0; mesh.position.z = 0;
+    mesh.updateMatrixWorld(true);
+    fillFieldsFromShape(shape);
+  }
+  document.getElementById('boxCenterAlignBtn').addEventListener('click', centerSelectedOnOrigin);
+  // 이름 입력칸 등에서 "d"를 칠 때 단축키가 끼어들면 안 되므로 입력 요소에 포커스가 있으면 무시하고,
+  // 이 패널이 화면에 안 보이는 동안(다른 탭이 열려있을 때)도 무시한다(두 탭 다 이 리스너를 각자 갖고
+  // 있어서, 안 보이는 탭 것까지 같이 반응하면 이중 실행됨).
+  document.addEventListener('keydown', (e) => {
+    if (e.key.toLowerCase() !== 'd') return;
+    const tag = document.activeElement && document.activeElement.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (!panel.getClientRects().length || mode !== 'edit') return;
+    e.preventDefault();
+    placeSelectedOnWorkplane();
+  });
   // 회전축 고르기(x/y/z) — 그 축의 지금 각도를 드롭다운에 보여준다.
   document.getElementById('rotateAxis').addEventListener('change', syncRotateAngleUI);
   // 15도 단위 각도 드롭다운으로 정확한 각도를 바로 지정(사용자 지시: "x,y,z선택후 15도 단위로 회전 각도
@@ -1104,29 +1262,57 @@ function initBoxEditor() {
   });
   document.getElementById('boxPreviewBtn').addEventListener('click', () => setMode('preview'));
   document.getElementById('boxBackToEditBtn').addEventListener('click', () => setMode('edit'));
+  // 저장 API가 "로그인이 만료되었습니다" 에러를 주면 글자로만 안내하지 않고 바로 누를 수 있는 로그인
+  // 바로가기 버튼을 같이 보여준다(사용자 지시: "로그인이 만료되면 여기에 로그인 바로가기 버튼이 나와야지").
+  // 이 페이지(부품 수리실)는 로그인 없이도 열리지만, 저장 같은 서버 쓰기는 index.html에서 로그인해야 한다.
+  function showSaveError(msgEl, err, prefix) {
+    msgEl.className = 'msg err';
+    const text = prefix + ': ' + (err && err.message);
+    if (!err || typeof err.message !== 'string' || !err.message.includes('만료')) {
+      msgEl.textContent = text;
+      return;
+    }
+    msgEl.textContent = '';
+    const span = document.createElement('span');
+    span.textContent = text + ' ';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = '로그인 바로가기';
+    btn.style.cssText = 'margin-left:4px;padding:3px 10px;border-radius:5px;border:1px solid #2b6be0;background:#2b6be0;color:#fff;cursor:pointer;font-size:12px;';
+    btn.addEventListener('click', () => { location.href = 'index.html'; });
+    msgEl.appendChild(span);
+    msgEl.appendChild(btn);
+  }
   // showAll=true — 프레임/브라켓뿐 아니라 등록된 부품 전체를 보여줘서, 어떤 부품이든 열어서 지금 만든
   // 도형(들)로 교체 저장할 수 있게 함(사용자 지시: "기존의 등록된 부품을 수정으로 열어서 교체하는 기능").
   document.getElementById('boxTargetPickBtn').addEventListener('click', () => {
     openPickerModal('기존 부품 열어서 교체', onBoxTargetPicked, true);
   });
-  // 지금 만든 도형(들)을 완전히 새 부품으로 등록(사용자 지시: "부품등록쪽으로 저장하는기능") — 이름만
-  // 입력받고, 나머지(아이콘·과목 등)는 기본값으로 채운 뒤 "스펙 수정" 등 기존 화면에서 더 정리할 수 있다.
+  // 지금 만든 도형(들)을 완전히 새 부품으로 등록(사용자 지시: "부품등록쪽으로 저장하는기능") — 이름과
+  // 함께 과목/카테고리(로봇만)/권(로봇만)도 모달에서 같이 받는다. 예전엔 이름만 받고 과목은 지금 탭으로,
+  // 카테고리·권은 항상 빈 채로 등록해서 "부품 관리"에서 매번 다시 채워야 했다(사용자 지적: "로봇인지
+  // 어떤로봇인지 몇권에 있는지 선택을 하고 등록을 해야하는거아니야?").
   document.getElementById('boxNewPartBtn').addEventListener('click', async () => {
     const msg = document.getElementById('boxEditorMsg');
     if (!shapes.length) { msg.className = 'msg err'; msg.textContent = '등록할 도형이 없어요.'; return; }
-    // 이름 입력칸을 버튼 옆에 항상 붙여두면 버튼 줄이 너무 길어져서 옆 팔레트가 화면 밖으로 밀려난다
+    // 입력칸을 버튼 옆에 항상 붙여두면 버튼 줄이 너무 길어져서 옆 팔레트가 화면 밖으로 밀려난다
     // (사용자 지적: "이부분이 너무 길어서 2번째 스샷부분이 밀리자나") — 버튼을 누른 순간에만 모달로 물어본다.
-    const name = (await openNamePromptModal() || '').trim();
-    if (!name) return;
+    const picked = await openNamePromptModal(getSubject());
+    if (!picked || !picked.name) return;
+    const { name, subject, category, volumes } = picked;
     const btn = document.getElementById('boxNewPartBtn');
     btn.disabled = true; msg.textContent = '';
     try {
       const shapesToSave = shapes.map((s) => { const { _geometry, ...rest } = s; return rest; });
+      // _geometry가 이미 메모리에 있으면(불러온 파일이 지금 화면에 떠 있는 상태) 그걸 그대로 쓰고, 굳이
+      // fileDataUrl에서 다시 읽어들이지 않는다 — shapesToSave(_geometry 뺀 것)를 넘기면 매번 blob URL을
+      // 새로 fetch해야 해서 "Failed to fetch"로 저장이 실패하던 원인이었다.
+      const thumbnail3d = await renderShapesToThumbnailDataUrl(shapes, 88);
       const res = await adminApi({
-        action: 'add_part', name, icon: '📦', subject: getSubject(), category: '',
-        volumes: [], color: null, size: null,
+        action: 'add_part', name, icon: '📦', subject, category,
+        volumes, color: null, size: null,
         imageSvg: '', imageSvgDiagonal: '', primaryImage: 'front',
-        spec: { shapes: shapesToSave },
+        spec: { shapes: shapesToSave }, thumbnail3d,
       }, getAccessToken());
       const created = (res.parts || []).slice().reverse().find((p) => p.name === name);
       if (created) {
@@ -1137,8 +1323,7 @@ function initBoxEditor() {
       msg.className = 'msg ok';
       msg.textContent = '"' + name + '" 새 부품으로 등록했어요.';
     } catch (err) {
-      msg.className = 'msg err';
-      msg.textContent = '등록 실패: ' + err.message;
+      showSaveError(msg, err, '등록 실패');
     } finally {
       btn.disabled = false;
     }
@@ -1175,17 +1360,21 @@ function initBoxEditor() {
     });
     btn.disabled = true; msg.textContent = '';
     try {
+      // spec.shapes(_geometry 뺀 것) 대신 지금 화면의 shapes(있으면 _geometry 포함)를 넘겨서 불필요한
+      // blob URL 재로딩을 피한다 — "Failed to fetch"로 저장 실패하던 원인.
+      const thumbnail3d = await renderShapesToThumbnailDataUrl(shapes, 88);
       await adminApi({
         action: 'update_part', partId: targetPart.id,
         name: targetPart.name, icon: targetPart.icon, subject: targetPart.subject, category: targetPart.category || '',
         volumes: targetPart.volumes || [], color: targetPart.color, size: targetPart.size,
         imageSvg: targetPart.imageSvg, imageSvgDiagonal: targetPart.imageSvgDiagonal, primaryImage: targetPart.primaryImage || 'front',
-        spec, snapshot: targetPart.snapshot || null, snapshots: targetPart.snapshots || null,
+        spec, snapshot: targetPart.snapshot || null, snapshots: targetPart.snapshots || null, thumbnail3d,
       }, getAccessToken());
       targetPart.spec = spec;
-      msg.className = 'msg ok'; msg.textContent = '저장했어요.';
+      targetPart.thumbnail3d = thumbnail3d;
+      msg.className = 'msg ok'; msg.textContent = '"' + targetPart.name + '"에 저장했어요.';
     } catch (e) {
-      msg.className = 'msg err'; msg.textContent = '저장 실패: ' + e.message;
+      showSaveError(msg, e, '저장 실패');
     } finally {
       btn.disabled = false;
     }
@@ -1197,12 +1386,23 @@ function initBoxEditor() {
   document.getElementById('boxSaveBtn').addEventListener('click', async () => {
     if (!targetPart) {
       openPickerModal('저장할 부품 고르기', async (p) => {
-        await onBoxTargetPicked(p);
+        await onBoxTargetPicked(p, true);
         await saveToTargetPart();
       }, true);
       return;
     }
     await saveToTargetPart();
+  });
+  // "저장"이 한 번 부품을 고르면 그 뒤로는 다시 안 묻고 같은 부품에 바로 저장하는 것과 짝을 이루는 버튼
+  // — 사용자 지적("두번째부터는 어디에 저장되는지 모르게 그냥 저장을 하고있어" → "다른부품은 저장안해??")으로,
+  // "다른 부품으로 바꾸고 싶을 땐 어떻게 하냐"가 전혀 안 보이는 문제를 해결하려고 "저장" 버튼 바로 옆에
+  // 명시적으로 둠(예전엔 맨 위 "🔍 기존 부품 불러오기"로만 가능했는데, 이름이 "불러오기"라 저장 대상을 바꾸는
+  // 용도라는 게 전혀 안 드러났음). 부품을 고르면 그 즉시 그 부품에 저장까지 진행(다시 "저장"을 누를 필요 없음).
+  document.getElementById('boxChangeTargetBtn').addEventListener('click', () => {
+    openPickerModal('다른 부품에 저장', async (p) => {
+      await onBoxTargetPicked(p, true);
+      await saveToTargetPart();
+    }, true);
   });
 
   // 색상칸·밝기 슬라이더·뒤집기 버튼·회전 각도 드롭다운·바닥붙이기 체크박스처럼 캔버스 바깥에서 라이브

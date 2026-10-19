@@ -8,7 +8,10 @@
 // POST { action: 'set_approved', teacherId, approved }              선생님 승인 / 승인 취소 — 관리자만
 // POST { action: 'create_teacher', name, email, phone?, password? } 본사에서 선생님 등록 (바로 승인됨) — 관리자만
 // POST { action: 'delete_teacher', teacherId }                      선생님 삭제 (수업·학생·학생 로그인 계정·과제까지 함께 삭제) — 관리자만
-// POST { action: 'list_parts' }                                      부품 카탈로그 목록 (이름·아이콘·과목만, 3D 모양은 코드로 별도 구현)
+// POST { action: 'list_parts', light?, stripSpecFiles? }                     부품 카탈로그 목록 (light: 이름·아이콘·과목만 /
+//   stripSpecFiles: spec.shapes는 남기되 각 도형의 fileDataUrl만 빼서 목록 응답을 가볍게 함 — 3D 모양은 코드로 별도 구현)
+// POST { action: 'get_part', partId }                                       부품 하나를 spec.shapes.fileDataUrl까지 전부 포함해 조회
+//   (목록은 stripSpecFiles로 가볍게 받고, 3D를 실제로 그려야 할 때만 이걸로 그 부품 하나만 온전히 받는다)
 // POST { action: 'add_part', name, icon, subject, category?, volumes?: [{volume, qty?}], color?, size? } 부품 카탈로그에 등록
 //   — volumes는 이 부품이 필요한 권과 그 권에서 필요한 수량 목록(비우면 전체 공통). 이름·이미지 등은 한 번만
 //     등록하고 권마다 volumes 항목만 늘려서 쓴다 — 권마다 부품 전체를 새로 등록하지 않는다.
@@ -125,7 +128,7 @@ function parseSpec(body) {
   // 도형 에디터(부품 수리실 스케치북 자리) — 도형 하나 이상의 위치·크기를 그대로 저장. svg 없이도 이
   // 숫자만으로 모양이 재현됨(브라켓의 armLen1/armLen2/armWidth와 같은 목적).
   // parts-lab-box-editor.js의 SHAPE_TYPES/BOX_LIKE/RADIUS_ONLY와 반드시 같이 맞춰야 한다.
-  const SHAPE_TYPES = ['box', 'wheel', 'gear', 'sphere', 'cone', 'pyramid', 'torus', 'hexprism', 'icosahedron', 'dome', 'wedge', 'ring', 'star', 'heart', 'text', 'duplo', 'knexRod', 'knexConnector', 'technicBeam']
+  const SHAPE_TYPES = ['box', 'wheel', 'gear', 'sphere', 'cone', 'pyramid', 'torus', 'hexprism', 'icosahedron', 'dome', 'wedge', 'ring', 'star', 'heart', 'text', 'duplo', 'knexRod', 'knexConnector', 'technicBeam', 'import']
   const BOX_LIKE = ['box', 'wedge', 'duplo', 'technicBeam']
   const RADIUS_ONLY = ['sphere', 'icosahedron', 'dome']
   // op: 'add'(더하기)|'subtract'(빼기/뚫기) — 목록 순서대로 앞 결과에 CSG로 합치거나 깎아낸다. 첫 도형은
@@ -145,17 +148,40 @@ function parseSpec(body) {
         const rx = Number.isFinite(Number(s.rx)) ? Number(s.rx) : 0
         const ry = Number.isFinite(Number(s.ry)) ? Number(s.ry) : 0
         const rz = Number.isFinite(Number(s.rz)) ? Number(s.rz) : 0
+        // 색상 팔레트로 고른 색(color)·밝기(brightness) — 2026-09-29 발견: 이 필드들이 여기 화이트리스트에
+        // 아예 없어서, 도형마다 색을 골라 저장해도 서버가 조용히 걸러 항상 기본 팔레트 색으로 되돌아가고
+        // 있었다('import' 타입이 빠졌던 것과 같은 종류의 버그). 유효한 값일 때만 포함한다.
+        const colorHex = typeof s.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(s.color) ? s.color : null
+        const brightnessNum = Number(s.brightness)
+        // paint: true 는 "색칠 조각" — 모양을 합치지 않고 부품 위에 자기 색으로 얹는다(예: DC모터의 축 결합 자리 빨강). 화이트리스트에 없으면 서버가 걸러 버린다.
+        const colorFields = Object.assign(
+          { brightness: Number.isFinite(brightnessNum) && brightnessNum >= 100 && brightnessNum <= 200 ? brightnessNum : 100 },
+          colorHex ? { color: colorHex } : {},
+          s.paint === true ? { paint: true } : {}
+        )
         if (BOX_LIKE.includes(s.type)) {
           const w = Number(s.w), h = Number(s.h), d = Number(s.d)
           if (![w, h, d].every((n) => Number.isFinite(n) && n > 0)) return null
-          return { type: s.type, op, x, y, z, rx, ry, rz, w, h, d }
+          return Object.assign({ type: s.type, op, x, y, z, rx, ry, rz, w, h, d }, colorFields)
+        }
+        // GLB/GLTF·STL·OBJ로 불러온 도형(나누기·붙이기·테두리 만들기 결과 포함, 전부 이 타입) — 숫자로
+        // 계산하는 다른 도형과 달리 파일 원본(fileDataUrl, base64)을 그대로 저장해서 다시 열 때 지오메트리를
+        // 재생성한다. w/h/d도 radius/width도 없으니 그 검증들을 타면 안 되므로 여기서 먼저 처리하고 return.
+        // 2026-09-29 발견: 이 분기가 아예 없어서 SHAPE_TYPES에도 'import'가 빠져있었고, 그 결과 나누기·
+        // 붙이기·테두리·3D 파일 불러오기 저장이 전부 "성공" 메시지는 뜨지만 실제로는 shapes가 조용히
+        // 빈 배열로 저장되는 버그가 있었음(사용자 지적: "115프레임은 등록했는데 왜 안보여?").
+        if (s.type === 'import') {
+          const fileDataUrl = typeof s.fileDataUrl === 'string' && s.fileDataUrl.startsWith('data:') ? s.fileDataUrl : null
+          if (!fileDataUrl) return null
+          const fileName = typeof s.fileName === 'string' && s.fileName ? s.fileName.slice(0, 200) : 'model'
+          return Object.assign({ type: 'import', op, x, y, z, rx, ry, rz, fileName, fileDataUrl }, colorFields)
         }
         const radius = Number(s.radius)
         if (!Number.isFinite(radius) || radius <= 0) return null
-        if (RADIUS_ONLY.includes(s.type)) return { type: s.type, op, x, y, z, rx, ry, rz, radius }
+        if (RADIUS_ONLY.includes(s.type)) return Object.assign({ type: s.type, op, x, y, z, rx, ry, rz, radius }, colorFields)
         const width = Number(s.width)
         if (!Number.isFinite(width) || width <= 0) return null
-        const out = { type: s.type, op, x, y, z, rx, ry, rz, radius, width }
+        const out = Object.assign({ type: s.type, op, x, y, z, rx, ry, rz, radius, width }, colorFields)
         if (s.type === 'gear') {
           const teeth = Number(s.teeth)
           out.teeth = Number.isFinite(teeth) && teeth >= 4 ? Math.round(teeth) : 12
@@ -212,10 +238,53 @@ function parseSnapshots(body) {
   return Object.keys(result).length ? result : null
 }
 
-async function listParts(sb) {
+// spec.shapes 중 'import'(3D 파일 불러오기) 도형의 fileDataUrl(base64 STL/GLB/OBJ 원본)이 부품 하나당
+// 수백 KB~몇 MB까지 나간다 — 실측: 부품 69개 spec 합계 16MB(썸네일 97KB·SVG 218KB와 비교가 안 됨). "부품
+// 관리" 목록 화면은 이 원본 파일이 필요 없다(has3d 여부·이미 저장된 thumbnail3d만 보여줌 — 3D 편집은
+// "부품 수리실"에서 따로 함) — 그런데도 탭을 열 때마다 카탈로그 전체의 원본 파일까지 통째로 받아와서
+// "큐보 부품리스트를 불러오는데 시간이 좀 걸리는" 원인이었다(사용자 지적). stripSpecFiles가 true면 도형
+// 목록·개수(has3d 판정에 필요)는 그대로 두고 fileDataUrl만 빼서 응답을 가볍게 만든다.
+function stripSpecFileData(spec) {
+  if (!spec || !Array.isArray(spec.shapes)) return spec
+  return Object.assign({}, spec, {
+    shapes: spec.shapes.map((s) => {
+      if (!s || typeof s !== 'object' || !s.fileDataUrl) return s
+      const { fileDataUrl, ...rest } = s
+      return rest
+    }),
+  })
+}
+function mapPartRow(r, { light = false, stripSpecFiles = false } = {}) {
+  const base = { id: r.id, name: r.data?.name || '', icon: r.data?.icon || '', subject: r.data?.subject || '', category: r.data?.category || '', volumes: Array.isArray(r.data?.volumes) ? r.data.volumes : [], color: r.data?.color || '', size: r.data?.size || '', thumbKey: r.data?.thumbKey || '', createdAt: r.created_at }
+  // 교재관리처럼 이름·과목만 필요한 화면용 — 부품마다 수십 KB인 SVG/스냅샷/spec은 빼서 응답을 가볍게 한다.
+  if (light) return base
+  const spec = stripSpecFiles ? stripSpecFileData(r.data?.spec || null) : (r.data?.spec || null)
+  return Object.assign(base, { imageSvg: r.data?.image_svg || '', imageSvgDiagonal: r.data?.image_svg_diagonal || '', primaryImage: r.data?.primary_image === 'diagonal' ? 'diagonal' : 'front', spec, snapshot: r.data?.snapshot || null, snapshots: r.data?.snapshots || null, thumbnail3d: r.data?.thumbnail3d || null })
+}
+async function listParts(sb, light = false, stripSpecFiles = false) {
+  // light·stripSpecFiles 목록은 spec(3D 원본, 부품 50개 합쳐 24MB)이 필요 없다 — data 통째로 읽으면 응답은 작아도
+  // DB→서버로 24MB가 넘어와서 목록이 3초 넘게 걸렸다(실측: 필요한 열만 읽으면 367KB). 그래서 DB에서 필요한
+  // 항목만 골라 읽고, spec은 "3D 모양 있음" 표시(첫 도형의 type)만 받는다. 실제 도형은 get_part로 따로 받는다.
+  if (light || stripSpecFiles) {
+    const base = 'id, created_at, name:data->>name, icon:data->>icon, subject:data->>subject, category:data->>category, volumes:data->volumes, color:data->>color, size:data->>size, thumb_key:data->>thumbKey'
+    const extra = ', image_svg:data->>image_svg, image_svg_diagonal:data->>image_svg_diagonal, primary_image:data->>primary_image, snapshot:data->snapshot, snapshots:data->snapshots, thumbnail3d:data->thumbnail3d, spec_type:data->spec->shapes->0->>type'
+    const { data, error } = await sb.from('ivs_part_catalog').select(light ? base : base + extra).order('created_at', { ascending: true })
+    if (error) throw new Error(error.message)
+    return (data || []).map((r) => {
+      const out = { id: r.id, name: r.name || '', icon: r.icon || '', subject: r.subject || '', category: r.category || '', volumes: Array.isArray(r.volumes) ? r.volumes : [], color: r.color || '', size: r.size || '', thumbKey: r.thumb_key || '', createdAt: r.created_at }
+      if (light) return out
+      return Object.assign(out, { imageSvg: r.image_svg || '', imageSvgDiagonal: r.image_svg_diagonal || '', primaryImage: r.primary_image === 'diagonal' ? 'diagonal' : 'front', spec: r.spec_type ? { shapes: [{ type: r.spec_type }], partial: true } : null, snapshot: r.snapshot || null, snapshots: r.snapshots || null, thumbnail3d: r.thumbnail3d || null })
+    })
+  }
   const { data, error } = await sb.from('ivs_part_catalog').select('id, data, created_at').order('created_at', { ascending: true })
   if (error) throw new Error(error.message)
-  return (data || []).map((r) => ({ id: r.id, name: r.data?.name || '', icon: r.data?.icon || '', subject: r.data?.subject || '', category: r.data?.category || '', volumes: Array.isArray(r.data?.volumes) ? r.data.volumes : [], color: r.data?.color || '', size: r.data?.size || '', imageSvg: r.data?.image_svg || '', imageSvgDiagonal: r.data?.image_svg_diagonal || '', primaryImage: r.data?.primary_image === 'diagonal' ? 'diagonal' : 'front', spec: r.data?.spec || null, snapshot: r.data?.snapshot || null, snapshots: r.data?.snapshots || null, createdAt: r.created_at }))
+  return (data || []).map((r) => mapPartRow(r, {}))
+}
+async function getPart(sb, partId) {
+  const { data, error } = await sb.from('ivs_part_catalog').select('id, data, created_at').eq('id', partId).maybeSingle()
+  if (error) throw new Error(error.message)
+  if (!data) return null
+  return mapPartRow(data, {}) // light/stripSpecFiles 둘 다 기본값(false) — fileDataUrl까지 전부 포함해서 돌려준다.
 }
 
 // 부품 하나가 여러 권에 걸쳐 쓰이는 걸 표현 — 이름·아이콘·이미지 등 "부품 자체"는 한 번만 등록하고, 어느
@@ -248,9 +317,55 @@ async function listRobotCategories(sb) {
 }
 
 const TEACHER_ACTIONS = new Set([
-  'list_parts', 'add_part', 'update_part', 'delete_part',
+  'list_parts', 'get_part', 'add_part', 'update_part', 'delete_part',
   'list_robot_categories', 'add_robot_category', 'update_robot_category', 'delete_robot_category',
+  'list_textbooks', 'add_textbook', 'update_textbook', 'delete_textbook',
 ])
+
+async function listTextbooks(sb) {
+  const { data, error } = await sb.from('ivs_textbooks').select('id, data, created_at').order('created_at', { ascending: true })
+  if (error) throw new Error(error.message)
+  return (data || []).map((r) => ({
+    id: r.id,
+    subject: r.data?.subject || '',
+    category: r.data?.category || null,
+    volume: r.data?.volume != null ? Number(r.data.volume) : null,
+    name: r.data?.name || '',
+    files: Array.isArray(r.data?.files) ? r.data.files : [],
+    chapters: Array.isArray(r.data?.chapters) ? r.data.chapters : [],
+    createdAt: r.created_at,
+  }))
+}
+// 교재 안 차시 배열을 검증한다 — 제목·필요 부품(partId+수량)·첨부파일(fileUrl/fileName) 정도만 저장.
+// 차시 목록은 항상 "전체를 통째로" 다시 보내는 방식(위/아래 이동·중간 삽입·삭제 전부 클라이언트에서
+// 배열을 다시 만든 뒤 한 번에 저장 — 서버는 순서만 그대로 믿고 저장).
+function parseChapters(raw) {
+  if (!Array.isArray(raw)) return []
+  return raw.map((c) => {
+    if (!c || typeof c !== 'object') return null
+    const title = String(c.title || '').trim()
+    const id = typeof c.id === 'string' && c.id ? c.id : ('ch_' + Math.random().toString(36).slice(2, 10))
+    const parts = Array.isArray(c.parts) ? c.parts.map((p) => {
+      const partId = typeof p?.partId === 'string' ? p.partId : null
+      const qty = Number(p?.qty)
+      if (!partId) return null
+      return { partId, qty: Number.isFinite(qty) && qty > 0 ? Math.round(qty) : 1 }
+    }).filter(Boolean) : []
+    // 사용자 지시: "파일업로드는 pdf,워드,엑셀,ppt가 되게끔, 여러개 가능" — 차시 하나에 파일 하나만
+    // (fileUrl/fileName)이 아니라 여러 개(files 배열)를 붙일 수 있어야 한다.
+    const files = parseFileList(c.files)
+    return { id, title, parts, files }
+  }).filter(Boolean)
+}
+function parseFileList(raw) {
+  if (!Array.isArray(raw)) return []
+  return raw.map((f) => {
+    const url = typeof f?.url === 'string' && f.url ? f.url : null
+    if (!url) return null
+    const name = typeof f?.name === 'string' && f.name ? f.name.slice(0, 200) : '파일'
+    return { url, name }
+  }).filter(Boolean).slice(0, 30)
+}
 
 export async function POST(request) {
   const sb = admin()
@@ -323,7 +438,15 @@ export async function POST(request) {
       return json({ ok: true, teachers: await listTeachers(sb) })
     }
 
-    if (body?.action === 'list_parts') return json({ parts: await listParts(sb) })
+    if (body?.action === 'list_parts') return json({ parts: await listParts(sb, body.light === true, body.stripSpecFiles === true) })
+
+    if (body?.action === 'get_part') {
+      const partId = body.partId
+      if (typeof partId !== 'string') return json({ error: '잘못된 요청입니다.' }, 400)
+      const part = await getPart(sb, partId)
+      if (!part) return json({ error: '부품을 찾을 수 없어요.' }, 404)
+      return json({ part })
+    }
 
     if (body?.action === 'add_part') {
       const name = String(body.name || '').trim()
@@ -338,11 +461,12 @@ export async function POST(request) {
       const spec = parseSpec(body)
       const snapshot = parseOneSnapshot(body.snapshot)
       const snapshots = parseSnapshots(body)
+      const thumbnail3d = parseOneSnapshot(body.thumbnail3d)
       const { volumes, error: volErr } = parseVolumes(body)
       if (!name) return json({ error: '부품 이름을 입력해주세요.' }, 400)
       if (!PART_SUBJECTS.includes(subject)) return json({ error: '과목을 선택해주세요.' }, 400)
       if (volErr) return json({ error: volErr }, 400)
-      const { error } = await sb.from('ivs_part_catalog').insert({ data: { name, icon, subject, category: category || null, volumes, color: color || null, size: size || null, image_svg: imageSvg || null, image_svg_diagonal: imageSvgDiagonal || null, primary_image: primaryImage, spec, snapshot, snapshots, createdAt: Date.now() } })
+      const { error } = await sb.from('ivs_part_catalog').insert({ data: { name, icon, subject, category: category || null, volumes, color: color || null, size: size || null, image_svg: imageSvg || null, image_svg_diagonal: imageSvgDiagonal || null, primary_image: primaryImage, spec, snapshot, snapshots, thumbnail3d, createdAt: Date.now() } })
       if (error) throw new Error(error.message)
       return json({ ok: true, parts: await listParts(sb) })
     }
@@ -362,10 +486,12 @@ export async function POST(request) {
       const spec = parseSpec(body)
       const snapshot = parseOneSnapshot(body.snapshot)
       const snapshots = parseSnapshots(body)
+      const thumbnail3d = parseOneSnapshot(body.thumbnail3d)
       const { volumes, error: volErr } = parseVolumes(body)
       if (!name) return json({ error: '부품 이름을 입력해주세요.' }, 400)
       if (!PART_SUBJECTS.includes(subject)) return json({ error: '과목을 선택해주세요.' }, 400)
       if (volErr) return json({ error: volErr }, 400)
+      const thumbKey = typeof body.thumbKey === 'string' ? body.thumbKey.slice(0, 64) : '' // 썸네일을 그릴 때의 도형 지문 — 도형이 바뀌었는지 비교하는 데 쓴다
       const { data: existing, error: fetchErr } = await sb.from('ivs_part_catalog').select('data').eq('id', partId).maybeSingle()
       if (fetchErr) throw new Error(fetchErr.message)
       if (!existing) return json({ error: '부품을 찾을 수 없어요.' }, 404)
@@ -373,13 +499,23 @@ export async function POST(request) {
       // spec/snapshot을 안 보내면(예: 다른 화면에서 저장) 기존 값을 그대로 유지 — 부품 수리실에서 한 번
       // 확정해둔 정확한 치수·이미지가 다른 저장 경로 때문에 사라지지 않게 함. snapshots(위/정면/뒷면)도
       // 마찬가지 — 사용자 지시: "위에서 본거 정면 뒷면 모두 저장하고 스샷도 다 저장해놔, 불러올때 항상 똑같이".
-      const nextSpec = spec || existing.data?.spec || null
+      // thumbnail3d(부품관리 목록용 저장된 3D 썸네일)도 같은 원칙 — 매번 다시 그리지 않고 저장해둔 걸
+      // 그대로 보여주기 위한 것(사용자 지시: "썸네일을 매번그리지 말고 썸네일을 저장해두고 그데로 보여줘").
+      // 다만 잘못 저장된 3D 모델(예: CSG 버그로 깨진 지오메트리)을 지우고 싶을 때도 있어서(사용자 지시:
+      // "3D 잘못저장된거 삭제할수 있어야 하는데"), body.clearSpec===true면 "안 보냄"이 아니라 "확실히
+      // 지움"으로 취급해 spec/thumbnail3d를 null로 되돌린다. snapshot(들)은 부품 수리실과 무관한 옛
+      // SVG/스냅샷 체계라 그대로 둔다.
+      const clearSpec = body.clearSpec === true
+      const nextSpec = clearSpec ? null : (spec || existing.data?.spec || null)
       const nextSnapshot = snapshot || existing.data?.snapshot || null
       const nextSnapshots = snapshots || existing.data?.snapshots || null
+      const nextThumbnail3d = clearSpec ? null : (thumbnail3d || existing.data?.thumbnail3d || null)
       // volumes도 안 보내면(예: 부품 수리실에서 스펙만 저장) 기존 권 배정을 그대로 유지한다.
       const nextVolumes = Array.isArray(body.volumes) ? volumes : (Array.isArray(existing.data?.volumes) ? existing.data.volumes : [])
-      const { error } = await sb.from('ivs_part_catalog').update({ data: { name, icon, subject, category: category || null, volumes: nextVolumes, color: color || null, size: size || null, image_svg: imageSvg || null, image_svg_diagonal: imageSvgDiagonal || null, primary_image: primaryImage, spec: nextSpec, snapshot: nextSnapshot, snapshots: nextSnapshots, createdAt } }).eq('id', partId)
+      // connectors(돌기·구멍 연결점)는 body.connectors 로 주면 기록하고, 안 주면 기존 값을 그대로 이어 붙인다 — 안 그러면 부품을 수정할 때마다 지워진다.
+      const { error } = await sb.from('ivs_part_catalog').update({ data: { name, icon, subject, category: category || null, volumes: nextVolumes, color: color || null, size: size || null, image_svg: imageSvg || null, image_svg_diagonal: imageSvgDiagonal || null, primary_image: primaryImage, spec: nextSpec, snapshot: nextSnapshot, snapshots: nextSnapshots, thumbnail3d: nextThumbnail3d, createdAt, ...(thumbKey ? { thumbKey } : (existing.data?.thumbKey ? { thumbKey: existing.data.thumbKey } : {})), ...((body.connectors && typeof body.connectors === 'object') ? { connectors: body.connectors } : (existing.data?.connectors ? { connectors: existing.data.connectors } : {})) } }).eq('id', partId)
       if (error) throw new Error(error.message)
+      if (body.skipList === true) return json({ ok: true }) // 썸네일을 여러 개 연달아 저장할 때: 응답으로 전체 부품 목록(26MB)을 매번 다시 만들지 않는다(DB 시간 초과 원인)
       return json({ ok: true, parts: await listParts(sb) })
     }
 
@@ -430,6 +566,46 @@ export async function POST(request) {
       const { error } = await sb.from('ivs_robot_categories').delete().eq('id', categoryId)
       if (error) throw new Error(error.message)
       return json({ ok: true, categories: await listRobotCategories(sb) })
+    }
+
+    if (body?.action === 'list_textbooks') return json({ textbooks: await listTextbooks(sb) })
+
+    if (body?.action === 'add_textbook') {
+      const subject = String(body.subject || '')
+      const name = String(body.name || '').trim()
+      const category = String(body.category || '').trim()
+      const volumeNum = Number(body.volume)
+      const volume = Number.isFinite(volumeNum) && volumeNum > 0 ? Math.round(volumeNum) : null
+      if (!name) return json({ error: '교재 이름을 입력해주세요.' }, 400)
+      if (!PART_SUBJECTS.includes(subject)) return json({ error: '과목을 선택해주세요.' }, 400)
+      const files = parseFileList(body.files)
+      const { error } = await sb.from('ivs_textbooks').insert({ data: { subject, category: category || null, volume, name, files, chapters: [], createdAt: Date.now() } })
+      if (error) throw new Error(error.message)
+      return json({ ok: true, textbooks: await listTextbooks(sb) })
+    }
+
+    if (body?.action === 'update_textbook') {
+      const textbookId = body.textbookId
+      if (typeof textbookId !== 'string') return json({ error: '잘못된 요청입니다.' }, 400)
+      const { data: existing, error: fetchErr } = await sb.from('ivs_textbooks').select('data').eq('id', textbookId).maybeSingle()
+      if (fetchErr) throw new Error(fetchErr.message)
+      if (!existing) return json({ error: '교재를 찾을 수 없어요.' }, 404)
+      const name = body.name != null ? String(body.name).trim() : existing.data?.name || ''
+      if (!name) return json({ error: '교재 이름을 입력해주세요.' }, 400)
+      const subject = existing.data?.subject
+      const nextChapters = Array.isArray(body.chapters) ? parseChapters(body.chapters) : (Array.isArray(existing.data?.chapters) ? existing.data.chapters : [])
+      const nextFiles = Array.isArray(body.files) ? parseFileList(body.files) : (Array.isArray(existing.data?.files) ? existing.data.files : [])
+      const { error } = await sb.from('ivs_textbooks').update({ data: { subject, category: existing.data?.category || null, volume: existing.data?.volume ?? null, name, files: nextFiles, chapters: nextChapters, createdAt: existing.data?.createdAt ?? Date.now() } }).eq('id', textbookId)
+      if (error) throw new Error(error.message)
+      return json({ ok: true, textbooks: await listTextbooks(sb) })
+    }
+
+    if (body?.action === 'delete_textbook') {
+      const textbookId = body.textbookId
+      if (typeof textbookId !== 'string') return json({ error: '잘못된 요청입니다.' }, 400)
+      const { error } = await sb.from('ivs_textbooks').delete().eq('id', textbookId)
+      if (error) throw new Error(error.message)
+      return json({ ok: true, textbooks: await listTextbooks(sb) })
     }
 
     return json({ error: '알 수 없는 요청입니다.' }, 400)

@@ -1,0 +1,1 @@
+{"global": {"X": [55.0, -21.0], "Y": [5.4, -55.0], "Z": [55.0, 54.2]}, "fit": {"from": "27_F.json", "err_px": 4.25, "points": 14, "theta": -0.67, "phi": 0.87, "fov": 40, "method": "세계 3D 좌표 PnP(판 구멍 5+프레임 구멍 9, 판 묶음 30mm 물러남)", "cols": "+X", "rows": "+Y"}, "no_rotate": true}

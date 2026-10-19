@@ -1,0 +1,1 @@
+{"global": {"X": [55.0, -17.5], "Y": [-3.6, -55.0], "Z": [55.0, 18.1]}, "fit": {"from": "(1번 카메라 값을 옮김 — 9번 그림은 판이 없고 타이어 타원비로 phi 1.24, theta −0.66 은 임의)", "err_px": null, "points": 3, "theta": -0.66, "phi": 1.24, "moved_from": 1}, "no_rotate": true, "origin_cell": [1, 1]}
