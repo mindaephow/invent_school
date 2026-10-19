@@ -326,12 +326,16 @@
 "noPart": false
 },
 "47": {
-"parts": {},
-"noPart": true
+"parts": {
+"T축": 1
+},
+"noPart": false
 },
 "48": {
-"parts": {},
-"noPart": true
+"parts": {
+"27프레임": 1
+},
+"noPart": false
 },
 "49": {
 "parts": {},
