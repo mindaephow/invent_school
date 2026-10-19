@@ -492,7 +492,7 @@ if int(_osm.environ.get("AT_LAST", "99")) >= 32:
     _g31 = A.group("31번 조립", [A.steps[25].parts[_i] for _i in range(6, 12)] + list(A.steps[28].parts) + list(A.steps[29].parts) + list(A.steps[30].parts))
     _pg32 = np.array(GE29.p, float)
     _mk32 = {id(BL31): [list(np.array(P39B.hole("h8_1")["pos"], float))]}
-    s32.move_made(_g31, _M32, pivot=_pg32, shift=(-10.0 - _pg32[0], 30.0 - _pg32[1], 135.0 - _pg32[2]), dir=[0, 1, 0], hover=60, group="mm32unit31", marks=_mk32)
+    s32.move_made(_g31, _M32, pivot=_pg32, shift=(-10.0 - _pg32[0], 30.0 - _pg32[1], 139.5 - _pg32[2]), dir=[0, 1, 0], hover=60, group="mm32unit31", marks=_mk32)   # 2026-10-20 34번 책(리벳·볼트 구멍이 흰 27프레임 칸에 10 간격으로 맞아야 함)에서 135→139.5 로 고침: 큰기어 가운데 z 139.5, 블록 z 154.5(P39B 구멍 z 150 과 4.5mm 어긋남 ⚠ 32번 책 링 8px 로는 가릴 수 없음)
 if int(_osm.environ.get("AT_LAST", "99")) >= 33:
     # ── 33 ── 교재 75쪽 33 (읽은 것 2026-10-20 — 창고 3: 검은 27프레임(2×7) 윗줄 칸 3·5에 리벳 둘이 서고 3단블록이 위에서 내려와 구멍 둘로 리벳을 받고, 12볼트가 가운데 칸 4 를 지나 아래 너트로 조인다)
     #   책 33번(리벳 (2), 12볼트, 너트): 아래 검은 27프레임(7칸×2줄) 위 줄(먼 쪽)에 칸 3·5 리벳 둘(초록 링 바닥)·칸 4 노란 링(볼트·너트), 위 3단블록(긴 쪽이 판과 나란, 돌기 셋 줄이 카메라 쪽 +Z)이 구멍 h1·h3 로 리벳을 받고 h2 로 볼트가 지난다, 너트는 판 아래.
@@ -505,6 +505,23 @@ if int(_osm.environ.get("AT_LAST", "99")) >= 33:
     BL33 = s33.recv("3단블록", np.eye(3), {"h1": (RV33[0], "p2"), "h3": (RV33[1], "p2")}, dir=[0, 1, 0], hover=21)
     BOLT33 = s33.attach("12볼트", np.eye(3), {"p1": (BL33, "h2")}, hover=28); BOLT33.extra["joinOrder"] = 3
     NUT33 = s33.attach("너트", np.eye(3), {"p1": (PL33, "h4_1")}, hover=24)
+if int(_osm.environ.get("AT_LAST", "99")) >= 34:
+    # ── 34 ── 교재 75쪽 34 (읽은 것 2026-10-20 — 창고 2: 28번 왼쪽 브래킷·31번 오른쪽 브래킷 윗면 구멍에 리벳 4개를 꽂고, 33번 조립(27프레임+3단블록, 창고 3)을 90° 돌려 두 브래킷 위에 얹은 뒤 8볼트 둘을 판→브래킷 구멍으로 넣어 아래 너트 둘로 조인다)
+    #   책 34번(리벳 (4), 8볼트×2, 너트×2): 두 브래킷 윗면(2×2)에 리벳 둘씩(초록 링)과 볼트 구멍 하나씩(노랑 링)이 있고 그 위에 33번 조립이 떠 있다. 카메라: 흰 판 리벳 4점 IPPE 0.14px fov 25 theta 0.92 phi 0.92.
+    #   배치 읽기: 책 리벳 링을 브래킷 윗면 평면에 환산해 왼쪽 브래킷 리벳 줄 z≈192(+높이 보정), 오른쪽 z≈132, 판 7칸(60mm) 양 끝 칸 1·7 = 두 브래킷 리벳 줄, 볼트 구멍은 칸 2(왼쪽)·6(오른쪽) — 그래서 31번 조립을 32번에서 z +4.5 옮김(큰기어 z 139.5).
+    s34 = SKEL[33]; s34.kw.pop("noPart", None)
+    s34.note = "[교재 34] 두 브래킷 윗면 구멍에 리벳 4개를 꽂고, 33번 조립(27프레임+3단블록)을 위에서 얹은 뒤 8볼트 둘을 넣어 아래에서 너트로 조여요."
+    _BK28, _BK31 = BR26[0][2], BR26[1][2]
+    RV34 = [s34.attach("리벳", np.eye(3), {"p1": (_B, _h)}, rivet=True, hover=15) for _B, _h in ((_BK28, "h6"), (_BK28, "h5"), (_BK31, "h5"), (_BK31, "h6"))]
+    for _r in RV34: _r.extra["joinOrder"] = 1
+    _M34 = np.array([[0, 0, 1], [0, 1, 0], [-1, 0, 0]], float)   # 33번 국소 +Z(돌기 셋줄) → +X(카메라 쪽), 국소 +X → −Z(칸1 = z 192)
+    _g33 = A.group("33번 조립", list(s33.parts))
+    _pp33 = np.array(PL33.p, float)
+    _y34 = float(np.array(RV34[0].p, float)[1]) + 2.5
+    s34.move_made(_g33, _M34, pivot=_pp33, shift=(-5.0 - _pp33[0], _y34 - _pp33[1], 162.0 - _pp33[2]), dir=[0, 1, 0], hover=31, group="mm34plate")
+    BO34 = [s34.attach("8볼트", np.eye(3), {"p1": (_B, _h)}, hover=50) for _B, _h in ((_BK28, "h7"), (_BK31, "h8"))]
+    for _r in BO34: _r.extra["joinOrder"] = 3
+    NU34 = [s34.attach("너트", np.eye(3), {"p1": (_B, _h)}, hover=22) for _B, _h in ((_BK28, "h7"), (_BK31, "h8"))]
 # ── 번호판 글자색(2026-10-18): verify_step.py 가 저장한 autotarget_verify.json 에서 '통과'가 아닌 번호(주의·실패·아직 점검 안 함)는 주황(review), 통과는 파랑.
 #   번호를 고친 뒤 verify_step.py 를 다시 돌려 ❌ 0건·통과가 되면 다음 빌드에서 파랑으로 바뀐다. 아직 안 만든 번호(작성 전)는 색을 안 칠한다.
 import os as _os
@@ -543,6 +560,7 @@ A.steps[24].cam = _c(-0.53, 0.98, (-40.0, 40.0, 200.0)); A.steps[24].camSrc = "e
 A.steps[23].cam = _c(-0.56, 0.93, (-20.0, 20.0, 150.0)); A.steps[23].camSrc = "eye"   # 24번: 책 24번 주황 리벳 끝 11점 앵커 PnP 2.12px fov 42 roll −1.9° (하나씩 빼도 theta −0.52~−0.59·phi 0.91~0.95), 링 둘은 앵커 밖 독립 확인 1.7~2.2px
 A.steps[17].cam = _c(0.49, 0.73, (0.0, 5.0, 80.0)); A.steps[17].camSrc = "eye"   # 18번: 새 리벳 링 4개로 푼 평면 격자(앵커 4점)·axes_fit 45점 0.46px roll −0.9°, 겹침 증명 8점 PnP 2.9px(아래 리벳 링 4 + 위 판 링 4)
 A.steps[16].cam = _c(0.62, 0.60, (0.0, 5.0, 80.0)); A.steps[16].camSrc = "eye"   # 17번: 흰 59프레임 격자 holesearch 1.90px(구멍 60%)·axes_fit 45점 1.54px roll −1.5°
+A.steps[33].cam = _c(0.97, 0.93, (-5.0, 60.0, 160.0)); A.steps[33].camSrc = "eye"   # 34번: 흰 판 리벳 4점 IPPE 0.14px fov 25
 A.steps[32].cam = _c(-0.42, 0.96, (-120.0, 30.0, -90.0)); A.steps[32].camSrc = "eye"   # 33번: 판 윗면 점 6개 IPPE 2.18px fov 30
 A.steps[31].cam = _c(0.65, 0.87, (-30.0, 30.0, 100.0)); A.steps[31].camSrc = "eye"   # 32번: 흰 판 리벳 8점 IPPE 0.88px fov 25(32_axes fit theta 0.65 phi 0.87)
 A.steps[14].cam = _c(-0.71, 0.85, (-100.0, 60.0, 15.0)); A.steps[14].camSrc = "eye"   # 15번: 본체를 세운 자세(poseAt, x축 +90°)에서 리벳 둘·돌기 끝·왼쪽 끝 돌기·기어 축 두 끝 6점 PnP 10.7px fov 30 roll −3.2°(⚠ 롤이 거의 0 으로 풀려 세워서 그린 것이 맞음을 뒷받침, 점을 하나씩 빼면 theta −0.64~−0.79)
@@ -551,7 +569,7 @@ A.steps[12].cam = _c(-0.69, 0.90, (-70.0, 37.0, -10.0)); A.steps[12].camSrc = "e
 A.steps[10].cam = _c(-0.39, 0.83, STR5.hole("h1_1")["pos"]); A.steps[10].camSrc = "eye"   # 11번: 위 판 윗면 점 8개 앵커 3.83px fov 30(⚠ 한 평면이라 fov 불확실)
 A.meta["lift"] = {"6": 95.0, "7": 95.0, "9": 95.0, "10": 20.0, "19": 60.0, "21": 60.0, "23": 60.0}   # 6번: 기어·부시가 축 아래에서 올라오는 분해도라 화면을 띄워 바닥 아래로 안 내려가게
 # ── 다른 창고에서 만든 것은 숨긴다(hideMade): 새 창고 번호는 앞 창고 부품이 같은 원점에 겹쳐 보이지 않게
-for _n, _hide in ((4, (1, 2, 3)), (5, (1, 2, 3)), (6, (1, 2, 3, 4, 5)), (7, (1, 2, 3)), (8, (1, 2, 3, 4, 5, 6, 7)), (9, (1, 2, 3)), (10, (1, 2, 3)), (11, (1, 2, 3)), (17, tuple(range(1, 17))), (18, tuple(range(1, 17))), (19, tuple(range(1, 17))), (20, tuple(range(1, 20))), (21, tuple(range(1, 17))), (22, tuple(range(1, 17))), (23, tuple(range(1, 17))), (24, tuple(range(1, 17))), (25, tuple(range(1, 17))), (26, tuple(range(1, 26))), (27, tuple(range(1, 26))), (28, tuple(range(1, 17))), (29, tuple(range(1, 29))), (30, tuple(range(1, 26)) + (27, 28)), (31, tuple(range(1, 26)) + (27, 28)), (32, tuple(range(1, 17))), (33, tuple(range(1, 33)))):
+for _n, _hide in ((4, (1, 2, 3)), (5, (1, 2, 3)), (6, (1, 2, 3, 4, 5)), (7, (1, 2, 3)), (8, (1, 2, 3, 4, 5, 6, 7)), (9, (1, 2, 3)), (10, (1, 2, 3)), (11, (1, 2, 3)), (17, tuple(range(1, 17))), (18, tuple(range(1, 17))), (19, tuple(range(1, 17))), (20, tuple(range(1, 20))), (21, tuple(range(1, 17))), (22, tuple(range(1, 17))), (23, tuple(range(1, 17))), (24, tuple(range(1, 17))), (25, tuple(range(1, 17))), (26, tuple(range(1, 26))), (27, tuple(range(1, 26))), (28, tuple(range(1, 17))), (29, tuple(range(1, 29))), (30, tuple(range(1, 26)) + (27, 28)), (31, tuple(range(1, 26)) + (27, 28)), (32, tuple(range(1, 17))), (33, tuple(range(1, 33))), (34, tuple(range(1, 17)))):
     A.steps[_n - 1].kw["hideMade"] = {str(_i): (("고무줄 총(1~16번, 창고 1)" if _i <= 16 else "바닥 판 조립(17~19번, 창고 2)") if _n >= 17 else ("막대 조립(1~3번, 창고 1)" if _i <= 3 else "L자 조립(4~7번, 창고 2)")) for _i in _hide}
 # 30~31번(창고 3): 26번 첫째 조립(부품 0~5번)은 28번에서 창고 2 로 옮겨졌으니 창고 3 화면에서는 숨긴다 — 둘째 조립(6~11번)만 보인다(부품 하나씩 숨기기: hideMade "26:순서")
 for _n in (30, 31):
