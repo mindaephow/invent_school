@@ -223,11 +223,17 @@
 },
 "32": {
 "parts": {},
-"noPart": true
+"noPart": false
 },
 "33": {
-"parts": {},
-"noPart": true
+"parts": {
+"27프레임": 1,
+"리벳": 2,
+"3단블록": 1,
+"12볼트": 1,
+"너트": 1
+},
+"noPart": false
 },
 "34": {
 "parts": {},

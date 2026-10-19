@@ -60,7 +60,7 @@ def apply(A, name):
     for r in idx: have[r["step"]][r["idx"]] = r.get("note", "")
     cum = collections.Counter(); blocking = []; rows = {}
     _done = userdone.user_done(A.id)   # 사용자가 화면에서 직접 누른 ✓ 완료 단계(DB) — 눈으로 하는 확인(화면 확대·책과 나란히 비교·카메라)의 유일한 근거(2026-10-11: rules.json 에 Claude 가 적어서 푸는 길 삭제)
-    _last_built = max([i for i, st2 in enumerate(A.steps, 1) if st2.parts] or [0])
+    _last_built = max([i for i, st2 in enumerate(A.steps, 1) if st2.parts or st2.kw.get("moveMade") or st2.kw.get("madeNoPart")] or [0])   # 새 부품 없이 앞 번호 부품을 옮겨 합치는 번호(오토타깃 32번)도 '가장 마지막에 만든 번호'다(사용자 승인 2026-10-20)
     _evf = os.path.join(here, name + "_evidence.json"); _evid = json.load(open(_evf, encoding="utf-8")) if os.path.exists(_evf) else {}
     for k, st in enumerate(A.steps, 1):
         if not st.parts and not st.kw.get("moveMade") and not st.kw.get("madeNoPart"):   # 새 부품이 없어도 앞 번호 부품을 옮겨 합치는 번호(18번 등)는 작업 점검을 붙인다(사용자 지시 2026-10-17: "18번에 작업점검은 어디 갔어?")
