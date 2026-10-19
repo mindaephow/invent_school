@@ -446,8 +446,8 @@ if int(_osm.environ.get("AT_LAST", "99")) >= 29:
     s29.note = "[교재 29] 큰기어 가운데 구멍에 T축을 꿰고, 기어 뒤쪽에서 빨간 부시를 끼워 T축 끝을 막아요."
     _X29, _Z29 = -60.0, -95.0   # 새 작업공간(창고 4) 위치 — 숨은 몸(1~16번)·25~28번 조립과 안 겹치게 원점 ±100mm 안 한쪽
     GE29 = s29.place("큰기어", _RG26, (_X29, 25.0, _Z29))
-    TA29 = s29.attach("T축", _RT25, {"p1": (GE29, "h3")}, dir=[0, 0, 1], hover=65, horizontal=True)
-    TA29.p = np.array([_X29, 25.0, _Z29 - 9.5])   # 머리 쪽 끝 z +5.5(기어 앞면 4.5 에서 1mm = 접시 머리, 30번 책에서 기어 가운데 회색 원판이 앞면과 거의 같은 높이)·끝 z −24.5 — 기어 뒤 −Z 로 부시를 지나 20mm 가 나온다(29번 완성 그림·31번 책)
+    TA29 = s29.attach("T축", _RT25, {"p1": (GE29, "h3")}, dir=[0, 0, 1], hover=66, horizontal=True)
+    TA29.p = np.array([_X29, 25.0, _Z29 - 10.5])   # 머리 쪽 끝 z +4.5(기어 앞면과 같은 높이 — 30번 책에서 기어 가운데 회색 원판이 앞면과 거의 같은 높이, 30번 판 구멍에는 안 닿음)·끝 z −25.5 — 기어 뒤 −Z 로 부시를 지나 20mm 가 나온다(29번 완성 그림·31번 책)
     BU29 = s29.recv("부시", _RG26, [(TA29, "p1")], p=(_X29, 25.0, _Z29 - 7.25), dir=[0, 0, -1], hover=41)
     BU29.p = np.array([_X29, 25.0, _Z29 - 7.25])
 if int(_osm.environ.get("AT_LAST", "99")) >= 30:
@@ -465,7 +465,7 @@ if int(_osm.environ.get("AT_LAST", "99")) >= 30:
     for _r in RV30: _r.extra["joinOrder"] = 1
     _g29 = A.group("29번 큰기어 조립", [GE29, TA29, BU29])
     _pg30 = np.array(GE29.p, float); _tg30 = np.array(_PL30.hole("h2_2")["pos"], float) + np.array([0.0, 0.0, -8.5]); _sh30 = _tg30 - _pg30
-    _mk30 = {id(GE29): [list(np.array(GE29.world("hole", next(_h for _h in GE29.conn["holes"] if _h["id"] == _hid))["pos"], float) + _sh30) for _hid in ("h1", "h5")], id(TA29): [list(_tg30)]}   # 안내점: 기어 리벳 구멍 둘·T축은 기어 가운데에 꿰여 같이 움직이므로 기어 가운데 하나
+    _mk30 = {id(GE29): [list(np.array(GE29.world("hole", next(_h for _h in GE29.conn["holes"] if _h["id"] == _hid))["pos"], float) + _sh30) for _hid in ("h1", "h5")]}   # 안내점: 기어 리벳 구멍 둘만(T축은 29번에서 이미 기어에 꿰여 있어 책 30번에도 T축 화살표가 없다)
     s30.move_made(_g29, np.eye(3), pivot=_pg30, shift=tuple(float(_v) for _v in _sh30), dir=[0, 0, -1], hover=30, group="mm30gear", marks=_mk30)
     BO30 = s30.attach("12볼트", _RG26, {"p1": (_PL30, "h2_1")}, hover=38); BO30.extra["joinOrder"] = 3
     NU30 = s30.attach("너트", _RG26, {"p1": (GE29, "h4")}, hover=72)
