@@ -338,28 +338,41 @@
 "noPart": false
 },
 "49": {
-"parts": {},
-"noPart": true
+"parts": {
+"부시": 1
+},
+"noPart": false
 },
 "50": {
 "parts": {},
-"noPart": true
+"noPart": false
 },
 "51": {
-"parts": {},
-"noPart": true
+"parts": {
+"2단블록": 2,
+"3단블록": 1
+},
+"noPart": false
 },
 "52": {
-"parts": {},
-"noPart": true
+"parts": {
+"중간바퀴": 1,
+"축": 1,
+"37프레임": 1,
+"부시": 2
+},
+"noPart": false
 },
 "53": {
 "parts": {},
-"noPart": true
+"noPart": false
 },
 "54": {
-"parts": {},
-"noPart": true
+"parts": {
+"메인보드": 1,
+"LED센서": 1
+},
+"noPart": false
 },
 "55": {
 "parts": {},
