@@ -1,0 +1,31 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>안내</title>
+<style>
+body{margin:0;font-family:system-ui,"Malgun Gothic",sans-serif;background:#f6f5f1;color:#222;display:flex;align-items:center;justify-content:center;min-height:100vh}
+.box{background:#fff;border:1px solid #ddd;border-radius:14px;padding:32px 40px;text-align:center;max-width:560px;width:calc(100% - 32px);box-sizing:border-box}
+h1{font-size:24px;margin:0 0 12px}p{font-size:16px;line-height:1.7;margin:6px 0;color:#555}
+.menu{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:18px}
+.menu button,.back{font-size:18px;padding:14px 28px;border:1px solid #999;border-radius:10px;background:#fff;cursor:pointer}
+.menu button:hover,.back:hover{background:#f0eee8}
+.back{font-size:14px;padding:6px 14px;margin-bottom:14px}
+</style></head>
+<body><div class="box" id="box"></div>
+<script>
+// 각 주제의 내용은 나중에 여기에 채운다(주제 이름 = 주소의 t 값: 리모컨 번호코딩, 메인보드 코딩, 서보모터 코딩, 조립방법, 리모컨+메인보드 연결, 리모컨 설명, 배터리넣기).
+// 안에서 한 번 더 고르는 주제는 SUBS 에 적는다. 내용이 생기면 CONTENT 에 'HTML 글'을 넣는다(주제 또는 '고른 것 주제' 이름).
+const SUBS={'배터리넣기':['리모컨','메인보드']};
+const CONTENT={};
+const t=new URLSearchParams(location.search).get('t')||'안내';
+const box=document.getElementById('box');
+document.title=t;
+function page(title,html,back){
+  box.innerHTML=(back?'<button class="back" id="bk">← 뒤로</button>':'')+'<h1></h1>'+html;
+  box.querySelector('h1').textContent=title;
+  if(back)document.getElementById('bk').onclick=menu;
+}
+function menu(){
+  if(!SUBS[t]){page(t,CONTENT[t]||'<p>내용은 곧 추가돼요.</p>',false);return;}
+  page(t,'<p>어느 것을 볼까요?</p><div class="menu" id="m"></div>',false);
+  SUBS[t].forEach(s=>{const b=document.createElement('button');b.textContent=s;b.onclick=()=>page(s+' '+t,CONTENT[s+' '+t]||'<p>내용은 곧 추가돼요.</p>',true);document.getElementById('m').appendChild(b);});
+}
+menu();
+</script></body></html>

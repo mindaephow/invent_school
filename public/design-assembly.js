@@ -1312,11 +1312,12 @@
     if (!viewing) box.hidden = !lessonFound && !zero;
     const jb = $('asmJoint');
     if (jb) jb.hidden = !zero;
+    document.querySelectorAll('.asm-topic').forEach((b) => { b.hidden = !zero; }); // 리모컨 번호코딩·메인보드 코딩·서보모터 코딩·조립방법 버튼도 0차시에서만(내용은 나중에 lesson-topic.html 에 채운다)
     const rb = $('asmRulesBox'); // 📖 큐보 조립 방식도 0차시에서만(사용자 지시 2026-10-20)
     if (rb) rb.hidden = !zero;
   }
   // 결합원리(사용자 지시 2026-10-20): 스냅핏 결합·프레임+리벳·프레임+블록을 3D 단면으로 보여 주는 학생용 창(joint-principle.html)을 덮개 안에 연다.
-  function openJointPrinciple() {
+  function openOverlay(src, title) { // 학생용 안내 창(덮개 + iframe + 닫기)
     if (document.getElementById('jointPrincipleOverlay')) return;
     const ov = document.createElement('div');
     ov.id = 'jointPrincipleOverlay';
@@ -1330,10 +1331,11 @@
     x.addEventListener('click', close); document.addEventListener('keydown', onKey);
     bar.appendChild(x);
     const fr = document.createElement('iframe');
-    fr.src = 'joint-principle.html'; fr.title = '결합원리';
+    fr.src = src; fr.title = title || '';
     fr.style.cssText = 'flex:1;border:0;border-radius:12px;background:#fff;width:100%;';
     ov.appendChild(bar); ov.appendChild(fr); document.body.appendChild(ov);
   }
+  function openJointPrinciple() { openOverlay('joint-principle.html', '결합원리'); }
   setInterval(syncAllPartsBtn, 1500); // 로그인이 늦게 끝나도 버튼이 맞게 나타난다
   const ALL_PARTS_ORDER = ['15프레임', '17프레임', '19프레임', '25프레임', '27프레임', '29프레임', '35프레임', '37프레임', '39프레임', '59프레임', '115프레임', '215프레임', '315프레임', '515프레임', '713프레임', '90도 프레임', '135도 프레임', '반원프레임', '2단블록', '3단블록', '1열브라켓', '2열브라켓', '리벳', '축', 'T축', '부시', '너트', '8볼트', '12볼트', '서보고정볼트', '작은기어', '큰기어', '육각큰기어', '작은바퀴', '중간바퀴', '데코바퀴', '눈블록', 'DC모터', '서보모터', '서보혼', '둥근서보혼', 'IR센서', 'LED센서', '터치센서', '메인보드', '스프라켓', '캐터필러', '큐보분리기'];
   const ALL_PARTS_FLIP = { '육각큰기어': [180, 0, 0] }; // 목록에서 육각이 위로 보이게 뒤집어 놓을 부품(사용자 지시 2026-10-03)
@@ -1429,6 +1431,7 @@
     $('asmClose').addEventListener('click', close);
     if ($('asmAllParts')) $('asmAllParts').addEventListener('click', openAllParts);
     if ($('asmJoint')) $('asmJoint').addEventListener('click', openJointPrinciple);
+    document.querySelectorAll('.asm-topic').forEach((b) => b.addEventListener('click', () => openOverlay('lesson-topic.html?t=' + encodeURIComponent(b.dataset.asmTopic), b.dataset.asmTopic)));
     const mm2 = $('asmMarkMove2');
     const toggleMark = () => { const on = mm2.dataset.on !== '1'; mm2.dataset.on = on ? '1' : '0'; mm2.style.background = on ? '#f97316' : ''; mm2.style.color = on ? '#fff' : ''; mm2.textContent = on ? '📍 끝내기' : '📍 표시하기'; bridge().markMove(on); notice(on ? '표시 모드를 켰어요. 화면의 부품을 누르면 누른 자리에 주황 표시가 생기고, 다시 누르면 지워져요. 끝나면 [끝내기]를 누르세요.' : '표시 모드를 껐어요. 표시한 곳을 사진으로 남기려면 [수정스샷]을 누르세요.'); };
     // 📸 수정스샷: 화면+번호+이동 목록을 한 장의 그림으로 만들어 클립보드에 복사하고 PNG로 내려받는다(번호 = 옮긴 순서)
