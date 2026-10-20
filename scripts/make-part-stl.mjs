@@ -7,6 +7,7 @@ import { blockTriangles } from '../app/lib/cubo-block-mesh.js'
 import { bracketTriangles } from '../app/lib/cubo-bracket-mesh.js'
 import { trianglesToStl } from '../app/lib/cubo-mesh-kit.js'
 import { arcFrameTriangles } from '../app/lib/cubo-arc-frame-mesh.js'
+import { bentFrameTriangles } from '../app/lib/cubo-bent-frame-mesh.js'
 import { servoHornTriangles, roundHornTriangles } from '../app/lib/cubo-horn-mesh.js'
 import { boltTriangles, nutTriangles, servoBoltTriangles } from '../app/lib/cubo-bolt-mesh.js'
 
@@ -34,6 +35,14 @@ if (kind === 'arc') { // 반원프레임(구멍 9개 고정):  node scripts/make
   const s = trianglesToStl(t)
   fs.writeFileSync(out, s)
   console.log(`arc 9: 삼각형 ${t.length / 9}개, ${(s.length / 1024).toFixed(0)}KB → ${out}`)
+  process.exit(0)
+}
+if (kind === 'bent') { // 135도 프레임(구멍 9개 고정):  node scripts/make-part-stl.mjs bent 9 <저장할 파일.stl>
+  if (count !== 9 || !out) { console.error('사용: node scripts/make-part-stl.mjs bent 9 <저장할 파일.stl>'); process.exit(1) }
+  const t = bentFrameTriangles()
+  const s = trianglesToStl(t)
+  fs.writeFileSync(out, s)
+  console.log(`bent 9: 삼각형 ${t.length / 9}개, ${(s.length / 1024).toFixed(0)}KB → ${out}`)
   process.exit(0)
 }
 if (!['frame', 'block', 'bracket'].includes(kind) || !Number.isInteger(count) || count < 1 || count > 30 || (kind === 'bracket' && count > 2) || !out) {
