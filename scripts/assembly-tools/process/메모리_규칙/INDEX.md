@@ -117,3 +117,6 @@
 - [검증은 책 비교 → 다음 책 비교 먼저](feedback_verify_by_next_book_first.md) — 도구 목록 설명 말고 어느 책과 무엇이 같은지부터, 안 맞을 때만 규칙 점검(오토타깃 19번)
 - [카메라 돌려 직접 확인, 핑계 금지](feedback_check_all_angles_no_excuses.md) — 끝내기 전 4방향 스샷 확인(상시 허락), 되묻지 말고, 핑계는 스샷 증거로; 떠 있는 리벳=seated(오토타깃 18·19번)
 - [메모리→저장소 동기화](feedback_sync_memory_rules_to_repo.md) — 조립도 메모리를 고치면 sync_memory_rules.py 로 저장소 사본 갱신(외부 PC 용, 2026-10-19)
+- [T축 헤드 2mm·6방향](feedback_tshaft_head_2mm_six_views.md) — T축은 헤드 2mm만 남기고 끝까지 끼움(44·47번 지적), 끝내기 전 6방향 비교, move hover=0은 60으로 뜸
+- [번호마다 조사·6방향·다음 번호 비교](feedback_survey_every_number_six_views_next_compare.md) — 끝낼 때 앞뒤좌우위아래 확인+다음 번호 같은 부분 비교를 track.py 로 기록
+- [조립 편집·색칠 도구](project_assembly_edit_and_paint.md) — 표시 옮기기/수정스샷(관리자), paint 도형, DC모터 색칠 완료 내용

@@ -1,0 +1,15 @@
+---
+name: feedback-tshaft-head-2mm-six-views
+description: T축은 헤드만 2mm 남기고 끝까지 끼운 모양이 제자리(항상); 번호 끝내기 전 앞뒤좌우위아래 6방향으로 돌려 책과 비교
+metadata:
+  node_type: memory
+  type: feedback
+  originSessionId: ecc3b44f-861f-4475-ab4b-28d20bbcba56
+  modified: 2026-10-19T18:59:31.390Z
+---
+
+T축(접시 머리)은 결합된 모양에서 헤드만 반대편 면 밖으로 2mm 남기고 끝까지 들어가 있어야 한다. 오토타깃 44·47번에서 헤드 7mm 노출·면에 딱 붙임으로 둬서 "끼우다 말았다"고 지적받았다(2026-10-20). 이전 드롭체커 규칙은 1mm — 사용자가 그때그때 말한 값을 따른다.
+
+**Why:** 사용자는 6방향(앞·뒤·좌·우·위·아래)으로 돌려 보며 책과 비교하라고 반복해서 지시했다. 한 시점만 보면 막대가 판 위에 떠 있는 것·겹침·부시/기어 위치를 놓친다.
+
+**How to apply:** 번호를 끝내기 전 `bridge.snapshot` 으로 6방향 이미지를 만들어(overlay 로 띄워 스크린샷) 보고, T축 끝·바닥 접촉·겹침을 센 값으로 확인. 뷰어 `move_made` 의 `hover=0` 은 "없음"이 아니라 기본 띄움(60)이다 — 안 띄우려면 0.5. 관련: [[feedback-check-all-angles-no-excuses]]
