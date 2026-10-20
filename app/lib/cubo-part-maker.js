@@ -6,6 +6,8 @@
 //  - 판 가장자리 둘레에도 폭 1mm·높이 1mm 테두리가 위·아래 면에 있다(모델 모서리 점 (±25,±5)·(±24,±4) 로 확인)
 // 이 값으로 만든 15프레임(cubo-frame-mesh.js)의 높이별·반지름별 점 구조·전체 크기가 등록된 모델과 같고,
 // 삼각형 2,280개·STL 111KB 로 등록된 15프레임(2,102개·105KB)과 비슷한 크기다. 구멍 테두리 바깥 반지름만 닿는 곳의 면 깨짐을 피하려 3.99 로 쓴다.
+import { RIVET_STD as RV } from './cubo-rivet-mesh.js'
+
 export const CUBO_FRAME_STD = {
   pitch: 10,        // 구멍 간격
   margin: 5,        // 끝에서 첫 구멍 중심까지 = 가장자리 여백
@@ -26,7 +28,11 @@ export const CUBO_FRAME_STD = {
 export const CUBO_BLOCK_STD = {
   height: 10, width: 10, pitch: 10,
   holeEntryR: 3.5, holeEntryDepth: 1, holeNeckR: 2.75,
-  peg: { len: 5, collarR: 3.8, collarLen: 1, shaftR: 3.0, shaftEnd: 4.5, tipR: 2.5, slit: 1.2 },
+  // 돌기(2026-10-20): 블록은 걸리는 방식이 아니라 그냥 끼우는 방식이다. 몸통이 프레임에 딱 붙고 돌기 끝이 프레임 반대쪽 면과 같은 높이가 되도록(길이 5 = 프레임 두께),
+  // 밑동 1mm 는 구멍 테두리 안쪽(반지름 3.5)에 들어가게 반지름 3.4(예전 3.8 은 테두리에 걸려 끝까지 안 들어갔다). 몸통 반지름 2.9(목 2.75 보다 0.15 큼)는 십자 홈(1.2)이 살짝 눌렸다가 끼워진다. 끝 0.5mm 는 모서리를 둥글린 끝(반지름 2.9→2.4, 잘 들어가게 둥글다)이고 화살처럼 걸리는 머리는 없다.
+  peg: { len: 5, collarR: 3.4, collarLen: 1, shaftR: 2.9, shaftEnd: 4.5, tipR: 2.4, slit: 1.2 },
+  // 구멍 가운데 방(2026-10-20): 위·아래에서 들어온 리벳 머리가 목을 지나 벌어지는 자리. 방 반지름 = 입구 반지름, 높이 = 몸통 높이 − 8(2단 1, 3단 2).
+  chamberR: 3.5,
 }
 
 export const PART_STANDARD_TEXT = `# 큐보 부품 만들기 기본 규격 (프레임·블록·브라켓)
@@ -53,9 +59,20 @@ export const PART_STANDARD_TEXT = `# 큐보 부품 만들기 기본 규격 (프�
 | 몸통 | 길이 10×칸 수, 높이 ${CUBO_BLOCK_STD.height}, 폭 ${CUBO_BLOCK_STD.width} (돌기까지 합치면 폭 20, 길이 +10) |
 | 구멍 | 위아래로 뚫림. 프레임 구멍과 같은 구조(입구 ${CUBO_BLOCK_STD.holeEntryR}·깊이 ${CUBO_BLOCK_STD.holeEntryDepth}, 가장 좁은 곳 ${CUBO_BLOCK_STD.holeNeckR}). 칸마다 1개 |
 | 돌기 개수·위치 | 구멍 칸마다 앞뒤(±z) 면에 1개씩 + 양 끝(±x)에 1개씩. 높이는 몸통 가운데(y=5) |
-| 돌기 모양(스냅핏) | 길이 ${CUBO_BLOCK_STD.peg.len}. 밑동 ${CUBO_BLOCK_STD.peg.collarLen}mm 는 반지름 ${CUBO_BLOCK_STD.peg.collarR}, 몸통 반지름 ${CUBO_BLOCK_STD.peg.shaftR}(${CUBO_BLOCK_STD.peg.shaftEnd}mm 지점까지), 끝 0.5mm 는 반지름 ${CUBO_BLOCK_STD.peg.tipR} 로 가늘어짐 |
+| 돌기 모양(끼우기) | 길이 ${CUBO_BLOCK_STD.peg.len}. 밑동 ${CUBO_BLOCK_STD.peg.collarLen}mm 는 반지름 ${CUBO_BLOCK_STD.peg.collarR}, 몸통 반지름 ${CUBO_BLOCK_STD.peg.shaftR}(${CUBO_BLOCK_STD.peg.shaftEnd}mm 지점까지), 끝 0.5mm 는 반지름 ${CUBO_BLOCK_STD.peg.tipR} 로 가늘어짐 |
 | 십자 홈 | 돌기 중심을 가로지르는 십자, 폭 ${CUBO_BLOCK_STD.peg.slit}, 돌기 길이 전체. 눌렸다가 펴져서 구멍에 꽉 끼게 하는 부분 |
-구멍에 끼워지는 것은 스냅핏 리벳(돌기 반지름 3.2)과 블록 돌기뿐이고, 돌기에 홈이 있어도 된다.
+구멍에 끼워지는 것은 스냅핏 리벳(머리 반지름 ${RV.headR})과 블록 돌기뿐이고, 돌기에 홈이 있어도 된다.
+
+## 리벳 (스냅핏 리벳 — 프레임 두 장을 맞대어 결합) (2026-10-20, 새 리벳)
+**결합 방식:** 프레임 두 장을 면끼리 맞대고(마주 본 구멍 테두리끼리 닿는다), 리벳 가운데가 두 프레임이 맞닿는 면에 놓인다. 리벳 한쪽 끝이 프레임 한 장(두께 5)에 들어가고, 전체 길이 ${2 * RV.pegEnd} = 프레임 두 장 두께다(프레임 사이가 뜨면 안 된다).
+| 부분 | 값 | 프레임 구멍과의 관계 |
+|---|---|---|
+| 플랜지(가운데) | 반지름 ${RV.collarR}, 두께 ${2 * RV.collarHalf} | 마주 본 테두리 안쪽(반지름 ${CUBO_FRAME_STD.rimInnerR}, 높이 1씩)에 들어감, 여유 ${+(CUBO_FRAME_STD.rimInnerR - RV.collarR).toFixed(2)} |
+| 몸통 | 반지름 ${RV.shaftR}, 플랜지에서 판 바깥 면까지 길이 ${RV.shaftTo - RV.collarHalf} | 목(반지름 ${CUBO_FRAME_STD.boreR})에 여유 ${+(CUBO_FRAME_STD.boreR - RV.shaftR).toFixed(2)}로 미끄러져 들어감 |
+| 머리 | 반지름 ${RV.headR}, 길이 ${RV.pegEnd - RV.shaftTo}(화살촉 모양: 뒷면 경사 ${RV.backRamp} 로 올라갔다가 앞쪽 ${+(RV.pegEnd - RV.shaftTo - RV.backRamp).toFixed(1)} 동안 ${RV.headR}→${RV.tipR} 로 가늘어짐, 원통 부분 없음) | 목보다 ${+(RV.headR - CUBO_FRAME_STD.boreR).toFixed(2)} 커서 눌렸다가 목을 지나 아랫 입구(반지름 ${CUBO_FRAME_STD.rimInnerR})에서 퍼짐(여유 ${+(CUBO_FRAME_STD.rimInnerR - RV.headR).toFixed(2)}). 뒷면 경사가 판 바깥 면에 걸리되 힘을 주면 눌려서 빠짐(분리 가능) |
+| 십자 홈 | 폭 ${RV.slit}, 한쪽 끝 전체 길이(플랜지 윗면까지) | 머리가 목을 지날 때 눌리게 하는 부분 |
+들어가는 순서: 입구(반지름 ${CUBO_FRAME_STD.rimInnerR}, 깊이 1) → 목(반지름 ${CUBO_FRAME_STD.boreR}, 길이 3) → 아랫 입구. 머리 끝은 바깥 테두리 윗면과 같은 높이다. 조립도에서는 리벳 가운데가 두 프레임의 맞닿는 면에 오고(프레임 가운데에서 2.5), 꽂히기 전에는 결합 전 모습(hover)으로 보여 준다.
+치수·유격은 cubo-rivet-mesh.js 의 RIVET_STD 에서 바꾼다(너무 꽉 끼면 머리·몸통 반지름을 줄인다). 만들기: node scripts/make-part-stl.mjs rivet 1 파일.stl (삼각형 684개).
 
 ## 브라켓 (ㄴ자, 1열·2열)
 브라켓은 **프레임과 같은 판 두 장**(두께 5, 구멍 구조·테두리·간격 모두 프레임 규격)을 ㄴ자로 붙인 것이다.
@@ -77,7 +94,7 @@ export const PART_STANDARD_TEXT = `# 큐보 부품 만들기 기본 규격 (프�
 
 ## 부품 원칙 (모든 부품 공통, 새 모양 포함)
 큐보 로봇은 부품끼리 블록·리벳에 끼워서 조립한다. 그러므로:
-1. 끼우는 곳(구멍·돌기)은 어떤 부품이든 위 규격 그대로다. 구멍은 입구 반지름 3.5(깊이 1)에서 가장 좁은 곳 2.75, 돌기는 스냅핏(반지름 3.0, 십자 홈 1.2), 리벳(반지름 3.2)이 걸려야 한다. 위치는 10mm 격자, 간격 10. 판 두께 3, 테두리 높이 1.
+1. 끼우는 곳(구멍·돌기)은 어떤 부품이든 위 규격 그대로다. 구멍은 입구 반지름 3.5(깊이 1)에서 가장 좁은 곳 2.75, 돌기는 스냅핏(반지름 3.0, 십자 홈 1.2), 리벳(머리 반지름 3.1, 십자 홈 1.2)이 걸려야 한다. 위치는 10mm 격자, 간격 10. 판 두께 3, 테두리 높이 1.
 2. 그 밖의 몸통 모양(기어 이빨, T자, 눈 모양 등)은 자유롭게 설계한다. 단 구멍·돌기를 막거나 간섭하면 안 된다.
 3. 만든 뒤 compute_attach 로 기존 블록·리벳과 실제로 끼워지는지 확인하고, 구멍 수·위치·면 방향을 직접 검사한다(겹침 없음 ≠ 정답).
 4. 연결점(돌기·구멍 좌표)을 기록한다.

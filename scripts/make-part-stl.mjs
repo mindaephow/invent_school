@@ -8,10 +8,13 @@ import { bracketTriangles } from '../app/lib/cubo-bracket-mesh.js'
 import { trianglesToStl } from '../app/lib/cubo-mesh-kit.js'
 import { arcFrameTriangles } from '../app/lib/cubo-arc-frame-mesh.js'
 import { bentFrameTriangles } from '../app/lib/cubo-bent-frame-mesh.js'
+import { rivetTriangles } from '../app/lib/cubo-rivet-mesh.js'
+import { addPeg } from '../app/lib/cubo-block-mesh.js'
+import { makeKit } from '../app/lib/cubo-mesh-kit.js'
 import { servoHornTriangles, roundHornTriangles } from '../app/lib/cubo-horn-mesh.js'
 import { boltTriangles, nutTriangles, servoBoltTriangles } from '../app/lib/cubo-bolt-mesh.js'
 
-const [kind, countArg, out] = process.argv.slice(2)
+const [kind, countArg, out, heightArg, entryArg, neckArg, chamberArg] = process.argv.slice(2) // block 은 마지막에 몸통 높이(기본 10, 2단블록은 9)를 줄 수 있다
 const count = Number(countArg)
 if (kind === 'bolt' || kind === 'nut' || kind === 'servobolt') { // 볼트(8·12)·너트·서보고정볼트: node scripts/make-part-stl.mjs bolt 8 <파일> / nut 1 <파일> / servobolt 1 <파일>
   if (!out || (kind === 'bolt' && count !== 8 && count !== 12)) { console.error('사용: node scripts/make-part-stl.mjs <bolt 8|12 | nut 1 | servobolt 1> <저장할 파일.stl>'); process.exit(1) }
@@ -37,6 +40,23 @@ if (kind === 'arc') { // 반원프레임(구멍 9개 고정):  node scripts/make
   console.log(`arc 9: 삼각형 ${t.length / 9}개, ${(s.length / 1024).toFixed(0)}KB → ${out}`)
   process.exit(0)
 }
+if (kind === 'peg') { // 규격 돌기 하나(다른 부품의 돌기를 바꿔 끼울 때 쓴다): 밑동이 원점, 방향 +z, 홈은 x·y 축.  node scripts/make-part-stl.mjs peg 1 <저장할 파일.json>
+  if (!out) { console.error('사용: node scripts/make-part-stl.mjs peg 1 <저장할 파일.json>'); process.exit(1) }
+  const kit = makeKit(20)
+  addPeg(kit, [0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1])
+  const t = kit.result()
+  fs.writeFileSync(out, JSON.stringify(Array.from(t)))
+  console.log(`peg: 삼각형 ${t.length / 9}개 → ${out}`)
+  process.exit(0)
+}
+if (kind === 'rivet') { // 스냅핏 리벳(전체 길이 10, 프레임 두 장용):  node scripts/make-part-stl.mjs rivet 1 <저장할 파일.stl>
+  if (!out) { console.error('사용: node scripts/make-part-stl.mjs rivet 1 <저장할 파일.stl>'); process.exit(1) }
+  const t = rivetTriangles()
+  const s = trianglesToStl(t)
+  fs.writeFileSync(out, s)
+  console.log(`rivet: 삼각형 ${t.length / 9}개, ${(s.length / 1024).toFixed(0)}KB → ${out}`)
+  process.exit(0)
+}
 if (kind === 'bent') { // 135도 프레임(구멍 9개 고정):  node scripts/make-part-stl.mjs bent 9 <저장할 파일.stl>
   if (count !== 9 || !out) { console.error('사용: node scripts/make-part-stl.mjs bent 9 <저장할 파일.stl>'); process.exit(1) }
   const t = bentFrameTriangles()
@@ -49,7 +69,7 @@ if (!['frame', 'block', 'bracket'].includes(kind) || !Number.isInteger(count) ||
   console.error('사용: node scripts/make-part-stl.mjs <frame|block|bracket> <개수(프레임 구멍 수·블록 칸 수 1~30, 브라켓 열 수 1~2)> <저장할 파일.stl>')
   process.exit(1)
 }
-const tris = kind === 'block' ? blockTriangles(count) : kind === 'bracket' ? bracketTriangles(count) : frameTriangles(count)
+const tris = kind === 'block' ? blockTriangles(count, 20, heightArg ? Number(heightArg) : undefined, entryArg ? { entryR: Number(entryArg), neckR: Number(neckArg), chamberR: Number(chamberArg) } : {}) : kind === 'bracket' ? bracketTriangles(count) : frameTriangles(count)
 const stl = trianglesToStl(tris)
 fs.writeFileSync(out, stl)
 console.log(`${kind} ${count}칸: 삼각형 ${tris.length / 9}개, ${(stl.length / 1024).toFixed(0)}KB → ${out}`)

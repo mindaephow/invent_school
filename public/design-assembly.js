@@ -1301,15 +1301,38 @@
   // ── 큐보 부품 전체 리스트(사용자 지시 2026-10-03): 등록된 큐보 부품 전부를 한 화면에 펼쳐 둔다. 조립도 엔진을 그대로 써서(닫기·부품 창·번호·🟢 연결점) 단계 하나짜리 가짜 조립도로 연다.
   let catAny = null;
   let lessonFound = false;
+  let lessonSession = -1; // 지금 고른 차시 번호(0차시 = 0). 부품 전체 리스트·결합원리 버튼은 0차시에서만 보인다(사용자 지시 2026-10-20)
   let connAutoOn = false; // 조립도를 열면서 연결점을 자동으로 켰는지(닫을 때 되돌리기 위해)
   // "큐보 부품 전체 리스트" 버튼은 큐보를 고른 관리자에게만 보인다(사용자 지시 2026-10-03). 조립도가 없는 차시에서도 열 수 있어야 해서 상자도 같이 맞춘다.
   function syncAllPartsBtn() {
     const box = $('assemblyBox'), btn = $('asmAllParts');
     if (!box || !btn) return;
-    const admin = !!(window.__ivsIsAdmin && window.__ivsIsAdmin());
-    const show = !!(catAny && catAny.name === '큐보' && admin);
-    btn.hidden = !show;
-    if (!viewing) box.hidden = !lessonFound && !show;
+    const zero = !!(catAny && catAny.name === '큐보' && lessonSession === 0); // 큐보 0차시(준비, 부품 알아보기)에서만, 학생도 본다
+    btn.hidden = !zero;
+    if (!viewing) box.hidden = !lessonFound && !zero;
+    const jb = $('asmJoint');
+    if (jb) jb.hidden = !zero;
+    const rb = $('asmRulesBox'); // 📖 큐보 조립 방식도 0차시에서만(사용자 지시 2026-10-20)
+    if (rb) rb.hidden = !zero;
+  }
+  // 결합원리(사용자 지시 2026-10-20): 스냅핏 결합·프레임+리벳·프레임+블록을 3D 단면으로 보여 주는 학생용 창(joint-principle.html)을 덮개 안에 연다.
+  function openJointPrinciple() {
+    if (document.getElementById('jointPrincipleOverlay')) return;
+    const ov = document.createElement('div');
+    ov.id = 'jointPrincipleOverlay';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);display:flex;flex-direction:column;padding:16px;';
+    const bar = document.createElement('div');
+    bar.style.cssText = 'display:flex;justify-content:flex-end;margin:0 0 8px;';
+    const x = document.createElement('button');
+    x.type = 'button'; x.textContent = '닫기 ✕'; x.style.cssText = 'padding:8px 16px;font-size:15px;border-radius:8px;border:0;cursor:pointer;';
+    const onKey = (e) => { if (e.key === 'Escape') close(); };
+    const close = () => { ov.remove(); document.removeEventListener('keydown', onKey); };
+    x.addEventListener('click', close); document.addEventListener('keydown', onKey);
+    bar.appendChild(x);
+    const fr = document.createElement('iframe');
+    fr.src = 'joint-principle.html'; fr.title = '결합원리';
+    fr.style.cssText = 'flex:1;border:0;border-radius:12px;background:#fff;width:100%;';
+    ov.appendChild(bar); ov.appendChild(fr); document.body.appendChild(ov);
   }
   setInterval(syncAllPartsBtn, 1500); // 로그인이 늦게 끝나도 버튼이 맞게 나타난다
   const ALL_PARTS_ORDER = ['15프레임', '17프레임', '19프레임', '25프레임', '27프레임', '29프레임', '35프레임', '37프레임', '39프레임', '59프레임', '115프레임', '215프레임', '315프레임', '515프레임', '713프레임', '90도 프레임', '135도 프레임', '반원프레임', '2단블록', '3단블록', '1열브라켓', '2열브라켓', '리벳', '축', 'T축', '부시', '너트', '8볼트', '12볼트', '서보고정볼트', '작은기어', '큰기어', '육각큰기어', '작은바퀴', '중간바퀴', '데코바퀴', '눈블록', 'DC모터', '서보모터', '서보혼', '둥근서보혼', 'IR센서', 'LED센서', '터치센서', '메인보드', '스프라켓', '캐터필러', '큐보분리기'];
@@ -1405,6 +1428,7 @@
     if (!$('asmClose')) return;
     $('asmClose').addEventListener('click', close);
     if ($('asmAllParts')) $('asmAllParts').addEventListener('click', openAllParts);
+    if ($('asmJoint')) $('asmJoint').addEventListener('click', openJointPrinciple);
     const mm2 = $('asmMarkMove2');
     const toggleMark = () => { const on = mm2.dataset.on !== '1'; mm2.dataset.on = on ? '1' : '0'; mm2.style.background = on ? '#f97316' : ''; mm2.style.color = on ? '#fff' : ''; mm2.textContent = on ? '📍 끝내기' : '📍 표시하기'; bridge().markMove(on); notice(on ? '표시 모드를 켰어요. 화면의 부품을 누르면 누른 자리에 주황 표시가 생기고, 다시 누르면 지워져요. 끝나면 [끝내기]를 누르세요.' : '표시 모드를 껐어요. 표시한 곳을 사진으로 남기려면 [수정스샷]을 누르세요.'); };
     // 📸 수정스샷: 화면+번호+이동 목록을 한 장의 그림으로 만들어 클립보드에 복사하고 PNG로 내려받는다(번호 = 옮긴 순서)
@@ -1558,7 +1582,7 @@
 
   // 차시 카드에서 카테고리·권·차시를 바꿀 때마다 design.html이 알려준다 — 맞는 조립 데이터가 있을 때만 버튼을 보여준다.
   window.__ivsAssembly = {
-    onLessonChange(cat, volume, chapterTitle) {
+    onLessonChange(cat, volume, chapterTitle, session) {
       const box = $('assemblyBox');
       if (!box) return;
       const title = String(chapterTitle || '').trim();
@@ -1568,6 +1592,7 @@
       window.__asmQtyOverride = (found && found.qtyOverride) || null; // 조립도 쪽 부품 개수가 책과 다를 때 {부품 이름: 개수}(design.html 의 필요 부품·사용 부품이 이 개수를 기준으로 하고 책 개수는 괄호로만 알린다)
       catId = found ? cat.id : null;
       catAny = cat;
+      lessonSession = Number(session);
       lessonFound = !!found;
       syncAllPartsBtn();
       ['asmOrderHead', 'asmOrderList', 'asmSteps'].forEach((id) => { if ($(id)) $(id).style.display = found ? '' : 'none'; });
