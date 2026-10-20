@@ -1,0 +1,28 @@
+{
+ "global": {
+  "X": [
+   55.0,
+   -47.1
+  ],
+  "Y": [
+   -6.9,
+   -55.0
+  ],
+  "Z": [
+   55.0,
+   23.5
+  ]
+ },
+ "fit": {
+  "from": "03_P.json",
+  "err_px": 0.62,
+  "points": 91,
+  "theta": -0.82,
+  "phi": 0.9,
+  "cols": "+X",
+  "rows": "+Z",
+  "fov": 28,
+  "solver": "holefit 칸1~4 점 18 + 링↔돌기 12 → pnp.fit(fov 28)"
+ },
+ "no_rotate": true
+}

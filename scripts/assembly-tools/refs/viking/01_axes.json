@@ -1,0 +1,33 @@
+{
+ "global": {
+  "X": [
+   65.2,
+   -25.4
+  ],
+  "Y": [
+   -15.0,
+   -68.4
+  ],
+  "Z": [
+   50.0,
+   49.0
+  ]
+ },
+ "fit": {
+  "from": "01_P.json",
+  "err_px": 3.69,
+  "points": 6,
+  "theta": -0.32,
+  "phi": 1.04,
+  "cols": "+X",
+  "rows": "+Z",
+  "fov": 14,
+  "solver": "_freepnp(d=40, measure_part 실측 3D)"
+ },
+ "no_rotate": true,
+ "no_lines": true,
+ "origin_cell": [
+  1,
+  1
+ ]
+}

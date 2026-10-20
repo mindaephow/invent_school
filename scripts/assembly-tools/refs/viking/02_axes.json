@@ -1,0 +1,28 @@
+{
+ "global": {
+  "X": [
+   55.0,
+   -29.3
+  ],
+  "Y": [
+   -5.0,
+   -55.0
+  ],
+  "Z": [
+   55.0,
+   47.1
+  ]
+ },
+ "fit": {
+  "from": "02_P.json",
+  "err_px": 0.0,
+  "points": 91,
+  "theta": -0.57,
+  "phi": 0.85,
+  "cols": "+X",
+  "rows": "+Z",
+  "fov": 30,
+  "solver": "infer_grid(앵커 42·블록 영역 제외)→axes_fit 91점"
+ },
+ "no_rotate": true
+}

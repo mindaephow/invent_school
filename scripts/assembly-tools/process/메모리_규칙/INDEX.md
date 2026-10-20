@@ -120,3 +120,4 @@
 - [T축 헤드 2mm·6방향](feedback_tshaft_head_2mm_six_views.md) — T축은 헤드 2mm만 남기고 끝까지 끼움(44·47번 지적), 끝내기 전 6방향 비교, move hover=0은 60으로 뜸
 - [번호마다 조사·6방향·다음 번호 비교](feedback_survey_every_number_six_views_next_compare.md) — 끝낼 때 앞뒤좌우위아래 확인+다음 번호 같은 부분 비교를 track.py 로 기록
 - [조립 편집·색칠 도구](project_assembly_edit_and_paint.md) — 표시 옮기기/수정스샷(관리자), paint 도형, DC모터 색칠 완료 내용
+- [바이킹 조립도 진행](project_viking_status.md) — 1~9번 완료·10번부터, 인계는 저장소 진행기록_viking.md 맨 위 "★ 다음 세션 인계"

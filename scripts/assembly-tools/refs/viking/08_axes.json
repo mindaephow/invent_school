@@ -1,0 +1,28 @@
+{
+ "global": {
+  "X": [
+   55.0,
+   36.4
+  ],
+  "Y": [
+   -10.6,
+   -55.0
+  ],
+  "Z": [
+   -55.0,
+   41.0
+  ]
+ },
+ "fit": {
+  "from": "08_P.json",
+  "err_px": 1.36,
+  "points": 15,
+  "theta": 0.97,
+  "phi": 0.8,
+  "cols": "+X",
+  "rows": "-Z",
+  "fov": 25,
+  "solver": "holefit 어두운판 15구멍 → pnp.fit fov 25(줄 방향 −Z)"
+ },
+ "no_rotate": true
+}

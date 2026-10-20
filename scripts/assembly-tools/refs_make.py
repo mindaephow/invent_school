@@ -92,6 +92,19 @@ BOOKS = {
         },
         "extra": [],
     },
+    "viking": {
+        "volume": 2,
+        "pages": {
+            81: [(0, (360, 500, 1285, 1300), "교재 81쪽 맨 앞 완성품 사진 — 앞뒤·방향(기둥 위 큰기어 둘, 앞 큰 바퀴, 왼쪽 빨간 바퀴, 오른쪽 메인보드)은 여기서 확인"), (1, (75, 1330, 705, 1888), ""), (2, (720, 1330, 1355, 1888), "")],
+            82: [(3 + i, box(*g), "") for i, g in enumerate(GRID)],
+            83: [(9 + i, box(*g), "") for i, g in enumerate(GRID)],
+            84: [(15 + i, box(*g), "") for i, g in enumerate(GRID)],
+            85: [(21 + i, box(*g), "") for i, g in enumerate(GRID)],
+            86: [(27 + i, box(*g), "") for i, g in enumerate(GRID)],
+            87: [(33, box("L", 1), ""), (34, box("R", 1), ""), (35, box("L", 2), ""), (36, box("R", 2), ""), (99, box("L", 3), "완성 — ※ 메인보드 왼쪽 / 오른쪽에 DC모터 연결")],
+        },
+        "extra": [],
+    },
     "autotarget": {
         "volume": 2,
         "pages": {
