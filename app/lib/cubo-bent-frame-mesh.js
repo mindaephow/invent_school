@@ -10,12 +10,12 @@ import { ringFace, circlePts } from './cubo-face-mesh.js'
 export { trianglesToStl }
 
 export const BENT_STD = { straightHoles: 6, slantHoles: 4, bendDeg: 45 }
-const RO = S.rimOuterR - 0.01
-const E = S.edgeWall
+// RO·E 는 호출 때마다 규격(S)을 읽는다(프린트용 시험 조각이 값을 바꿔 만들 수 있게) — 아래 두 함수 첫 줄에서 정한다
 
 // 평면 점은 (X,Y)(곧은 팔이 +X, 꺾인 팔이 -X +Y 쪽)로 만들고, 메시 좌표 (x,z) = (X,-Y) 로 옮긴다.
 // 면은 다른 프레임 생성기(15프레임·반원프레임)처럼 구멍 한 칸씩 나눠 만든다. 칸 경계(구멍 사이 중간, 모서리 구멍 칸은 두 팔의 중간)에는 윤곽선에도 같은 점을 두어 이웃 칸·벽과 모서리가 정확히 맞는다.
 export function bentGeometry() {
+  const RO = S.rimOuterR - 0.01, E = S.edgeWall
   const th = (BENT_STD.bendDeg * Math.PI) / 180, c = Math.cos(th), s = Math.sin(th)
   const e2 = [-c, s], n2 = [s, c], W = S.width / 2, P = S.pitch
   const xEnd = (BENT_STD.straightHoles - 1) * P + S.margin
@@ -57,6 +57,7 @@ export function bentGeometry() {
 }
 
 export function bentFrameTriangles(seg = 20) {
+  const RO = S.rimOuterR - 0.01, E = S.edgeWall
   const kit = makeKit(seg)
   const { quad, P } = kit
   const g = bentGeometry()

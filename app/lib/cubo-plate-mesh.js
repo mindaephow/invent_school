@@ -4,9 +4,9 @@
 //   xCells / zCells: [{ lo, hi, c }] — 칸의 시작·끝 좌표와 구멍 중심 c(구멍 없는 칸은 c=null). 판 바깥 크기는 첫·마지막 칸의 끝이다.
 import { CUBO_FRAME_STD as S } from './cubo-part-maker.js'
 
-const RO = S.rimOuterR - 0.01 // 구멍 테두리 바깥 반지름. 가장자리 테두리와 딱 닿으면(접선) 면 나누기가 깨져서 0.01 줄인다(눈에 안 보임)
 
 export function addPlate(kit, { xCells, zCells }) {
+  const RO = S.rimOuterR - 0.01 // 구멍 테두리 바깥 반지름. 가장자리 테두리와 딱 닿으면(접선) 면 나누기가 깨져서 0.01 줄인다(눈에 안 보임). 호출 때마다 읽는다(프린트용 시험 조각이 규격 값을 바꿔 만들 수 있게)
   const { quad, P } = kit
   const X0 = xCells[0].lo, X1 = xCells[xCells.length - 1].hi
   const Z0 = zCells[0].lo, Z1 = zCells[zCells.length - 1].hi
