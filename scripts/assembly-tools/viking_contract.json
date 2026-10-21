@@ -230,16 +230,25 @@
 "noPart": false
 },
 "32": {
-"parts": {},
-"noPart": true
+"parts": {
+"DC모터": 1
+},
+"noPart": false
 },
 "33": {
-"parts": {},
-"noPart": true
+"parts": {
+"축": 1,
+"부시": 1
+},
+"noPart": false
 },
 "34": {
-"parts": {},
-"noPart": true
+"parts": {
+"중간바퀴": 1,
+"작은기어": 1,
+"부시": 1
+},
+"noPart": false
 },
 "35": {
 "parts": {},
