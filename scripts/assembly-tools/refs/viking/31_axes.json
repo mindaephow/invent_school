@@ -1,0 +1,1 @@
+{"global": {"X": [42.1, -55.0], "Y": [-0.2, -55.0], "Z": [55.0, 15.1]}, "fit": {"from": "31_P.json bookcam 3D 점 18개 PnP", "err_px": 2.68, "points": 18, "theta": -1.1, "phi": 0.82, "cols": "+X", "rows": "+Y", "note": "bookcam: 몸통 윤곽 IoU 0.88 해(theta -1.14·phi 0.85)와 비교"}, "no_rotate": true}
