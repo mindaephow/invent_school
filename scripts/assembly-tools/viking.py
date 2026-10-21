@@ -311,7 +311,7 @@ for _sg, _nm in ((1, "가까운 팔(+X 끝)"), (-1, "먼 팔(−X 끝)")):
     _lr = []
     for _h in ("h9", "h7"):
         _p = np.array(_f.hole(_h)["pos"], float); _lr.append(s15.place("리벳", _Rr, (_xf + _off[0], _p[1], _p[2])))
-    for _q in _lr: _q.extra["seated"] = True; _q.extra["noGuide"] = True; _q.extra["openEnd"] = True
+    for _q in _lr: _q.extra["seated"] = True; _q.extra["noGuide"] = True; _q.extra["openEnd"] = True; _q.extra["moveGuide"] = True   # moveGuide: 16번에서 팔이 옮겨 붙을 때 책처럼 리벳 끝→블록 구멍 화살표를 그린다(안 달면 seated 라서 링만 칠하고 화살표 0개 — 2026-10-21 화면에서 확인)
     _sr = []
     for _h in ("h1", "h2"):
         _p = np.array(_f.hole(_h)["pos"], float); _sr.append(s15.place("리벳", _Rr, (_xf + _off[0], _p[1], _p[2])))
@@ -338,6 +338,12 @@ for _f16, _lr16, _sr16, _b16, _sg16 in ARMS:
     _g16 = A.group("팔(15번)", [_f16] + list(_lr16) + list(_sr16) + [_b16])
     s16.move_made(_g16, np.eye(3), pivot=(0.0, 0.0, 0.0), shift=(-60.0 * _sg16, 0.0, 0.0), dir=[_sg16, 0, 0], hover=30, group="mm16arm%d" % _sg16, marks=_mk16)
 A.steps[15].cam = (2.066, 0.913, False, None, None, None); A.steps[15].camSrc = "eye"   # 책 16번 상자 7점 PnP 3.5px(fov 28)
+# 13~16번 "2개 만들기" 둘째 벌: 새로 만들지 않고 복사해 창고 4 에 보관한다(18번 "16+17" 에서 꺼낸다). 6~9번과 같은 방법 — 16번에서 옮겨진 팔은 _base(처음 놓은 자세)가 아니라 옮긴 뒤 자세로 복사한다.
+_g1316 = [_q for _q in A.parts if _q.step.index in (13, 14, 15)]
+_bases16 = {id(_q): _q._base for _q in _g1316}
+for _q in _g1316: _q._base = None
+_g1316c = s16.copy_to_slot(Group("13~16번 한 벌", _g1316), 4, "13~16번 둘째 벌", until=18)
+for _q in _g1316: _q._base = _bases16[id(_q)]
 
 import stepchecks; stepchecks.apply(A, "viking")   # 모든 번호를 만든 뒤에 돌려야 번호 설명 끝에 작업 점검 블록이 붙는다
 
