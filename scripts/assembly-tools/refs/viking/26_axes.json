@@ -1,0 +1,1 @@
+{"global": {"X": [55.0, -9.4], "Y": [-1.7, -55.0], "Z": [31.7, 55.0]}, "fit": {"from": "26_P.json 의 3D 점 16개(세 높이: 프레임 구멍 10·링 6) PnP, fov 37", "err_px": 1.88, "points": 16, "theta": -0.25, "phi": 0.9, "cols": "+X", "rows": "+Y", "note": "점이 세 높이에 걸쳐 있어 axes_fit(평면)은 못 쓰고 pnp.fit 값을 적음. 타이어 윤곽까지 함께 푼 joint 해(theta −0.29·phi 0.83)와 4° 안에서 같다."}, "no_rotate": true}

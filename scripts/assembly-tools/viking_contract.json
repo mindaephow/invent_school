@@ -188,8 +188,13 @@
 "noPart": false
 },
 "26": {
-"parts": {},
-"noPart": true
+"parts": {
+"작은바퀴": 2,
+"T축": 2,
+"15프레임": 2,
+"부시": 2
+},
+"noPart": false
 },
 "27": {
 "parts": {},
