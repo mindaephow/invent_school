@@ -1,1 +1,1 @@
-{"global": {"X": [55.0, 24.9], "Y": [3.1, -40.8], "Z": [-31.3, 43.6]}, "fit": {"from": "15_P.json", "err_px": 3.17, "points": 4, "theta": 0.337, "phi": 0.8, "cols": "+X", "rows": "+Z", "fov": 22, "solver": "프레임 구멍 4점 PnP — 평면 모호 ⚠"}, "no_rotate": true}
+{"global": {"X": [-11.8, 38.6], "Y": [22.8, -44.4], "Z": [-55.0, -24.4]}, "fit": {"from": "15_P.json", "err_px": 3.39, "points": 4, "theta": 1.63, "phi": 0.87, "cols": "+X", "rows": "+Z", "fov": 28, "solver": "프레임 4점 PnP+법선 일치, 서 있는 팔 자세로 환산(롤 39°)"}, "no_rotate": true}

@@ -1,0 +1,1 @@
+{"global": {"X": [-34.1, 31.4], "Y": [-0.2, -55.0], "Z": [-52.1, -17.3]}, "fit": {"from": "16_P.json", "err_px": 3.52, "points": 7, "theta": 2.066, "phi": 0.913, "cols": "-X", "rows": "+Z", "fov": 28, "solver": "상자 위 15프레임 구멍 5 + 끝 블록 링 2 PnP"}, "no_rotate": true}

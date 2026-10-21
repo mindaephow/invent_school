@@ -51,6 +51,8 @@ rm -rf public/_refs_tmp/<이름>; rmdir public/_refs_tmp 2>/dev/null     # 올�
 ```
 확인: MCP `get_rows` table `ivs_assembly_refs` select `step,idx,note` filter `{"assembly_id":"cubo-2-dropchecker","step":"26"}` order_by `idx` (이 표엔 `created_at` 이 없어서 order_by 를 안 주면 오류), 화면 새로고침 후 번호의 `🖼N` 버튼 숫자. 삭제는 MCP `delete_row`(id 는 `select id` 로 먼저 읽는다) — 사용자 확인 뒤에만.
 
+**3-1. 올린 뒤에는 화면에서 다시 불러와 🖼 배지로 확인한다(사용자 지시 2026-10-21 "이미지 작업을 했으면 다시 불러와서 언제든 볼 수 있게 했어야지").** 번호 버튼 옆 🖼N 배지는 차시를 열 때 한 번만 읽는다 — DB 에 올린 직후 `차시 select 10 → 9 토글` 로 다시 불러오고 그 번호를 눌러 배지 숫자(그림 장수)가 올린 장수와 같은지 본다. 안 뜨면 올린 것이 아니다.
+
 ## 4. 데이터를 고친 뒤 화면에 다시 불러오기
 `python build.py <이름> --write` → 브라우저 `navigate` 로 설계 화면을 새로 연다 → 1번. (전체 새로고침이 안 먹는 옛 상황이 있었으면 `design-assemblies.js` 를 `fetch('/design-assemblies.js?cb='+Date.now())` 후 `(0,eval)` 하고 차시를 다른 차시로 바꿨다 돌아온다.)
 

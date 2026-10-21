@@ -121,3 +121,5 @@
 - [번호마다 조사·6방향·다음 번호 비교](feedback_survey_every_number_six_views_next_compare.md) — 끝낼 때 앞뒤좌우위아래 확인+다음 번호 같은 부분 비교를 track.py 로 기록
 - [조립 편집·색칠 도구](project_assembly_edit_and_paint.md) — 표시 옮기기/수정스샷(관리자), paint 도형, DC모터 색칠 완료 내용
 - [바이킹 조립도 진행](project_viking_status.md) — 1~9번 완료·10번부터, 인계는 저장소 진행기록_viking.md 맨 위 "★ 다음 세션 인계"
+- [올린 뒤 다시 불러와 확인](feedback_reload_after_upload.md) — 이미지 올린 뒤 🖼 배지 확인(15번 지적)
+- [좌우 부품은 각각 책으로 확인](feedback_check_arm_sides_from_book.md) — 구멍이 다 안 보이면 눕힌 게 아님, 결합은 옆일 수 있음, 팔 둘 각각 overlay(15·16번)
