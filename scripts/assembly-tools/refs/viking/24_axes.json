@@ -1,1 +1,1 @@
-{"global": {"X": [55.0, -19.8], "Y": [4.5, -55.0], "Z": [46.1, 55.0]}, "fit": {"from": "24_P.json", "err_px": 0.6, "points": 75, "theta": -0.6, "phi": 0.82, "cols": "+X", "rows": "-Y"}, "no_rotate": true}
+{"global": {"X": [55.0, -19.8], "Y": [4.5, -55.0], "Z": [46.1, 55.0]}, "fit": {"from": "24_P.json + 붙는 곳 3점 joint PnP (판 격자 29점 + 앞 팔 끝 구멍 둘·2단블록 돌기, 깊이 71 포함)", "err_px": 0.69, "points": 32, "theta": -0.48, "phi": 0.8, "cols": "+X", "rows": "-Y", "note": "axes_fit(판 평면만) 은 깊이를 몰라 theta −0.60 이라 joint PnP 값으로 바꿔 적음"}, "no_rotate": true}

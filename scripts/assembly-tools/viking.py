@@ -496,6 +496,27 @@ _mk24[id(SP20)] = [[2.0, 10.0, 32.0]]   # 작은 판은 긴 판 뒤(바닥판 �
 s24.move_made(G24, R_PAN24, pivot=(0.0, 0.0, 0.0), shift=tuple(T_PAN24), dir=[0, 0, 1], hover=71, group="mm24panel", marks=_mk24)
 A.steps[23].cam = (-0.48, 0.80, False, None, None, None); A.steps[23].camSrc = "eye"   # 판 격자 29점+붙는 곳 셋 PnP 0.69px(fov 36)
 
+# ── 25 ── 교재 85쪽 25 (읽은 것 2026-10-22 — 창고 2: 24번 결과 반대쪽(뒤, −Z)에 23번 판 조립 둘째 벌(창고 4 복사본)을 24번과 같은 방법으로 붙인다 — 번호표 "23 + 24". 둘째 판 = 첫째 판을 바닥판 가운데(x 2·z 7) 둘레로 180° 돌린 자리: (x', y', z') → 세계 (−x'−1, 24.5−z', −y'−16).
+#   붙는 곳 셋(y 10): 뒤(−Z) 팔 둘의 평평한 끝 구멍(프레임 h4, x −67.1·71.1)에 리벳 둘(새 부품 2개, 바깥 끝이 −Z)과 가운데 2단블록 뒤 돌기(x 2.0, z −21.1)가 판 맨 아래 줄 구멍에 들어간다.
+#   책 25번 카메라: 붙는 곳 셋(리벳 둘·돌기 링)과 떠 있는 판의 링 셋(y 10, 판 앞면 z −99)을 같은 평면(y 10) PnP — 오차 최소가 판 떠 있는 70~74(24번 71 과 같음)에서 1.6px(fov 38), 위에서 보는 해 theta −2.50·phi 0.80.
+s25 = SKEL[24]; s25.kw.pop("noPart", None)
+s25.note = "[교재 25] 24번 결과 반대쪽(뒤)에 23번 판 조립 둘째 벌을 같은 방법으로 붙여요 — 뒤 팔 끝 구멍 둘에 리벳을 꽂고(바깥 끝이 판 쪽), 리벳 둘과 가운데 2단블록 뒤 돌기가 판의 맨 아래 줄 구멍 셋에 들어가게 판을 세워 끼워요(막대가 위로 서요)."
+s25.kw["hideMade"] = {str(_i): "1~11번(창고 1)" for _i in range(1, 12)}
+_fr25 = sorted([_q for _q in A.parts if str(_q.n).startswith("135도") and abs(_q.p[2] + 20.5) < 1.0], key=lambda _q: _q.p[0])   # 뒤(−Z) 프레임 둘 — 왼쪽(−X)·오른쪽(+X)
+R_RV25 = np.array([[1.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, -1.0, 0.0]])   # 리벳: 바깥 끝 p2 → −Z
+RV25 = [s25._add(Part("리벳", R_RV25, (float(np.array(_f.world("hole", next(_h for _h in _f.conn["holes"] if _h["id"] == "h4"))["pos"], float)[0]), 10.0, -23.0), s25, {})) for _f in _fr25]
+for _r in RV25: _r.extra["seated"] = True; _r.extra["noGuide"] = True; _r.extra["openEnd"] = True; _r.extra["moveGuide"] = True
+R_PAN25 = np.array([[-1.0, 0.0, 0.0], [0.0, 0.0, -1.0], [0.0, -1.0, 0.0]])   # 둘째 판: x' → −X, y'(앞면) → −Z, z' → −Y
+T_PAN25 = np.array([-1.0, 24.5, -16.0]); _CP25 = np.array([0.0, 0.0, 300.0])   # 복사본은 원본 +Z 300 에 보관 중
+SH25 = T_PAN25 - R_PAN25 @ _CP25
+_cpm25 = {_q.extra["copyOf"]: _q for _q in _g2023c.parts}
+_cP20 = _cpm25["%d:%d" % (P20.step.index, P20.step.parts.index(P20))]; _cSP = _cpm25["%d:%d" % (SP20.step.index, SP20.step.parts.index(SP20))]
+G25 = A.group("20~23번 판 조립(둘째 벌)", list(_g2023c.parts))
+_mk25 = {id(_cP20): [[float(_v) for _v in (R_PAN25 @ (np.array(_cP20.hole(_hid)["pos"], float) - _CP25) + T_PAN25 + np.array([0.0, 0.0, 2.5]))] for _hid in ("h1_3", "h8_3", "h15_3")],
+         id(_cSP): [[2.0, 10.0, -18.0]]}   # 판 뒷면(합친 자리) 구멍 셋, 작은 판 구멍(뒷면 z −18)
+s25.move_made(G25, R_PAN25, pivot=(0.0, 0.0, 0.0), shift=tuple(SH25), dir=[0, 0, -1], hover=71, group="mm25panel", marks=_mk25)
+A.steps[24].cam = (-2.52, 0.80, False, None, None, None); A.steps[24].camSrc = "eye"   # 붙는 곳 셋+판 링 셋 같은 평면 PnP 1.6px(fov 38)
+
 import stepchecks; stepchecks.apply(A, "viking")   # 모든 번호를 만든 뒤에 돌려야 번호 설명 끝에 작업 점검 블록이 붙는다
 
 # ── 부품 체크(03 B, 2026-10-20) — 이 줄 앞까지가 번호별 조립 코드다(_mates_table.py 가 여기서 자른다)

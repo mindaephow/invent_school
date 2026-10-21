@@ -182,8 +182,10 @@
 "noPart": false
 },
 "25": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 2
+},
+"noPart": false
 },
 "26": {
 "parts": {},
