@@ -209,8 +209,10 @@
 "noPart": false
 },
 "29": {
-"parts": {},
-"noPart": true
+"parts": {
+"DC모터": 1
+},
+"noPart": false
 },
 "30": {
 "parts": {},

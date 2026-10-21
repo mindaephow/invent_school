@@ -46,7 +46,10 @@ export function addPlate(kit, { xCells, zCells }) {
       kit.cyl(cx, cz, RO, Y0, Y1, 1); kit.cyl(cx, cz, RO, Y4, Y5, 1)
       kit.cyl(cx, cz, S.rimInnerR, Y0, Y1, -1); kit.cyl(cx, cz, S.rimInnerR, Y4, Y5, -1)
       kit.annulus(cx, cz, S.boreR, S.rimInnerR, Y1, -1); kit.annulus(cx, cz, S.boreR, S.rimInnerR, Y4, 1)
-      kit.cyl(cx, cz, S.boreR, Y1, Y4, -1)
+      if (S.ribR) { // 프린트용(선택): 구멍 목 가운데에 얇은 고리(립) — 목은 boreR 로 넓게 두고 가운데 ribH 두께만 ribR 로 좁혀 꽂은 돌기를 잡는다. S.ribR 가 없으면 그대로.
+        const Ym = (Y1 + Y4) / 2, Ya = Ym - S.ribH / 2, Yb = Ym + S.ribH / 2
+        kit.cyl(cx, cz, S.boreR, Y1, Ya, -1); kit.annulus(cx, cz, S.ribR, S.boreR, Ya, -1); kit.cyl(cx, cz, S.ribR, Ya, Yb, -1); kit.annulus(cx, cz, S.ribR, S.boreR, Yb, 1); kit.cyl(cx, cz, S.boreR, Yb, Y4, -1)
+      } else kit.cyl(cx, cz, S.boreR, Y1, Y4, -1)
       kit.cell(cx, cz, RO, xlo, xhi, zlo, zhi, Y1, -1); kit.cell(cx, cz, RO, xlo, xhi, zlo, zhi, Y4, 1)
     }
   }
