@@ -1,0 +1,31 @@
+{
+ "global": {
+  "X": [
+   46.1,
+   -29.9
+  ],
+  "Y": [
+   0.5,
+   -55.0
+  ],
+  "Z": [
+   52.0,
+   39.6
+  ]
+ },
+ "fit": {
+  "from": "18_P.json",
+  "err_px": 1.34,
+  "points": 41,
+  "theta": -0.73,
+  "phi": 0.78,
+  "cols": "+X",
+  "rows": "-Z",
+  "roll_deg": -0.9
+ },
+ "no_rotate": true,
+ "origin_cell": [
+  8,
+  3
+ ]
+}

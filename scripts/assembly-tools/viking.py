@@ -345,6 +345,47 @@ for _q in _g1316: _q._base = None
 _g1316c = s16.copy_to_slot(Group("13~16번 한 벌", _g1316), 4, "13~16번 둘째 벌", until=18)
 for _q in _g1316: _q._base = _bases16[id(_q)]
 
+# ── 17 ── 교재 84쪽 17 (읽은 것 2026-10-21 — 창고 2: 12번에서 만든 판(515프레임+2단블록 둘+빨강 15프레임)에 16번 상자+팔 한 벌(창고 3)을 합친다 — 번호표 "12 + 16". 상자를 위쪽에 들고 팔 둘이 판 쪽으로 내려와, 팔 끝 2단블록 돌기 둘씩이 판 칸3·칸4 의 줄1·줄5 구멍에 들어간다)
+#   책 17번 카메라: 판 흰 구멍 61개(밝은 조각 중심, 호모그래피 0.55px)를 모델 구멍 좌표(칸 +X·줄 −Z·높이 2.5)에 PnP — 평균 0.39px·fov 38·roll 0.4° → theta 0.63·phi 0.73(refs/viking/anchors/17.json). 판은 180° 대칭이라 칸 +X/줄 −Z 와 칸 −X/줄 +Z 두 풀이가 같은 오차로 나오고, 12번 조립도 180° 대칭이라 12번과 같은 칸 +X 쪽을 골랐다(⚠ 판 대칭 가정).
+#   링 4개(책 격자 칸3·4 × 줄1·줄5)=팔 끝 블록 둘의 아래 돌기. 판 줄1·줄5 는 z 27·−13(40mm), 모델 블록 둘은 z 간격 38 이라 ±1mm 씩 나눠 맞춘다(평균 오차를 한쪽에 몰지 않음).
+#   자세: 16번 자세 그대로 상자는 위에 들리고(팔 긴 쪽 45° 내려옴) 팔 끝 블록 돌기가 아래를 본다 — 16번 자세를 X 축 −45°(블록 돌기 면이 아래로) 돌린 뒤 Y 축 −90°(팔이 +X 로 뻗음). 블록 돌기 법선(0,−.71,−.71)→(0,−1,0).
+s17 = SKEL[16]; s17.kw.pop("noPart", None)
+s17.note = "[교재 17] 16번에서 만든 상자와 팔 한 벌을 12번에서 만든 판 위로 가져와, 팔 끝 2단블록 돌기 둘씩이 515프레임 판 칸3·4 의 양쪽 줄 구멍에 내려가게 합쳐요(13~16번은 두 벌 만들기)."
+s17.kw["hideMade"] = {str(_i): "1~11번 몸통·문틀(창고 1)" for _i in range(1, 12)}
+_c45 = float(np.cos(np.pi / 4))
+R17 = np.array([[0.0, 0.0, -1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]]) @ np.array([[1.0, 0.0, 0.0], [0.0, _c45, _c45], [0.0, -_c45, _c45]])   # Ry(−90°)·Rx(−45°)
+_sh17 = []; _hole17 = {}
+for (_f17, _lr17, _sr17, _b17, _sg17) in ARMS:
+    _dn17 = [_pg for _pg in _b17.conn["pegs"] if _pg["id"] in (("p3", "p4") if _sg17 > 0 else ("p5", "p6"))]   # 블록 아래로 향하는 돌기 면(회전 뒤 −Y)
+    _pp17 = sorted(((R17 @ np.array(_b17.world("peg", _pg)["pos"], float), _pg["id"]) for _pg in _dn17), key=lambda _t: _t[0][0])   # 작은 x 가 칸3
+    for (_p17, _pid17), _col17 in zip(_pp17, (3, 4)):
+        _hid = "h%d_%d" % (_col17, 5 if _sg17 > 0 else 1)   # 모델 줄: z 큰 쪽(+Z 팔) = 줄5, 반대 팔 = 줄1 (책 격자 줄1·줄5 = 모델 줄5·줄1, 줄 −Z 가설)
+        _sh17.append(np.array(PL12.hole(_hid)["pos"], float) - _p17); _hole17.setdefault(id(_b17), []).append(np.array(PL12.hole(_hid)["pos"], float) + np.array([0.0, 2.5, 0.0]))
+SH17 = np.mean(_sh17, axis=0)
+G17 = A.group("상자+팔(13~16번 첫 벌)", [_q for _q in A.parts if _q.step.index in (13, 14, 15)])
+s17.move_made(G17, R17, pivot=(0.0, 0.0, 0.0), shift=tuple(float(v) for v in SH17), dir=[0, 1, 0], hover=30, group="mm17box", marks={id(_bb[3]): [[float(_v) for _v in _h] for _h in _hole17[id(_bb[3])]] for _bb in ARMS})
+A.steps[16].cam = (0.63, 0.73, False, None, None, None); A.steps[16].camSrc = "eye"   # 판 흰 구멍 61점 PnP 0.39px(fov 38)
+
+# ── 18 ── 교재 85쪽 18 (읽은 것 2026-10-21 — 창고 2: 13~16번 둘째 벌(창고 4 복사본)을 17번에서 합친 판 반대쪽(오른쪽, 칸12·13) 끝에 합친다 — 번호표 "16 + 17". 첫째 벌과 판 가운데 둘레 180° 돌린 자리)
+#   책 18번 카메라: 판 오른쪽 끝 모서리 둘·빨강 15프레임 구멍 5개·판 흰 구멍 34개(예측 6px 안, 후보 37개 중)를 모델 좌표에 PnP — 41점 1.34px(fov 42, roll −0.9°) theta −0.73·phi 0.78. 판·15프레임 앞뒤(구멍 z −13 쪽이 위)는 4가지 가설 중 흰 구멍 34개가 모두 예측과 맞는 하나(칸 +X·줄 −Z, 17번과 같음)로 골랐다.
+#   링 4개: 먼 팔 블록 (619,431)(604,446)·가까운 팔 블록 (725,497)(701,515) = 판 칸13·12 의 줄1·줄5(모델 h13_1·h12_1 / h13_5·h12_5, x 52·42, z −13·27) — 첫째 벌 칸3·4 의 판 가운데(x 2, z 7) 둘레 180° 대칭.
+#   자세·자리: 첫째 벌과 같은 자세(Ry(−90°)·Rx(−45°))에서 판 가운데 둘레 Y 180° → R18 = diag(−1,1,−1)·R17, 이동 = diag(−1,1,−1)·(SH17 − R17·(0,0,300)) + (4,0,14) (복사본은 원본에서 z +300 보관 중).
+s18 = SKEL[17]; s18.kw.pop("noPart", None)
+s18.note = "[교재 18] 16번에서 하나 더 만든 상자와 팔 한 벌을 판 반대쪽 끝으로 가져와, 팔 끝 2단블록 돌기 둘씩이 515프레임 판 칸12·13 의 양쪽 줄 구멍에 내려가게 합쳐요(17번에서 합친 한 벌과 판 가운데 둘레로 마주 보는 자리)."
+s18.kw["hideMade"] = {str(_i): "1~11번 몸통·문틀(창고 1)" for _i in range(1, 12)}
+RM18 = np.diag([-1.0, 1.0, -1.0]); C18 = np.array([4.0, 0.0, 14.0])
+R18 = RM18 @ R17
+SH18 = RM18 @ (SH17 - R17 @ np.array([0.0, 0.0, 300.0])) + C18
+_mk18 = {}
+for (_f18, _lr18, _sr18, _b18, _sg18) in ARMS:
+    _orig18 = "%d:%d" % (_b18.step.index, _b18.step.parts.index(_b18))
+    for _q18 in _g1316c.parts:
+        if _q18.extra.get("copyOf") == _orig18:
+            _mk18[id(_q18)] = [[float(_v) for _v in (RM18 @ np.array(_h, float) + C18)] for _h in _hole17[id(_b18)]]
+G18 = A.group("상자+팔(13~16번 둘째 벌)", list(_g1316c.parts))
+s18.move_made(G18, R18, pivot=(0.0, 0.0, 0.0), shift=tuple(float(v) for v in SH18), dir=[0, 1, 0], hover=50, group="mm18box", marks=_mk18)   # 책 화살표 길이(먼 팔 약 115px, 17번 카메라 환산 ≈ 17번 100px 의 1.6배) → 띄움 50
+A.steps[17].cam = (-0.73, 0.78, False, None, None, None); A.steps[17].camSrc = "eye"   # 판 모서리 2·빨강 15프레임 5·흰 구멍 34점 PnP 1.34px(fov 42)
+
 import stepchecks; stepchecks.apply(A, "viking")   # 모든 번호를 만든 뒤에 돌려야 번호 설명 끝에 작업 점검 블록이 붙는다
 
 # ── 부품 체크(03 B, 2026-10-20) — 이 줄 앞까지가 번호별 조립 코드다(_mates_table.py 가 여기서 자른다)
