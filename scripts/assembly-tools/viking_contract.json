@@ -251,8 +251,10 @@
 "noPart": false
 },
 "35": {
-"parts": {},
-"noPart": true
+"parts": {
+"메인보드": 1
+},
+"noPart": false
 },
 "36": {
 "parts": {},
