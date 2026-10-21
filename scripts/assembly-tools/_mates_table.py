@@ -13,15 +13,22 @@ def peg_world(P):
         w = P.world("peg", h); out.append((h["id"], np.array(w["pos"], float), np.array(w["dir"], float), h.get("len", 5)))
     return out
 allp = list(A.parts)
+def hidden_at_final(P):
+    """P 를 마지막으로 옮긴 번호(moveMade)에서 숨겨 둔 번호의 부품 — 그 번호 화면에 없는 부품이라 같은 좌표에 있어도 결합 후보로 세지 않는다(바이킹 17번: 새 창고 판이 몸통과 같은 좌표계라 우연히 겹침)."""
+    key = "%d:%d" % (P.step.index, P.step.parts.index(P)); last = None
+    for i, st in enumerate(A.steps, 1):
+        if key in (st.kw.get("moveMade") or {}): last = i
+    if last is None: return set()
+    return {int(k) for k in (A.steps[last - 1].kw.get("hideMade") or {}) if str(k).isdigit()}
 for N in steps:
     print("═══ %d번 ═══" % N)
     mine = [P for P in allp if P.step.index == N]
     for P in mine:
-        print(" ●", P.n, "중심", np.round(P.p, 1).tolist())
+        print(" ●", P.n, "중심", np.round(P.p, 1).tolist()); hid_ = hidden_at_final(P)
         for pid, pp, pd, pl in peg_world(P):
             best = None
             for Q in allp:
-                if Q is P: continue
+                if Q is P or Q.step.index in hid_: continue
                 for hid, hp, hd, hl in hole_world(Q):
                     rel = pp - hp; along = float(rel @ hd); lat = float(np.linalg.norm(rel - along * hd))
                     if abs(float(pd @ hd)) < 0.9: continue
@@ -31,7 +38,7 @@ for N in steps:
         for hid, hp, hd, hl in hole_world(P):
             best = None
             for Q in allp:
-                if Q is P: continue
+                if Q is P or Q.step.index in hid_: continue
                 for pid, pp, pd, pl in peg_world(Q):
                     rel = pp - hp; along = float(rel @ hd); lat = float(np.linalg.norm(rel - along * hd))
                     if abs(float(pd @ hd)) < 0.9: continue

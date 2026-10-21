@@ -114,24 +114,39 @@
 "noPart": false
 },
 "16": {
-"parts": {},
+"parts": {
+"25프레임": 2,
+"15프레임": 2,
+"3단블록": 2,
+"135도 프레임": 2,
+"리벳": 8,
+"2단블록": 2
+},
 "noPart": false
 },
 "17": {
 "parts": {},
-"noPart": true
+"noPart": false
 },
 "18": {
 "parts": {},
-"noPart": true
+"noPart": false
 },
 "19": {
-"parts": {},
-"noPart": true
+"parts": {
+"2열브라켓": 4
+},
+"noPart": false
 },
 "20": {
-"parts": {},
-"noPart": true
+"parts": {
+"315프레임": 1,
+"리벳": 2,
+"35프레임": 1,
+"8볼트": 1,
+"너트": 1
+},
+"noPart": false
 },
 "21": {
 "parts": {},
