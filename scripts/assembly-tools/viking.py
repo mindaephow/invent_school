@@ -311,10 +311,12 @@ for _sg, _nm in ((1, "가까운 팔(+X 끝)"), (-1, "먼 팔(−X 끝)")):
     _lr = []
     for _h in ("h9", "h7"):
         _p = np.array(_f.hole(_h)["pos"], float); _lr.append(s15.place("리벳", _Rr, (_xf + _off[0], _p[1], _p[2])))
-    for _q in _lr: _q.extra["seated"] = True; _q.extra["noGuide"] = True; _q.extra["openEnd"] = True; _q.extra["moveGuide"] = True   # moveGuide: 16번에서 팔이 옮겨 붙을 때 책처럼 리벳 끝→블록 구멍 화살표를 그린다(안 달면 seated 라서 링만 칠하고 화살표 0개 — 2026-10-21 화면에서 확인)
+    for _q in _lr: _q.extra["openEnd"] = True; _q.extra["moveGuide"] = True   # moveGuide: 16번에서 팔이 옮겨 붙을 때 책처럼 리벳 끝→블록 구멍 화살표를 그린다(안 달면 seated 라서 링만 칠하고 화살표 0개 — 2026-10-21 화면에서 확인)
     _sr = []
     for _h in ("h1", "h2"):
         _p = np.array(_f.hole(_h)["pos"], float); _sr.append(s15.place("리벳", _Rr, (_xf + _off[0], _p[1], _p[2])))
+    for _q in _lr + _sr:   # 사용자 지시 2026-10-21: 15번 리벳 4개는 결합 전(분리)으로 상자 쪽에서 24 띄워 화살표 — 책은 꽂힌 모양이지만 지시를 따른다(읽기 표에 적음)
+        _q.extra["hover"] = 24; _q.extra["dir"] = [-1.0 * _sg, 0, 0]; _q.extra["marks"] = [[float(_v) for _v in _q.p]]
     _h1 = np.array(_f.hole("h1")["pos"], float); _h2 = np.array(_f.hole("h2")["pos"], float)
     _xb = (_h2 - _h1) / np.linalg.norm(_h2 - _h1); _yb = np.array([-1.0 * _sg, 0.0, 0.0]); _zb = np.cross(_xb, _yb)
     _Rb = np.array([_xb, _yb, _zb]).T
@@ -403,8 +405,9 @@ BR19 = []
 for _f, _lr, _sr_, _b, _sg in ARMS:
     _cb = _cp18["%d:%d" % (_b.step.index, _b.step.parts.index(_b))]
     _up = ("p5", "p6") if _sg > 0 else ("p4", "p3")   # 위로 선 돌기: (X 작은 쪽, 큰 쪽) — 첫째 벌 기준. 둘째 벌은 180° 라 같은 이름이 (X 큰 쪽, 작은 쪽)
-    BR19.append(s19.recv("2열브라켓", R_BR19A, {"h1": (_b, _up[0]), "h3": (_b, _up[1])}, dir=[0, 1, 0], hover=40))
-    BR19.append(s19.recv("2열브라켓", R_BR19B, {"h1": (_cb, _up[0]), "h3": (_cb, _up[1])}, dir=[0, 1, 0], hover=40))
+    _hh = ("h1", "h3") if _sg > 0 else ("h2", "h4")   # 가로판 두 줄(국소 x ±5) 중 끼는 줄: 책에서 브라켓 둘은 판 가운데 줄(z 7)에 대해 거울 — 빈 구멍 줄이 안쪽(가운데 쪽)이다(2026-10-22 긴 쪽·벽·빈 구멍 줄을 확대해 다시 대조)
+    BR19.append(s19.recv("2열브라켓", R_BR19A, {_hh[0]: (_b, _up[0]), _hh[1]: (_b, _up[1])}, dir=[0, 1, 0], hover=40))
+    BR19.append(s19.recv("2열브라켓", R_BR19B, {_hh[0]: (_cb, _up[0]), _hh[1]: (_cb, _up[1])}, dir=[0, 1, 0], hover=40))
 A.steps[18].cam = (-0.39, 0.78, False, None, None, None); A.steps[18].camSrc = "eye"   # 판 구멍 37점 PnP 0.58px(fov 37)·axes_fit 75점 0.74px(roll −2.2°)
 
 # ── 20 ── 교재 85쪽 20 (읽은 것 2026-10-21 — 창고 3 새 조립(20~23번 2개 만들기): 315프레임 긴 검은 판(15칸×3줄)의 앞 줄 칸7·9 에 리벳 둘을 꽂고, 35프레임 작은 판을 가로로(긴 쪽 5칸이 판 폭 방향, 뒤로 뻗음) 얹어 끝 칸 두 구멍(줄1·줄3)이 리벳 둘에, 가운데 구멍(칸3 줄2)에 8볼트가 긴 판 칸8 뒤 줄 구멍을 지나 아래 너트로 조인다.
