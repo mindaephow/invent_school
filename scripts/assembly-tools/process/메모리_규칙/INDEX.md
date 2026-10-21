@@ -124,3 +124,4 @@
 - [올린 뒤 다시 불러와 확인](feedback_reload_after_upload.md) — 이미지 올린 뒤 🖼 배지 확인(15번 지적)
 - [좌우 부품은 각각 책으로 확인](feedback_check_arm_sides_from_book.md) — 구멍이 다 안 보이면 눕힌 게 아님, 결합은 옆일 수 있음, 팔 둘 각각 overlay(15·16번)
 - [브라켓 긴·짧은 팔 먼저](feedback_bracket_long_short_arm_first.md) — L자 부품 결합은 긴 팔·결합면을 홀라인 피치 여유로 먼저 확인, 증명 안 된 건 증거로 보내지 않음(바이킹 19번 2026-10-22)
+- [리벳은 항상 결합 전](feedback_rivets_always_separated.md) — seated 금지, 책이 꽂은 모양이어도 hover 24+화살표; 바이킹 21·22번 지적(2026-10-22)

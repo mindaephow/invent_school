@@ -429,8 +429,7 @@ s21 = SKEL[20]; s21.kw.pop("noPart", None)
 s21.note = "[교재 21] 29프레임 검은 판 둘을 한 줄로 놓고(사이 한 칸 비움) 마주 보는 끝 칸 두 줄에 리벳 넷을 꽂아 둔 뒤, 20번 조립의 작은 판이 긴 판 뒤로 나온 구멍 넷을 그 리벳에 내려 끼워요(20~23번은 두 벌 만들기)."
 s21.kw["hideMade"] = {str(_i): "1~19번(창고 1·2)" for _i in range(1, 20)}
 P29 = [s21.place("29프레임", np.eye(3), (_cx, 2.5, -20.5)) for _cx in (-53.0, 47.0)]   # 끝 칸(칸9 / 칸1) 이 x −13 / +7 — 20번 작은 판 구멍 x(−13·+7)·z(−15.5·−25.5)와 맞음
-RV21 = [s21.attach("리벳", np.eye(3), {"p1": (_pl, _hh)}, rivet=True) for _pl, _cols in ((P29[0], "h9"), (P29[1], "h1")) for _hh in (_cols + "_1", _cols + "_2")]
-for _r in RV21: _r.extra["seated"] = True; _r.extra["noGuide"] = True; _r.extra["moveGuide"] = True   # 책이 꽂아 둔 리벳(밑 링)
+RV21 = [s21.attach("리벳", np.eye(3), {"p1": (_pl, _hh)}, rivet=True, hover=24) for _pl, _cols in ((P29[0], "h9"), (P29[1], "h1")) for _hh in (_cols + "_1", _cols + "_2")]   # 사용자 지시 2026-10-22: 리벳은 결합 전(분리)으로 띄워 화살표 — 책이 꽂은 모양이어도 05 표 4번(seated 금지)
 G21 = A.group("20번 조립", [_q for _q in A.parts if _q.step.index == 20])
 _mk21 = {id(SP20): [[float(_v) for _v in (np.array(_r.world("peg", next(_x for _x in _r.conn["pegs"] if _x["id"] == "p2"))["pos"], float) + np.array([0.0, 1.5, 0.0]))] for _r in RV21]}   # 작은 판 구멍 넷 ← 리벳 위 끝
 s21.move_made(G21, np.eye(3), pivot=(0.0, 0.0, 0.0), shift=(0.0, 0.0, 0.0), dir=[0, 1, 0], hover=50, group="mm21asm", marks=_mk21)
@@ -445,7 +444,7 @@ s22.kw["hideMade"] = {str(_i): "1~19번(창고 1·2)" for _i in range(1, 20)}
 _RV22 = {}
 for _key, (_pl, _hid) in {"L2": (P20, "h14_2"), "L1": (P20, "h14_1"), "BA": (P29[1], "h6_2"), "BB": (P29[1], "h8_2"),
                           "R2": (P20, "h2_2"), "R1": (P20, "h2_1"), "RA": (P29[0], "h4_2"), "RB": (P29[0], "h2_2")}.items():
-    _r = s22.attach("리벳", np.eye(3), {"p1": (_pl, _hid)}, rivet=True); _r.extra["seated"] = True; _r.extra["noGuide"] = True; _RV22[_key] = _r
+    _r = s22.attach("리벳", np.eye(3), {"p1": (_pl, _hid)}, rivet=True, hover=24); _RV22[_key] = _r   # 결합 전(분리) — 사용자 지시 2026-10-22
 R_FR22A = np.eye(3)                       # +X 쪽 프레임(그림 왼쪽): 모서리 h1 (57,−15.5), 긴 팔 +Z, 짧은 팔 +X
 R_FR22B = np.diag([-1.0, -1.0, 1.0])      # −X 쪽 프레임(그림 오른쪽): 모서리 h1 (−63,−15.5), 긴 팔 +Z, 짧은 팔 −X
 FR22 = [s22.recv("90도 프레임", R_FR22A, {"h3": (_RV22["L2"], "p2"), "h2": (_RV22["L1"], "p2"), "h1": (_RV22["BA"], "p2"), "h5": (_RV22["BB"], "p2")}, p=(67.0, 7.5, -5.5), dir=[0, 1, 0], hover=55),
@@ -462,7 +461,7 @@ s23.kw["hideMade"] = {str(_i): "1~19번(창고 1·2)" for _i in range(1, 20)}
 _R_FLIP23 = np.diag([-1.0, -1.0, 1.0])
 G23 = A.group("20~22번 조립", [_q for _q in A.parts if _q.step.index in (20, 21, 22)])
 s23.move_made(G23, _R_FLIP23, pivot=(-3.0, 5.0, 0.0), shift=(0.0, 2.0, 0.0), dir=[0, 1, 0], hover=0, group="mm23flip")
-RV23 = s23.attach("리벳", np.eye(3), {"p1": (SP20, "h5_2")}, rivet=True); RV23.extra["seated"] = True; RV23.extra["noGuide"] = True   # 작은 판 노출 면의 구멍(x −3, z −25.5)에 꽂아 둔 모양
+RV23 = s23.attach("리벳", np.eye(3), {"p1": (SP20, "h5_2")}, rivet=True, hover=24)   # 작은 판 노출 면의 구멍(x −3, z −25.5) — 결합 전(분리, 05 표 4번)
 R_BAR23 = np.array([[0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [-1.0, 0.0, 0.0]])   # 115프레임: 국소 x → −Z (구멍 h1 이 z −15.5, h15 가 −155.5), 막대가 −Z 로 뻗음
 BAR23 = s23.recv("115프레임", R_BAR23, {"h2_1": (RV23, "p2")}, p=(-3.0, float(RV23.p[1]) + 2.5, -85.5), dir=[0, 1, 0], hover=36)
 BOLT23 = s23.attach("8볼트", np.eye(3), {"p1": (BAR23, "h1_1")}, hover=66)
@@ -486,8 +485,8 @@ s24.kw["hideMade"] = {str(_i): "1~11번(창고 1)" for _i in range(1, 12)}
 s24.kw["history"] = "📦 창고 3의 20~23번 판 조립(첫 벌)을 창고 2의 바닥판 조립(19번)에 합쳐요 — 번호표 '19 + 23'(23번 둘째 벌은 창고 4 에 보관)"
 _fr24 = sorted([_q for _q in A.parts if str(_q.n).startswith("135도") and abs(_q.p[2] - 34.5) < 1.0], key=lambda _q: _q.p[0])   # 앞(+Z) 프레임 둘 — 왼쪽(−X) 첫째 벌·오른쪽 둘째 벌
 R_RV24 = np.array([[1.0, 0.0, 0.0], [0.0, 0.0, -1.0], [0.0, 1.0, 0.0]])   # 리벳: 바깥 끝 p2 → +Z
-RV24 = [s24._add(Part("리벳", R_RV24, (float(np.array(_f.world("hole", next(_h for _h in _f.conn["holes"] if _h["id"] == "h4"))["pos"], float)[0]), 10.0, 37.0), s24, {})) for _f in _fr24]   # place 는 앞 부품(옮겨진 프레임 복사본)에 잠금 기록을 붙여 빌드마다 자리가 바뀌므로 Part 를 직접 더한다
-for _r in RV24: _r.extra["seated"] = True; _r.extra["noGuide"] = True; _r.extra["openEnd"] = True; _r.extra["moveGuide"] = True   # 판 쪽으로 열린 끝(받는 구멍은 판) — 책이 꽂아 둔 모양
+RV24 = [s24._add(Part("리벳", R_RV24, (float(np.array(_f.world("hole", next(_h for _h in _f.conn["holes"] if _h["id"] == "h4"))["pos"], float)[0]), 10.0, 37.0), s24, {"dir": [0, 0, 1], "hover": 24})) for _f in _fr24]   # place 는 앞 부품(옮겨진 프레임 복사본)에 잠금 기록을 붙여 빌드마다 자리가 바뀌므로 Part 를 직접 더한다
+for _r in RV24: _r.extra["marks"] = [[float(_r.p[0]), 10.0, 37.0]]; _r.extra["openEnd"] = True   # 결합 전(분리): 팔 끝 구멍 입구 링 + 위로 뜬 리벳(05 표 4번)
 R_PAN24 = np.array([[1.0, 0.0, 0.0], [0.0, 0.0, -1.0], [0.0, 1.0, 0.0]])   # 판: x' → +X, y'(앞면) → +Z, z' → −Y
 T_PAN24 = np.array([5.0, 24.5, 30.0])
 G24 = A.group("20~23번 판 조립(첫 벌)", [_q for _q in A.parts if _q.step.index in (20, 21, 22, 23) and "copyOf" not in _q.extra])
@@ -504,8 +503,8 @@ s25.note = "[교재 25] 24번 결과 반대쪽(뒤)에 23번 판 조립 둘째 �
 s25.kw["hideMade"] = {str(_i): "1~11번(창고 1)" for _i in range(1, 12)}
 _fr25 = sorted([_q for _q in A.parts if str(_q.n).startswith("135도") and abs(_q.p[2] + 20.5) < 1.0], key=lambda _q: _q.p[0])   # 뒤(−Z) 프레임 둘 — 왼쪽(−X)·오른쪽(+X)
 R_RV25 = np.array([[1.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, -1.0, 0.0]])   # 리벳: 바깥 끝 p2 → −Z
-RV25 = [s25._add(Part("리벳", R_RV25, (float(np.array(_f.world("hole", next(_h for _h in _f.conn["holes"] if _h["id"] == "h4"))["pos"], float)[0]), 10.0, -23.0), s25, {})) for _f in _fr25]
-for _r in RV25: _r.extra["seated"] = True; _r.extra["noGuide"] = True; _r.extra["openEnd"] = True; _r.extra["moveGuide"] = True
+RV25 = [s25._add(Part("리벳", R_RV25, (float(np.array(_f.world("hole", next(_h for _h in _f.conn["holes"] if _h["id"] == "h4"))["pos"], float)[0]), 10.0, -23.0), s25, {"dir": [0, 0, -1], "hover": 24})) for _f in _fr25]
+for _r in RV25: _r.extra["marks"] = [[float(_r.p[0]), 10.0, -23.0]]; _r.extra["openEnd"] = True   # 결합 전(분리)
 R_PAN25 = np.array([[-1.0, 0.0, 0.0], [0.0, 0.0, -1.0], [0.0, -1.0, 0.0]])   # 둘째 판: x' → −X, y'(앞면) → −Z, z' → −Y
 T_PAN25 = np.array([-1.0, 24.5, -16.0]); _CP25 = np.array([0.0, 0.0, 300.0])   # 복사본은 원본 +Z 300 에 보관 중
 SH25 = T_PAN25 - R_PAN25 @ _CP25
