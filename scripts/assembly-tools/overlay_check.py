@@ -41,7 +41,7 @@ def main():
     im = cv2.imread(os.path.join(R, "%02d.jpg" % N)); H, W = im.shape[:2]; c = obj.mean(0)
     best = None
     for fov in ([f["fov"]] if f.get("fov") else range(15, 61)):   # fits 에 fov 를 적으면 그 값으로 고정(평면 한 장만 읽을 수 있는 번호 — 앞뒤 번호 풀이 28~31 을 따름)
-        r = fit(obj - c, img, W, H, fov)
+        r = fit(obj - c, img, W, H, fov, f.get("cx"), f.get("cy"))   # cx·cy: 책 그림이 잘려 주점이 가운데가 아닐 때 fits 에 적는다(바이킹 28번)
         if r:
             e, rv, tv, K = r; C, fwd, up, right = cam_from(rv, tv)
             if up[1] > 0 and (best is None or e < best[0]): best = (e, fov, rv, tv, K)

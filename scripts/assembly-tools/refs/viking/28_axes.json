@@ -1,0 +1,1 @@
+{"global": {"X": [55.0, -38.0], "Y": [-1.6, -55.0], "Z": [55.0, 30.5]}, "fit": {"from": "28_P.json 3D 점 26개 PnP(리벳 머리 22·축 줄 링 4), fov 34", "err_px": 2.62, "points": 26, "theta": -0.85, "phi": 0.82, "cols": "+X", "rows": "+Y", "note": "책 그림이 잘려 주점이 가운데가 아니다(pnp.fit cx·cy). 몸통 윤곽 IoU 0.78 해(theta −0.84·phi 0.90)와 4° 안."}, "no_rotate": true}
