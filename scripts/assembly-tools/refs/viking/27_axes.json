@@ -1,0 +1,1 @@
+{"global": {"X": [-55.0, 34.6], "Y": [1.6, -55.0], "Z": [-55.0, -36.0]}, "fit": {"from": "27_P.json 3D 점 27개 PnP(배 끝 돌기·막대 꼭대기·리벳 머리), fov 36", "err_px": 3.82, "points": 27, "theta": 2.44, "phi": 0.95, "cols": "+X", "rows": "+Y", "note": "점이 여러 높이에 걸쳐 axes_fit(평면)은 못 쓰고 pnp.fit 값을 적음. 몸통 윤곽 IoU 0.76 해(theta 2.36·phi 0.92)와 4° 안."}, "no_rotate": true}

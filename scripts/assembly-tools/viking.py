@@ -535,6 +535,28 @@ for _cx, _cz in ((-30.0, 0.0), (31.2, -3.1)):
 A.meta["lift"] = {**(A.meta.get("lift") or {}), "26": 84.0}   # T축을 바퀴 아래 83 에 띄운 분해도라 화면을 84mm 올린다(20번 너트와 같은 방식)
 A.steps[25].cam = (-0.25, 0.90, False, None, None, None); A.steps[25].camSrc = "eye"   # 프레임 구멍 10 + 링 6 점 PnP 1.88px(fov 37), 타이어 윤곽 joint 해와 4° 안
 
+# ── 27 ── 교재 86쪽 27 (읽은 것 2026-10-22 — 창고 2: 26번 바퀴 세트 둘(창고 3)을 25번 배 몸통 양 끝에 하나씩 끼운다 — 번호표 없음(그림으로 판단), 새 부품 없음)
+#   책 27번: 배 몸통 양 끝(135도 프레임 꺾인 팔 끝, 비스듬히 위로 기운 3단블록)에 회색 돌기 둘씩(40mm 간격)이 나와 있고, 바퀴 세트(바퀴 + 빨간 15프레임, 프레임 쪽이 배를 향함)가 초록 선으로 그 돌기 둘에 다가온다. 15프레임 양 끝 구멍(h1_1·h5_1, ±20)이 돌기 둘을 받는다.
+#   놓기: 배 끝 3단블록(15번) 바깥 돌기 p1 — 왼쪽(−X) 블록 둘 (−95.4, 38.3, −13·27)에서 방향 (−0.71, 0.71, 0), 오른쪽(+X) (99.4, 38.3, −13·27)에서 (0.71, 0.71, 0) — 돌기 가운데 (∓107.7, 50.7)·두 돌기 40 간격. 세트 축(세트 +Y = 프레임이 배 쪽)은 돌기 방향의 반대, 프레임 긴 쪽(세트 X) → 세계 Z, 프레임 가운데가 두 돌기 가운데(z 7)에 온다.
+#   책 27번 카메라: 배 몸통 부품 상자(12~25번)의 윤곽을 책 그림의 몸통 윤곽에 맞춘 시야(IoU 0.76) — 막대 꼭대기 둘이 책 점과 8px 안, theta 2.36·phi 0.92(fov 37.5).
+s27 = SKEL[26]; s27.kw.pop("noPart", None)
+s27.note = "[교재 27] 바퀴 세트 둘을 배 몸통 양 끝에 하나씩 끼워요 — 바퀴 세트의 빨간 15프레임 양 끝 구멍 둘이 배 끝의 회색 돌기 둘에 들어가요."
+s27.kw["hideMade"] = {str(_i): "1~11번(창고 1)" for _i in range(1, 12)}
+_end27 = {"L": [q for q in A.parts if q.n == "3단블록" and -100.0 < q.p[0] < -90.0 and 30.0 < q.p[1] < 45.0], "R": [q for q in A.parts if q.n == "3단블록" and 95.0 < q.p[0] < 105.0 and 30.0 < q.p[1] < 45.0]}   # 배 끝 기운 3단블록(15번 첫 팔 왼쪽, 16번 복사 팔 오른쪽)
+def _peg27(_blk):
+    _pg = next(g for g in _blk.conn["pegs"] if g["id"] == "p1"); _w = _blk.world("peg", _pg)
+    return np.array(_w["pos"], float), np.array(_w["dir"], float)
+_c = float(np.sqrt(0.5))
+R_SET27 = {"L": np.array([[0.0, _c, _c], [0.0, -_c, _c], [1.0, 0.0, 0.0]]), "R": np.array([[0.0, -_c, _c], [0.0, -_c, -_c], [1.0, 0.0, 0.0]])}   # 세트 (x',y',z') → 세계: x'→Z, y'→돌기 반대(프레임이 배 쪽), z'=x'×y'
+for _k, _set in zip(("L", "R"), WH26):
+    _blks = sorted(_end27[_k], key=lambda q: q.p[2]); _fr = _set[2]
+    _pd = [_peg27(q) for q in _blks]; _dout = _pd[0][1]
+    _F = np.array([float(_pd[0][0][0]), float(_pd[0][0][1]), float(np.mean([q[0][2] for q in _pd]))]); _P0 = _fr.p.copy()
+    _g = A.group("바퀴 세트 %s(26번)" % _k, list(_set))
+    _mk = {id(_fr): [[float(_v) for _v in (R_SET27[_k] @ (np.array(_fr.hole(_h)["pos"], float) - _P0) + _F)] for _h in ("h1_1", "h5_1")]}
+    s27.move_made(_g, R_SET27[_k], pivot=tuple(_P0), shift=tuple(_F - _P0), dir=[float(v) for v in _dout], hover=60, group="mm27wheel" + _k, marks=_mk)
+A.steps[26].cam = (2.44, 0.95, False, None, None, None); A.steps[26].camSrc = "eye"   # 몸통 윤곽 IoU 0.76 + 막대 꼭대기 둘 8px 안
+
 import stepchecks; stepchecks.apply(A, "viking")   # 모든 번호를 만든 뒤에 돌려야 번호 설명 끝에 작업 점검 블록이 붙는다
 
 # ── 부품 체크(03 B, 2026-10-20) — 이 줄 앞까지가 번호별 조립 코드다(_mates_table.py 가 여기서 자른다)

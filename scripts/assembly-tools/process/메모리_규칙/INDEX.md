@@ -120,7 +120,7 @@
 - [T축 헤드 2mm·6방향](feedback_tshaft_head_2mm_six_views.md) — T축은 헤드 2mm만 남기고 끝까지 끼움(44·47번 지적), 끝내기 전 6방향 비교, move hover=0은 60으로 뜸
 - [번호마다 조사·6방향·다음 번호 비교](feedback_survey_every_number_six_views_next_compare.md) — 끝낼 때 앞뒤좌우위아래 확인+다음 번호 같은 부분 비교를 track.py 로 기록
 - [조립 편집·색칠 도구](project_assembly_edit_and_paint.md) — 표시 옮기기/수정스샷(관리자), paint 도형, DC모터 색칠 완료 내용
-- [바이킹 조립도 진행](project_viking_status.md) — 1~26번 완료·27번부터, 인계는 저장소 진행기록_viking.md 맨 위 "★ 다음 세션 인계"; 리벳은 항상 분리
+- [바이킹 조립도 진행](project_viking_status.md) — 1~27번 완료·28번부터, 인계는 저장소 진행기록_viking.md 맨 위 "★ 다음 세션 인계"; 리벳은 항상 분리
 - [올린 뒤 다시 불러와 확인](feedback_reload_after_upload.md) — 이미지 올린 뒤 🖼 배지 확인(15번 지적)
 - [좌우 부품은 각각 책으로 확인](feedback_check_arm_sides_from_book.md) — 구멍이 다 안 보이면 눕힌 게 아님, 결합은 옆일 수 있음, 팔 둘 각각 overlay(15·16번)
 - [브라켓 긴·짧은 팔 먼저](feedback_bracket_long_short_arm_first.md) — L자 부품 결합은 긴 팔·결합면을 홀라인 피치 여유로 먼저 확인, 증명 안 된 건 증거로 보내지 않음(바이킹 19번 2026-10-22)
