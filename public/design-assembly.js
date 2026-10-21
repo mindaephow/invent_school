@@ -1067,10 +1067,24 @@
       box.appendChild(fig);
     });
     ov.appendChild(box); document.body.appendChild(ov);
+    // 제목 줄을 잡고 끌면 창이 움직인다(3D 화면과 나란히 비교할 때) — 닫기 버튼은 끌기에서 뺀다
+    hd.style.cursor = 'move'; hd.style.touchAction = 'none'; hd.style.userSelect = 'none'; box.style.position = 'relative';
+    let dragX = 0, dragY = 0, drag = null, moved = false;
+    hd.addEventListener('pointerdown', (e) => {
+      if (e.target === x || e.button > 0) return;
+      drag = { sx: e.clientX, sy: e.clientY, ox: dragX, oy: dragY }; moved = false; hd.setPointerCapture(e.pointerId); e.preventDefault();
+    });
+    hd.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy; if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
+      dragX = drag.ox + dx; dragY = drag.oy + dy; box.style.transform = 'translate(' + dragX + 'px,' + dragY + 'px)';
+    });
+    const endDrag = (e) => { if (!drag) return; drag = null; try { hd.releasePointerCapture(e.pointerId); } catch (_) { /* 이미 놓음 */ } setTimeout(() => { moved = false; }, 0); };
+    hd.addEventListener('pointerup', endDrag); hd.addEventListener('pointercancel', endDrag);
     const closeIt = () => { ov.remove(); document.removeEventListener('keydown', onKey); };
     const onKey = (e) => { if (e.key === 'Escape') closeIt(); };
     document.addEventListener('keydown', onKey);
-    x.addEventListener('click', closeIt); ov.addEventListener('click', (e) => { if (e.target === ov) closeIt(); });
+    x.addEventListener('click', closeIt); ov.addEventListener('click', (e) => { if (e.target === ov && !moved) closeIt(); });
   }
   async function showRefs(steps, title) {
     const b = bridge(); if (!b || !b.refStore || !def) return;
