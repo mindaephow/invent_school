@@ -1,0 +1,1 @@
+{"global": {"X": [55.0, 27.3], "Y": [-0.9, -50.2], "Z": [-40.9, 39.5]}, "fit": {"from": "14_P.json", "err_px": 0.55, "points": 6, "theta": 0.61, "phi": 0.86, "cols": "+X", "rows": "+Z", "fov": 28, "solver": "블록 위 돌기 링 6점(3D 확정) PnP — 판 격자 axes_fit 은 띄운 판 링과 섞여 4.3px 라 쓰지 않음"}, "no_rotate": true}

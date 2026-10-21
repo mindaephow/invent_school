@@ -1,0 +1,1 @@
+{"global": {"X": [55.0, 24.9], "Y": [3.1, -40.8], "Z": [-31.3, 43.6]}, "fit": {"from": "15_P.json", "err_px": 3.17, "points": 4, "theta": 0.337, "phi": 0.8, "cols": "+X", "rows": "+Z", "fov": 22, "solver": "프레임 구멍 4점 PnP — 평면 모호 ⚠"}, "no_rotate": true}

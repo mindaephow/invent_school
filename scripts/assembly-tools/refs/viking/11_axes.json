@@ -1,0 +1,1 @@
+{"global": {"X": [-39.1, 17.9], "Y": [-3.0, -55.0], "Z": [-43.0, -11.0]}, "fit": {"from": "11_P.json", "err_px": 3.07, "points": 120, "theta": 2.181, "phi": 1.176, "cols": "-Y", "rows": "+Z", "fov": 44, "solver": "뒤 문(세계 자세 앎)+앞 문(가정 자리) 120점 PnP"}, "no_rotate": true}
