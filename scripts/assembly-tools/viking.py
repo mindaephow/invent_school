@@ -477,6 +477,25 @@ for _q in _g2023: _q._base = None
 _g2023c = s23.copy_to_slot(Group("20~23번 한 벌", _g2023), 4, "20~23번 둘째 벌", until=25)
 for _q in _g2023: _q._base = _bases23[id(_q)]
 
+# ── 24 ── 교재 85쪽 24 (읽은 것 2026-10-22 — 창고 2: 19번 결과(바닥판+양 끝 상자·팔+브라켓)의 앞쪽(+Z)에 23번 판 조립(창고 3 첫 벌)을 세워 붙인다 — 번호표 "19 + 23". 판은 두 검은 판이 위, 긴 판이 아래인 채로 서고 115프레임 막대가 곧게 위로 선다.
+#   붙는 곳 셋(한 줄, y 10): 앞(+Z) 팔 둘의 평평한 끝 구멍(프레임 h4, x −67.1·71.1)에 리벳 둘(새 부품 2개, 바깥 끝이 판 쪽 +Z)과 가운데 2단블록 앞 돌기(x 2.0, z 33.9)가 판의 긴 판 맨 아래 줄(줄3) 칸1·칸15·칸8 구멍에 들어간다. 책 링 3개 간격 7.1칸 = 69mm = 팔 끝 구멍 사이 69.1.
+#   판 자세: 뒤집은 판 좌표 (x', y', z') → 세계 (x'+5, 24.5−z', y'+30) — x 는 그대로, 판의 z' 가 위(−y), 판의 앞면(막대 쪽)이 +Z 로 향한다(R = Rx 90°). 책 24번 카메라는 판 격자 29점 + 붙는 곳 셋을 같이 PnP(0.69px, fov 36): 판이 합친 자리보다 71 앞(+Z)에 떠 있을 때(오차 최소, 70 안팎에서 한 점으로 0.8px 아래로 떨어짐) theta −0.48·phi 0.80.
+s24 = SKEL[23]; s24.kw.pop("noPart", None)
+s24.note = "[교재 24] 19번 바닥판 조립의 앞쪽에 23번 판 조립을 세워 붙여요 — 앞 팔 끝 구멍 둘에 리벳을 꽂고(바깥 끝이 판 쪽), 리벳 둘과 가운데 2단블록 앞 돌기가 판의 맨 아래 줄 구멍 셋(칸1·8·15)에 들어가게 판을 세워 끼워요(막대가 위로 서요)."
+s24.kw["hideMade"] = {str(_i): "1~11번(창고 1)" for _i in range(1, 12)}
+s24.kw["history"] = "📦 창고 3의 20~23번 판 조립(첫 벌)을 창고 2의 바닥판 조립(19번)에 합쳐요 — 번호표 '19 + 23'(23번 둘째 벌은 창고 4 에 보관)"
+_fr24 = sorted([_q for _q in A.parts if str(_q.n).startswith("135도") and abs(_q.p[2] - 34.5) < 1.0], key=lambda _q: _q.p[0])   # 앞(+Z) 프레임 둘 — 왼쪽(−X) 첫째 벌·오른쪽 둘째 벌
+R_RV24 = np.array([[1.0, 0.0, 0.0], [0.0, 0.0, -1.0], [0.0, 1.0, 0.0]])   # 리벳: 바깥 끝 p2 → +Z
+RV24 = [s24._add(Part("리벳", R_RV24, (float(np.array(_f.world("hole", next(_h for _h in _f.conn["holes"] if _h["id"] == "h4"))["pos"], float)[0]), 10.0, 37.0), s24, {})) for _f in _fr24]   # place 는 앞 부품(옮겨진 프레임 복사본)에 잠금 기록을 붙여 빌드마다 자리가 바뀌므로 Part 를 직접 더한다
+for _r in RV24: _r.extra["seated"] = True; _r.extra["noGuide"] = True; _r.extra["openEnd"] = True; _r.extra["moveGuide"] = True   # 판 쪽으로 열린 끝(받는 구멍은 판) — 책이 꽂아 둔 모양
+R_PAN24 = np.array([[1.0, 0.0, 0.0], [0.0, 0.0, -1.0], [0.0, 1.0, 0.0]])   # 판: x' → +X, y'(앞면) → +Z, z' → −Y
+T_PAN24 = np.array([5.0, 24.5, 30.0])
+G24 = A.group("20~23번 판 조립(첫 벌)", [_q for _q in A.parts if _q.step.index in (20, 21, 22, 23) and "copyOf" not in _q.extra])
+_mk24 = {id(P20): [[float(_v) for _v in (R_PAN24 @ np.array(P20.hole(_hid)["pos"], float) + T_PAN24 - np.array([0.0, 0.0, 2.5]))] for _hid in ("h1_3", "h8_3", "h15_3")]}   # 판 뒷면(합친 자리) 구멍 셋
+_mk24[id(SP20)] = [[2.0, 10.0, 32.0]]   # 작은 판은 긴 판 뒤(바닥판 쪽)에 있어 가운데 2단블록 앞 돌기(x 2·y 10)는 작은 판 구멍(뒷면 z 32)에 먼저 들어간다
+s24.move_made(G24, R_PAN24, pivot=(0.0, 0.0, 0.0), shift=tuple(T_PAN24), dir=[0, 0, 1], hover=71, group="mm24panel", marks=_mk24)
+A.steps[23].cam = (-0.48, 0.80, False, None, None, None); A.steps[23].camSrc = "eye"   # 판 격자 29점+붙는 곳 셋 PnP 0.69px(fov 36)
+
 import stepchecks; stepchecks.apply(A, "viking")   # 모든 번호를 만든 뒤에 돌려야 번호 설명 끝에 작업 점검 블록이 붙는다
 
 # ── 부품 체크(03 B, 2026-10-20) — 이 줄 앞까지가 번호별 조립 코드다(_mates_table.py 가 여기서 자른다)
