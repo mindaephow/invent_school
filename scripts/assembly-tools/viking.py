@@ -583,6 +583,17 @@ _pl29 = {(_q.step.index): _q for _q in A.parts if _q.n == "713프레임" and _q.
 DC29 = s29.attach("DC모터", np.diag([-1.0, -1.0, 1.0]), {"p1": (_pl29[2], "h1_1"), "p2": (_pl29[5], "h1_7")}, dir=[0, 1, 0], hover=25)
 A.steps[28].cam = (-1.10, 0.91, False, None, None, None); A.steps[28].camSrc = "eye"   # 리벳 머리 24점 PnP 2.76px(fov 38), 몸통 윤곽 IoU 0.87 해와 theta 2° 안(phi 는 6° 차이)
 
+# ── 30 ── 교재 86쪽 30 (읽은 것 2026-10-22 — 창고 1: DC모터 윗면 십자 소켓에 T축을 세우고 빨간 부시를 끼운다 — 새 부품 T축 1·부시 1)
+#   책 30번: 29번 결과(문틀 몸통 바닥판 위 DC모터) 앞쪽에서 보며, 모터 윗면 빨간 십자 소켓의 초록 링에서 초록 선이 위로 올라가 긴 회색 막대(T축)를 지나 맨 위 빨간 부시(링)까지 이어진다 — T축이 소켓에 서고 부시가 그 축에 끼인다.
+#   놓기: 모터 위 십자 소켓(세계 (−60, 38, −60)) 에 T축 끝(십자 쪽)을 6mm 꽂아 머리가 위(가운데 y 47), 부시는 소켓 위 모터 윗면에 얹혀(가운데 y 40.75, 좁은 쪽이 아래) 축에 끼인다 — 31번 바퀴·작은기어·부시가 그 위에 이어진다. ⚠ 책 막대가 T축(30mm)보다 길어 보여(화면 약 80mm) 길이는 DB 모델(30mm)을 따랐다.
+#   책 30번 카메라: 몸통 윤곽(IoU 0.86)과 리벳 머리 PnP(39점, 6.5px, 주점 이동) theta −1.17·phi 0.93 — 오차가 커 ⚠.
+s30 = SKEL[29]; s30.kw.pop("noPart", None)
+s30.note = "[교재 30] DC모터 윗면 십자 소켓에 T축을 꽂아 세우고, 빨간 부시를 축에 끼워 모터 윗면에 얹어요."
+_cx30 = np.array(DC29.world("hole", next(_h for _h in DC29.conn["holes"] if _h["id"] == "cross_back"))["pos"], float)   # 모터 윗면 십자 소켓 입구
+T30 = s30._add(Part("T축", np.diag([1.0, -1.0, -1.0]), (float(_cx30[0]), float(_cx30[1]) - 6.0 + 15.0, float(_cx30[2])), s30, {"dir": [0, 1, 0], "hover": 23, "marks": [[float(_cx30[0]), float(_cx30[1]), float(_cx30[2])]], "noMarkCheck": True}))
+BU30 = s30.recv("부시", np.diag([1.0, -1.0, -1.0]), [(T30, "p1")], p=(float(_cx30[0]), float(_cx30[1]) + 2.75, float(_cx30[2])), dir=[0, 1, 0], hover=100)
+A.steps[29].cam = (-1.17, 0.92, False, None, None, None); A.steps[29].camSrc = "eye"   # 몸통 윤곽 + 리벳 머리 39점 PnP 6.5px(fov 42, 주점 이동) ⚠
+
 import stepchecks; stepchecks.apply(A, "viking")   # 모든 번호를 만든 뒤에 돌려야 번호 설명 끝에 작업 점검 블록이 붙는다
 
 # ── 부품 체크(03 B, 2026-10-20) — 이 줄 앞까지가 번호별 조립 코드다(_mates_table.py 가 여기서 자른다)
