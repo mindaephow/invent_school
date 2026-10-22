@@ -456,7 +456,7 @@ export async function POST(request) {
       const { data, error } = await sb.from('ivs_part_catalog').select('print:data->' + kind).eq('id', partId).maybeSingle()
       if (error) throw new Error(error.message)
       if (!data || !data.print || !data.print.stlGzBase64) return json({ error: '이 부품에는 등록된 출력용 파일이 없어요.' }, 404)
-      return json({ file: data.print.file, stlGzBase64: data.print.stlGzBase64, spec: { 목지름: data.print.목지름, 입구지름: data.print.입구지름, 고리벽: data.print.고리벽, 목두께: data.print.목두께, 총두께: data.print.총두께, 막: data.print.막 } })
+      return json({ file: data.print.file, stlGzBase64: data.print.stlGzBase64, extras: (data.print.extras || []).map((x) => ({ file: x.file, stlGzBase64: x.stlGzBase64 })), 보정: data.print.보정 || '', spec: { 목지름: data.print.목지름, 입구지름: data.print.입구지름, 고리벽: data.print.고리벽, 목두께: data.print.목두께, 총두께: data.print.총두께, 막: data.print.막 } })
     }
 
     if (body?.action === 'add_part') {

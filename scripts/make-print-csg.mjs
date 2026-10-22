@@ -11,6 +11,8 @@ import { BENT_STD } from '../app/lib/cubo-bent-frame-mesh.js'
 import { arcGeometry } from '../app/lib/cubo-arc-frame-mesh.js'
 const wasm = await Module(); wasm.setup()
 const { Manifold } = wasm
+const HORN = { pilotR: 1.1, hexR: 2.5, hexDepth: 4, hexAngle: 30 } // 서보혼 구멍(cubo-horn-mesh.js 의 HORN_STD 와 같은 값)
+const hexPts = (cx, cy) => Array.from({ length: 6 }, (_, k) => { const a = ((HORN.hexAngle + 60 * k) * Math.PI) / 180; return [cx + HORN.hexR * Math.cos(a), cy + HORN.hexR * Math.sin(a)] })
 const SEG = 64, NECK_R = 3.05, ENTRY_R = 3.85, RING_W = 0.8, RIM_H = 1.1, PLATE = 2.8, TOTAL = RIM_H * 2 + PLATE, EPS = 0.1
 const home = path.join(os.homedir(), 'Downloads', '큐보_3D모델_프린트용')
 const out = process.argv[2] || path.join(home, '고해상도'); fs.mkdirSync(out, { recursive: true })
@@ -26,8 +28,15 @@ function frame(outer, inner, holes, skin = 0) { // skin > 0: 위·아래 면 전
   const ro = ENTRY_R + RING_W
   if (skin > 0) { const cap = ccw(outer); m = m.add(Manifold.extrude([cap], skin)).add(Manifold.extrude([cap], skin).translate([0, 0, TOTAL - skin])) }
   // 고리·구멍은 한꺼번에 합쳐(Manifold.union) 한 번만 더하고 뺀다 — 구멍이 70개 넘는 판(515·713프레임)에서 하나씩 하면 메모리가 모자라다
-  m = m.add(Manifold.union(holes.flatMap(([x, y]) => [cyl(x, y, 0, RIM_H, ro), cyl(x, y, TOTAL - RIM_H, RIM_H, ro)])))
-  m = m.subtract(Manifold.union(holes.flatMap(([x, y]) => [cyl(x, y, -EPS, RIM_H + EPS, ENTRY_R), cyl(x, y, TOTAL - RIM_H, RIM_H + EPS, ENTRY_R), cyl(x, y, -EPS, TOTAL + 2 * EPS, NECK_R)])))
+  const H = holes.map((h) => (Array.isArray(h) ? { x: h[0], y: h[1], type: 'through' } : h))
+  m = m.add(Manifold.union(H.flatMap(({ x, y }) => [cyl(x, y, 0, RIM_H, ro), cyl(x, y, TOTAL - RIM_H, RIM_H, ro)])))
+  const cut = []
+  for (const { x, y, type } of H) {
+    if (type === 'through') cut.push(cyl(x, y, -EPS, RIM_H + EPS, ENTRY_R), cyl(x, y, TOTAL - RIM_H, RIM_H + EPS, ENTRY_R), cyl(x, y, -EPS, TOTAL + 2 * EPS, NECK_R))
+    else if (type === 'pilot') cut.push(cyl(x, y, RIM_H, TOTAL - RIM_H + EPS, ENTRY_R), cyl(x, y, -EPS, TOTAL + 2 * EPS, HORN.pilotR)) // 위만 열린 홈 + 나사 구멍, 아래는 막힘
+    else if (type === 'hex') cut.push(Manifold.extrude([hexPts(x, y)], HORN.hexDepth + EPS).translate([0, 0, TOTAL - HORN.hexDepth]), cyl(x, y, -EPS, TOTAL + 2 * EPS, HORN.pilotR)) // 위 육각 구멍(깊이 4) + 나사 구멍
+  }
+  m = m.subtract(Manifold.union(cut))
   return m
 }
 // 파일명 규칙(사용자 2026-10-23): 출력용-<부품>_목6.10_입구7.7_고리벽0.8_목두께2.8_총5[+막0.2].stl — 규격 숫자를 이름에 다 적는다
@@ -56,7 +65,13 @@ const arc = () => { const g = arcGeometry(); return frame(g.outer, g.inner, g.ho
 export const ALL = [['115프레임', 1, 15], ['15프레임', 1, 5], ['17프레임', 1, 7], ['19프레임', 1, 9], ['215프레임', 2, 15], ['25프레임', 2, 5], ['27프레임', 2, 7], ['29프레임', 2, 9], ['315프레임', 3, 15], ['35프레임', 3, 5], ['37프레임', 3, 7], ['39프레임', 3, 9], ['515프레임', 5, 15], ['59프레임', 5, 9], ['713프레임', 7, 13]]
 const SKIN = process.argv[4] ? Number(process.argv[4]) : 0
 const bent = () => { const g = bentGeometry(); return frame(g.outer, g.inner, g.holes.map((h) => [h.X, h.Y])) }
-if (process.argv[3] === 'all') {
+const servoHorn = (skin = 0) => { const hx = 5 * S.pitch / 2, hz = S.width / 2, E = S.edgeWall, rect = (a, b) => [[-a, -b], [a, -b], [a, b], [-a, b]]
+  const types = ['through', 'through', 'pilot', 'pilot', 'hex']
+  return frame(rect(hx, hz), rect(hx - E, hz - E), types.map((type, i) => ({ x: -hx + S.margin + i * S.pitch, y: 0, type })), skin) }
+const roundHorn = (skin = 0) => { const R = 15, E = S.edgeWall, circ = (r, n = 96) => Array.from({ length: n }, (_, k) => [r * Math.cos((2 * Math.PI * k) / n), r * Math.sin((2 * Math.PI * k) / n)])
+  return frame(circ(R), circ(R - E), [{ x: 0, y: 0, type: 'hex' }, ...[[10, 0], [0, 10], [-10, 0], [0, -10]].map(([x, y]) => ({ x, y, type: 'through' }))], skin) }
+if (process.argv[3] === 'horn') { const idx = {}; save(fname('서보혼', SKIN), servoHorn(SKIN)); idx['서보혼'] = fname('서보혼', SKIN); save(fname('둥근서보혼', SKIN), roundHorn(SKIN)); idx['둥근서보혼'] = fname('둥근서보혼', SKIN); fs.writeFileSync(path.join(out, 'index.json'), JSON.stringify(idx, null, 1)) }
+else if (process.argv[3] === 'all') {
   const idx = {}
   for (const [name, a, b] of ALL) { const f = fname(name, SKIN); save(f, plate(b, a, SKIN)); idx[name] = f }
   Object.assign(BENT_STD, { straightHoles: 6, slantHoles: 4, bendDeg: 45 }); save(fname('135도프레임', SKIN), bent()); idx['135도 프레임'] = fname('135도프레임', SKIN)

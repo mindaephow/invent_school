@@ -2773,10 +2773,14 @@
       const label = printBtn.textContent; printBtn.disabled = true; printBtn.textContent = '받는 중…';
       try {
         const r = await adminApi({ action: 'get_print_stl', partId: printBtn.dataset.printStl, kind: printBtn.dataset.kind });
-        const gz = Uint8Array.from(atob(r.stlGzBase64), (c) => c.charCodeAt(0));
-        const stl = await new Response(new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'))).blob();
-        const a = document.createElement('a'); a.href = URL.createObjectURL(stl); a.download = r.file; document.body.appendChild(a); a.click(); a.remove();
-        setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+        // 파일이 여럿인 부품(작은바퀴: 본체·바깥면·타이어)은 차례로 모두 받는다
+        for (const f of [{ file: r.file, stlGzBase64: r.stlGzBase64 }, ...(r.extras || [])]) {
+          const gz = Uint8Array.from(atob(f.stlGzBase64), (c) => c.charCodeAt(0));
+          const stl = await new Response(new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'))).blob();
+          const a = document.createElement('a'); a.href = URL.createObjectURL(stl); a.download = f.file; document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+          await new Promise((ok) => setTimeout(ok, 400));
+        }
       } catch (err) { alert(err.message); }
       printBtn.disabled = false; printBtn.textContent = label;
       return;
