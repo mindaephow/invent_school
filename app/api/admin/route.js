@@ -448,7 +448,7 @@ export async function POST(request) {
       return json({ part })
     }
 
-    // 출력용 STL 한 개(gzip+base64) — 관리자 전용(TEACHER_ACTIONS 에 없음). kind: 'print'(원래 디자인) | 'printSkin'(위·아래 막 0.2).
+    // 출력용 STL 한 개(gzip+base64) — 관리자 전용(TEACHER_ACTIONS 에 없음). kind: 'print'(원래 디자인) | 'printSkin'(꽉 채운 판 — 채움).
     // 본문이 부품당 수백 KB~1MB 라서 목록(list_parts)에는 파일 이름만 싣고, 받기 버튼을 누를 때만 이 액션으로 하나씩 가져간다.
     if (body?.action === 'get_print_stl') {
       const partId = body.partId, kind = body.kind === 'printSkin' ? 'printSkin' : 'print'

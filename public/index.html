@@ -1564,10 +1564,10 @@
     // 권 하나만 더 배정하는 별개 동작 — 한 버튼에 두 역할을 같이 주면 헷갈린다는 지적(사용자: "수정버튼을
     // 그역할로 하면 엄청 헷갈려")에 따라 완전히 분리했다.
     const addVolBtn = (actionable && isNewHere) ? `<button type="button" class="ghost" data-add-volume="${escapeHtml(p.id)}">+ 다른 권에 등록</button>` : '';
-    // 출력용 STL 받기(관리자 지시 2026-10-23): 부품마다 두 가지 — 원래 디자인(구멍 둘레 고리·가장자리 벽)과 위·아래 막 0.2 한 층. 목록에는 파일 이름만 오고 본문은 눌렀을 때 get_print_stl 로 하나씩 받는다.
+    // 출력용 STL 받기(관리자 지시 2026-10-23): 부품마다 두 가지 — 원래 디자인(구멍 둘레 고리·가장자리 벽)과 위·아래 움푹한 곳까지 꽉 채운 판(채움). 목록에는 파일 이름만 오고 본문은 눌렀을 때 get_print_stl 로 하나씩 받는다.
     const printBtns = actionable
       ? ((p.printFile ? `<button type="button" class="ghost" data-print-stl="${escapeHtml(p.id)}" data-kind="print" title="${escapeHtml(p.printFile)}">출력용 받기</button>` : '')
-        + (p.printSkinFile ? `<button type="button" class="ghost" data-print-stl="${escapeHtml(p.id)}" data-kind="printSkin" title="${escapeHtml(p.printSkinFile)}">출력용 받기(막 0.2)</button>` : ''))
+        + (p.printSkinFile ? `<button type="button" class="ghost" data-print-stl="${escapeHtml(p.id)}" data-kind="printSkin" title="${escapeHtml(p.printSkinFile)}">출력용 받기(채움)</button>` : ''))
       : '';
     const editBtn = actionable ? `<button type="button" class="ghost" data-edit-part="${escapeHtml(p.id)}">수정</button>` : '';
     const delBtn = actionable ? `<button type="button" class="ghost" data-delete-part="${escapeHtml(p.id)}">삭제</button>` : '';
