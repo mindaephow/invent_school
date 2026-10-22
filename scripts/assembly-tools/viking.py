@@ -461,10 +461,10 @@ s23.kw["hideMade"] = {str(_i): "1~19번(창고 1·2)" for _i in range(1, 20)}
 _R_FLIP23 = np.diag([-1.0, -1.0, 1.0])
 G23 = A.group("20~22번 조립", [_q for _q in A.parts if _q.step.index in (20, 21, 22)])
 s23.move_made(G23, _R_FLIP23, pivot=(-3.0, 5.0, 0.0), shift=(0.0, 2.0, 0.0), dir=[0, 1, 0], hover=0, group="mm23flip")
-RV23 = s23.attach("리벳", np.eye(3), {"p1": (SP20, "h5_2")}, rivet=True, hover=24)   # 작은 판 노출 면의 구멍(x −3, z −25.5) — 결합 전(분리, 05 표 4번)
+RV23 = s23.attach("리벳", np.eye(3), {"p1": (SP20, "h5_2")}, rivet=True, hover=45)   # 작은 판 노출 면의 구멍(x −3, z −25.5) — 결합 전(분리, 05 표 4번)
 R_BAR23 = np.array([[0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [-1.0, 0.0, 0.0]])   # 115프레임: 국소 x → −Z (구멍 h1 이 z −15.5, h15 가 −155.5), 막대가 −Z 로 뻗음
-BAR23 = s23.recv("115프레임", R_BAR23, {"h2_1": (RV23, "p2")}, p=(-3.0, float(RV23.p[1]) + 2.5, -85.5), dir=[0, 1, 0], hover=36)
-BOLT23 = s23.attach("8볼트", np.eye(3), {"p1": (BAR23, "h1_1")}, hover=66)
+BAR23 = s23.recv("115프레임", R_BAR23, {"h2_1": (RV23, "p2")}, p=(-3.0, float(RV23.p[1]) + 2.5, -85.5), dir=[0, 1, 0], hover=57)
+BOLT23 = s23.attach("8볼트", np.eye(3), {"p1": (BAR23, "h1_1")}, hover=87)
 NUT23 = s23.attach("너트", np.eye(3), {"p1": (SP20, "h4_2")}, hover=36)
 A.steps[22].cam = (-2.62, 0.84, False, None, None, None); A.steps[22].camSrc = "eye"   # 뒤집은 판 격자 31점 PnP 0.87px(fov 38)
 A.meta["lift"] = {**(A.meta.get("lift") or {}), "23": 37.0}   # 너트를 아래로 띄운 분해도(너트 y −35)라 화면을 37mm 띄운다(20번과 같은 방식)
