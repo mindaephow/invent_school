@@ -72,9 +72,19 @@ export function bentFrameTriangles(seg = 20) {
     const j = (i + 1) % m
     const [px, pz] = nrm(O[i], O[j])
     quad(P(O[i][0], Y0, O[i][1]), P(O[j][0], Y0, O[j][1]), P(O[j][0], Y5, O[j][1]), P(O[i][0], Y5, O[i][1]), px, 0, pz)
+    if (S.slab) continue
     for (const [y, ny] of [[Y0, -1], [Y5, 1]]) quad(P(O[i][0], y, O[i][1]), P(O[j][0], y, O[j][1]), P(I[j][0], y, I[j][1]), P(I[i][0], y, I[i][1]), 0, ny, 0)
     for (const [y0, y1] of [[Y0, Y1], [Y4, Y5]]) quad(P(I[i][0], y0, I[i][1]), P(I[j][0], y0, I[j][1]), P(I[j][0], y1, I[j][1]), P(I[i][0], y1, I[i][1]), -px, 0, -pz)
   }
+  if (S.slab) { // 프린트용(선택): 통판(plate-mesh 의 S.slab 와 같은 모양, edgeWall 을 0 으로 두고 쓴다) — 칸마다 위·아래 면은 칸 윤곽 − 입구 원
+    for (const cell of g.cells) {
+      const [cx, cz] = toXZ([cell.X, cell.Y]), RE = S.rimInnerR, poly = cell.poly.map(toXZ).filter((q, i, a) => { const r = a[(i + a.length - 1) % a.length]; return Math.hypot(q[0] - r[0], q[1] - r[1]) > 1e-9 }), hole = circlePts(cx, cz, RE, seg) // 90° 에서 J1 과 꺾인 칸 경계점이 겹치므로 같은 점은 한 번만
+      kit.cyl(cx, cz, RE, Y0, Y1, -1); kit.cyl(cx, cz, RE, Y4, Y5, -1)
+      kit.annulus(cx, cz, S.boreR, RE, Y1, -1); kit.annulus(cx, cz, S.boreR, RE, Y4, 1)
+      kit.cyl(cx, cz, S.boreR, Y1, Y4, -1)
+      ringFace(kit, poly, [hole], Y0, -1); ringFace(kit, poly, [hole], Y5, 1)
+    }
+  } else
   for (const cell of g.cells) {
     const h = cell
     const [cx, cz] = toXZ([h.X, h.Y])

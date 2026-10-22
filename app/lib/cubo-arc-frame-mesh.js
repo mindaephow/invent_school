@@ -85,3 +85,16 @@ export function arcFrameTriangles(seg = 20, sub = 4) {
   for (let i = 2; i < out.length; i += 3) out[i] -= zc
   return out
 }
+
+// 프린트용(3D 불리언)으로 쓰는 윤곽: 바깥 윤곽·가장자리 벽 안쪽 윤곽·구멍 중심([x, z]). arcFrameTriangles 의 윤곽 계산과 같다.
+export function arcGeometry(sub = 4) {
+  const n = ARC_STD.holes, W = S.width / 2, F = ARC_STD.foot, Ew = S.edgeWall
+  const { R, delta } = solveArc(), half = (n - 1) / 2
+  const pt = (r, a) => [r * Math.sin(a), r * Math.cos(a)]
+  const phiEnd = half * delta, holeX = R * Math.sin(phiEnd), xo = holeX + W, xi = holeX - W, zb = R * Math.cos(phiEnd) - F
+  const span = (outer) => Array.from({ length: 2 * (half * sub - (outer ? 0 : 1)) + 1 }, (_, j) => (-(half * sub - (outer ? 0 : 1)) + j) * (delta / sub))
+  const angles = (e, outer) => [-e, ...span(outer), e]
+  const loop = (d) => { const ro = R + W - d, ri = R - W + d, xod = xo - d, xid = xi + d, zbd = zb + d, eo = Math.asin(xod / ro), ei = Math.asin(xid / ri)
+    return [[xod, zbd], ...angles(eo, true).reverse().map((a) => pt(ro, a)), [-xod, zbd], [-xid, zbd], ...angles(ei, false).map((a) => pt(ri, a)), [xid, zbd]] }
+  return { outer: loop(0), inner: loop(Ew), holes: Array.from({ length: n }, (_, k) => pt(R, (k - half) * delta)) }
+}

@@ -3,6 +3,7 @@
 // 길이 방향은 x, 폭 방향은 z. 칸(cell)은 길이×폭 방향으로 10mm 격자이고, 구멍은 칸의 가운데에 둔다.
 //   xCells / zCells: [{ lo, hi, c }] — 칸의 시작·끝 좌표와 구멍 중심 c(구멍 없는 칸은 c=null). 판 바깥 크기는 첫·마지막 칸의 끝이다.
 import { CUBO_FRAME_STD as S } from './cubo-part-maker.js'
+import { ringFace, circlePts } from './cubo-face-mesh.js'
 
 
 export function addPlate(kit, { xCells, zCells }) {
@@ -14,6 +15,23 @@ export function addPlate(kit, { xCells, zCells }) {
   const Y0 = 0, Y1 = S.rimHeight, Y4 = S.rimHeight + S.plate, Y5 = S.total
   const ix0 = X0 + E, ix1 = X1 - E, iz0 = Z0 + E, iz1 = Z1 - E // 안쪽 사각(테두리 안)
 
+  if (S.slab) { // 프린트용(선택): 테두리·고리 없이 통판 — 위·아래 면은 평평하고 구멍은 입구(rimInnerR, 깊이 rimHeight)에서 목(boreR)으로 좁아진다. 겹치는 몸체가 없어 슬라이서가 빼지 않고, 아래 면이 평평해 바닥이 뜨지 않는다.
+    quad(P(X1, Y0, Z0), P(X1, Y0, Z1), P(X1, Y5, Z1), P(X1, Y5, Z0), 1, 0, 0)
+    quad(P(X0, Y0, Z1), P(X0, Y0, Z0), P(X0, Y5, Z0), P(X0, Y5, Z1), -1, 0, 0)
+    quad(P(X0, Y0, Z1), P(X1, Y0, Z1), P(X1, Y5, Z1), P(X0, Y5, Z1), 0, 0, 1)
+    quad(P(X1, Y0, Z0), P(X0, Y0, Z0), P(X0, Y5, Z0), P(X1, Y5, Z0), 0, 0, -1)
+    const outerPts = [[X0, Z0], [X1, Z0], [X1, Z1], [X0, Z1]], holes = []
+    for (const xc of xCells) for (const zc of zCells) {
+      if (xc.c == null || zc.c == null) continue
+      const cx = xc.c, cz = zc.c, RE = S.rimInnerR
+      holes.push(circlePts(cx, cz, RE, kit.seg))
+      kit.cyl(cx, cz, RE, Y0, Y1, -1); kit.cyl(cx, cz, RE, Y4, Y5, -1)
+      kit.annulus(cx, cz, S.boreR, RE, Y1, -1); kit.annulus(cx, cz, S.boreR, RE, Y4, 1)
+      kit.cyl(cx, cz, S.boreR, Y1, Y4, -1)
+    }
+    ringFace(kit, outerPts, holes, Y0, -1); ringFace(kit, outerPts, holes, Y5, 1)
+    return
+  }
   // ① 바깥 옆면 4개 (바닥~위)
   quad(P(X1, Y0, Z0), P(X1, Y0, Z1), P(X1, Y5, Z1), P(X1, Y5, Z0), 1, 0, 0)
   quad(P(X0, Y0, Z1), P(X0, Y0, Z0), P(X0, Y5, Z0), P(X0, Y5, Z1), -1, 0, 0)
