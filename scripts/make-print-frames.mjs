@@ -10,7 +10,7 @@ import { addPlate } from '../app/lib/cubo-plate-mesh.js'
 import { bentFrameTriangles, BENT_STD } from '../app/lib/cubo-bent-frame-mesh.js'
 const out = process.argv[2] || path.join(os.homedir(), 'Downloads', '큐보_3D모델_프린트용', '고해상도'); fs.mkdirSync(out, { recursive: true })
 const L = 0.35, SEG = 64
-Object.assign(S, { boreR: S.boreR + L, rimInnerR: S.rimInnerR + L, rimOuterR: S.rimOuterR + L, edgeWall: S.edgeWall - L })
+Object.assign(S, { boreR: 3.05, rimInnerR: 3.85, rimHeight: 1.1, plate: 2.8, total: 5, edgeWall: 0, slab: true }) // 확정 규격(사용자 2026-10-23): 목 지름 6.10, 입구 지름 7.7(깊이 1.1), 가장 얇은 곳(목) 2.8, 통판(테두리·고리 겹침 없음, 아래 면 평평)
 const plate = (nx, nz) => {
   const kit = makeKit(SEG), hx = nx * S.pitch / 2, hz = nz * S.pitch / 2
   const xCells = Array.from({ length: nx }, (_, i) => ({ lo: -hx + i * S.pitch, hi: -hx + (i + 1) * S.pitch, c: -hx + S.margin + i * S.pitch }))
