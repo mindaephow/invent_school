@@ -24,7 +24,7 @@ D = os.path.join(HERE, "refs", name) + os.sep
 im = cv2.imread(D + "%02d.jpg" % step); g = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY); Hh, Ww = g.shape
 A = runpy.run_path(os.path.join(HERE, name + ".py"), run_name="probe")["A"]
 q = next(p for p in A.parts if p.n == part and p.step.index == pstep)
-_hv = (np.array(q.extra.get('dir') or [0, 1, 0], float) * float(q.extra.get('hover') or 0)) if q.extra.get('hover') else np.zeros(3)   # 책 그림에서 이 부품은 띄워진 채 그려져 있으므로 띄운 만큼 옮겨 푼다
+_hv = (np.array(q.extra.get('dir') or [0, 1, 0], float) * float(q.extra.get('hover') or 0)) if (q.extra.get('hover') and q.step.index == step and '--띄움없음' not in sys.argv) else np.zeros(3)   # 책 그림에서 이 번호에 띄워 그려진 부품만 띄운 만큼 옮겨 푼다(앞 번호 부품은 제자리)   # 책 그림에서 이 부품은 띄워진 채 그려져 있으므로 띄운 만큼 옮겨 푼다
 world = {}
 for c in range(1, cols + 1):
     for r in range(1, rows + 1):
@@ -40,6 +40,10 @@ if _ini is not None:   # 이전 번호 카메라로 칸 가운데 4모서리를 
     Hi, _ = cv2.findHomography(src0, dst0, 0)
     C = np.array([cv2.perspectiveTransform(np.array([[[a, b]]], np.float32), Hi)[0][0] for a, b in ((0, 0), (cols, 0), (cols, rows), (0, rows))], np.float32)
     print("  이전 카메라로 예측한 모서리:", " ".join("%.0f %.0f" % (c[0], c[1]) for c in C))
+if _anc is not None and _ref is None and len(_anc) >= 4:   # 참조 없이 앵커 4점 이상이면 앵커로 호모그래피를 만들어 처음 모서리로 쓴다
+    Ha, _ = cv2.findHomography(np.array([[a[0] - 0.5, a[1] - 0.5] for a in _anc], np.float32), np.array([[a[2], a[3]] for a in _anc], np.float32), 0)
+    C = np.array([cv2.perspectiveTransform(np.array([[[a, b]]], np.float32), Ha)[0][0] for a, b in ((0, 0), (cols, 0), (cols, rows), (0, rows))], np.float32)
+    print("  앵커로 만든 처음 모서리:", " ".join("%.0f %.0f" % (c[0], c[1]) for c in C))
 if _anc is not None and _ref is not None:   # 앵커 점 + 참조 번호의 격자 모양(칸·줄 방향 벡터)으로 처음 격자를 만든다
     fr_ = json.load(open(D + "fits/%02d_P.json" % _ref, encoding="utf-8")); fp_ = [t for t in fr_["pts"] if [t[0], t[1]] not in fr_.get("est", [])]
     Hr, _ = cv2.findHomography(np.array([[t[0] - 0.5, t[1] - 0.5] for t in fp_], np.float32), np.array([[t[2], t[3]] for t in fp_], np.float32), 0)
@@ -73,6 +77,7 @@ for it in range(10):   # 호모그래피로 다시 붙이기(눈대중 모서리
     Hn, _ = cv2.findHomography(np.array([[c - 0.5, r - 0.5] for (c, r) in sel], np.float32), np.array([P[k] for k in sel.values()], np.float32), cv2.RANSAC, 6.0)
     if Hn is None: break
     H = Hn; pred = {(c, r): node(H, c, r) for (c, r) in world}; sel = assign(pred, max(0.3, 0.5 - 0.04 * it))
+print('  다시 맞춘 모서리(실행에 다시 쓴다): ' + ' '.join('%.0f %.0f' % tuple(cv2.perspectiveTransform(np.array([[[a, b]]], np.float32), H)[0][0]) for a, b in ((0, 0), (cols, 0), (cols, rows), (0, rows))))
 best = None
 for rounds in range(14):   # PnP 로 풀고 오차 큰 점을 덜어낸다
     keys = list(sel); 
@@ -84,15 +89,15 @@ for rounds in range(14):   # PnP 로 풀고 오차 큰 점을 덜어낸다
     if not cand: break
     e, fov, rv, tv, K = cand
     proj = cv2.projectPoints(np.float32(O - c0), rv, tv, K, None)[0].reshape(-1, 2); res = np.linalg.norm(proj - I, axis=1)
-    best = (e, fov, keys, res, rv, tv, K, c0)
+    best = (e, fov, keys, res, rv, tv, K, c0); selb = {k: sel[k] for k in keys}
     print("  라운드 %d: 점 %d개 평균 %.2fpx 최대 %.1fpx fov %d" % (rounds, len(keys), e, res.max(), fov))
     if (res.max() <= 3.5 and e <= 2.0) or len(keys) <= 8: break
     worst = keys[int(np.argmax(res))]; del sel[worst]
 if not best: sys.exit("❌ PnP 를 못 풀었다 — 모서리를 고쳐 다시 한다")
-e, fov, keys, res, rv, tv, K, c0 = best
+e, fov, keys, res, rv, tv, K, c0 = best; sel = selb
 Cc, fwd, up, right = cam_from(rv, tv)
 print("★ 점 %d개 평균 %.2fpx fov %d theta %.3f phi %.3f" % (len(keys), e, fov, float(np.arctan2(-fwd[0], -fwd[2])), float(np.arccos(-fwd[1]))))
-if e > 2.0 or len(keys) < 6: sys.exit("❌ 통과 못 함(평균 ≤2.0px·점 ≥6) — fits 를 쓰지 않는다")
+if (e > 2.0 and '--저장강행' not in sys.argv) or len(keys) < 6: sys.exit("❌ 통과 못 함(평균 ≤2.0px·점 ≥6) — fits 를 쓰지 않는다")
 pts = []; est = []
 Hfin, _ = cv2.findHomography(np.array([[c - 0.5, r - 0.5] for (c, r) in keys], np.float32), np.array([P[sel[k]] for k in keys], np.float32), 0)
 for (c, r) in sorted(world):

@@ -19,20 +19,35 @@
 "noPart": false
 },
 "4": {
-"parts": {},
-"noPart": true
+"parts": {
+"315프레임": 1,
+"3단블록": 4,
+"37프레임": 1,
+"DC모터": 1,
+"59프레임": 1
+},
+"noPart": false
 },
 "5": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 2,
+"17프레임": 1
+},
+"noPart": false
 },
 "6": {
-"parts": {},
-"noPart": true
+"parts": {
+"29프레임": 3
+},
+"noPart": false
 },
 "7": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 9,
+"35프레임": 1,
+"15프레임": 1
+},
+"noPart": false
 },
 "8": {
 "parts": {},

@@ -1,0 +1,28 @@
+{
+ "global": {
+  "X": [
+   55.0,
+   -34.5
+  ],
+  "Y": [
+   -5.9,
+   -49.9
+  ],
+  "Z": [
+   46.1,
+   47.0
+  ]
+ },
+ "fit": {
+  "from": "06_P.json ringfit 점 11개 PnP",
+  "err_px": 6.63,
+  "points": 11,
+  "theta": -0.69,
+  "phi": 0.64,
+  "cols": "+X",
+  "rows": "+Y",
+  "fov": 25
+ },
+ "no_rotate": true,
+ "no_lines": true
+}
