@@ -255,7 +255,7 @@ function stripSpecFileData(spec) {
   })
 }
 function mapPartRow(r, { light = false, stripSpecFiles = false } = {}) {
-  const base = { id: r.id, name: r.data?.name || '', icon: r.data?.icon || '', subject: r.data?.subject || '', category: r.data?.category || '', volumes: Array.isArray(r.data?.volumes) ? r.data.volumes : [], color: r.data?.color || '', size: r.data?.size || '', thumbKey: r.data?.thumbKey || '', createdAt: r.created_at }
+  const base = { id: r.id, name: r.data?.name || '', icon: r.data?.icon || '', subject: r.data?.subject || '', category: r.data?.category || '', volumes: Array.isArray(r.data?.volumes) ? r.data.volumes : [], color: r.data?.color || '', size: r.data?.size || '', thumbKey: r.data?.thumbKey || '', printFile: r.data?.print?.file || '', printSkinFile: r.data?.printSkin?.file || '', createdAt: r.created_at }
   // 교재관리처럼 이름·과목만 필요한 화면용 — 부품마다 수십 KB인 SVG/스냅샷/spec은 빼서 응답을 가볍게 한다.
   if (light) return base
   const spec = stripSpecFiles ? stripSpecFileData(r.data?.spec || null) : (r.data?.spec || null)
@@ -266,12 +266,12 @@ async function listParts(sb, light = false, stripSpecFiles = false) {
   // DB→서버로 24MB가 넘어와서 목록이 3초 넘게 걸렸다(실측: 필요한 열만 읽으면 367KB). 그래서 DB에서 필요한
   // 항목만 골라 읽고, spec은 "3D 모양 있음" 표시(첫 도형의 type)만 받는다. 실제 도형은 get_part로 따로 받는다.
   if (light || stripSpecFiles) {
-    const base = 'id, created_at, name:data->>name, icon:data->>icon, subject:data->>subject, category:data->>category, volumes:data->volumes, color:data->>color, size:data->>size, thumb_key:data->>thumbKey'
+    const base = 'id, created_at, name:data->>name, icon:data->>icon, subject:data->>subject, category:data->>category, volumes:data->volumes, color:data->>color, size:data->>size, thumb_key:data->>thumbKey, print_file:data->print->>file, print_skin_file:data->printSkin->>file'
     const extra = ', image_svg:data->>image_svg, image_svg_diagonal:data->>image_svg_diagonal, primary_image:data->>primary_image, snapshot:data->snapshot, snapshots:data->snapshots, thumbnail3d:data->thumbnail3d, spec_type:data->spec->shapes->0->>type'
     const { data, error } = await sb.from('ivs_part_catalog').select(light ? base : base + extra).order('created_at', { ascending: true })
     if (error) throw new Error(error.message)
     return (data || []).map((r) => {
-      const out = { id: r.id, name: r.name || '', icon: r.icon || '', subject: r.subject || '', category: r.category || '', volumes: Array.isArray(r.volumes) ? r.volumes : [], color: r.color || '', size: r.size || '', thumbKey: r.thumb_key || '', createdAt: r.created_at }
+      const out = { id: r.id, name: r.name || '', icon: r.icon || '', subject: r.subject || '', category: r.category || '', volumes: Array.isArray(r.volumes) ? r.volumes : [], color: r.color || '', size: r.size || '', thumbKey: r.thumb_key || '', printFile: r.print_file || '', printSkinFile: r.print_skin_file || '', createdAt: r.created_at }
       if (light) return out
       return Object.assign(out, { imageSvg: r.image_svg || '', imageSvgDiagonal: r.image_svg_diagonal || '', primaryImage: r.primary_image === 'diagonal' ? 'diagonal' : 'front', spec: r.spec_type ? { shapes: [{ type: r.spec_type }], partial: true } : null, snapshot: r.snapshot || null, snapshots: r.snapshots || null, thumbnail3d: r.thumbnail3d || null })
     })
@@ -448,6 +448,17 @@ export async function POST(request) {
       return json({ part })
     }
 
+    // 출력용 STL 한 개(gzip+base64) — 관리자 전용(TEACHER_ACTIONS 에 없음). kind: 'print'(원래 디자인) | 'printSkin'(위·아래 막 0.2).
+    // 본문이 부품당 수백 KB~1MB 라서 목록(list_parts)에는 파일 이름만 싣고, 받기 버튼을 누를 때만 이 액션으로 하나씩 가져간다.
+    if (body?.action === 'get_print_stl') {
+      const partId = body.partId, kind = body.kind === 'printSkin' ? 'printSkin' : 'print'
+      if (typeof partId !== 'string') return json({ error: '잘못된 요청입니다.' }, 400)
+      const { data, error } = await sb.from('ivs_part_catalog').select('print:data->' + kind).eq('id', partId).maybeSingle()
+      if (error) throw new Error(error.message)
+      if (!data || !data.print || !data.print.stlGzBase64) return json({ error: '이 부품에는 등록된 출력용 파일이 없어요.' }, 404)
+      return json({ file: data.print.file, stlGzBase64: data.print.stlGzBase64, spec: { 목지름: data.print.목지름, 입구지름: data.print.입구지름, 고리벽: data.print.고리벽, 목두께: data.print.목두께, 총두께: data.print.총두께, 막: data.print.막 } })
+    }
+
     if (body?.action === 'add_part') {
       const name = String(body.name || '').trim()
       const icon = String(body.icon || '').trim()
@@ -513,7 +524,7 @@ export async function POST(request) {
       // volumes도 안 보내면(예: 부품 수리실에서 스펙만 저장) 기존 권 배정을 그대로 유지한다.
       const nextVolumes = Array.isArray(body.volumes) ? volumes : (Array.isArray(existing.data?.volumes) ? existing.data.volumes : [])
       // connectors(돌기·구멍 연결점)는 body.connectors 로 주면 기록하고, 안 주면 기존 값을 그대로 이어 붙인다 — 안 그러면 부품을 수정할 때마다 지워진다.
-      const { error } = await sb.from('ivs_part_catalog').update({ data: { name, icon, subject, category: category || null, volumes: nextVolumes, color: color || null, size: size || null, image_svg: imageSvg || null, image_svg_diagonal: imageSvgDiagonal || null, primary_image: primaryImage, spec: nextSpec, snapshot: nextSnapshot, snapshots: nextSnapshots, thumbnail3d: nextThumbnail3d, createdAt, ...(thumbKey ? { thumbKey } : (existing.data?.thumbKey ? { thumbKey: existing.data.thumbKey } : {})), ...((body.connectors && typeof body.connectors === 'object') ? { connectors: body.connectors } : (existing.data?.connectors ? { connectors: existing.data.connectors } : {})) } }).eq('id', partId)
+      const { error } = await sb.from('ivs_part_catalog').update({ data: { name, icon, subject, category: category || null, volumes: nextVolumes, color: color || null, size: size || null, image_svg: imageSvg || null, image_svg_diagonal: imageSvgDiagonal || null, primary_image: primaryImage, spec: nextSpec, snapshot: nextSnapshot, snapshots: nextSnapshots, thumbnail3d: nextThumbnail3d, createdAt, ...(thumbKey ? { thumbKey } : (existing.data?.thumbKey ? { thumbKey: existing.data.thumbKey } : {})), ...((body.connectors && typeof body.connectors === 'object') ? { connectors: body.connectors } : (existing.data?.connectors ? { connectors: existing.data.connectors } : {})), ...(existing.data?.print ? { print: existing.data.print } : {}), ...(existing.data?.printSkin ? { printSkin: existing.data.printSkin } : {}) } }).eq('id', partId) // print·printSkin: 출력용 STL(gzip base64) — 부품을 수정해도 지워지지 않게 그대로 이어 붙인다
       if (error) throw new Error(error.message)
       if (body.skipList === true) return json({ ok: true }) // 썸네일을 여러 개 연달아 저장할 때: 응답으로 전체 부품 목록(26MB)을 매번 다시 만들지 않는다(DB 시간 초과 원인)
       return json({ ok: true, parts: await listParts(sb) })

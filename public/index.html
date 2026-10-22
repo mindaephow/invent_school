@@ -1564,6 +1564,11 @@
     // 권 하나만 더 배정하는 별개 동작 — 한 버튼에 두 역할을 같이 주면 헷갈린다는 지적(사용자: "수정버튼을
     // 그역할로 하면 엄청 헷갈려")에 따라 완전히 분리했다.
     const addVolBtn = (actionable && isNewHere) ? `<button type="button" class="ghost" data-add-volume="${escapeHtml(p.id)}">+ 다른 권에 등록</button>` : '';
+    // 출력용 STL 받기(관리자 지시 2026-10-23): 부품마다 두 가지 — 원래 디자인(구멍 둘레 고리·가장자리 벽)과 위·아래 막 0.2 한 층. 목록에는 파일 이름만 오고 본문은 눌렀을 때 get_print_stl 로 하나씩 받는다.
+    const printBtns = actionable
+      ? ((p.printFile ? `<button type="button" class="ghost" data-print-stl="${escapeHtml(p.id)}" data-kind="print" title="${escapeHtml(p.printFile)}">출력용 받기</button>` : '')
+        + (p.printSkinFile ? `<button type="button" class="ghost" data-print-stl="${escapeHtml(p.id)}" data-kind="printSkin" title="${escapeHtml(p.printSkinFile)}">출력용 받기(막 0.2)</button>` : ''))
+      : '';
     const editBtn = actionable ? `<button type="button" class="ghost" data-edit-part="${escapeHtml(p.id)}">수정</button>` : '';
     const delBtn = actionable ? `<button type="button" class="ghost" data-delete-part="${escapeHtml(p.id)}">삭제</button>` : '';
     // spec.shapes(부품 수리실에서 만든 3D 모델)가 있으면 svg 아이콘 대신 3D를 우선 보여준다(사용자 지시:
@@ -1581,7 +1586,7 @@
           ? `<button type="button" class="part-thumb" data-view-image="${escapeHtml(p.id)}"><img src="${escapeHtml(p.thumbnail3d)}" style="width:100%;height:100%;object-fit:contain;"></button>`
           : `<button type="button" class="part-thumb" data-view-image="${escapeHtml(p.id)}" data-thumb-3d="${escapeHtml(p.id)}"></button>`)
       : (thumbSrc ? `<button type="button" class="part-thumb" data-view-image="${escapeHtml(p.id)}">${thumbSrc}</button>` : '');
-    return `<div class="design-row" style="align-items:center;"><div class="item-main"><div class="item-title">${newBadge}${escapeHtml(p.icon ? p.icon + ' ' : '')}${escapeHtml(p.name)}</div><div class="item-sub">${escapeHtml(sub)}</div></div><div style="display:flex; align-items:center; gap:8px; flex:none; flex-wrap:wrap;">${thumb}${addVolBtn}${editBtn}${delBtn}</div></div>`;
+    return `<div class="design-row" style="align-items:center;"><div class="item-main"><div class="item-title">${newBadge}${escapeHtml(p.icon ? p.icon + ' ' : '')}${escapeHtml(p.name)}</div><div class="item-sub">${escapeHtml(sub)}</div></div><div style="display:flex; align-items:center; gap:8px; flex:none; flex-wrap:wrap;">${thumb}${printBtns}${addVolBtn}${editBtn}${delBtn}</div></div>`;
   }
   // "+ 다른 권에 등록" 클릭 시 그 행 바로 아래 펼쳐지는 미니폼 — 권 번호·수량만 물어보고 부품의 다른 정보는
   // 건드리지 않는다(등록 폼을 다시 열거나 "수정"을 누르게 하지 않기 위한, 이 동작 전용의 작고 뚜렷한 UI).
@@ -2686,7 +2691,7 @@
       document.getElementById('imgModalBackdrop').hidden = false;
     }
   }
-  document.getElementById('partListArea').addEventListener('click', (e) => {
+  document.getElementById('partListArea').addEventListener('click', async (e) => {
     const viewBtn = e.target.closest('[data-view-image]');
     if (viewBtn) {
       const p = allParts.find((x) => x.id === viewBtn.dataset.viewImage);
@@ -2761,6 +2766,19 @@
       document.getElementById('partSubmitBtn').textContent = '수정 저장';
       document.getElementById('partCancelEdit').hidden = false;
       document.getElementById('partForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    const printBtn = e.target.closest('[data-print-stl]');
+    if (printBtn) { // 출력용 STL 받기: 서버에서 gzip+base64 로 받아 브라우저에서 풀고 파일로 저장한다
+      const label = printBtn.textContent; printBtn.disabled = true; printBtn.textContent = '받는 중…';
+      try {
+        const r = await adminApi({ action: 'get_print_stl', partId: printBtn.dataset.printStl, kind: printBtn.dataset.kind });
+        const gz = Uint8Array.from(atob(r.stlGzBase64), (c) => c.charCodeAt(0));
+        const stl = await new Response(new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'))).blob();
+        const a = document.createElement('a'); a.href = URL.createObjectURL(stl); a.download = r.file; document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      } catch (err) { alert(err.message); }
+      printBtn.disabled = false; printBtn.textContent = label;
       return;
     }
     const btn = e.target.closest('[data-delete-part]');
