@@ -82,6 +82,8 @@ if not _tried: sys.exit("❌ 구멍 후보가 너무 적다 — 모서리·밝�
 _best = next((t for t in _tried if t["ok"]), max(_tried, key=lambda t: len(t["sel"])))
 P, H, sel, pred, mean_e, max_e, used_mode = _best["P"], _best["H"], _best["sel"], _best["pred"], _best["mean_e"], _best["max_e"], _best["mode"]
 print("→ 사용한 방식: %s | 구멍 간격 약 %.1fpx" % (used_mode, pitch))
+_cn = [cv2.perspectiveTransform(np.array([[[a, b]]], np.float32), H)[0][0] for a, b in ((0, 0), (cols, 0), (cols, rows), (0, rows))]   # 찾은 구멍들로 다시 맞춘 격자의 모서리 — 눈대중 모서리가 어긋나 기준 미달이면 이 값으로 다시 돌린다(2026-10-23 트레일러)
+print("  다시 맞춘 모서리(다음 실행에 쓴다): " + " ".join("%.1f %.1f" % (c[0], c[1]) for c in _cn))
 os.makedirs(D + "hf", exist_ok=True)
 ov = im.copy()
 for (c, r), pos in pred.items():

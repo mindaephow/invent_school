@@ -92,6 +92,20 @@ BOOKS = {
         },
         "extra": [],
     },
+    "trailer": {
+        "volume": 2,
+        "pages": {
+            90: [(0, (340, 600, 1290, 1190), "교재 90쪽 맨 앞 완성품 사진 — 앞뒤·방향(왼쪽 트럭 앞 큰 바퀴·캐터필러 바퀴·메인보드, 오른쪽 짐칸 트레일러)은 여기서 확인"), (1, (75, 1325, 705, 1880), ""), (2, (720, 1325, 1355, 1880), "")],
+            91: [(3 + i, box(*g), "") for i, g in enumerate(GRID)],
+            92: [(9 + i, box(*g), "") for i, g in enumerate(GRID)],
+            93: [(15 + i, box(*g), "") for i, g in enumerate(GRID)],
+            94: [(21 + i, box(*g), "") for i, g in enumerate(GRID)],
+            95: [(27 + i, box(*g), "") for i, g in enumerate(GRID)],
+            96: [(33 + i, box(*g), "") for i, g in enumerate(GRID)],
+            97: [(39, box("L", 1), ""), (40, box("R", 1), ""), (41, (75, 765, 1355, 1313), "41 — 리모컨 (2)·완성 직전 전체"), (99, (75, 1328, 1355, 1880), "완성")],
+        },
+        "extra": [],
+    },
     "viking": {
         "volume": 2,
         "pages": {
