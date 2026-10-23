@@ -159,7 +159,7 @@ RV7 = [s7.attach("리벳", np.eye(3), {"p1": (PL6[_i], "h%d_%d" % (_c, _r))}, ri
 PL7 = s7.recv("35프레임", R_FLIPX, {"h%d_%d" % (_c, _r): (RV7[_i * 2 + _k], "p2") for _i, _c in enumerate((1, 3, 5)) for _k, _r in enumerate((3, 1))}, dir=[0, 1, 0], hover=50)
 RB7 = [s7.attach("리벳", np.eye(3), {"p1": (PL7, "h%d_2" % _c)}, rivet=True, hover=74) for _c in (1, 3, 5)]
 BAR7 = s7.recv("15프레임", R_FLIPX, {"h%d_1" % _c: (RB7[_k], "p2") for _k, _c in enumerate((1, 3, 5))}, dir=[0, 1, 0], hover=98)
-A.steps[6].cam = (-0.76, 0.76, False, None, None, None); A.steps[6].camSrc = "eye"   # 흰 59프레임 DoG 29점 hfpnp(fov 35) 평균 1.83px
+A.steps[6].cam = (-0.78, 0.76, False, None, None, None); A.steps[6].camSrc = "eye"   # 35프레임 링 6(띄움 45 가정)·리벳 밑 링 6 = 12점 ringfit PnP 평균 3.18px(fov 36) — 흰 59프레임 hfpnp(−0.76, 0.76, 1.83px)와 일치. 책 부품은 리벳을 꽂은 채·35프레임은 약 42mm 띄워 그렸다(모델은 리벳 24·35프레임 50 으로 분리)
 
 # ── 8 ── 교재 92쪽 8 (읽은 것 2026-10-23 — 열린 쪽(−X 끝)에서 본다: 두 벽 블록 끝 면(x −75) 구멍 1·3 에 리벳 4개를 꽂고, 검은 39프레임을 그 앞에 세워 막는다: 링 4개 = 칸 1·9 × 줄 1·3)
 #   책 8번: 조립체를 돌려 −X 쪽 열린 끝이 앞이다. 벽마다 3단블록 끝 면 구멍 3개 중 위(y 30)·아래(y 10)에 주황 리벳이 서 있고(가운데 구멍 비어 있음), 앞에 검은 39프레임이 서서 링 4개(칸1·9 × 줄1·3)로 그 리벳에 끼워진다.
@@ -169,7 +169,7 @@ _B8, _C8 = B1[3], _cB(B1[3]); _R8 = np.array([[0.0, -1.0, 0.0], [1.0, 0.0, 0.0],
 RV8 = [s8.attach("리벳", _R8, {"p1": (_h, _i)}, rivet=True, hover=24, dir=[-1, 0, 0]) for _h, _i in ((_B8, "h1"), (_B8, "h3"), (_C8, "h1"), (_C8, "h3"))]   # 결합 전(분리) — 벽 B1[3](z −40) y30·y10, 벽 _cB(z +40) y10·y30
 R_P39 = np.array([[0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [1.0, 0.0, 0.0]])   # 39프레임: 긴 쪽(칸1~9)→+Z, 구멍 방향→−X
 PL8 = s8.recv("39프레임", R_P39, {"h1_3": (RV8[0], "p2"), "h1_1": (RV8[1], "p2"), "h9_1": (RV8[2], "p2"), "h9_3": (RV8[3], "p2")}, dir=[-1, 0, 0], hover=46)
-A.steps[7].cam = (-1.06, 1.03, False, None, None, None); A.steps[7].camSrc = "eye"   # 리벳 링 4 + 판 링 4(두 평행 면) ringfit
+A.steps[7].cam = (-1.06, 1.03, False, None, None, None); A.steps[7].camSrc = "eye"   # 검은 판 구멍 19(holefit 어두운판) + 블록 끝 면 리벳 링 4 = 23점 ringfit PnP 0.65px(fov 30, 판 띄움 46 에서 최소)
 
 
 import stepchecks; stepchecks.apply(A, "trailer")
