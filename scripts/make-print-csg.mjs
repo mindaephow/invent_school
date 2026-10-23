@@ -13,6 +13,8 @@ const wasm = await Module(); wasm.setup()
 const { Manifold } = wasm
 const HORN = { pilotR: 1.1, hexR: 2.5, hexDepth: 4, hexAngle: 30 } // 서보혼 구멍(cubo-horn-mesh.js 의 HORN_STD 와 같은 값)
 const hexPts = (cx, cy) => Array.from({ length: 6 }, (_, k) => { const a = ((HORN.hexAngle + 60 * k) * Math.PI) / 180; return [cx + HORN.hexR * Math.cos(a), cy + HORN.hexR * Math.sin(a)] })
+// 구멍 목 둘레 홈(사용자 지시 2026-10-23: 블록 돌기가 빡빡해서 위·아래·좌·우를 살짝 판다): NOTCH=4(0·90°) 또는 8(0·45·90·135°), 폭 NOTCH_W, 반지름 방향 깊이 NOTCH_D(목 반지름 위로). 환경변수 NOTCH 로 켠다.
+const NOTCH = Number(process.env.NOTCH || 0), NOTCH_W = Number(process.env.NOTCH_W || 0.8), NOTCH_D = Number(process.env.NOTCH_D || 0.3)
 const SEG = 64, NECK_R = 3.05, ENTRY_R = 3.85, RING_W = 0.8, RIM_H = 1.1, PLATE = 2.8, TOTAL = RIM_H * 2 + PLATE, EPS = 0.1
 const home = path.join(os.homedir(), 'Downloads', '큐보_3D모델_프린트용')
 const out = process.argv[2] || path.join(home, '고해상도'); fs.mkdirSync(out, { recursive: true })
@@ -33,7 +35,10 @@ function frame(outer, inner, holes, skin = 0) { // skin > 0(막 버전, 사용�
   m = m.add(Manifold.union(H.flatMap(({ x, y }) => [cyl(x, y, 0, RIM_H, ro), cyl(x, y, TOTAL - RIM_H, RIM_H, ro)])))
   const cut = []
   for (const { x, y, type } of H) {
-    if (type === 'through') cut.push(cyl(x, y, -EPS, RIM_H + EPS, ENTRY_R), cyl(x, y, TOTAL - RIM_H, RIM_H + EPS, ENTRY_R), cyl(x, y, -EPS, TOTAL + 2 * EPS, NECK_R))
+    if (type === 'through') {
+      cut.push(cyl(x, y, -EPS, RIM_H + EPS, ENTRY_R), cyl(x, y, TOTAL - RIM_H, RIM_H + EPS, ENTRY_R), cyl(x, y, -EPS, TOTAL + 2 * EPS, NECK_R))
+      for (let k = 0; k < NOTCH / 2; k++) cut.push(Manifold.cube([2 * (NECK_R + NOTCH_D), NOTCH_W, TOTAL + 2 * EPS], true).rotate([0, 0, (180 / (NOTCH / 2)) * k]).translate([x, y, TOTAL / 2]))
+    }
     else if (type === 'pilot') cut.push(cyl(x, y, RIM_H, TOTAL - RIM_H + EPS, ENTRY_R), cyl(x, y, -EPS, TOTAL + 2 * EPS, HORN.pilotR)) // 위만 열린 홈 + 나사 구멍, 아래는 막힘
     else if (type === 'hex') cut.push(Manifold.extrude([hexPts(x, y)], HORN.hexDepth + EPS).translate([0, 0, TOTAL - HORN.hexDepth]), cyl(x, y, -EPS, TOTAL + 2 * EPS, HORN.pilotR)) // 위 육각 구멍(깊이 4) + 나사 구멍
   }
@@ -42,7 +47,7 @@ function frame(outer, inner, holes, skin = 0) { // skin > 0(막 버전, 사용�
 }
 // 파일명 규칙(사용자 2026-10-23): 출력용-<부품>_목6.10_입구7.7_고리벽0.8_목두께2.8_총5[+채움].stl — 규격 숫자를 이름에 다 적는다
 const SPEC = `목${(NECK_R * 2).toFixed(2)}_입구${ENTRY_R * 2}_고리벽${RING_W}_목두께${PLATE}_총${TOTAL}`
-const fname = (part, skin = 0) => `출력용-${part}_${SPEC}${skin ? '+채움' : ''}.stl`
+const fname = (part, skin = 0) => `출력용-${part}_${SPEC}${skin ? '+채움' : ''}${NOTCH ? `+홈${NOTCH}` : ''}.stl`
 function save(name, m, dir = out) {
   const mesh = m.getMesh(), v = mesh.vertProperties, n = mesh.numProp, t = mesh.triVerts
   let mn = [1e9, 1e9, 1e9], mx = [-1e9, -1e9, -1e9]

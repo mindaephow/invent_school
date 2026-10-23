@@ -1567,7 +1567,7 @@
     // 출력용 STL 받기(관리자 지시 2026-10-23): 부품마다 두 가지 — 원래 디자인(구멍 둘레 고리·가장자리 벽)과 위·아래 움푹한 곳까지 꽉 채운 판(채움). 목록에는 파일 이름만 오고 본문은 눌렀을 때 get_print_stl 로 하나씩 받는다.
     const printBtns = actionable
       ? ((p.printFile ? `<button type="button" class="ghost" data-print-stl="${escapeHtml(p.id)}" data-kind="print" title="${escapeHtml(p.printFile)}">출력용 받기</button>` : '')
-        + (p.printSkinFile ? `<button type="button" class="ghost" data-print-stl="${escapeHtml(p.id)}" data-kind="printSkin" title="${escapeHtml(p.printSkinFile)}">출력용 받기(채움)</button>` : ''))
+        + (p.printSkinFile ? `<button type="button" class="ghost" data-print-stl="${escapeHtml(p.id)}" data-kind="printSkin" title="${escapeHtml(p.printSkinFile)}">출력용 받기(채움·홈8)</button>` : ''))
       : '';
     const editBtn = actionable ? `<button type="button" class="ghost" data-edit-part="${escapeHtml(p.id)}">수정</button>` : '';
     const delBtn = actionable ? `<button type="button" class="ghost" data-delete-part="${escapeHtml(p.id)}">삭제</button>` : '';
