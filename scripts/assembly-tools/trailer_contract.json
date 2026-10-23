@@ -58,12 +58,19 @@
 "noPart": false
 },
 "9": {
-"parts": {},
-"noPart": true
+"parts": {
+"2열브라켓": 2,
+"리벳": 4,
+"39프레임": 1
+},
+"noPart": false
 },
 "10": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 4,
+"29프레임": 1
+},
+"noPart": false
 },
 "11": {
 "parts": {},

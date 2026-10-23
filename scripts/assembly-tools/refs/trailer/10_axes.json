@@ -1,0 +1,1 @@
+{"global": {"X": [40.7, -14.1], "Y": [2.5, -55.0], "Z": [33.8, 35.0]}, "fit": {"from": "10_P.json ringfit 판 구멍 18점(월드 좌표, 판 평면 점뿐이라 phi 가 axes_fit(0.92)와 갈림 → 브라켓·리벳 점 26개 합친 풀이 phi 0.74 와 가까운 값 채택)", "err_px": 0.32, "points": 18, "theta": -0.57, "phi": 0.77, "cols": "+X", "rows": "+Y", "fov": 32}, "no_rotate": true, "no_lines": true}
