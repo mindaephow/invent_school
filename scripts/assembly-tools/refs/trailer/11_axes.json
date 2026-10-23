@@ -1,0 +1,1 @@
+{"global": {"X": [46.1, 32.8], "Y": [-4.3, -55.0], "Z": [-53.5, 31.2]}, "fit": {"from": "11_R.json ringfit 점 18개 PnP(두 막대 구멍 9+9, 막대 간격은 책 구성이라 d 54~60 범위)", "err_px": 1.93, "points": 18, "theta": 0.9, "phi": 0.93, "cols": "+X", "rows": "+Y", "fov": 27}, "no_rotate": true, "no_lines": true}
