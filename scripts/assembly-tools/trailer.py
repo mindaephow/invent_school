@@ -382,10 +382,7 @@ s26.note = "[교재 26] 몸통을 뒤집어 놓고, 옆판 구멍으로 축(65)�
 s26.kw["hideMade"] = {"25:%d" % _i: "스프라켓 바퀴 둘째(27번에서 씀)" for _i in range(15, 30)}   # 바퀴 둘 중 둘째는 보관(책 그림에 하나만 있다)
 _G26B = A.group("몸통(1~24번)", [_q for _q in A.parts if _q.step.index <= 24])
 s26.move_made(_G26B, np.diag([1.0, -1.0, -1.0]), pivot=(0.0, 37.5, 0.0), shift=(0.0, 0.0, 0.0), dir=[0, 1, 0], hover=0.01, group="mm26b")   # 25번 뒤집기: y 75−y, z −z
-_M26 = [_q for _q in A.parts if _q.n == "DC모터" and _q.step.index == 4][0]
-_ax_c = np.array(_M26.hole("cross")["pos"], float)   # 뒤집은 모터 십자 구멍 입구
-print("26번 모터 십자 구멍", np.round(_ax_c, 1).tolist())
-_AXL = np.array([_ax_c[0], _ax_c[1], 0.0])
+_AXL = np.array([-50.0, 55.0, 0.0])   # 스프라켓 축 위치(26·27번): 책 27번 벽 끝 리벳 쌍 4점+옆판 구멍 링 5점을 PnP 로 풀어 구멍 위치 가설을 가름 — 벽 끝(−X)에서 3번째 가운데 줄 구멍(x −50)일 때 1.0px, −40 은 5.2px, 모터 쪽 +40 은 17px(fov 36, θ −0.73·φ 0.98). 모터 십자 구멍(x +40)과는 다른 끝이다(모터 연결은 모델에 없음 — 확인 필요)
 R_AX26 = np.array([[1.0, 0.0, 0.0], [0.0, 0.0, -1.0], [0.0, 1.0, 0.0]])   # 축/부시: 로컬 y → 세계 +Z
 AX26 = s26.place("축", R_AX26, (_AXL[0], _AXL[1], -70.5)); AX26.extra["dir"] = [0, 0, -1]; AX26.extra["hover"] = 25   # 안쪽 끝 z −38(모터 십자 구멍 안 7)·바깥 끝 −103
 BU26 = s26.place("부시", R_AX26, (_AXL[0], _AXL[1], -100.5)); BU26.extra["dir"] = [0, 0, -1]; BU26.extra["hover"] = 110   # 축 바깥 끝(−98~−103)에
@@ -400,7 +397,7 @@ def _bush_R(n): return np.array([[1.0, 0.0, 0.0], [0.0, 0.0, -float(n)], [0.0, f
 def _wheel_R(n): return np.array([[1.0, 0.0, 0.0], [0.0, 0.0, float(n)], [0.0, -float(n), 0.0]])   # 중간바퀴 허브(−y)가 n 을 본다(무늬 면이 바깥)
 R_AXZ = np.array([[1.0, 0.0, 0.0], [0.0, 0.0, -1.0], [0.0, 1.0, 0.0]])   # 축 돌기가 +Z 를 본다(−Z 쪽 옆판 조립용)
 R_AXN = np.array([[1.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, -1.0, 0.0]])   # 축 돌기가 −Z 를 본다(+Z 쪽 옆판 조립용)
-_XS, _XF, _YW = float(_AXL[0]), -50.0, float(_AXL[1])   # 스프라켓 축 x(모터), 빈 축 x(반대 끝 3번째 구멍), 옆판 가운데 줄 y
+_XS, _XF, _YW = float(_AXL[0]), 50.0, float(_AXL[1])   # 스프라켓 축 x(벽 끝 3번째 구멍 −50), 빈 축 x(반대 끝 +X 에서 3번째 구멍 50), 옆판 가운데 줄 y
 s27 = SKEL[26]; s27.kw.pop("noPart", None)
 s27.note = "[교재 27] 반대쪽 옆판에도 같은 방법으로 축(65)을 모터 십자 구멍에 끼우고 둘째 스프라켓 바퀴를 끼운 뒤 끝에 빨간 부시를 끼워요."
 s27.kw["hideMade"] = {}
@@ -409,7 +406,7 @@ _W1 = np.array(SPR25[1].p, float)
 s27.move_made(_G27W, np.diag([-1.0, 1.0, -1.0]), pivot=tuple(_W1), shift=(_XS - _W1[0], _YW - _W1[1], 60.0 - _W1[2]), dir=[0, 0, 1], hover=80, group="mm27w")   # 돌기가 몸통(−Z) 쪽, 캐터필러 안쪽 끝이 옆판 바깥면 +50 에 닿음
 AX27 = s27.place("축", R_AXN, (_XS, _YW, 70.5)); AX27.extra["dir"] = [0, 0, 1]; AX27.extra["hover"] = 25
 BU27 = s27.place("부시", _bush_R(-1), (_XS, _YW, 100.5)); BU27.extra["dir"] = [0, 0, 1]; BU27.extra["hover"] = 110
-A.steps[26].cam = (0.41, 0.85, False, None, None, None); A.steps[26].camSrc = "eye"   # ⚠ 26번 반대쪽에서 본 모습을 눈으로 맞춤
+A.steps[26].cam = (-0.73, 0.98, False, None, None, None); A.steps[26].camSrc = "eye"   # 벽 끝 리벳 쌍 4점+옆판 구멍 링 PnP 1.0px(fov 36) — 책 27번과 같은 시점
 
 for _q, _m in ((AX27, [_XS, _YW, 50.0]), (BU27, [_XS, _YW, 103.0])):   # 안내 링 = 받는 구멍 입구. place() 로 놓은 부품이라 안내점을 직접 적는다
     _q.extra["marks"] = [[round(float(v), 2) for v in _m]]; _q.extra["noMarkCheck"] = True
@@ -418,7 +415,7 @@ s28 = SKEL[27]; s28.kw.pop("noPart", None)
 s28.note = "[교재 28] 같은 쪽 옆판 뒤쪽 구멍(−X 끝에서 3번째, 가운데 줄)에 축(65)을 끼우고 옆판 바깥면에 빨간 부시를 끼워요."
 AX28 = s28.place("축", R_AXN, (_XF, _YW, 60.5)); AX28.extra["dir"] = [0, 0, 1]; AX28.extra["hover"] = 25   # 안쪽 끝 z 28·바깥 끝 93
 BU28 = s28.place("부시", _bush_R(-1), (_XF, _YW, 52.75)); BU28.extra["dir"] = [0, 0, 1]; BU28.extra["hover"] = 70   # 옆판 바깥면(50)에 닿음
-A.steps[27].cam = (0.41, 0.85, False, None, None, None); A.steps[27].camSrc = "eye"
+A.steps[27].cam = (-0.73, 0.98, False, None, None, None); A.steps[27].camSrc = "eye"
 
 for _q, _m in ((AX28, [_XF, _YW, 50.0]), (BU28, [_XF, _YW, 55.5]),):   # 안내 링 = 받는 구멍 입구
     _q.extra["marks"] = [[round(float(v), 2) for v in _m]]; _q.extra["noMarkCheck"] = True
@@ -427,7 +424,7 @@ s29 = SKEL[28]; s29.kw.pop("noPart", None)
 s29.note = "[교재 29] 축에 중간바퀴를 끼우고(무늬 면이 바깥) 끝에 빨간 부시를 끼워요."
 WH29 = s29.place("중간바퀴", _wheel_R(-1), (_XF, _YW, 71.5)); WH29.extra["dir"] = [0, 0, 1]; WH29.extra["hover"] = 60   # 허브 면 z 55.5(안쪽 부시 바깥면)
 BU29 = s29.place("부시", _bush_R(-1), (_XF, _YW, 90.25)); BU29.extra["dir"] = [0, 0, 1]; BU29.extra["hover"] = 100   # 바퀴 무늬 면 87.5 ~ 축 끝 93
-A.steps[28].cam = (0.41, 0.85, False, None, None, None); A.steps[28].camSrc = "eye"
+A.steps[28].cam = (-0.73, 0.98, False, None, None, None); A.steps[28].camSrc = "eye"
 
 for _q, _m in ((WH29, [_XF, _YW, 55.5]), (BU29, [_XF, _YW, 93.0]),):   # 안내 링 = 받는 구멍 입구
     _q.extra["marks"] = [[round(float(v), 2) for v in _m]]; _q.extra["noMarkCheck"] = True
@@ -436,7 +433,7 @@ s30 = SKEL[29]; s30.kw.pop("noPart", None)
 s30.note = "[교재 30] 반대쪽 옆판(−Z)에도 같은 방법으로 빈 축(65)을 끼우고 빨간 부시를 끼워요."
 AX30 = s30.place("축", R_AXZ, (_XF, _YW, -60.5)); AX30.extra["dir"] = [0, 0, -1]; AX30.extra["hover"] = 25
 BU30 = s30.place("부시", _bush_R(1), (_XF, _YW, -52.75)); BU30.extra["dir"] = [0, 0, -1]; BU30.extra["hover"] = 70
-A.steps[29].cam = (3.55, 0.85, False, None, None, None); A.steps[29].camSrc = "eye"
+A.steps[29].cam = (3.55, 0.90, False, None, None, None); A.steps[29].camSrc = "eye"
 
 for _q, _m in ((AX30, [_XF, _YW, -50.0]), (BU30, [_XF, _YW, -55.5]),):   # 안내 링 = 받는 구멍 입구
     _q.extra["marks"] = [[round(float(v), 2) for v in _m]]; _q.extra["noMarkCheck"] = True
@@ -445,7 +442,7 @@ s31 = SKEL[30]; s31.kw.pop("noPart", None)
 s31.note = "[교재 31] 반대쪽 축에 중간바퀴를 끼우고(무늬 면이 바깥) 끝에 빨간 부시를 끼워요."
 WH31 = s31.place("중간바퀴", _wheel_R(1), (_XF, _YW, -71.5)); WH31.extra["dir"] = [0, 0, -1]; WH31.extra["hover"] = 60
 BU31 = s31.place("부시", _bush_R(1), (_XF, _YW, -90.25)); BU31.extra["dir"] = [0, 0, -1]; BU31.extra["hover"] = 100
-A.steps[30].cam = (3.55, 0.85, False, None, None, None); A.steps[30].camSrc = "eye"
+A.steps[30].cam = (3.55, 0.90, False, None, None, None); A.steps[30].camSrc = "eye"
 
 
 for _q, _m in ((WH31, [_XF, _YW, -55.5]), (BU31, [_XF, _YW, -93.0]),):   # 안내 링 = 받는 구멍 입구
@@ -459,7 +456,7 @@ s32.move_made(_G32, np.diag([1.0, -1.0, -1.0]), pivot=(0.0, 37.5, 0.0), shift=(0
 R_MB32 = np.array([[0.0, 0.0, -1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]])   # 메인보드 긴 쪽(로컬 x)=판 긴 쪽(Z), 돌기 둘(로컬 z)=판 짧은 쪽(−X)
 MB32 = s32.attach("메인보드", R_MB32, {"p1": (PL13, "h5_4"), "p2": (PL13, "h5_2")}, hover=45, dir=[0, 1, 0])   # 판 가운데 줄(칸5) 줄2·줄4 구멍
 A.meta["lift"] = {**(A.meta.get("lift") or {}), **{str(_i): 18.0 for _i in range(32, 42)}}   # 중간바퀴(지름 76)가 모터 축 높이 20 에서 바닥 아래로 내려가는 만큼 올림(드롭체커와 같은 18)
-A.steps[31].cam = (-0.6, 0.9, False, None, None, None); A.steps[31].camSrc = "eye"   # ⚠ 책 32번 모습을 눈으로 맞춤
+A.steps[31].cam = (2.54, 0.9, False, None, None, None); A.steps[31].camSrc = "eye"   # ⚠ 책 32번 모습을 눈으로 맞춤
 
 import stepchecks; stepchecks.apply(A, "trailer")
 
