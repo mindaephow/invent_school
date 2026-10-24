@@ -48,6 +48,73 @@ def bush_wrong(A, k):
         if hw and not hn: bad.append(i)
     return bad
 
+def fastener_protrusion(A, k):
+    """k번에서 새로 꽂은 볼트·너트의 가장 큰 부분(머리·너트 몸)이 프레임 면 밖으로 나온 만큼(mm)을 돌려준다 — 기본 규칙(사용자 지시 2026-10-24):
+    볼트·너트의 가장 큰 부분은 프레임 구멍(홀라인) 안으로 들어가 프레임 외곽선 밖으로 안 나온다. 반환: [(부품, 받는 프레임, 나온 mm)] — 0.3 넘은 것만."""
+    from asmlib import euler_to_R
+    dims = _dims(); bad = []
+    hide = A.steps[k - 1].kw.get("hideMade") or {}
+    def pose_k(q):
+        key = "%d:%d" % (q.step.index, q.step.parts.index(q))
+        for j in range(k, 0, -1):
+            e = (A.steps[j - 1].kw.get("moveMade") or {}).get(key)
+            if e: return np.array(e["p"], float), np.array(euler_to_R(e["r"]), float)
+        return _pose(q, k)
+    pool = [(q, *pose_k(q)) for k2, st2 in enumerate(A.steps, 1) if k2 <= k and str(k2) not in hide for q in st2.parts if q.n in dims and "프레임" in q.n]
+    for b in A.steps[k - 1].parts:
+        if b.n not in ("8볼트", "12볼트", "너트") or not b.conn["pegs"]: continue
+        bp, bR = pose_k(b); c = b.conn["pegs"][0]
+        ld = np.array(c["dir"], float); dw = bR @ ld; ax = int(np.argmax(np.abs(ld))); half = np.array(dims[b.n], float)[ax] / 2
+        base = bp + bR @ (np.array(c["pos"], float) - ld * c["len"] / 2)    # 돌기 밑동(구멍 입구 쪽 끝)
+        back_t = float(np.dot(bp, dw) + (-half))                              # 부품 상자의 바깥쪽 끝(돌기 방향의 반대쪽) 좌표
+        for q, p, R in pool:
+            d = np.array(dims[q.n]) / 2; e = np.abs(R) @ d; lo, hi = p - e, p + e
+            if np.all(base + dw * 1.0 >= lo - 0.3) and np.all(base + dw * 1.0 <= hi + 0.3):   # 밑동에서 구멍 쪽으로 1 들어간 점이 든 프레임 = 받는 프레임
+                cs = [float(np.dot(np.array([x, y, z]), dw)) for x in (lo[0], hi[0]) for y in (lo[1], hi[1]) for z in (lo[2], hi[2])]
+                face_t = min(cs)   # 돌기가 들어가는 입구 면(돌기 방향 쪽으로 가장 안쪽이 아닌 바깥 면)
+                prot = face_t - back_t
+                if prot > 0.3: bad.append((b.n, q.n, round(prot, 1)))
+                break
+    return bad
+
+def rivet_gaps(A, k):
+    """k번에서 새로 꽂은 리벳마다, 리벳이 잇는 두 프레임(양끝이 든 부품) 사이의 틈(mm, +는 떠 있음, −는 겹침)을 돌려준다 — 기본 규칙(사용자 지시 2026-10-24):
+    리벳으로 프레임과 프레임을 이으면 두 프레임은 딱 붙는다(틈 0, 겹침 0). 두 부품을 못 찾으면(한쪽만 꽂힌 결합 전 모습 등) 건너뛴다.
+    반환: [(리벳 이름, 부품1 이름, 부품2 이름, 틈)] — 틈이 0.3 넘게 떠 있거나(6 이하) 1.0 넘게 겹친 것만."""
+    from asmlib import euler_to_R
+    dims = _dims(); bad = []
+    hide = A.steps[k - 1].kw.get("hideMade") or {}
+    def pose_k(q):   # k번 시점 자세: k번까지 옮겨진(moveMade) 마지막 자세, 없으면 놓은 자세
+        key = "%d:%d" % (q.step.index, q.step.parts.index(q))
+        for j in range(k, 0, -1):
+            e = (A.steps[j - 1].kw.get("moveMade") or {}).get(key)
+            if e: return np.array(e["p"], float), np.array(euler_to_R(e["r"]), float)
+        return _pose(q, k)
+    pool = [(q, *pose_k(q)) for k2, st2 in enumerate(A.steps, 1) if k2 <= k and str(k2) not in hide for q in st2.parts if q.n in dims and q.n != "리벳"]
+    def box_of(q, p, R):
+        d = np.array(dims[q.n]) / 2.0; e = np.abs(R) @ d; return p - e, p + e
+    def host(pt, skip=None):
+        for q, p, R in pool:
+            if q is skip: continue
+            lo, hi = box_of(q, p, R)
+            if np.all(pt >= lo - 0.01) and np.all(pt <= hi + 0.01): return q, p, R
+        return None
+    for r in A.steps[k - 1].parts:
+        if r.n != "리벳": continue
+        rp, rR = pose_k(r)
+        loc = {c["id"]: np.array(c["pos"], float) for c in r.conn["pegs"]}
+        if "p1" not in loc or "p2" not in loc: continue
+        t1, t2 = rp + rR @ loc["p1"], rp + rR @ loc["p2"]; ax = (t2 - t1) / np.linalg.norm(t2 - t1)
+        h1 = host(t1 - ax * 1.0)
+        if not h1: continue
+        h2 = host(t2 + ax * 1.0, h1[0])
+        if not h2 or any(x[0].n in ("1열브라켓", "2열브라켓") for x in (h1, h2)): continue   # 브라켓은 L 자 모양이라 상자로는 면 위치를 못 잰다 — 건너뜀
+        def span(h):
+            lo, hi = box_of(h[0], h[1], h[2]); cs = [float(np.dot(np.array([x, y, z]), ax)) for x in (lo[0], hi[0]) for y in (lo[1], hi[1]) for z in (lo[2], hi[2])]; return min(cs), max(cs)
+        a, b = span(h1), span(h2); gap = max(b[0] - a[1], a[0] - b[1])
+        if 0.3 < gap <= 6.0 or gap < -1.0: bad.append((r.n, h1[0].n, h2[0].n, round(gap, 1)))
+    return bad
+
 def apply(A, name):
     here = os.path.dirname(os.path.abspath(__file__))
     lst = json.load(open(os.path.join(here, name + "_list.json"), encoding="utf-8")) if os.path.exists(os.path.join(here, name + "_list.json")) else {}
@@ -85,6 +152,12 @@ def apply(A, name):
         _ori = str(r.get("부품방향", "")).strip()   # 부품 방향·제자리 판정(관리자 지시 2026-10-09): 새 부품의 위·바깥 면, 칸1 끝, 줄 방향, 부품 사이 좌우 관계, 그룹이 들어오는 방향·앉는 자세를 책 격자에서 읽어 적는다
         _oex = k in rl.get("orient_exempt", [])   # 면제 번호는 새 순서로 다시 점검할 때까지 통과로 친다(rules 의 orient_exempt 에서 지우면 점검 대상)
         items.append((bool(rl.get("orient_check")) and not _oex, (len(_ori) >= 20 and not _ori.startswith("미")) or _oex or not rl.get("orient_check"), "부품 방향·제자리 판정(읽기 표 '부품방향')" + (" — 면제(재점검 대기)" if _oex and rl.get("orient_check") else "")))
+        if any(p.n == "리벳" for p in st.parts):   # 리벳으로 프레임과 프레임을 이으면 딱 붙는다(기본 규칙, 사용자 2026-10-24): 틈 0.3 초과(떠 있음)·겹침 1.0 초과면 막는다
+            _rg = rivet_gaps(A, k)
+            items.append((k not in _done, not _rg, "리벳 결합 프레임이 딱 붙음(틈 0)" + ("" if not _rg else " — 틈 %s" % ", ".join("%s(%s↔%s) %.1fmm" % x for x in _rg[:3]))))
+        if any(p.n in ("8볼트", "12볼트", "너트") for p in st.parts):   # 볼트·너트의 가장 큰 부분은 프레임 구멍 안에 묻혀 프레임 면 밖으로 안 나온다(기본 규칙, 사용자 2026-10-24)
+            _fp = fastener_protrusion(A, k)
+            items.append((k not in _done, not _fp, "볼트·너트 머리·몸이 프레임 면 밖으로 안 나옴" + ("" if not _fp else " — 나옴 %s" % ", ".join("%s(%s) %.1fmm" % x for x in _fp[:3]))))
         if any(p.n == "부시" for p in st.parts):   # 부시 방향 규칙(관리자 확정 2026-10-11): 넓은 쪽(모델 −y)이 바깥, 좁은 쪽(모델 +y)이 닿은 판 쪽. 사용자 ✓ 번호는 막지 않는다(내용을 못 바꾸므로)
             _bw = bush_wrong(A, k)
             items.append((k not in _done, not _bw, "부시 방향: 좁은 쪽(모델 +y)이 판 쪽" + ("" if not _bw else " — 넓은 쪽이 판에 닿은 부시 %s번째" % ", ".join(str(i + 1) for i in _bw))))

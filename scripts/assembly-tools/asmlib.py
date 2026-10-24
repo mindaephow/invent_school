@@ -553,6 +553,14 @@ class Step:
                 p = surf if rivet else (surf + d * mypeg["len"] / 2) - mypeg["pos"]   # tmp 는 p=0 이라 mypeg["pos"] 가 곧 R·(로컬 위치)
                 d0 = d
             marks.append(rnd(surf))
+        if p is not None and not rivet and n in SINK_PARTS and d0 is not None:   # 볼트·너트의 가장 큰 부분(머리·너트 몸)은 프레임 구멍 안으로 들어가 프레임 면 밖으로 안 나온다(사용자 기본 규칙 2026-10-24): 돌기 밑동이 면에 닿는 자리에서 머리 두께만큼 구멍 안쪽으로 더 넣는다
+            _dm = _sink_dims().get(n)
+            if _dm:
+                _pc = next((c for c in tmp.conn["pegs"] if c["id"] == _lk[0][0]), None)
+                if _pc:
+                    _ld = np.array(_pc["dir"], float); _ax = int(np.argmax(np.abs(_ld)))
+                    _prot = float(np.dot(np.array(_pc["pos"], float) - _ld * _pc["len"] / 2, _ld) + _dm[_ax] / 2)
+                    if _prot > 0.05: p = p + d0 * _prot
         part = Part(n, R, p if p is not None else (0, 0, 0), s, extra)
         for pid, (host, tgt) in items[1:]:
             pg = part.peg(pid); h = target(host, tgt, pg)
@@ -582,6 +590,8 @@ class Step:
             if calc:
                 myh = tmp.hole(pid); base = g["pos"] - d * g["len"] / 2
                 hole_center = base + d * myh["len"] / 2 if g["len"] >= myh["len"] else g["pos"] + d * (myh["len"] - g["len"]) / 2
+                if host.n == "리벳":   # 리벳으로 프레임과 프레임을 잇는 곳은 두 프레임이 딱 붙는다(사용자 기본 규칙 2026-10-24): 받는 판의 면이 리벳 가운데(= 먼저 꽂은 쪽 프레임 면)에 닿게 한다 — 돌기 밑동 기준(위)으로 놓으면 1.5mm 뜬다
+                    hole_center = np.array(host.p, float) + d * myh["len"] / 2
                 if p is None: p = hole_center - myh["pos"]   # myh 는 이미 세계 방향으로 돌린 값(tmp 의 p=0)
             if d0 is None: d0 = d
             marks.append(rnd(tip))
@@ -605,6 +615,16 @@ class Step:
         part.extra.update({"recv": True, "dir": rnd(d0 if dir is None else vec(dir)), "marks": marks})
         if hover: part.extra["hover"] = hover
         return s._add(part)
+
+SINK_PARTS = ("8볼트", "12볼트", "너트")   # 머리·몸이 프레임 면 밖으로 나오면 안 되는 부품(구멍에 묻는다)
+_SINK_DIMS = None
+def _sink_dims():
+    global _SINK_DIMS
+    if _SINK_DIMS is None:
+        import json as _j, os as _o
+        _p = _o.path.join(_o.path.dirname(_o.path.abspath(__file__)), "dims.json")
+        _SINK_DIMS = _j.load(open(_p, encoding="utf-8")) if _o.path.exists(_p) else {}
+    return _SINK_DIMS
 
 def _feature_points(q):
     """부품 q 의 구멍 입구/출구/중심, 돌기 끝/밑동의 세계 좌표 목록 [(변형, 종류, id, 좌표)]."""

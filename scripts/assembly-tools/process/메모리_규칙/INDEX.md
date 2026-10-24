@@ -24,7 +24,6 @@
 - `feedback_dont_prebuild_dont_push_often.md` · `feedback_no_unilateral_action.md` — 요청 안 한 것·푸시 금지
 
 ## 전체 색인
-- [조립 편집·색칠 도구](project_assembly_edit_and_paint.md) — 표시 옮기기/수정스샷(관리자), paint 도형, DC모터 색칠 완료 내용
 - [Diagnose, don't re-explain](feedback_diagnose_dont_explain.md) — when user says a UI element is missing, go look/fix, don't repeat navigation instructions
 - [Parse scope before removing](feedback_parse_scope_before_removing.md) — a scope qualifier in the next message can change what a prior "remove X" meant; don't delete a liked feature on a first-message reading
 - [No unilateral action](feedback_no_unilateral_action.md) — sharing a reference isn't authorization to act on it; propose and wait for go-ahead before writes
@@ -120,8 +119,10 @@
 - [메모리→저장소 동기화](feedback_sync_memory_rules_to_repo.md) — 조립도 메모리를 고치면 sync_memory_rules.py 로 저장소 사본 갱신(외부 PC 용, 2026-10-19)
 - [T축 헤드 2mm·6방향](feedback_tshaft_head_2mm_six_views.md) — T축은 헤드 2mm만 남기고 끝까지 끼움(44·47번 지적), 끝내기 전 6방향 비교, move hover=0은 60으로 뜸
 - [번호마다 조사·6방향·다음 번호 비교](feedback_survey_every_number_six_views_next_compare.md) — 끝낼 때 앞뒤좌우위아래 확인+다음 번호 같은 부분 비교를 track.py 로 기록
+- [조립 편집·색칠 도구](project_assembly_edit_and_paint.md) — 표시 옮기기/수정스샷(관리자), paint 도형, DC모터 색칠 완료 내용
 - [바이킹 조립도 진행](project_viking_status.md) — 1~36번 전부 완료·남은 일 확인/푸시, 인계는 저장소 진행기록_viking.md 맨 위 "★ 다음 세션 인계"; 리벳은 항상 분리
 - [올린 뒤 다시 불러와 확인](feedback_reload_after_upload.md) — 이미지 올린 뒤 🖼 배지 확인(15번 지적)
 - [좌우 부품은 각각 책으로 확인](feedback_check_arm_sides_from_book.md) — 구멍이 다 안 보이면 눕힌 게 아님, 결합은 옆일 수 있음, 팔 둘 각각 overlay(15·16번)
 - [브라켓 긴·짧은 팔 먼저](feedback_bracket_long_short_arm_first.md) — L자 부품 결합은 긴 팔·결합면을 홀라인 피치 여유로 먼저 확인, 증명 안 된 건 증거로 보내지 않음(바이킹 19번 2026-10-22)
 - [리벳은 항상 결합 전](feedback_rivets_always_separated.md) — seated 금지, 책이 꽂은 모양이어도 hover 24+화살표; 바이킹 21·22번 지적(2026-10-22)
+- [리벳 프레임은 딱 붙인다](feedback_rivet_frames_flush.md) — 리벳 결합 프레임 틈 0·겹침 0은 모든 조립도 기본 규칙(트레일러 17~19번 지적 2026-10-24), recv 후 flush
