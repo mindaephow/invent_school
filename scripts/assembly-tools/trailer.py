@@ -534,7 +534,7 @@ for _zp, _n in ((199.4, 1.0), (79.4, -1.0)):   # _n: +1 앞 판(+Z 바깥), −1
     _zi = _zp - 2.5 * _n   # 판 안쪽 면
     _Rin = R_AXN if _n > 0 else R_AXZ   # 바퀴 허브·T축 십자 끝이 몸통 쪽(−n)을 본다
     _w = s40.place("작은바퀴", _Rin, (_X40, _Y40, _zo + 8.0 * _n)); _w.extra["dir"] = [0, 0, _n]; _w.extra["hover"] = 30; _w.extra["marks"] = [[_X40, _Y40, _zo]]
-    _t = s40.place("T축", _Rin, (_X40, _Y40, _zo + 6.5 * _n + 0.0)); _t.extra["dir"] = [0, 0, _n]; _t.extra["hover"] = 75; _t.extra["horizontal"] = True; _t.extra["marks"] = [[_X40, _Y40, _zo + 16.0 * _n]]
+    _t = s40.place("T축", _Rin, (_X40, _Y40, _zo + 3.0 * _n)); _t.extra["dir"] = [0, 0, _n]; _t.extra["hover"] = 75; _t.extra["horizontal"] = True; _t.extra["marks"] = [[_X40, _Y40, _zo + 16.0 * _n]]
     _b = s40.place("부시", _bush_R(int(_n)), (_X40, _Y40, _zi - 2.75 * _n)); _b.extra["dir"] = [0, 0, -_n]; _b.extra["hover"] = 30; _b.extra["marks"] = [[_X40, _Y40, _zi]]
     for _q in (_w, _t, _b): _q.extra["noMarkCheck"] = True
 A.steps[39].cam = (-0.57, 0.97, False, None, None, None); A.steps[39].camSrc = "pnp"   # 옆판 모서리 4점 PnP 0.64px(fov 40)
