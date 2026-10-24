@@ -272,7 +272,9 @@
 "noPart": false
 },
 "41": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 2
+},
+"noPart": false
 }
 }
