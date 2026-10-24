@@ -17,12 +17,21 @@
 "noPart": false
 },
 "3": {
-"parts": {},
-"noPart": true
+"parts": {
+"59프레임": 1,
+"리벳": 2,
+"8볼트": 2,
+"너트": 2
+},
+"noPart": false
 },
 "4": {
-"parts": {},
-"noPart": true
+"parts": {
+"39프레임": 2,
+"3단블록": 6,
+"2단블록": 2
+},
+"noPart": false
 },
 "5": {
 "parts": {},
