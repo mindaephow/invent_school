@@ -456,7 +456,7 @@ s32.move_made(_G32, np.diag([1.0, -1.0, -1.0]), pivot=(0.0, 37.5, 0.0), shift=(0
 R_MB32 = np.array([[0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [-1.0, 0.0, 0.0]])   # 메인보드 긴 쪽(로컬 x)=판 긴 쪽(Z), 돌기 둘(로컬 z)=판 짧은 쪽(−X)
 MB32 = s32.attach("메인보드", R_MB32, {"p1": (PL13, "h5_2"), "p2": (PL13, "h5_4")}, hover=45, dir=[0, 1, 0])   # 판 가운데 줄(칸5) 줄2·줄4 구멍
 A.meta["lift"] = {**(A.meta.get("lift") or {}), **{str(_i): 18.0 for _i in range(32, 42)}}   # 중간바퀴(지름 76)가 모터 축 높이 20 에서 바닥 아래로 내려가는 만큼 올림(드롭체커와 같은 18)
-A.steps[31].cam = (2.54, 0.9, False, None, None, None); A.steps[31].camSrc = "eye"   # ⚠ 책 32번 모습을 눈으로 맞춤
+A.steps[31].cam = (3.73, 1.01, False, None, None, None); A.steps[31].camSrc = "eye"   # ⚠ 책 32번 모습을 눈으로 맞춤
 
 import stepchecks; stepchecks.apply(A, "trailer")
 
