@@ -136,28 +136,47 @@
 "noPart": false
 },
 "21": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 2,
+"15프레임": 1
+},
+"noPart": false
 },
 "22": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 2
+},
+"noPart": false
 },
 "23": {
-"parts": {},
-"noPart": true
+"parts": {
+"59프레임": 1,
+"리벳": 1,
+"1열브라켓": 1,
+"8볼트": 1,
+"너트": 1
+},
+"noPart": false
 },
 "24": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 4
+},
+"noPart": false
 },
 "25": {
-"parts": {},
-"noPart": true
+"parts": {
+"스프라켓": 2,
+"캐터필러": 28
+},
+"noPart": false
 },
 "26": {
-"parts": {},
-"noPart": true
+"parts": {
+"축": 1,
+"부시": 1
+},
+"noPart": false
 },
 "27": {
 "parts": {},
