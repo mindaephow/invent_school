@@ -106,6 +106,19 @@ BOOKS = {
         },
         "extra": [],
     },
+    "bowling": {
+        "volume": 2,
+        "pages": {
+            100: [(0, (370, 460, 1135, 1315), "교재 100쪽 맨 앞 완성품 사진 — 앞뒤·방향(위 큰 바퀴 둘+기어, 아래 흰 비탈 둘, 아래 검은 판·메인보드)은 여기서 확인"), (1, (75, 1325, 705, 1880), ""), (2, (720, 1325, 1355, 1880), "")],
+            101: [(3 + i, box(*g), "") for i, g in enumerate(GRID)],
+            102: [(9 + i, box(*g), "") for i, g in enumerate(GRID)],
+            103: [(15 + i, box(*g), "") for i, g in enumerate(GRID)],
+            104: [(21 + i, box(*g), "") for i, g in enumerate(GRID)],
+            105: [(27 + i, box(*g), "") for i, g in enumerate(GRID)],
+            106: [(33, box("L", 1), ""), (34, box("R", 1), ""), (35, box("L", 2), ""), (36, box("R", 2), ""), (37, box("L", 3), ""), (99, box("R", 3), "완성")],
+        },
+        "extra": [],
+    },
     "viking": {
         "volume": 2,
         "pages": {
