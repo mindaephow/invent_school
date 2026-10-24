@@ -1,0 +1,1 @@
+{"global": {"X": [49.5, 32.3], "Y": [-0.8, -55.0], "Z": [-49.0, 32.4]}, "fit": {"from": "12_R.json ringfit 점(벽 구멍 14 + 막대 구멍 12, 막대 띄움 37)", "err_px": 3.3, "points": 26, "theta": 0.89, "phi": 0.79, "cols": "+X", "rows": "+Y", "fov": 34}, "no_rotate": true, "no_lines": true}

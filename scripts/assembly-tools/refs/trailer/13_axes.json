@@ -1,0 +1,1 @@
+{"global": {"X": [46.1, 25.3], "Y": [-2.1, -55.0], "Z": [-49.2, 27.2]}, "fit": {"from": "13_R.json ringfit 점 35개(판 격자 24 + 막대 구멍 11, 판을 막대에서 20mm 아래로 둠 = 책 간격)", "err_px": 4.28, "points": 35, "theta": 0.72, "phi": 1.01, "cols": "+X", "rows": "+Y", "fov": 32}, "no_rotate": true, "no_lines": true}

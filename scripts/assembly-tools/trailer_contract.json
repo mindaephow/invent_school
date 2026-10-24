@@ -81,39 +81,59 @@
 },
 "12": {
 "parts": {},
-"noPart": true
+"noPart": false
 },
 "13": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 4,
+"59프레임": 1,
+"8볼트": 2,
+"너트": 2
+},
+"noPart": false
 },
 "14": {
-"parts": {},
-"noPart": true
+"parts": {
+"2단블록": 2
+},
+"noPart": false
 },
 "15": {
-"parts": {},
-"noPart": true
+"parts": {
+"27프레임": 1,
+"2단블록": 2,
+"17프레임": 1
+},
+"noPart": false
 },
 "16": {
 "parts": {},
-"noPart": true
+"noPart": false
 },
 "17": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 4,
+"29프레임": 1
+},
+"noPart": false
 },
 "18": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 4,
+"29프레임": 1
+},
+"noPart": false
 },
 "19": {
 "parts": {},
-"noPart": true
+"noPart": false
 },
 "20": {
-"parts": {},
-"noPart": true
+"parts": {
+"3단블록": 2,
+"15프레임": 2
+},
+"noPart": false
 },
 "21": {
 "parts": {},

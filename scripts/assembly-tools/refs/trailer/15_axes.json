@@ -1,0 +1,1 @@
+{"global": {"X": [55.0, 22.8], "Y": [2.5, -54.6], "Z": [-36.2, 34.5]}, "fit": {"from": "15_R.json ringfit 판 구멍 14점(holefit 어두운판 14/14구멍 1.11px)", "err_px": 1.12, "points": 14, "theta": 0.63, "phi": 0.81, "cols": "+X", "rows": "+Y", "fov": 23}, "no_rotate": true, "no_lines": true}

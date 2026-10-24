@@ -1,0 +1,1 @@
+{"global": {"X": [36.5, 37.4], "Y": [-4.1, -49.0], "Z": [-55.0, 27.2]}, "fit": {"from": "14_R.json ringfit 판 구멍 25점(holefit DoG 29/45구멍 1.32px 중 칸2~8)", "err_px": 1.16, "points": 25, "theta": 0.91, "phi": 0.89, "cols": "+X", "rows": "+Y", "fov": 32}, "no_rotate": true, "no_lines": true}
