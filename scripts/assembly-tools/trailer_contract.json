@@ -258,12 +258,18 @@
 "noPart": false
 },
 "39": {
-"parts": {},
-"noPart": true
+"parts": {
+"315프레임": 2
+},
+"noPart": false
 },
 "40": {
-"parts": {},
-"noPart": true
+"parts": {
+"작은바퀴": 2,
+"T축": 2,
+"부시": 2
+},
+"noPart": false
 },
 "41": {
 "parts": {},

@@ -1,0 +1,1 @@
+{"cols": 4, "rows": 1, "pts": [[1, 1, 335.0, 578.0], [2, 1, 817.0, 372.0], [3, 1, 148.0, 322.0], [4, 1, 570.0, 210.0]], "est": [], "name": "trailer 39번 P: 블록 끝 돌기 링 4점 PnP 7px(fov 40)", "tool": "ring-read", "err_px": 0.0, "max_err_px": 0.0, "found": 4, "found_ratio": 1.0, "mode": "링 읽음"}
