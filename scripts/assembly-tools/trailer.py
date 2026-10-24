@@ -372,13 +372,13 @@ s25.note = "[교재 25] 스프라켓 둘레에 캐터필러 28개(바퀴마다 1
 s25.kw["hideMade"] = {**{str(_n): "트럭 몸통(1~8번)" for _n in range(1, 9)}, **{str(_n): "합친 트럭 몸통+조립(9~24번)" for _n in range(9, 25)}}
 R_SPR25 = np.array([[1.0, 0.0, 0.0], [0.0, 0.0, -1.0], [0.0, 1.0, 0.0]])   # 스프라켓: 로컬 y(가운데 구멍 축) → 세계 +Z
 SPR25, TRD25 = [], []
-for _cx in (-55.0, 55.0):   # 새 창고 2 바퀴 둘(몸통 옆자리 z +100), 축 Z
+for _cx in (-55.0, 55.0):   # 새 창고 2 바퀴 둘(몸통 옆자리 z +100), 축 Z — 배치는 드롭체커 12번(사용자 지시로 다듬은 값)을 그대로 옮김
     _c = np.array([_cx, 45.0, 100.0])
     SPR25.append(s25.place("스프라켓", R_SPR25, tuple(_c)))
-    for _k in range(14):   # 캐터필러 14개: 긴 쪽(로컬 x)=바퀴 축 Z, 돌기(로컬 y)=바깥(반지름 방향), 로컬 z=원둘레 방향 — 링크 폭 16 ×14 = 둘레 → 중심 반지름 35, 앞쪽 끝이 스프라켓 앞면(+Z)과 같은 높이로 뒤(−Z)로 5.5 더 뻗음(책 바퀴: 판이 앞, 캐터필러가 뒤로 뻗음)
+    for _k in range(14):   # 캐터필러 14개: 로컬 x → 축 Z, 돌기(로컬 y) → 바깥, 로컬 z → 둘레. 둘레 반지름 25.8(스프라켓 피치 반지름), 링크를 축 방향 −9 에 두어 스프라켓 톱니 띠가 링크 안쪽 받침에 끼고 톱니 14개와 링크 14개 각도가 0°에서 같다
         _a = 2 * np.pi * _k / 14
         _u = np.array([np.cos(_a), np.sin(_a), 0.0]); _t = np.array([-np.sin(_a), np.cos(_a), 0.0])
-        TRD25.append(s25.place("캐터필러", np.stack([np.array([0.0, 0.0, 1.0]), _u, _t], axis=1), tuple(_c + 35.0 * _u + np.array([0.0, 0.0, -5.5]))))
+        TRD25.append(s25.place("캐터필러", np.stack([np.array([0.0, 0.0, 1.0]), _u, _t], axis=1), tuple(_c + 25.8 * _u + np.array([0.0, 0.0, -9.0]))))
 for _q in SPR25 + TRD25: _q.extra["loose"] = True   # 스프라켓·캐터필러는 부품 DB 에 서로 끼우는 구멍·돌기가 없다(링크 안쪽 홈·바퀴 이빨 없음) — 허공 검사만 면제, 위치는 반지름 35·간격 25.7°(14개)로 계산
 A.steps[24].cam = (0.8, 1.25, False, None, None, None); A.steps[24].camSrc = "eye"   # ⚠ 추정: 책에 구멍 격자·링이 없어 바퀴 모양(앞면 둥근 판이 앞, 캐터필러가 뒤로 뻗음)만 눈으로 맞춘 값
 
@@ -398,7 +398,7 @@ AX26 = s26.place("축", R_AX26, (_AXL[0], _AXL[1], -70.5)); AX26.extra["dir"] = 
 BU26 = s26.place("부시", R_AX26, (_AXL[0], _AXL[1], -100.5)); BU26.extra["dir"] = [0, 0, -1]; BU26.extra["hover"] = 110   # 축 바깥 끝(−98~−103)에
 _G26W = A.group("스프라켓 바퀴 하나(25번)", [_q for _q in A.parts if _q.step.index == 25 and A.steps[24].parts.index(_q) < 15])
 _W0 = np.array(SPR25[0].p, float)
-s26.move_made(_G26W, np.diag([-1.0, 1.0, -1.0]), pivot=tuple(_W0), shift=(_AXL[0] - _W0[0], _AXL[1] - _W0[1], -74.5 - _W0[2]), dir=[0, 0, -1], hover=80, group="mm26w")   # 스프라켓 뒤면 z −61(캐터필러 뒤끝이 옆판 −50 에 닿음)·앞면 −88, 앞면(판)이 바깥
+s26.move_made(_G26W, np.diag([-1.0, 1.0, -1.0]), pivot=tuple(_W0), shift=(_AXL[0] - _W0[0], _AXL[1] - _W0[1], -78.0 - _W0[2]), dir=[0, 0, -1], hover=80, group="mm26w")   # 스프라켓 가운데 z −78(캐터필러 안쪽 끝 −50 이 옆판 바깥면에 딱 닿음, 앞면 −91.5), 앞면(판)이 바깥
 A.steps[25].cam = (3.55, 0.85, False, None, None, None); A.steps[25].camSrc = "eye"   # ⚠ 링 3점이 한 축선 위라 PnP 불가 — 뒤집은 몸통·바퀴·부시 모양(바퀴가 왼쪽 아래, 몸통 위 오른쪽, 먼 왼쪽 끝에 흰 판 모서리)을 책과 눈으로 맞춘 값
 
 import stepchecks; stepchecks.apply(A, "trailer")
