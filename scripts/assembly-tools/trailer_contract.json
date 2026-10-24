@@ -252,8 +252,10 @@
 "noPart": false
 },
 "38": {
-"parts": {},
-"noPart": true
+"parts": {
+"19프레임": 1
+},
+"noPart": false
 },
 "39": {
 "parts": {},
