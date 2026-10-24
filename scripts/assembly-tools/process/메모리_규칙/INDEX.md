@@ -126,3 +126,4 @@
 - [브라켓 긴·짧은 팔 먼저](feedback_bracket_long_short_arm_first.md) — L자 부품 결합은 긴 팔·결합면을 홀라인 피치 여유로 먼저 확인, 증명 안 된 건 증거로 보내지 않음(바이킹 19번 2026-10-22)
 - [리벳은 항상 결합 전](feedback_rivets_always_separated.md) — seated 금지, 책이 꽂은 모양이어도 hover 24+화살표; 바이킹 21·22번 지적(2026-10-22)
 - [리벳 프레임은 딱 붙인다](feedback_rivet_frames_flush.md) — 리벳 결합 프레임 틈 0·겹침 0은 모든 조립도 기본 규칙(트레일러 17~19번 지적 2026-10-24), recv 후 flush
+- [기존 조립세트 재사용](feedback_reuse_existing_assembly_sets.md) — 반복 세트(스프라켓 바퀴)는 다른 조립도에서 가져오고 asmlib 기본 세트로 등록(트레일러 25번)

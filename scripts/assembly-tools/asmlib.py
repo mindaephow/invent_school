@@ -389,6 +389,16 @@ class Step:
     def built(s):
         """이 단계 직전까지 끝낸 조립품 전체 = 자동으로 만들어지는 그룹(사용자 지시 2026-10-04: 순서대로 1번이 완성되면 자동으로 그룹화)."""
         return Group(f"{s.index - 1}단계까지 완성품", [pt for st in s.A.steps if st.index < s.index for pt in st.parts])
+    def sprocket_wheel(s, center):
+        """기본 조립세트 — 스프라켓 바퀴(스프라켓 1 + 캐터필러 14, 축 = 세계 Z, 허브 십자 구멍이 +Z 쪽). 드롭체커 12번에서 사용자 지시로 다듬은 배치를 그대로 쓴다(2026-10-24 사용자 "이 바퀴도 기본 조립세트로 등록"):
+        둘레 반지름 25.8(스프라켓 피치 반지름), 링크 14개 = 25.7° 간격(톱니 14개와 0°에서 같은 각도), 링크는 축 방향 −9 에 두어 스프라켓 톱니 띠가 링크 안쪽 받침에 낀다. 링크 로컬 x → 축(Z), y → 바깥(돌기), z → 둘레. 부품 DB 에 서로 끼우는 구멍·돌기가 없어 loose(허공 검사 면제).
+        center: 스프라켓 가운데(세계). 반환: (스프라켓, [캐터필러 14])."""
+        c = np.array(center, float); sp = s.place("스프라켓", np.array([[1.0, 0, 0], [0, 0, -1.0], [0, 1.0, 0]]), tuple(c)); sp.extra["loose"] = True; links = []
+        for k in range(14):
+            a = 2 * math.pi * k / 14; u = np.array([math.cos(a), math.sin(a), 0.0]); t = np.array([-math.sin(a), math.cos(a), 0.0])
+            q = s.place("캐터필러", np.stack([np.array([0.0, 0.0, 1.0]), u, t], axis=1), tuple(c + 25.8 * u + np.array([0.0, 0.0, -9.0]))); q.extra["loose"] = True; links.append(q)
+        return sp, links
+
     def copy_to_slot(s, g, slot, store, until, shift=(0, 0, 300)):
         """이미 만든 부품 묶음 g 를 그대로 복사해 다른 창고(slot)에 보관한다(교재 "N~M번 2개 만들기"의 둘째 벌 — 새로 만들지 않고 복사).
         복사본은 이번 단계 부품으로 들어가 이번 단계부터 until−1 단계까지 창고 slot 에 '보관 중'(store 이름, 화면에 안 그려짐)이고 until 단계부터 보인다.
