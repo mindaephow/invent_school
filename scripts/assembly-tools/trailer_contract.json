@@ -243,8 +243,13 @@
 "noPart": false
 },
 "37": {
-"parts": {},
-"noPart": true
+"parts": {
+"29프레임": 1,
+"T축": 1,
+"15프레임": 1,
+"부시": 1
+},
+"noPart": false
 },
 "38": {
 "parts": {},
