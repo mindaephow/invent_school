@@ -391,7 +391,7 @@ AX26 = s26.place("축", R_AX26, (_AXL[0], _AXL[1], -70.5)); AX26.extra["dir"] = 
 BU26 = s26.place("부시", R_AX26, (_AXL[0], _AXL[1], -100.5)); BU26.extra["dir"] = [0, 0, -1]; BU26.extra["hover"] = 110   # 축 바깥 끝(−98~−103)에
 _G26W = A.group("스프라켓 바퀴 하나(25번)", [_q for _q in A.parts if _q.step.index == 25 and A.steps[24].parts.index(_q) < 15])
 _W0 = np.array(SPR25[0].p, float)
-s26.move_made(_G26W, np.diag([-1.0, 1.0, -1.0]), pivot=tuple(_W0), shift=(_AXL[0] - _W0[0], _AXL[1] - _W0[1], -78.0 - _W0[2]), dir=[0, 0, -1], hover=80, group="mm26w")   # 스프라켓 가운데 z −78(캐터필러 안쪽 끝 −50 이 옆판 바깥면에 딱 닿음, 앞면 −91.5), 앞면(판)이 바깥
+s26.move_made(_G26W, np.eye(3), pivot=tuple(_W0), shift=(_AXL[0] - _W0[0], _AXL[1] - _W0[1], -60.0 - _W0[2]), dir=[0, 0, -1], hover=80, group="mm26w")   # 스프라켓 돌기(+y 허브 관)가 몸통(가운데, +Z) 쪽 — 기본 규칙(사용자 2026-10-24): 관 끝 z −46.5 가 옆판 구멍에 3.5 들어가고 캐터필러 안쪽 끝이 옆판 바깥면 −50 에 딱 닿음. 바퀴를 돌리지 않는다(25번 자세 그대로, 돌기 +Z)
 A.steps[25].cam = (3.55, 0.85, False, None, None, None); A.steps[25].camSrc = "eye"   # ⚠ 링 3점이 한 축선 위라 PnP 불가 — 뒤집은 몸통·바퀴·부시 모양(바퀴가 왼쪽 아래, 몸통 위 오른쪽, 먼 왼쪽 끝에 흰 판 모서리)을 책과 눈으로 맞춘 값
 
 import stepchecks; stepchecks.apply(A, "trailer")
