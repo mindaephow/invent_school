@@ -34,8 +34,10 @@
 "noPart": false
 },
 "5": {
-"parts": {},
-"noPart": true
+"parts": {
+"39프레임": 2
+},
+"noPart": false
 },
 "6": {
 "parts": {},
