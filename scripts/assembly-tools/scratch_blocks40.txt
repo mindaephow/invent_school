@@ -1,0 +1,15 @@
+# ── 40 ── 교재 112쪽 40 (읽은 것 2026-10-24 — 옆판 둘의 뒤쪽 끝(칸13)·가운데 줄 구멍에 작은 빨간 바퀴를 바깥에서 T축으로 끼우고 안쪽에서 빨간 부시로 잠근다: 링 = 판 구멍(칸13·줄2, 앞 판은 바깥 면·뒤 판은 안쪽 면에 보임)·부시·바퀴 가운데, 양쪽 같은 칸. 판 모서리 4점 PnP 0.64px — 링 (685,445)·(470,285) 이 칸13·줄2 로 투영됨)
+s40 = SKEL[39]; s40.kw.pop("noPart", None)
+s40.note = "[교재 40] 두 옆판 뒤쪽(칸13) 가운데 구멍에 작은 빨간 바퀴를 T축으로 끼우고 안쪽에서 빨간 부시로 잠가요."
+s40.kw["hideMade"] = {str(_n): "트럭(1~35번)" for _n in range(1, 36)}
+_X40, _Y40 = 55.0, 20.0
+for _zp, _n in ((199.4, 1.0), (79.4, -1.0)):   # _n: +1 앞 판(+Z 바깥), −1 뒤 판(−Z 바깥)
+    _zo = _zp + 2.5 * _n   # 판 바깥 면
+    _zi = _zp - 2.5 * _n   # 판 안쪽 면
+    _Rin = R_AXN if _n > 0 else R_AXZ   # 바퀴 허브·T축 십자 끝이 몸통 쪽(−n)을 본다
+    _w = s40.place("작은바퀴", _Rin, (_X40, _Y40, _zo + 8.0 * _n)); _w.extra["dir"] = [0, 0, _n]; _w.extra["hover"] = 30; _w.extra["marks"] = [[_X40, _Y40, _zo]]
+    _t = s40.place("T축", _Rin, (_X40, _Y40, _zo + 6.5 * _n + 0.0)); _t.extra["dir"] = [0, 0, _n]; _t.extra["hover"] = 75; _t.extra["horizontal"] = True; _t.extra["marks"] = [[_X40, _Y40, _zo + 16.0 * _n]]
+    _b = s40.place("부시", _bush_R(int(_n)), (_X40, _Y40, _zi - 2.75 * _n)); _b.extra["dir"] = [0, 0, -_n]; _b.extra["hover"] = 30; _b.extra["marks"] = [[_X40, _Y40, _zi]]
+    for _q in (_w, _t, _b): _q.extra["noMarkCheck"] = True
+A.steps[39].cam = (-0.57, 0.97, False, None, None, None); A.steps[39].camSrc = "pnp"   # 옆판 모서리 4점 PnP 0.64px(fov 40)
+

@@ -44,124 +44,220 @@
 "noPart": false
 },
 "7": {
-"parts": {},
-"noPart": true
+"parts": {
+"515프레임": 1,
+"리벳": 2,
+"17프레임": 1,
+"8볼트": 1,
+"너트": 1
+},
+"noPart": false
 },
 "8": {
-"parts": {},
-"noPart": true
+"parts": {
+"59프레임": 1,
+"리벳": 2,
+"8볼트": 1,
+"너트": 1
+},
+"noPart": false
 },
 "9": {
-"parts": {},
-"noPart": true
+"parts": {
+"3단블록": 1
+},
+"noPart": false
 },
 "10": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 4,
+"2열브라켓": 2
+},
+"noPart": false
 },
 "11": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 4,
+"215프레임": 1
+},
+"noPart": false
 },
 "12": {
 "parts": {},
-"noPart": true
+"noPart": false
 },
 "13": {
-"parts": {},
-"noPart": true
+"parts": {
+"515프레임": 1,
+"리벳": 8,
+"17프레임": 1,
+"8볼트": 2,
+"너트": 2,
+"59프레임": 1,
+"3단블록": 1,
+"2열브라켓": 2
+},
+"noPart": false
 },
 "14": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 4,
+"215프레임": 1
+},
+"noPart": false
 },
 "15": {
 "parts": {},
-"noPart": true
+"noPart": false
 },
 "16": {
-"parts": {},
-"noPart": true
+"parts": {
+"315프레임": 1,
+"DC모터": 1,
+"3단블록": 1
+},
+"noPart": false
 },
 "17": {
-"parts": {},
-"noPart": true
+"parts": {
+"37프레임": 1,
+"3단블록": 2
+},
+"noPart": false
 },
 "18": {
 "parts": {},
-"noPart": true
+"noPart": false
 },
 "19": {
-"parts": {},
-"noPart": true
+"parts": {
+"315프레임": 1
+},
+"noPart": false
 },
 "20": {
-"parts": {},
-"noPart": true
+"parts": {
+"315프레임": 1
+},
+"noPart": false
 },
 "21": {
-"parts": {},
-"noPart": true
+"parts": {
+"큰기어": 1,
+"리벳": 3,
+"29프레임": 1
+},
+"noPart": false
 },
 "22": {
-"parts": {},
-"noPart": true
+"parts": {
+"135도 프레임": 1,
+"리벳": 2,
+"8볼트": 1,
+"너트": 1
+},
+"noPart": false
 },
 "23": {
-"parts": {},
-"noPart": true
+"parts": {
+"T축": 1
+},
+"noPart": false
 },
 "24": {
-"parts": {},
-"noPart": true
+"parts": {
+"35프레임": 1,
+"리벳": 4,
+"2단블록": 2
+},
+"noPart": false
 },
 "25": {
-"parts": {},
-"noPart": true
+"parts": {
+"15프레임": 2
+},
+"noPart": false
 },
 "26": {
 "parts": {},
-"noPart": true
+"noPart": false
 },
 "27": {
-"parts": {},
-"noPart": true
+"parts": {
+"29프레임": 1,
+"리벳": 3,
+"큰기어": 1
+},
+"noPart": false
 },
 "28": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 2,
+"135도 프레임": 1,
+"8볼트": 1,
+"너트": 1
+},
+"noPart": false
 },
 "29": {
-"parts": {},
-"noPart": true
+"parts": {
+"T축": 1,
+"부시": 1
+},
+"noPart": false
 },
 "30": {
 "parts": {},
-"noPart": true
+"noPart": false
 },
 "31": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 2,
+"17프레임": 1
+},
+"noPart": false
 },
 "32": {
-"parts": {},
-"noPart": true
+"parts": {
+"37프레임": 2,
+"2단블록": 4
+},
+"noPart": false
 },
 "33": {
 "parts": {},
-"noPart": true
+"noPart": false
 },
 "34": {
 "parts": {},
-"noPart": true
+"noPart": false
 },
 "35": {
-"parts": {},
-"noPart": true
+"parts": {
+"315프레임": 3,
+"DC모터": 1,
+"3단블록": 3,
+"37프레임": 3,
+"큰기어": 2,
+"리벳": 16,
+"29프레임": 2,
+"135도 프레임": 2,
+"8볼트": 2,
+"너트": 2,
+"T축": 2,
+"35프레임": 1,
+"2단블록": 6,
+"15프레임": 2,
+"부시": 1,
+"17프레임": 1
+},
+"noPart": false
 },
 "36": {
-"parts": {},
-"noPart": true
+"parts": {
+"메인보드": 1
+},
+"noPart": false
 },
 "37": {
 "parts": {},

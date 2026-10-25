@@ -128,3 +128,5 @@
 - [리벳 프레임은 딱 붙인다](feedback_rivet_frames_flush.md) — 리벳 결합 프레임 틈 0·겹침 0은 모든 조립도 기본 규칙(트레일러 17~19번 지적 2026-10-24), recv 후 flush
 - [기존 조립세트 재사용](feedback_reuse_existing_assembly_sets.md) — 반복 세트(스프라켓 바퀴)는 다른 조립도에서 가져오고 asmlib 기본 세트로 등록(트레일러 25번)
 - [로버트론 제품 규격](project_robotron_brands_part_spec.md) — 에이스랩·로보타미주니어=로버트론 제품, 큐보 프레임과 홀 테두리 없음·홀 1mm 작음·끝 더 둥글게
+- [책 글자 읽기](feedback_read_book_text_labels.md) — 책 그림 속 글(긴 쪽·리벳 홈 방향 주의 등)을 번호 시작 때 먼저 읽어 반영(볼링머신 10번, 2026-10-25)
+- [볼링머신 조립도 진행](project_bowling_status.md) — 1~36번 완료·37번 부품 없음(2026-10-25, 푸시 전, 22·24~36번 미달 인정), 남은 것은 사용자 확인·푸시; 격자 한 칸 밀림·3단블록 면 정정 교훈, 상세는 저장소 진행기록_bowling.md
