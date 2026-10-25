@@ -138,7 +138,10 @@
     const res = M.check(list.map((d, i) => ({ key: '#' + i, n: d.name, p: d.pos, r: d.rot })), conn);
     const par = list.map((_, i) => i);
     const find = (x) => { while (par[x] !== x) { par[x] = par[par[x]]; x = par[x]; } return x; };
-    (res.mated || []).forEach((m) => { const i = Number(String(m.part).slice(1)), j = Number(String(m.into).slice(1)); if (!isNaN(i) && !isNaN(j)) par[find(i)] = find(j); });
+    // 관절로 움직이는 묶음 따로 나누기(볼링머신 완성, 사용자 요청 2026-10-26): def.splitGroups = [{ name, keys:['단계:순서'…], from }] — 이 묶음 안 부품끼리만 한 덩어리가 되고, 묶음 안팎 부품 사이의 맞물림(관절 돌기)은 덩어리를 잇지 않는다 → 관절 블록+레인만 따로 잡아 움직여 볼 수 있다.
+    const spl = (def.splitGroups || []).filter((g) => step >= (g.from || 0)), sp = list.map(() => -1);
+    spl.forEach((g, gi) => { const ks = new Set(g.keys || []); list.forEach((d, i) => { if (ks.has(d.key)) sp[i] = gi; }); });
+    (res.mated || []).forEach((m) => { const i = Number(String(m.part).slice(1)), j = Number(String(m.into).slice(1)); if (!isNaN(i) && !isNaN(j) && sp[i] === sp[j]) par[find(i)] = find(j); });
     // 옆자리에서 따로 만드는 세트(같은 side.until)는 떠 있어서 맞물려 보이지 않아도 제자리에서 맞물리는 부품끼리 한 묶음이다 → 클릭하면 세트 전체가 잡힌다(사용자 지시 2026-10-04)
     { const resF = M.check(list.map((d, i) => ({ key: '#' + i, n: d.name, p: d.fin || d.pos, r: d.finRot || d.rot })), conn);
       (resF.mated || []).forEach((m) => { const i = Number(String(m.part).slice(1)), j = Number(String(m.into).slice(1)); if (!isNaN(i) && !isNaN(j) && list[i].sideUntil && list[i].sideUntil === list[j].sideUntil) par[find(i)] = find(j); }); }
@@ -148,7 +151,8 @@
     return Object.values(groups).filter((g) => g.length > 1).map((idx) => {
       const first = Math.min(...idx.map((i) => list[i].step || 1));
       const eff = Math.max(...idx.map((i) => list[i].eff || list[i].step || 1));
-      return { name: first === 1 ? '본체' : stepTag(first) + '번 조립품', idx, origin: slotOfStep(first), slot: (viewSlot !== null && viewSlot !== slotOfStep(step)) ? viewSlot : slotOfStep(step) }; // 지금 화면에 보이는 묶음은 모두 이 단계가 작업하는 창고 자리에 있다(결합하는 단계는 1·2번에 있던 것을 0번으로 끌어와 결합한다 — 사용자 지시 2026-10-04)
+      const gi0 = sp[idx[0]];
+      return { name: (gi0 >= 0 && idx.every((i) => sp[i] === gi0)) ? spl[gi0].name : (first === 1 ? '본체' : stepTag(first) + '번 조립품'), idx, origin: slotOfStep(first), slot: (viewSlot !== null && viewSlot !== slotOfStep(step)) ? viewSlot : slotOfStep(step) }; // 지금 화면에 보이는 묶음은 모두 이 단계가 작업하는 창고 자리에 있다(결합하는 단계는 1·2번에 있던 것을 0번으로 끌어와 결합한다 — 사용자 지시 2026-10-04)
     });
   }
 
@@ -226,6 +230,221 @@
     rng.oninput = () => { if (!hingeBusy) { setArm(rng.value); hingeLoaded = false; } };
     num.onchange = () => { if (!hingeBusy) { setArm(num.value); hingeLoaded = false; } };
     $('asmHingeReset').onclick = () => { if (!hingeBusy) { setMotor(0); setArm(0); hingeLoaded = false; } };
+  }
+  // ───── 볼링머신 발사(사용자 요청 2026-10-26): def.hinges 중 kind:'fire' 마다 "N번 발사" 버튼 — 팔이 시계 방향으로 swing° 돌아 중간바퀴(볼링공)를 던지고, 공이 레인을 따라 구르며(path: 이동 벡터 구간들) 레인이 돌기 관절(lanePivot·z축)로 laneTilt° 살짝 기울었다 돌아온다. 원위치 버튼으로 모두 되돌린다.
+  let fireBusy = false;
+  function setupFire(list, b) {
+    const fs = (def.hinges || []).filter((h) => h.kind === 'fire'), old = $('asmFireBar');
+    fireBusy = false;
+    if (!fs.length || step < (fs[0].from || 0) || !$('asmStageBar')) { if (old) old.hidden = true; return; }
+    if (old) old.remove();
+    const bar = document.createElement('div'); bar.id = 'asmFireBar';
+    bar.style.cssText = 'display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:0 0 8px; padding:6px 10px; background:#fef2f2; border:1px solid #fca5a5; border-radius:10px; font-size:13px; font-weight:700;';
+    $('asmStageBar').insertBefore(bar, $('asmStageBar').firstChild);
+    const idxOf = (keys) => { const ks = new Set(keys || []), r = []; list.forEach((d, i) => { if (ks.has(d.key)) r.push(i); }); return r; };
+    const rad = (d) => d * Math.PI / 180, ease = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+    const tween = (ms, fn, step_) => new Promise((res) => { const t0 = performance.now(); let last = 0; const f = (now) => { const k = Math.min(1, (now - t0) / ms), e = (step_ || ease)(k); fn(e - last); last = e; if (k < 1) requestAnimationFrame(f); else res(); }; requestAnimationFrame(f); });
+    const rot = (idxs, pv, ax, r) => { if (idxs.length) b.hinge(idxs, pv, ax, r); };
+    const btns = [], resets = [], loads = [];
+    const lock = (on) => { fireBusy = on; btns.forEach((x) => { x.disabled = on; }); };
+    fs.forEach((f) => {
+      const _tY = (f.wheelCenter || [0, 0, 0])[1], _dY = (f.path || []).reduce((t, q) => t + q.vec[1], 0), _minY = (f.wheelR || 38) + (f.floorY || 0), _k = (_dY < 0 && _tY + _dY < _minY) ? Math.max(0, (_tY - _minY) / -_dY) : 1;   // 바퀴 중심이 바닥 아래로 내려가지 않게 레인 끝을 바닥 높이에서 멈춘다
+      const fpath = (f.path || []).map((q) => Object.assign({}, q, { vec: q.vec.map((v) => v * _k) }));
+      const armIdx = idxOf(f.keys), whIdx = idxOf(f.wheelKeys), laneIdx = idxOf(f.laneKeys), ax = f.axis || [0, 0, 1], pv = f.pivot;
+      const S = { ang: 0, swung: false, c: (f.wheelCenter || [0, 0, 0]).slice(), D: [0, 0, 0], spin: 0 };
+      const box = document.createElement('div'); box.style.cssText = 'display:flex; flex-direction:column; gap:6px; padding:6px 8px; background:#fff; border:1px solid #fca5a5; border-radius:10px; flex:1 1 100%;';   // 번호마다 한 묶음: 윗줄 = 버튼, 아랫줄 = 측정·확정
+      const rowB = document.createElement('div'); rowB.style.cssText = 'display:flex; gap:6px; flex-wrap:wrap; align-items:center;';
+      const rowM = document.createElement('div'); rowM.style.cssText = 'display:flex; flex-direction:column; gap:6px; padding-top:6px; border-top:1px dashed #fca5a5;';
+      const mkRow = () => { const r = document.createElement('div'); r.style.cssText = 'display:flex; gap:14px; flex-wrap:wrap; align-items:center;'; rowM.appendChild(r); return r; };
+      const rowM1 = mkRow(), rowM2 = mkRow(), rowM3 = mkRow();   // 1줄: 장전 각도 · 내리기 각도 / 2줄: 지금 팔 · 바퀴 위치 / 3줄: 지렛대
+      box.append(rowB, rowM); bar.appendChild(box);
+      const btn = document.createElement('button'); btn.type = 'button'; btn.textContent = f.name;
+      btn.style.cssText = 'padding:5px 14px; border-radius:10px; border:0; background:#dc2626; color:#fff; font-weight:800;';
+      rowB.appendChild(btn); btns.push(btn);
+      const SKEY = 'asmFireSet:' + (def && def.id) + ':' + f.name;
+      let laneA = 0; const lpv = f.lanePivot || [0, 0, 0];   // 레인(지렛대) 기울기 — 바퀴는 레인 위에 얹혀 같이 기운다(S.c 는 기울기 전 레인 기준 좌표)
+      const mvW = (v) => { const c = Math.cos(laneA), sn = Math.sin(laneA); b.moveParts(whIdx, [c * v[0] - sn * v[1], sn * v[0] + c * v[1], v[2]]); };
+      const wcW = () => { const c = Math.cos(laneA), sn = Math.sin(laneA), dx = S.c[0] - lpv[0], dy = S.c[1] - lpv[1]; return [lpv[0] + c * dx - sn * dy, lpv[1] + sn * dx + c * dy, S.c[2]]; };
+      let levForce = null, levSnap = null; const showLev = (v) => { levForce = v; levSnap = S.c.slice(); };   // 확정·▼▲ 로 정한 각도를 바로 보여 준다(바퀴가 다시 움직이면 바퀴 위치 기준으로 돌아간다)
+      let whOff = 0, whLimit = null, levUp = 20, levEnd = 0, downAng = 15, startAngV = f.startAng == null ? 35 : f.startAng;
+      try { const sv0 = JSON.parse(localStorage.getItem(SKEY) || 'null'); if (sv0) { if (isFinite(sv0.ang)) startAngV = sv0.ang; if (sv0.wl != null && isFinite(sv0.wl)) whLimit = sv0.wl; if (sv0.lu != null && isFinite(sv0.lu)) levUp = sv0.lu; if (sv0.le != null && isFinite(sv0.le)) levEnd = sv0.le; if (sv0.dn != null && isFinite(sv0.dn)) downAng = sv0.dn; } } catch (e) { /* 저장값 없음 */ }
+      if (whLimit != null) whOff = whLimit;   // 확정한 바퀴 위치가 있으면 그 값에서 시작
+      const CBASE = f.contactAng == null ? 15 : f.contactAng, CSLOPE = 0.5, UPLIM = f.upLimit == null ? 55 : f.upLimit;
+      const contactAng = (off) => CBASE + Math.max(0, -off) * CSLOPE;   // 팔이 바퀴 위에 얹히는(닿는) 각도 — 바퀴가 위로 갈수록 팔이 더 들려 있어야 한다
+      const GREEN = '#16a34a', GRAY = '#9ca3af';   // 확정 버튼: 눌러 확정하면 회색, 칸의 값을 다시 고치면 초록으로 돌아온다
+      const confirmStyle = (ok, inp) => { ok.style.background = GRAY; ok.addEventListener('click', () => { ok.style.background = GRAY; }); if (inp) inp.addEventListener('input', () => { ok.style.background = GREEN; }); };
+      const saveSet = async () => {   // 확정 저장: 시작 팔 각도·바퀴 위치를 이 브라우저와(관리자면) DB 에 남긴다
+        const val = { ang: startAngV, wl: whLimit, lu: levUp, le: levEnd, dn: downAng };
+        try { localStorage.setItem(SKEY, JSON.stringify(val)); } catch (e) { /* 저장 못 해도 화면은 계속 */ }
+        const b2 = bridge(); if (b2 && b2.checkStore && def && window.__ivsIsAdmin && window.__ivsIsAdmin()) { try { await b2.checkStore.set(def.id, def.steps.length, 'fireset:' + f.name, 'ok', JSON.stringify(val)); } catch (e) { notice('저장에 실패했습니다: ' + e.message); } }
+      };
+      const rl = (fpath || []).filter((q) => Math.hypot(q.vec[0], q.vec[1], q.vec[2]) > 60)[0], rv = rl ? rl.vec : [1, 0, 0], rn = Math.hypot(rv[0], rv[1], rv[2]) || 1, rdir = rv.map((x) => x / rn);   // 레인 방향   // 장전(와인드업): 팔이 공 반대쪽으로 올라간다 — 발사 때 도는 방향(swing)의 반대
+      const tot = [0, 0, 0]; (fpath || []).forEach((q) => { for (let i = 0; i < 3; i++) tot[i] += q.vec[i]; });
+      const toStart = () => { mvW( tot); S.c = (S.home || f.wheelCenter).map((x, i) => x + tot[i]); S.swung = true; S.D = tot.slice(); S.spin = 0; S.atStart = true; };   // 시작 모습: 바퀴는 레인 아래 바닥 쪽에 놓여 있다
+      const angEl = document.createElement('span'); angEl.style.cssText = 'display:inline-flex; align-items:center; gap:3px; font-weight:800; color:#7c2d12;';
+      const angIn = document.createElement('input'); angIn.type = 'number'; angIn.step = 1; angIn.min = 0; angIn.max = 150; angIn.style.cssText = 'width:60px; padding:2px 4px; font-weight:800;'; angIn.title = '숫자를 넣고 Enter 를 누르면 팔이 바로 그 각도로 움직입니다(저장은 안 됨)';
+      const angOk = document.createElement('button'); angOk.type = 'button'; angOk.textContent = '확정'; angOk.style.cssText = 'padding:4px 10px; border-radius:8px; border:0; background:#16a34a; color:#fff; font-weight:800;';
+      const touchEl = document.createElement('span'); touchEl.style.cssText = 'font-weight:600; font-size:11.5px; color:#6b7280;'; angEl.append('지금 팔 ', angIn, '°', touchEl);
+      const upd = () => { if (document.activeElement !== angIn) angIn.value = Math.round(S.ang * 10) / 10; touchEl.textContent = '(바퀴에 닿는 각도 약 ' + Math.round(CBASE + Math.max(0, -whOff) * CSLOPE) + '°)'; };   // 입력 중이 아니면 현재 각도를 보여 준다
+      const armStart = () => { const A0 = startAngV; if (A0) { rot(armIdx, pv, ax, rad(A0)); S.ang = A0; upd(); } };   // 시작 모습: 팔을 든 채
+      const reset = (keepTop, keepArm) => {   // 거꾸로: 공 회전 → 공 이동 → 팔 각도
+        if (S.ang && !keepArm) { rot(armIdx, pv, ax, -rad(S.ang)); S.ang = 0; upd(); }   // 올라가 있던 팔은 −sw 방향이 아닌 부호 반대로 내린다(아래 up 정의와 같은 부호)
+        if (!S.swung) return;
+        rot(whIdx, wcW(), ax, -S.spin); mvW( S.D.map((v) => -v));
+        const c = S.c.map((v, i) => v - S.D[i]); if (f.carry !== false) rot(whIdx, pv, ax, -rad(f.swing)); S.swung = false; S.c = (S.home || f.wheelCenter || c).slice(); S.D = [0, 0, 0]; S.spin = 0; S.atStart = false;
+        if (!keepTop) { toStart(); armStart(); }
+      };
+      resets.push(reset);
+      const armTo = async (target) => { const from = S.ang, d0 = target - from; if (!d0) return; await tween(Math.max(250, Math.abs(d0) * 14), (d) => { rot(armIdx, pv, ax, rad(d0) * d); }); S.ang = target; upd(); };   // 각도(도)까지 부드럽게
+      const angW = (label, getV, setV) => {   // 각도 칸 + 확정: 확정하면 팔이 그 각도로 움직이고 저장된다
+        const w = document.createElement('span'); w.style.cssText = 'display:inline-flex; align-items:center; gap:3px; font-weight:700; color:#7f1d1d; font-size:12px;';
+        const inp = document.createElement('input'); inp.type = 'number'; inp.step = 1; inp.min = 0; inp.max = 150; inp.value = getV(); inp.style.cssText = 'width:60px; padding:2px 4px; font-weight:800;';
+        const ok = document.createElement('button'); ok.type = 'button'; ok.textContent = '확정'; ok.style.cssText = 'padding:4px 10px; border-radius:8px; border:0; background:#16a34a; color:#fff; font-weight:800;';
+        ok.onclick = async () => { if (fireBusy) return; const v = Math.max(0, Math.min(150, parseFloat(inp.value))); if (isNaN(v)) { inp.value = getV(); return; } inp.value = v; inp.blur(); setV(v); lock(true); try { await armTo(v); } finally { lock(false); } saveSet(); upd(); };
+        inp.onkeydown = (e) => { if (e.key === 'Enter') ok.click(); };
+        confirmStyle(ok, inp); w.append(label + ' ', inp, '°', ok); btns.push(ok); return { w, inp, ok };
+      };
+      const { w: loadW, inp: loadIn, ok: loadOk } = angW('장전 각도', () => startAngV, (v) => { startAngV = v; });
+      const { w: downW, inp: downIn, ok: downOk } = angW('내리기 각도', () => downAng, (v) => { downAng = v; });
+      angIn.onchange = async () => { if (fireBusy) return; const v = Math.max(0, Math.min(150, parseFloat(angIn.value))); if (isNaN(v)) { upd(); return; } angIn.blur(); lock(true); try { await armTo(v); } finally { lock(false); } upd(); };   // 지금 팔 칸에 숫자를 넣으면 바로 움직인다
+      const armDown = async () => { await armTo(0); };   // 발사 전에 팔을 맨 아래(원래 자세)로
+      const armHold = (btnEl, dir, fld) => {   // 누르고 있는 동안 팔이 움직이고(▲ 올림 / ▼ 내림), 떼면 멈춘 각도가 칸에 채워진다(초록 = 아직 저장 안 됨). 저장은 확정
+        let raf = 0, last = 0, on = false;
+        const step = (now) => { if (!raf) return; const dt = Math.min(50, now - last) / 1000; last = now; const nxt = Math.max(0, Math.min(150, S.ang + dir * 40 * dt)), dd = nxt - S.ang; if (dd) { rot(armIdx, pv, ax, rad(dd)); S.ang = nxt; upd(); } raf = requestAnimationFrame(step); };
+        const stop = () => { if (!on) return; on = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } fld.value = Math.round(S.ang * 10) / 10; fld.dispatchEvent(new Event('input', { bubbles: true })); };
+        btnEl.addEventListener('pointerdown', (e) => { if (fireBusy) return; e.preventDefault(); try { btnEl.setPointerCapture(e.pointerId); } catch (x) {} on = true; last = performance.now(); raf = requestAnimationFrame(step); });
+        ['pointerup', 'pointercancel', 'lostpointercapture', 'pointerleave'].forEach((ev) => btnEl.addEventListener(ev, stop));
+      };
+      const putWheel = async () => {   // 바퀴놓기: 바퀴를 레인 아래 바닥 쪽에 놓고, 레인을 따라 구르며 윗끝 자리까지 올라간다
+        const tgt = f.wheelCenter.map((x, i) => x + whOff * rdir[i]);
+        if (!S.swung) toStart();   // 이미 윗끝이면 아래에서 다시 시작
+        const mv = tgt.map((x, i) => x - S.c[i]), len = Math.hypot(mv[0], mv[1], mv[2]), sgn = mv[0] * rdir[0] + mv[1] * rdir[1] + mv[2] * rdir[2];
+        await tween(Math.max(600, len * 4), (d) => { const v = mv.map((x) => x * d); mvW( v); S.c = S.c.map((x, i) => x + v[i]); rot(whIdx, wcW(), ax, -(sgn * d) / (f.wheelR || 38)); }, (t) => t);
+        S.swung = false; S.c = tgt.slice(); S.home = tgt.slice(); S.D = [0, 0, 0]; S.spin = 0; S.atStart = false;
+      };
+      const wheelHold = (x, dir) => {   // 누르고 있는 동안 바퀴가 레인을 구르고(▲ 위로 / ▼ 아래로), 떼면 그 자리에 놓이고 위치가 칸에 채워진다(초록 = 아직 저장 안 됨)
+        let raf = 0, last = 0, on = false, tgt = f.wheelCenter.slice();
+        const place = () => { on = false; whOff = Math.round(((S.c[0] - f.wheelCenter[0]) * rdir[0] + (S.c[1] - f.wheelCenter[1]) * rdir[1] + (S.c[2] - f.wheelCenter[2]) * rdir[2]) * 10) / 10; offIn.value = whOff; offIn.dispatchEvent(new Event('input', { bubbles: true })); S.swung = false; S.home = S.c.slice(); S.D = [0, 0, 0]; S.spin = 0; S.atStart = false; upd(); };
+        const stop = () => { if (!on) return; if (raf) { cancelAnimationFrame(raf); raf = 0; } place(); };
+        const step = (now) => {
+          if (!raf) return; const dt = Math.min(50, now - last) / 1000; last = now;
+          const dv = tgt.map((t, i) => t - S.c[i]), dist = Math.hypot(dv[0], dv[1], dv[2]), mvl = Math.min(dist, 130 * dt);
+          if (mvl > 0) { const v = dv.map((q) => q / dist * mvl); mvW(v); S.c = S.c.map((q, i) => q + v[i]); const sgn = (v[0] * rdir[0] + v[1] * rdir[1] + v[2] * rdir[2]); rot(whIdx, wcW(), ax, -sgn / (f.wheelR || 38)); }
+          if (dist - mvl < 0.01) { raf = 0; place(); return; }
+          raf = requestAnimationFrame(step);
+        };
+        x.addEventListener('pointerdown', (e) => { if (fireBusy) return; e.preventDefault(); try { x.setPointerCapture(e.pointerId); } catch (z) {} on = true; tgt = dir < 0 ? f.wheelCenter.map((q, i) => q - UPLIM * rdir[i]) : f.wheelCenter.map((q, i) => q + tot[i]); if (!S.swung) { S.swung = true; S.D = S.c.map((q, i) => q - (S.home || f.wheelCenter)[i]); } last = performance.now(); raf = requestAnimationFrame(step); });
+        ['pointerup', 'pointercancel', 'lostpointercapture', 'pointerleave'].forEach((ev) => x.addEventListener(ev, stop));
+      };
+      const mk = (label, bg, fn) => { const x = document.createElement('button'); x.type = 'button'; x.textContent = label; x.style.cssText = 'padding:5px 12px; border-radius:10px; border:0; color:#fff; font-weight:800; background:' + bg + ';'; x.onclick = async () => { if (fireBusy) return; lock(true); try { await fn(); } finally { lock(false); } }; rowB.insertBefore(x, btn); btns.push(x); };
+      const nm = f.name.replace(' 발사', '').replace('발사', '');   // "1번"
+      rowM2.appendChild(angEl); upd();
+      const offIn = document.createElement('input'); offIn.type = 'number'; offIn.step = 5; offIn.value = whOff; offIn.style.cssText = 'width:60px; padding:2px 4px; font-weight:800;';
+      const offOk = document.createElement('button'); offOk.type = 'button'; offOk.textContent = '확정'; offOk.style.cssText = 'padding:4px 10px; border-radius:8px; border:0; background:#16a34a; color:#fff; font-weight:800;';
+      const offW = document.createElement('span'); offW.style.cssText = 'display:inline-flex; align-items:center; gap:3px; font-weight:700; color:#7f1d1d; font-size:12px;'; offW.append('바퀴 위치(레인 방향 mm) ', offIn, offOk);
+      offOk.onclick = async () => {   // 확정: 입력한 위치로 바퀴를 옮기고 저장한다(바퀴가 윗끝에 있을 때)
+        if (fireBusy) return; let v = parseFloat(offIn.value); if (isNaN(v)) { offIn.value = whOff; return; } v = Math.max(v, -(f.upLimit == null ? 55 : f.upLimit)); offIn.value = v;   // 레인 위쪽 끝보다 위로는 못 간다
+        whLimit = v; lock(true); try { const old = whOff; whOff = v; if (!S.swung) { const mv = rdir.map((q) => q * (v - old)); await tween(400, (d) => { const w = mv.map((x) => x * d); mvW( w); S.c = S.c.map((x, i) => x + w[i]); }, (t) => t); S.home = S.c.slice(); } } finally { lock(false); }
+        saveSet(); upd();
+      };
+      confirmStyle(offOk, offIn);
+      offIn.onkeydown = (e) => { if (e.key === 'Enter') offOk.click(); };
+      btns.push(offOk);
+      const holdBtn = (txt, attach) => { const x = document.createElement('button'); x.type = 'button'; x.textContent = txt; x.title = '누르고 있는 동안 움직입니다'; x.style.cssText = 'padding:4px 10px; border-radius:8px; border:0; background:#6b7280; color:#fff; font-weight:800; touch-action:none; user-select:none;'; attach(x); btns.push(x); return x; };
+      const grp = (...kids) => { const g = document.createElement('div'); g.style.cssText = 'display:none; align-items:center; gap:8px; flex-wrap:wrap; padding:4px 8px; background:#fff7ed; border-radius:8px;'; g.append(...kids); return g; };
+      const panels = {
+        load: grp(loadW, holdBtn('▲ 올림', (x) => armHold(x, 1, loadIn)), holdBtn('▼ 내림', (x) => armHold(x, -1, loadIn))),
+        down: grp(downW, holdBtn('▲ 올림', (x) => armHold(x, 1, downIn)), holdBtn('▼ 내림', (x) => armHold(x, -1, downIn))),
+        wheel: grp(offW, holdBtn('▲ 위로', (x) => wheelHold(x, -1)), holdBtn('▼ 아래로', (x) => wheelHold(x, 1)))
+      };
+      rowM1.append(panels.load, panels.down, panels.wheel);
+      const rollWheelTo = async (off) => {   // 바퀴를 레인을 따라 굴려 off 위치(레인 방향 mm)에 놓는다
+        const tgt = f.wheelCenter.map((x, i) => x + off * rdir[i]); whOff = off; offIn.value = whOff;
+        const mv = tgt.map((x, i) => x - S.c[i]), len = Math.hypot(mv[0], mv[1], mv[2]), sgn = mv[0] * rdir[0] + mv[1] * rdir[1] + mv[2] * rdir[2];
+        if (len > 0.5) await tween(Math.max(500, len * 4), (d) => { const v = mv.map((x) => x * d); mvW(v); S.c = S.c.map((x, i) => x + v[i]); rot(whIdx, wcW(), ax, -(sgn * d) / (f.wheelR || 38)); }, (t) => t);
+        S.swung = false; S.c = tgt.slice(); S.home = tgt.slice(); S.D = [0, 0, 0]; S.spin = 0; S.atStart = false; upd();
+      };
+      const modeBtns = {};
+      const setMode = (k) => { Object.keys(panels).forEach((q) => { panels[q].style.display = q === k ? 'flex' : 'none'; modeBtns[q].style.outline = q === k ? '3px solid #111827' : 'none'; }); };
+      const mkMode = (k, label, bg, onSel) => { const x = document.createElement('button'); x.type = 'button'; x.textContent = label; x.style.cssText = 'padding:5px 12px; border-radius:10px; border:0; color:#fff; font-weight:800; background:' + bg + ';'; x.onclick = async () => { if (fireBusy) return; setMode(k); lock(true); try { await onSel(); } finally { lock(false); } }; rowB.insertBefore(x, btn); btns.push(x); modeBtns[k] = x; };
+      mkMode('load', nm + ' 장전', '#f97316', async () => { if (conf.load) await armTo(startAngV); });   // 확정한 값이 있을 때만(색이 들어와 있을 때만) 그 각도로 움직인다   // 고르면 저장된 장전 각도로 간 뒤, 아래 칸·▲▼ 로 조정하고 확정
+      mkMode('wheel', nm + ' 바퀴 올리기', '#0ea5e9', async () => { if (conf.wheel) await rollWheelTo(whLimit); });   // 확정한 위치가 있을 때만(색이 들어와 있을 때만) 그 위치로 굴러간다(회색이면 제자리)
+      mkMode('down', nm + ' 내리기', '#8b5cf6', async () => { if (conf.down) await armTo(downAng); });
+      setMode('load');
+      const levIn = document.createElement('input'); levIn.type = 'number'; levIn.readOnly = true; levIn.style.cssText = 'width:56px; padding:2px 4px; font-weight:800; background:#f3f4f6;';   // 지금 지렛대 각도(읽기 전용)
+      const levW = document.createElement('span'); levW.style.cssText = 'display:inline-flex; align-items:center; gap:3px; font-weight:700; color:#7f1d1d; font-size:12px;'; levW.append('지렛대 지금 ', levIn, '°');
+      const levField = (label, getV, setV) => {   // 각도 칸 + ▼▲(누르는 동안 조절) + 확정(저장). 지렛대: + 는 위쪽(팔 쪽)이 내려가고 아래쪽이 올라온다
+        const w = document.createElement('span'); w.style.cssText = 'display:inline-flex; align-items:center; gap:3px; font-weight:700; color:#7f1d1d; font-size:12px;';
+        const inp = document.createElement('input'); inp.type = 'number'; inp.step = 0.5; inp.value = getV(); inp.style.cssText = 'width:56px; padding:2px 4px; font-weight:800;';
+        const hb2 = (t, dir) => { const x = document.createElement('button'); x.type = 'button'; x.textContent = t; x.style.cssText = 'padding:4px 8px; border-radius:8px; border:0; background:#8b5cf6; color:#fff; font-weight:800; touch-action:none; user-select:none;';
+          let raf = 0, last = 0, on = false;
+          let cur = null;
+          const step = (now) => { if (!raf) return; const dt = Math.min(50, now - last) / 1000; last = now; cur = Math.max(0, Math.min(30, cur + dir * 15 * dt)); showLev(cur); inp.value = Math.round(cur * 10) / 10; raf = requestAnimationFrame(step); };
+          const stop = () => { if (!on) return; on = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } inp.value = Math.round(cur * 10) / 10; inp.dispatchEvent(new Event('input', { bubbles: true })); };   // 저장은 확정을 눌러야 된다
+          x.addEventListener('pointerdown', (e) => { e.preventDefault(); try { x.setPointerCapture(e.pointerId); } catch (z) {} on = true; { const t = parseFloat(inp.value); cur = isNaN(t) ? getV() : t; } last = performance.now(); raf = requestAnimationFrame(step); });
+          ['pointerup', 'pointercancel', 'lostpointercapture', 'pointerleave'].forEach((ev) => x.addEventListener(ev, stop)); return x; };
+        const ok = document.createElement('button'); ok.type = 'button'; ok.textContent = '확정'; ok.style.cssText = 'padding:4px 10px; border-radius:8px; border:0; background:#16a34a; color:#fff; font-weight:800;';
+        ok.onclick = () => { const v = parseFloat(inp.value); if (isNaN(v)) { inp.value = getV(); return; } setV(Math.max(0, Math.min(30, v))); showLev(getV()); inp.value = getV(); inp.blur(); saveSet(); };
+        inp.onkeydown = (e) => { if (e.key === 'Enter') ok.click(); };
+        confirmStyle(ok, inp); w.append(label + ' ', hb2('▼', 1), hb2('▲', -1), inp, '°', ok); return { w, inp, ok };
+      };
+      const { w: luW, inp: luIn, ok: luOk } = levField('바퀴 올렸을 때', () => levUp, (v) => { levUp = v; });
+      const { w: leW, inp: leIn, ok: leOk } = levField('바퀴 굴러간 최종', () => levEnd, (v) => { levEnd = v; });
+      rowM2.appendChild(levW);
+      panels.lu = grp(luW); panels.le = grp(leW); rowM1.append(panels.lu, panels.le);   // 지렛대도 같은 방식: 고르고 → ▼▲ 로 조정 → 확정
+      mkMode('lu', nm + ' 지렛대(올렸을 때)', '#7c3aed', async () => { if (conf.lu) showLev(levUp); });
+      mkMode('le', nm + ' 지렛대(굴러간 최종)', '#7c3aed', async () => { if (conf.le) showLev(levEnd); });
+      setMode('load');
+      const MC = { load: '#f97316', wheel: '#0ea5e9', down: '#8b5cf6', lu: '#7c3aed', le: '#7c3aed' };   // 모드 버튼: 확정 전엔 회색, 확정하면 제 색
+      let sv1 = null; try { sv1 = JSON.parse(localStorage.getItem(SKEY) || 'null'); } catch (e) { /* 저장값 없음 */ }
+      const conf = { load: !!(sv1 && sv1.ang != null), down: !!(sv1 && sv1.dn != null), wheel: !!(sv1 && sv1.wl != null), lu: !!(sv1 && sv1.lu != null), le: !!(sv1 && sv1.le != null) };
+      const paintMode = (k) => { modeBtns[k].style.background = conf[k] ? MC[k] : '#9ca3af'; };
+      const bindMode = (k, ok, inp) => { ok.addEventListener('click', () => { conf[k] = true; paintMode(k); }); inp.addEventListener('input', () => { conf[k] = false; paintMode(k); }); paintMode(k); };
+      bindMode('load', loadOk, loadIn); bindMode('down', downOk, downIn); bindMode('wheel', offOk, offIn); bindMode('lu', luOk, luIn); bindMode('le', leOk, leIn);
+      btn.onclick = async () => {
+        if (fireBusy) return; lock(true); await armTo(startAngV); await rollWheelTo(whLimit != null ? whLimit : 0); await armTo(downAng); reset(true, true);   // 발사 = 장전 → 바퀴 올리기 → 내리기 → 발사(확정해 둔 값으로)
+        const sw = rad(f.swing), rr = f.wheelR || 38, carry = f.carry !== false, easeOut3 = (t) => 1 - Math.pow(1 - t, 3);
+        let armDone, hitDelay = 250;
+        if (carry) {   // 팔이 공을 싣고 돌다가 놓는다
+          await tween(700, (d) => { rot(armIdx.concat(whIdx), pv, ax, sw * d); });
+          const c0 = f.wheelCenter, vx = c0[0] - pv[0], vy = c0[1] - pv[1], ca = Math.cos(sw), sa = Math.sin(sw);
+          S.c = [pv[0] + ca * vx - sa * vy, pv[1] + sa * vx + ca * vy, c0[2]]; S.swung = true;
+          armDone = tween(600, (d) => { rot(armIdx, pv, ax, -sw * d); }, easeOut3);
+        } else {   // 공은 레인 윗끝에 얹혀 있고 팔 끝 막대가 뒤에서 밀며 돌았다가 제자리로 돌아온다
+          S.c = (S.home || f.wheelCenter).slice(); S.swung = true;
+          const lift = 12, held = S.ang <= Math.max(contactAng(whOff), downAng) + 1, easeIn = (t) => t * t;   // 팔이 중력으로 내려와 바퀴를 잡고 있다 → 팔이 살짝 들리면 바퀴가 풀려 굴러가고, 팔은 다시 중력으로 내려온다
+          hitDelay = held ? 350 : 0;
+          armDone = (held ? tween(350, (d) => { rot(armIdx, pv, ax, rad(lift) * d); }) : Promise.resolve()).then(() => new Promise((r) => setTimeout(r, held ? 500 : 0))).then(() => { const a1 = S.ang + (held ? lift : 0); return tween(Math.max(300, a1 * 9), (d) => { rot(armIdx, pv, ax, -rad(a1) * d); }, easeIn); }).then(() => { S.ang = 0; upd(); });
+        }
+        const path = (async () => {
+          if (!carry) await new Promise((r) => setTimeout(r, hitDelay));
+          const _E = f.wheelCenter.map((q, i) => q + tot[i]), _v = _E.map((q, i) => q - S.c[i]), _l = Math.hypot(_v[0], _v[1], _v[2]), _tl = Math.hypot(tot[0], tot[1], tot[2]) || 1;
+          const segs = _l > 5 ? [{ vec: _v, ms: Math.max(500, 1700 * _l / _tl) }] : [];   // 지금 바퀴 자리에서 레인 아래 끝까지
+          for (let si = 0; si < segs.length; si++) {
+            const seg = segs[si], len = Math.hypot(seg.vec[0], seg.vec[1], seg.vec[2]), isRoll = len > 60;
+            await tween(seg.ms, (d) => {
+              const v = seg.vec.map((x) => x * d); mvW( v); S.c = S.c.map((x, i) => x + v[i]); S.D = S.D.map((x, i) => x + v[i]);
+              if (isRoll) { const sp = -len * d / rr; rot(whIdx, wcW(), ax, sp); S.spin += sp; }
+            }, isRoll ? (t) => t : ease);
+          }
+        })();
+        await Promise.all([armDone, path]); lock(false);
+      };
+      toStart(); armStart(); offIn.value = whOff;
+         // 지렛대: 바퀴가 받침 관절 위쪽에 있으면 레인 위쪽이 내려가고 아래쪽이 올라간다(반대면 반대로). 최대 LT°. 각도 칸에 확정하면 그 각도로 고정
+      const follow = () => { if (!bar.isConnected) return; if (levForce != null && levSnap && (Math.abs(S.c[0] - levSnap[0]) + Math.abs(S.c[1] - levSnap[1]) + Math.abs(S.c[2] - levSnap[2])) > 0.5) levForce = null; if (laneIdx.length) { const dist = (S.c[0] - lpv[0]) * rdir[0] + (S.c[1] - lpv[1]) * rdir[1] + (S.c[2] - lpv[2]) * rdir[2], th = rad(levForce != null ? levForce : levEnd + (levUp - levEnd) * Math.max(0, Math.min(1, -dist / 25))),   // 바퀴가 위로 올라 있으면 '올렸을 때' 각도, 굴러 내려가 아래에 있으면 '굴러간 최종' 각도 (그 사이는 위치에 따라)
+        dd = th - laneA; if (Math.abs(dd) > 1e-4) { rot(laneIdx, lpv, ax, dd); rot(whIdx, lpv, ax, dd); laneA = th; } if (document.activeElement !== levIn) levIn.value = Math.round(laneA * 1800 / Math.PI) / 10; } requestAnimationFrame(follow); };
+      requestAnimationFrame(follow);
+      (async () => {   // 관리자가 DB 에 확정 저장한 값이 있으면 그걸로 시작 모습을 맞춘다
+        const b2 = bridge(); if (!b2 || !b2.checkStore || !b2.checkStore.loadFull || !def) return;
+        try { const row = ((await b2.checkStore.loadFull(def.id)) || []).find((r) => r && r.issue_key === 'fireset:' + f.name); if (!row) return; const v = JSON.parse(row.note || 'null'); if (!v) return;
+          if (isFinite(v.ang)) startAngV = v.ang; if (v.wl != null && isFinite(v.wl)) { whLimit = v.wl; whOff = whLimit; offIn.value = whOff; } conf.load = conf.load || v.ang != null; conf.down = conf.down || v.dn != null; conf.wheel = conf.wheel || v.wl != null; conf.lu = conf.lu || v.lu != null; conf.le = conf.le || v.le != null; Object.keys(conf).forEach(paintMode); if (v.lu != null && isFinite(v.lu)) levUp = v.lu; if (v.le != null && isFinite(v.le)) levEnd = v.le; if (typeof luIn !== 'undefined') { luIn.value = levUp; leIn.value = levEnd; } if (v.dn != null && isFinite(v.dn)) { downAng = v.dn; downIn.value = downAng; } loadIn.value = startAngV; offIn.value = whOff; if (!fireBusy && S.atStart && !S.moved) { reset(); } } catch (e) { /* DB 값 없음 */ }
+      })();
+    });
+    const rb = document.createElement('button'); rb.type = 'button'; rb.className = 'ghost'; rb.textContent = '원위치'; rb.style.cssText = 'padding:3px 10px;';
+    rb.onclick = () => { if (fireBusy) return; resets.forEach((r) => r()); };   // 원위치 = 시작 모습
+    bar.appendChild(rb); btns.push(rb);
+    const hint = document.createElement('span'); hint.style.cssText = 'font-weight:600; color:#991b1b;'; hint.textContent = fs[0].hint || ''; bar.appendChild(hint);
   }
   // 고무줄(step.bands)은 만든 번호부터 뒤 번호에도 이어서 그린다. bandsHideAt: 몸이 창고에 들어가 안 보이는 번호, bandsEnd: 줄을 푸는 번호.
   function bandsAt(n) {
@@ -1197,6 +1416,7 @@
     b.guides(guides);
     if (b.bands) b.bands(bandsAt(step));   // 고무줄 같은 규격 없는 줄(노란 곡선) — 만든 번호 이후 계속 보인다
     setupHinge(list, b);   // 팔 당기기 슬라이더(완성 화면에서)
+    setupFire(list, b);   // 볼링머신 1번·2번 발사 버튼(완성 화면에서)
     // 앞 벽이 뒤쪽 끝에 있는 단계(flip)는 반대편에서 보여준다
     // view: 기본 각도에서 90도×view 만큼 돌려서 보기 / cam: {theta, phi}로 교재 그림과 같은 각도를 직접 지정
     const camStep = (viewActive && viewEff >= 1) ? viewEff : step; // 창고 화면 보기: 그 묶음이 마지막으로 만들어진 단계의 시점

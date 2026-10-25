@@ -5637,6 +5637,10 @@
         m.body.quaternion.set(mq.x, mq.y, mq.z, mq.w); m.rot = null;
       });
     },
+    // 부품 묶음을 통째로 옮긴다(볼링머신 완성 발사: 중간바퀴가 레인을 굴러 내려감, 2026-10-26): 목록 번호 idxs 의 부품 위치에 v=[x,y,z] 를 더한다.
+    moveParts(idxs, v){
+      (idxs || []).forEach(i => { const m = assemblyListParts[i]; if (!m) return; m.body.position.set(m.body.position.x + v[0], m.body.position.y + v[1], m.body.position.z + v[2]); });
+    },
     bands(list){
       if (window.__asmBandGroup) { scene.remove(window.__asmBandGroup); window.__asmBandGroup.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); window.__asmBandGroup = null; }
       if (!list || !list.length) return;

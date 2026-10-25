@@ -260,7 +260,9 @@
 "noPart": false
 },
 "37": {
-"parts": {},
-"noPart": true
+"parts": {
+"중간바퀴": 2
+},
+"noPart": false
 }
 }

@@ -100,7 +100,7 @@ def rivet_gaps(A, k):
             if np.all(pt >= lo - 0.01) and np.all(pt <= hi + 0.01): return q, p, R
         return None
     for r in A.steps[k - 1].parts:
-        if r.n != "리벳": continue
+        if r.n != "리벳" or r.extra.get("copyOf"): continue   # 복사본(둘째 벌)은 원본 번호에서 이미 점검했다 — 복사 번호에서는 건너뜀
         rp, rR = pose_k(r)
         loc = {c["id"]: np.array(c["pos"], float) for c in r.conn["pegs"]}
         if "p1" not in loc or "p2" not in loc: continue
@@ -113,6 +113,24 @@ def rivet_gaps(A, k):
             lo, hi = box_of(h[0], h[1], h[2]); cs = [float(np.dot(np.array([x, y, z]), ax)) for x in (lo[0], hi[0]) for y in (lo[1], hi[1]) for z in (lo[2], hi[2])]; return min(cs), max(cs)
         a, b = span(h1), span(h2); gap = max(b[0] - a[1], a[0] - b[1])
         if 0.3 < gap <= 6.0 or gap < -1.0: bad.append((r.n, h1[0].n, h2[0].n, round(gap, 1)))
+    return bad
+
+
+_AX = {"+X": (1, 0, 0), "-X": (-1, 0, 0), "+Y": (0, 1, 0), "-Y": (0, -1, 0), "+Z": (0, 0, 1), "-Z": (0, 0, -1)}
+def mainboard_dir(A, k, txt):
+    """메인보드 방향 검사(사용자 지시 2026-10-26, 볼링머신 36번 거꾸로 결합 재발): 모델에서 버튼 쪽(모델 +z)이 월드 어느 쪽인지 계산해,
+    읽기 표 '부품방향' 에 적은 "버튼쪽=±X/Y/Z"(책 사진에서 읽은 쪽)와 다르면, 또는 안 적었으면 막는다. 돌려주는 값 = 문제 문구 목록."""
+    import re
+    bad = []
+    bd = [b for b in A.steps[k - 1].parts if b.n == "메인보드"]
+    if not bd: return bad
+    m = re.search(r"버튼\s*쪽\s*=\s*([+\-−])\s*([XYZxyz])", txt or "")
+    if not m: return ["읽기 표 '부품방향'에 책에서 읽은 \"버튼쪽=±X(또는 Y·Z)\" 가 없다(책 사진의 노란 버튼이 월드 어느 쪽인지 먼저 적는다)"]
+    want = ("-" if m.group(1) in "-−" else "+") + m.group(2).upper()
+    for i, b in enumerate(bd):
+        p, R = _pose(b, k); u = R @ np.array([0, 0, 1.0])
+        got = max(_AX, key=lambda a: float(np.dot(u, _AX[a])))
+        if got != want: bad.append("메인보드 %d번째: 모델 버튼 쪽(+z)이 %s 인데 책에서 읽은 버튼쪽은 %s" % (i + 1, got, want))
     return bad
 
 def apply(A, name):
@@ -158,6 +176,9 @@ def apply(A, name):
         if any(p.n in ("8볼트", "12볼트", "너트") for p in st.parts):   # 볼트·너트의 가장 큰 부분은 프레임 구멍 안에 묻혀 프레임 면 밖으로 안 나온다(기본 규칙, 사용자 2026-10-24)
             _fp = fastener_protrusion(A, k)
             items.append((k not in _done, not _fp, "볼트·너트 머리·몸이 프레임 면 밖으로 안 나옴" + ("" if not _fp else " — 나옴 %s" % ", ".join("%s(%s) %.1fmm" % x for x in _fp[:3]))))
+        if rl.get("mainboard_check") and any(p.n == "메인보드" for p in st.parts):   # 메인보드 방향 검사(조립도별 켬: _rules.json "mainboard_check": true). 사용자 ✓ 번호는 막지 않는다
+            _mb = mainboard_dir(A, k, str(r.get("부품방향", "")))
+            items.append((k not in _done, not _mb, "메인보드 방향: 책 버튼 쪽 = 모델 버튼 쪽(+z)" + ("" if not _mb else " — " + "; ".join(_mb))))
         if any(p.n == "부시" for p in st.parts):   # 부시 방향 규칙(관리자 확정 2026-10-11): 넓은 쪽(모델 −y)이 바깥, 좁은 쪽(모델 +y)이 닿은 판 쪽. 사용자 ✓ 번호는 막지 않는다(내용을 못 바꾸므로)
             _bw = bush_wrong(A, k)
             items.append((k not in _done, not _bw, "부시 방향: 좁은 쪽(모델 +y)이 판 쪽" + ("" if not _bw else " — 넓은 쪽이 판에 닿은 부시 %s번째" % ", ".join(str(i + 1) for i in _bw))))

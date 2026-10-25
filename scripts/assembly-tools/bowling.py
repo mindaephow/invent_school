@@ -90,7 +90,6 @@ NT1 = [s1.attach("너트", R_BOLT_UP, {"p1": (PA1, "h5_%d" % _r)}, hover=90, dir
 A.steps[0].cam = (-0.49, 1.03, False, None, None, None); A.steps[0].camSrc = "eye"   # holefit 가까운 713프레임 → axes_fit 오차 0.45px(91점, roll 0.5°)
 A.meta["lift"] = {"1": 50.0}   # 볼트가 판 아래로 내려오는 번호 — 화면을 올림
 
-import stepchecks; stepchecks.apply(A, "bowling")
 # ── 2 ── 교재 100쪽 2 (읽은 것 2026-10-25 — 이어 붙인 바닥(13칸×14줄) 먼 쪽 줄2·가까운 쪽 줄13(큰 줄 번호)에 흰 19프레임 막대 둘을 리벳 둘씩(칸3·11)으로 이어 얹는다)
 #   책 2번 홀라인(바닥 13×14): holefit DoG 103개 평균 0.79px → axes_fit 1.15px(182점) θ −0.47 φ 0.73. 29프레임 칸5~13 줄7·8(이음매), 볼트·너트 칸9. 새 리벳 링 4 = 칸3·11 × 줄2(먼 판 줄2)·줄13(가까운 판 줄6), 막대 구멍1·9번이 리벳 위.
 #   큰 줄 r ≤ 7 = 먼 판 줄 r, r ≥ 8 = 가까운 판 줄 r−7. 막대 길이(9칸) = 칸3~11, 가운데 칸7 = x −20.
@@ -608,14 +607,31 @@ for _i in range(36, 38): A.meta["lift"][str(_i)] = 5.0
 s36 = SKEL[35]; s36.kw.pop("noPart", None)
 s36.note = "[교재 36] 메인보드를 흰 판 가운데 구멍 둘에 위에서 내려 꽂아요."
 _wp36 = [_q for _q in A.parts if _q.name.startswith("59프레임 1")][0]
-R_BD36 = np.array([[0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [-1.0, 0.0, 0.0]])   # 보드 z(돌기 줄) → +X, 위(+y) 그대로, 긴 쪽 x → −Z: 판 폭(50)을 가로질러 놓는다(180° 방향은 책 버튼 위치로 못 가림 — 추정)
-MB36 = s36.attach("메인보드", R_BD36, {"p1": (_wp36, "h4_3"), "p2": (_wp36, "h6_3")}, hover=25, dir=[0, 1, 0])
+R_BD36 = np.array([[0.0, 0.0, -1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]])   # 메인보드: 모델 z(버튼 쪽 +z) → −X(책 36번에서 노란 버튼이 왼쪽 = −X, 소켓·핀이 오른쪽), 위(+y) → +Y(돌기 아래), 긴 쪽 x → +Z. 처음 R 은 버튼 쪽을 +X 로 거꾸로 놓아 사용자가 지적(2026-10-26)했다 — 메인보드 규칙(버튼 쪽 +z, 책 사진의 버튼 위치로 방향을 정한다)
+MB36 = s36.attach("메인보드", R_BD36, {"p1": (_wp36, "h6_3"), "p2": (_wp36, "h4_3")}, hover=25, dir=[0, 1, 0])   # p1(z −10 → 월드 x +10)=칸6, p2(z +10 → x −10)=칸4
 A.steps[35].cam = (-0.85, 0.81, False, None, None, None); A.steps[35].camSrc = "eye"   # 흰 판 모서리 4곳 IPPE 3.9px(fov 30, EPnP θ −1.0 φ 0.9) → 판 45구멍 추정 격자 axes_fit θ −0.85 φ 0.81 roll 8.1°
 for _i in range(37, 38): A.meta["lift"][str(_i)] = 5.0
 
 # ── 37 ── 교재 106쪽 37 (읽은 것 2026-10-25 — 메인보드의 단자에 상자 모터 둘의 흰 선(케이블)을 꽂는 마지막 번호. 모델에 선·단자 부품이 없어 부품은 더하지 않고 36번 모양 그대로가 완성이다. 완성 사진(00)과 같은 구성: 상자 둘·기어 넷·레인 둘·메인보드 하나)
 s37 = SKEL[36]
 s37.note = "[교재 37] 메인보드에 상자 모터 둘의 선을 꽂아 완성해요. (선은 모델에 없음 — 36번 모양이 완성)"
+# 37번(완성): 107쪽 작동방법의 볼링공 = 중간바퀴 둘(LIST 중간바퀴 2) — 상자마다 팔 안쪽, 팔 끝 25번 조립(35프레임) 바로 안쪽에 얹혀 팔과 같이 돈다(00 완성 사진: 바퀴가 두 팔 사이·빨간 프레임 뒤). 축 = 모터 축(z).
+s37.kw.pop("noPart", None)
+_pt37 = [_q for _q in A.parts if _q.name in ("35프레임 1번", "35프레임 2번")]   # 팔 끝(옮긴 뒤 자세)
+_piv37 = {"35프레임 1번": np.array([-70.0, 207.5, -45.0]), "35프레임 2번": np.array([-70.0, 207.5, 45.0])}   # 34·35번 이동 뒤 모터 축 자리(x −70, y 207.5, 상자 가운데 z)
+R_WH37 = np.array([[1.0, 0.0, 0.0], [0.0, 0.0, -1.0], [0.0, 1.0, 0.0]])   # 바퀴 로컬 y(축 구멍) → +Z
+WH37 = []
+_ALD = np.radians(-25.9)   # 장전 자세(00 완성 사진): 팔이 레인 쪽으로 수평보다 살짝 내려가 팔 끝 막대가 레인 윗끝에 얹힌 공 바로 뒤에 선다 — 팔 끝 막대(모터 축에서 90)+공 반지름 38+막대 반 두께 5 = 모터 축에서 133 의 공 중심이 레인 윗면(레인 줄 위 40.5)에 닿는 각도를 풀면 −25.9°
+_R_LOAD = np.array([[np.cos(np.radians(-115.9)), -np.sin(np.radians(-115.9)), 0.0], [np.sin(np.radians(-115.9)), np.cos(np.radians(-115.9)), 0.0], [0.0, 0.0, 1.0]])   # 선 팔(+90°) → 장전 팔(−25.9°) = 시계 방향 115.9°
+for _q in sorted(_pt37, key=lambda t: t.name):
+    _pv = _piv37[_q.name]; _c = np.array([_pv[0] + 133.0 * np.cos(_ALD), _pv[1] + 133.0 * np.sin(_ALD), float(_q.p[2])])
+    WH37.append(s37.place("중간바퀴", R_WH37, tuple(float(_v) for _v in _c))); WH37[-1].extra["loose"] = True   # 볼링공은 끼우지 않고 레인 윗끝에 얹어 둔다(검사: 허공 검사 제외 — 롤링봇 바퀴와 같음)
+_ROT37 = [21, 22, 23, 24, 25, 27, 28, 29]
+for _i, _nm in enumerate(("35프레임 1번", "35프레임 2번")):
+    _arm = [_p for _p in A.parts if (not _p.extra.get("copyOf") and _p.step.index in _ROT37)] if _i == 0 else [_p for _p in A.parts if _p.step.index == 35 and _p.extra.get("copyOf") and int(_p.extra["copyOf"].split(":")[0]) in _ROT37]
+    for _p in _arm:   # 롤링봇(1권)과 같은 방법: 완성(38번) 화면에서만 팔을 장전 자세(−25.9°)로 돌려 보인다 — poseAt "38" = 34·35번에서 세운 자세를 기준으로 돌린 절대 자세
+        _p.extra.setdefault("poseAt", {})["38"] = {"p": rnd(_R_LOAD @ (np.array(_p.p, float) - _piv37[_nm]) + _piv37[_nm]), "r": R_to_euler(_R_LOAD @ np.array(_p.R, float))}
+for _w in WH37: _w.extra["finalOnly"] = True   # 완성 화면에서만 보이는 볼링공(롤링봇 장전한 작은바퀴와 같은 방법)
 A.steps[36].cam = (-0.85, 0.81, False, None, None, None); A.steps[36].camSrc = "eye"   # 36번과 같은 시점(흰 판 모서리 4곳 IPPE) — 부품 없는 번호
 
 # ── 부품 체크(03 B, 2026-10-25): 번호별 새로 쓰는 부품. 1~8번만 센 값(홀라인·그림 확대), 9번부터는 번호 작업 때 센다(미정).
@@ -625,13 +641,35 @@ USED = {1: "713프레임 2, 29프레임 1, 리벳 4, 8볼트 2, 너트 2", 2: "1
         16: "DC모터 1, 315프레임 1, 3단블록 1 (2벌)", 17: "37프레임 1, 3단블록 2 (2벌)", 18: "없음(합치는 단계)", 19: "315프레임 1 (2벌)", 20: "315프레임 1 (2벌)",
         21: "29프레임 1, 큰기어 1, 리벳 3 (2벌)", 22: "135도 프레임 1, 리벳 2, 8볼트 1, 너트 1 (2벌)", 23: "T축 1 (2벌)", 24: "35프레임 1, 2단블록 2, 리벳 4 (2벌)", 25: "15프레임 2 (2벌)",
         26: "없음(합치는 단계)", 27: "29프레임 1, 큰기어 1, 리벳 3 (2벌)", 28: "135도 프레임 1, 리벳 2, 8볼트 1, 너트 1 (2벌)", 29: "부시 1, T축 1 (2벌)", 30: "없음(합치는 단계)",
-        31: "17프레임 1, 리벳 2 (2벌)", 32: "37프레임 2, 2단블록 4 (2벌)", 33: "없음(합치는 단계)", 34: "없음(합치는 단계)", 35: "없음(합치는 단계)", 36: "메인보드 1", 37: "없음(메인보드 연결)"}
+        31: "17프레임 1, 리벳 2 (2벌)", 32: "37프레임 2, 2단블록 4 (2벌)", 33: "없음(합치는 단계)", 34: "없음(합치는 단계)", 35: "없음(합치는 단계)", 36: "메인보드 1", 37: "중간바퀴 2 (107쪽 볼링공 — 완성 화면에서 발사)"}
 # LIST 대조(2026-10-25 다시 셈): 센 합계가 LIST 와 같은 것 — 리벳 66·8볼트 12·너트 12·2단블록 14·3단블록 14·315프레임 6·DC모터 2·큰기어 4·135도 4·T축 4·부시 2·15프레임 4·17프레임 4·35프레임 2·29프레임 5·215프레임 2·2열브라켓 4·515프레임 2·59프레임 3·713프레임 2·19프레임 2·메인보드 1.
 #   안 맞던 것: 37프레임 LIST 6 = 17번 1 + 32번 2 (각 ×2벌) — 32번 책에서 아래·위 판 둘을 센 값으로 맞음(2026-10-25). 중간바퀴 2 = 107쪽 작동방법의 볼링공(단계 아님), 리모컨 1 = 모델 없음(제외).
 for _i, _u in USED.items():
     _pp = A.steps[_i - 1].note.split("\n▣ 사용 부품:")
     _tail = ("\n" + _pp[1].split("\n", 1)[1]) if len(_pp) > 1 and "\n" in _pp[1] else ""
     A.steps[_i - 1].note = _pp[0] + "\n▣ 사용 부품: " + _u + _tail
+import stepchecks; stepchecks.apply(A, "bowling")   # 번호별 점검은 모든 단계를 만든 뒤(끝)에 돌린다 — 예전엔 1번 뒤에 있어 2~37번이 한 번도 안 점검됐다(2026-10-26 발견)
+# ── 완성 화면 발사(2026-10-26): 107쪽 작동방법의 볼링공 1발사·2발사 = 상자마다 팔이 중간바퀴(볼링공)를 던지고, 레인이 3단블록 돌기 관절로 살짝 기운다(모터와 무관)
+def _key(q): return "%d:%d" % (q.step.index, q.step.parts.index(q))
+_ROT = [21, 22, 23, 24, 25, 27, 28, 29]
+_armk = [[_key(q) for q in A.parts if q.step.index in _ROT and not q.extra.get("copyOf")],
+         [_key(q) for q in A.parts if q.step.index == 35 and q.extra.get("copyOf") and int(q.extra["copyOf"].split(":")[0]) in _ROT]]
+_lanek = [[_key(q) for q in A.parts if q.name == "3단블록 3번" or q.step.index in (7, 8, 9, 10, 11)], [_key(q) for q in A.parts if q.name == "3단블록 6번" or q.step.index in (13, 14)]]   # 관절 블록(벽 3단블록 3·6번)과 레인이 같이 움직인다
+_lp = {"3단블록 7번": [q for q in A.parts if q.name == "3단블록 3번"][0], "3단블록 8번": [q for q in A.parts if q.name == "3단블록 6번"][0]}   # 관절 = 벽 판에 돌기 하나(p5·p8)로 끼운 3단블록 3·6번
+def _p6(q): return [float(_v) for _v in q.world("peg", [c for c in q.conn["pegs"] if c["id"] == "p5"][0])["pos"][:2]] + [float(q.p[2])]   # 돌기 p5 의 x·y, 블록 가운데 z
+_dl = np.array([0.7606, -0.6494]); _nl = np.array([0.6494, 0.7606]); _P0 = np.array([33.8, 109.8]); _END = np.array([125.0, 31.9]) + 45.0 * _dl
+_hin = []
+for _i, (_wh, _pv, _ln) in enumerate(zip(WH37, (_piv37["35프레임 1번"], _piv37["35프레임 2번"]), ("3단블록 7번", "3단블록 8번"))):
+    _sw = -30.0; _c0 = np.array(_wh.p, float); _cr = _c0[:2]; _drop = np.array([0.0, 0.0]); _pd = _cr   # 공은 장전 자리(레인 윗끝)에서 팔 끝 막대가 뒤에서 밀며 굴러 내려간다
+    _roll = float(np.dot(_END - _pd, _dl)) + 40.0
+    _hin.append({"id": "fire%d" % (_i + 1), "kind": "fire", "name": "%d번 발사" % (_i + 1), "from": 38, "keys": _armk[_i], "wheelKeys": [_key(_wh)], "pivot": [float(_pv[0]), float(_pv[1]), float(_pv[2])], "axis": [0, 0, 1], "swing": _sw, "carry": False,
+                 "wheelCenter": [float(_c0[0]), float(_c0[1]), float(_c0[2])], "wheelR": 38.0,
+                 "path": [{"vec": [float(_roll * _dl[0]), float(_roll * _dl[1]), 0.0], "ms": 1700}],
+                 "laneKeys": _lanek[_i], "lanePivot": _p6(_lp[_ln]), "laneTilt": -3.0,
+                 "hint": "장전: 공이 레인 윗끝에 얹히고 팔 끝 막대가 뒤를 막고 있다 → 발사: 팔이 시계 방향으로 돌며 공을 밀어 레인을 굴러 내려간다. 레인은 벽 3단블록 돌기 관절로 살짝 기운다(모터와 무관, 각도·속도 추정)"})
+A.meta["hinges"] = _hin
+A.meta["splitGroups"] = [{"name": "첫째 레인+관절 블록", "keys": _lanek[0], "from": 38}, {"name": "둘째 레인+관절 블록", "keys": _lanek[1], "from": 38},
+                         {"name": "첫째 팔(모터 축)", "keys": _armk[0], "from": 38}, {"name": "둘째 팔(모터 축)", "keys": _armk[1], "from": 38}]   # 관절로 움직이는 묶음 — 완성 화면에서 따로 그룹이 되어 따로 움직여 본다
 A.save_links()                                    # 이번 빌드의 잠금 기록 저장(수정 지시가 있는 빌드는 갱신하지 않는다)
 A.check_fixes()                                   # 적용되지 않은 수정 지시가 있으면 경고(번호가 밀렸거나 오타)
 A.report = lambda: [print("경고:", w) for w in A.warn]
@@ -641,5 +679,7 @@ if __name__ == "__main__":
     open("bowling_entry.js", "w", encoding="utf-8").write(js_entry(A))
     _df = json.load(open("bowling_def.json", encoding="utf-8")) if os.path.exists("bowling_def.json") else {}
     _df["lift"] = A.meta.get("lift") or {}   # 검사(design-verify.js 바닥 기준)와 화면이 단계별 화면 올림을 알도록
+    if A.meta.get("hinges"): _df["hinges"] = A.meta["hinges"]   # 완성 화면 발사 버튼(1번 발사·2번 발사)
+    if A.meta.get("splitGroups"): _df["splitGroups"] = A.meta["splitGroups"]   # 완성 화면 관절 묶음을 따로 그룹으로
     json.dump(_df, open("bowling_def.json", "w", encoding="utf-8"), ensure_ascii=False)
     print(len(steps), "단계,", len(A.parts), "부품", "경고", len(A.warn))
