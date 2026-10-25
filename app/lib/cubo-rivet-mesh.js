@@ -33,7 +33,7 @@ export function rivetTriangles(seg = 20, n = 6) {
   const peg = makeKit(seg)
   const { quad, P } = peg
   const levels = [
-    { y: 1, R: R_.shaftR }, { y: R_.shaftTo, R: R_.shaftR }, // 몸통
+    { y: R_.collarHalf, R: R_.shaftR }, { y: R_.shaftTo, R: R_.shaftR }, // 몸통
     { y: R_.shaftTo + R_.backRamp, R: R_.headR }, // 머리 뒷면 경사(비스듬해서 힘을 주면 눌려서 빠진다)
     { y: R_.shaftTo + R_.backRamp + R_.headStraight, R: R_.headR }, // 머리 곧은 부분
     { y: R_.pegEnd, R: R_.tipR }, // 앞 모따기(끼울 때 안내) 끝

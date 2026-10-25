@@ -127,3 +127,4 @@
 - [리벳은 항상 결합 전](feedback_rivets_always_separated.md) — seated 금지, 책이 꽂은 모양이어도 hover 24+화살표; 바이킹 21·22번 지적(2026-10-22)
 - [리벳 프레임은 딱 붙인다](feedback_rivet_frames_flush.md) — 리벳 결합 프레임 틈 0·겹침 0은 모든 조립도 기본 규칙(트레일러 17~19번 지적 2026-10-24), recv 후 flush
 - [기존 조립세트 재사용](feedback_reuse_existing_assembly_sets.md) — 반복 세트(스프라켓 바퀴)는 다른 조립도에서 가져오고 asmlib 기본 세트로 등록(트레일러 25번)
+- [로버트론 제품 규격](project_robotron_brands_part_spec.md) — 에이스랩·로보타미주니어=로버트론 제품, 큐보 프레임과 홀 테두리 없음·홀 1mm 작음·끝 더 둥글게
