@@ -75,11 +75,13 @@ function build(S, outlineIn, cells, cornerTargets, outerTargets) {
   const pockets = cells.map((c) => {
     let pk = insetPoly(dedupe(c.poly), S.edgeWall / 2)
     pk = ccw(roundCorners(pk, cornerTargets, S.cornerR - S.edgeWall, S.cornerSeg))
-    return { pk, hole: c.hole, cross: c.cross }
+    return { pk, holes: c.holes || [c.hole], holePolys: c.holePolys || [], cross: c.cross }
   })
-  for (const { pk, hole, cross } of pockets) {
+  for (const { pk, holes: hl, holePolys, cross } of pockets) {
     wall(pk, Y0, Y1, -1); wall(pk, Y4, Y5, -1)
-    const [cx, cz] = hole
+    const circles = []
+    for (const poly of holePolys) { wall(poly, Y1, Y4, -1); circles.push(poly) } // 서로 겹쳐 하나로 이어진 구멍(반시계 윤곽)
+    for (const [cx, cz] of hl) {
     let circle
     if (cross) { // 열십자 구멍(T축이 들어가는 구멍): 십자 전체 폭 crossSpan, 팔 폭 crossArm
       const a = S.crossSpan / 2, w = S.crossArm / 2
@@ -92,7 +94,9 @@ function build(S, outlineIn, cells, cornerTargets, outerTargets) {
       kit.cyl(cx, cz, S.boreR, Y1, Y4, -1) // 곧은 구멍(판 3mm 를 지난다)
       circle = circlePts(cx, cz, S.boreR, S.seg)
     }
-    ringFace(kit, pk, [circle], Y1, -1); ringFace(kit, pk, [circle], Y4, 1) // 주머니 바닥(칸 − 구멍)
+    circles.push(circle)
+    }
+    ringFace(kit, pk, circles, Y1, -1); ringFace(kit, pk, circles, Y4, 1) // 주머니 바닥(칸 − 구멍들)
   }
   // 테두리 윗면·아랫면: 칸마다(칸 타일 − 그 칸 주머니). 타일은 바깥 윤곽까지 이어진 칸이라 이웃 타일과 변이 정확히 맞는다(한 번에 다 나누면 격자 안쪽 주머니를 못 잇는다).
   cells.forEach((c, i) => {
@@ -124,25 +128,49 @@ const recenter = (arr, cx, cz) => { for (let i = 0; i < arr.length; i += 3) { ar
 // 구멍 nx(길이) × nz(폭) 개의 직선 프레임. 15프레임 = (5,1), 215프레임 = (15,2) ...
 // crossAt = [i, k] 이면 그 칸의 구멍을 열십자 구멍으로 만든다(3십자프레임).
 // squareEnd 이면 +x 쪽 끝 두 모서리를 둥글리지 않는다(브라켓에서 다른 판·모서리 덩어리와 빈틈 없이 이어지게).
-function straightFrame(S, nx, nz, crossAt, squareEnd) {
-  const hx = (nx * S.pitch) / 2, hz = (nz * S.pitch) / 2
+// ext(mm) > 0 이면 −x 쪽 끝 칸을 ext 만큼 늘인다(체어브라켓의 12프레임 +5mm = 길이 25: 구멍은 그대로 10mm 간격, −x 쪽 끝 여백만 5+ext).
+function straightFrame(S, nx, nz, crossAt, squareEnd, ext = 0) {
+  const hx = (nx * S.pitch + ext) / 2, hz = (nz * S.pitch) / 2
+  const bx = (i) => (i === 0 ? -hx : -hx + ext + i * S.pitch) // 칸 경계 x
   const rect = [[-hx, -hz], [hx, -hz], [hx, hz], [-hx, hz]]
   const outlinePts = [] // 칸 경계마다 점이 있는 바깥 윤곽(타일 윗면과 옆면 모서리가 맞게)
-  for (let i = 0; i <= nx; i++) outlinePts.push([-hx + i * S.pitch, -hz])
+  for (let i = 0; i <= nx; i++) outlinePts.push([bx(i), -hz])
   for (let k = 1; k <= nz; k++) outlinePts.push([hx, -hz + k * S.pitch])
-  for (let i = nx - 1; i >= 0; i--) outlinePts.push([-hx + i * S.pitch, hz])
+  for (let i = nx - 1; i >= 0; i--) outlinePts.push([bx(i), hz])
   for (let k = nz - 1; k >= 1; k--) outlinePts.push([-hx, -hz + k * S.pitch])
   const E = S.edgeWall, cells = [], holes = []
   for (let i = 0; i < nx; i++) for (let k = 0; k < nz; k++) {
-    const x0 = -hx + i * S.pitch, x1 = x0 + S.pitch, z0 = -hz + k * S.pitch, z1 = z0 + S.pitch
+    const x0 = bx(i), x1 = bx(i + 1), z0 = -hz + k * S.pitch, z1 = z0 + S.pitch, hxc = x0 + S.margin + (i === 0 ? ext : 0)
     const a = i === 0 ? x0 + E / 2 : x0, b = i === nx - 1 ? x1 - E / 2 : x1, c = k === 0 ? z0 + E / 2 : z0, d = k === nz - 1 ? z1 - E / 2 : z1
-    cells.push({ tile: [[x0, z0], [x1, z0], [x1, z1], [x0, z1]], poly: [[a, c], [b, c], [b, d], [a, d]], hole: [x0 + S.margin, z0 + S.margin], cross: !!crossAt && crossAt[0] === i && crossAt[1] === k })
-    holes.push({ x: x0 + S.margin, z: z0 + S.margin })
+    cells.push({ tile: [[x0, z0], [x1, z0], [x1, z1], [x0, z1]], poly: [[a, c], [b, c], [b, d], [a, d]], hole: [hxc, z0 + S.margin], cross: !!crossAt && crossAt[0] === i && crossAt[1] === k })
+    holes.push({ x: hxc, z: z0 + S.margin })
   }
   const tgt = [[-hx + E, -hz + E], [hx - E, -hz + E], [hx - E, hz - E], [-hx + E, hz - E]]
   const keep = (q) => !squareEnd || q[0] < 0
   const round = rect.filter(keep)
   return { tris: build(S, roundCorners(outlinePts, round, S.cornerR, S.cornerSeg), cells, tgt.filter(keep), round), holes }
+}
+
+// 길이 len·폭 한 칸(10)의 프레임 한 장에 주머니 하나(칸 하나)를 두고 구멍을 원하는 x 자리(holeXs, 가운데가 0)에 뚫는다(10 간격이 아닌 구멍 배치용, 체어브라켓). 구멍끼리 5 간격처럼 가까워도 주머니 안에 모두 들어간다.
+function slotFrame(S, len, holeXs) {
+  const hx = len / 2, hz = S.pitch / 2, E = S.edgeWall, r = S.boreR, xs = holeXs.slice().sort((p, q) => p - q)
+  const rect = [[-hx, -hz], [hx, -hz], [hx, hz], [-hx, hz]]
+  const groups = []; xs.forEach((x, i) => { if (i && x - xs[i - 1] < 2 * r - 1e-9) groups[groups.length - 1].push(x); else groups.push([x]) }) // 이웃 구멍과 겹치는(간격 < 지름) 것끼리 한 덩어리
+  const single = groups.filter((g) => g.length === 1).map((g) => [g[0], 0])
+  const arcPts = (cx, a0, a1) => { const n = Math.max(2, Math.ceil(Math.abs(a1 - a0) / (2 * Math.PI / S.seg))); return Array.from({ length: n + 1 }, (_, k) => { const a = a0 + (a1 - a0) * k / n; return [cx + r * Math.cos(a), r * Math.sin(a)] }) }
+  const unionPoly = (g) => { // 한 줄로 늘어선 같은 크기 원들의 합집합 윤곽(반시계): 아래쪽 호들을 오른쪽으로, 오른쪽 끝을 돌아, 위쪽 호들을 왼쪽으로
+    const n = g.length, phi = (i) => Math.acos(Math.min(1, (g[i + 1] - g[i]) / 2 / r)) // 이웃 두 원이 만나는 점의 각도(오른쪽 원 기준 i 번째 쌍)
+    const out = []
+    for (let i = 0; i < n; i++) { const fL = i ? phi(i - 1) : 0, fR = i < n - 1 ? phi(i) : 0
+      const a0 = i ? Math.PI + fL : Math.PI, a1 = i === n - 1 ? 3 * Math.PI - fL : 2 * Math.PI - fR
+      const arc = arcPts(g[i], a0, a1); out.push(...(out.length ? arc.slice(1) : arc)) }
+    for (let i = n - 2; i >= 0; i--) { const fL = i ? phi(i - 1) : 0, fR = phi(i), arc = arcPts(g[i], fR, i ? Math.PI - fL : Math.PI); out.push(...arc.slice(1)) }
+    out.pop() // 마지막 점은 시작점과 같다
+    return out }
+  const holePolys = groups.filter((g) => g.length > 1).map(unionPoly)
+  const cells = [{ tile: rect, poly: [[-hx + E / 2, -hz + E / 2], [hx - E / 2, -hz + E / 2], [hx - E / 2, hz - E / 2], [-hx + E / 2, hz - E / 2]], holes: single, holePolys }]
+  const tgt = [[-hx + E, -hz + E], [hx - E, -hz + E], [hx - E, hz - E], [-hx + E, hz - E]]
+  return { tris: build(S, roundCorners(rect, rect, S.cornerR, S.cornerSeg), cells, tgt, rect), holes: holeXs.map((x) => ({ x, z: 0 })) }
 }
 
 // 칸 목록 [[i,k],…](i = 길이 x 방향, k = 폭 z 방향 칸 번호)으로 이루어진 프레임(T자 등). 윤곽은 칸들을 합친 바깥 둘레이고, 튀어나온(볼록) 모서리만 둥글게 한다.
@@ -284,10 +312,11 @@ function arcFrame(S, sub = 4) {
 export function createFrameGenerator(S) {
   return {
     std: S,
-    straight: (nx, nz, crossAt) => straightFrame(S, nx, nz, crossAt),
+    straight: (nx, nz, crossAt, ext, squareEnd) => straightFrame(S, nx, nz, crossAt, !!squareEnd, ext), // squareEnd: +x 쪽 끝 두 모서리를 둥글리지 않는다
     bent: (straightHoles, slantHoles, bendDeg) => bentFrame(S, straightHoles, slantHoles, bendDeg),
     arc: () => arcFrame(S),
     grid: (cellList) => gridFrame(S, cellList),
+    slot: (len, holeXs) => slotFrame(S, len, holeXs),
     lBracket: () => angleBracket(S, 90),
     vBracket: () => angleBracket(S, 120),
   }

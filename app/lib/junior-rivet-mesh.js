@@ -5,7 +5,7 @@
 // 길이 10(프레임 한 장 두께 5 씩), 머리 끝이 프레임 바깥 면과 같은 높이다.
 import { RIVET_STD, rivetTriangles } from './cubo-rivet-mesh.js'
 
-export const JUNIOR_RIVET_STD = { collarR: 2.7, collarHalf: 0.5, shaftR: 2.1, shaftTo: 4, backRamp: 0.3, headR: 2.6, headStraight: 0, tipR: 2.0, pegEnd: 5, slit: 1.2 }
+export const JUNIOR_RIVET_STD = { collarR: 3.1, collarHalf: 0.5, shaftR: 2.45, shaftTo: 4, backRamp: 0.3, headR: 2.95, headStraight: 0, tipR: 2.35, pegEnd: 5, slit: 1.2 } // 구멍 반지름 2.6(지름 5.2, 사용자 2026-10-27 "모든 프레임 홀사이즈 5.2")에 맞춤: 몸통 2.45(여유 0.15), 머리 2.95(구멍보다 0.35 큼), 끝 2.35, 가운데 마디 3.1(구멍보다 0.5 큼)
 
 // 큐보 생성기가 모듈 값을 읽으므로, 만드는 동안만 로버트론 값으로 바꾸고 바로 되돌린다.
 export function juniorRivetTriangles(seg = 20, n = 6) {

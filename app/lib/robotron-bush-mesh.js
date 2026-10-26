@@ -3,7 +3,7 @@
 import { makeKit } from './cubo-mesh-kit.js'
 import { ringFace, circlePts } from './cubo-face-mesh.js'
 
-export const BUSH_STD = { r: 4, grooveR: 3.5, grooveW: 1.5, height: 5, boreSpan: 4.4, boreArm: 1.4, seg: 48 }
+export const BUSH_STD = { r: 4, grooveR: 3.5, grooveW: 1.5, height: 5, boreSpan: 5, boreArm: 1.4, seg: 48 }
 
 export function bushTriangles(S = BUSH_STD) {
   const kit = makeKit(S.seg), { quad } = kit

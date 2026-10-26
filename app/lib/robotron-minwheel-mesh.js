@@ -3,7 +3,7 @@
 import { makeKit } from './cubo-mesh-kit.js'
 import { ringFace, circlePts } from './cubo-face-mesh.js'
 
-export const MINWHEEL_STD = { r: 7.5, grooveR: 6, h: 5, grooveW: 2, boreR: 2.25, seg: 64 }
+export const MINWHEEL_STD = { r: 7.5, grooveR: 6, h: 5, grooveW: 2, boreR: 2.6, seg: 64 }
 
 export function minWheelTriangles(S = MINWHEEL_STD) {
   const kit = makeKit(S.seg)

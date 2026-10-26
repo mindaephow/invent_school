@@ -4,7 +4,7 @@
 import { makeKit } from './cubo-mesh-kit.js'
 import { ringFace, circlePts } from './cubo-face-mesh.js'
 
-export const WHEELPULLEY_STD = { discR: 15, discH: 5, bossR: 5, bossH: 10, boreR: 4, grooveW: 2, grooveDepth: 1, crossSpan: 4.4, crossArm: 1.4, holeR: 2.25, holePitch: 10, pocketSide: 8, pocketDepth: 1, slotW: 2, slotDepth: 6, seg: 64 }
+export const WHEELPULLEY_STD = { discR: 15, discH: 5, bossR: 5, bossH: 10, boreR: 4, grooveW: 2, grooveDepth: 1, crossSpan: 5, crossArm: 1.4, holeR: 2.6, holePitch: 10, pocketSide: 8, pocketDepth: 1, slotW: 2, slotDepth: 6, seg: 64 }
 
 const diamond = (cx, cz, side) => { const d = side / Math.SQRT2; return [[cx + d, cz], [cx, cz + d], [cx - d, cz], [cx, cz - d]] } // 한 변 side 인 정사각형을 45° 돌린 모양(반시계)
 

@@ -15,7 +15,7 @@ const H = { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: 'Bearer ' + en
 const rest = async (p, opt = {}) => { const r = await fetch(env.SUPABASE_URL + '/rest/v1/' + p, { headers: H, ...opt }); if (!r.ok) throw new Error(p + ' ' + r.status + ' ' + (await r.text()).slice(0, 300)); return opt.method ? null : r.json() }
 const ACE = 'cf342cca-792f-4e70-863b-b12de631f1cc'
 const HEX = { 블루: '#0053fa', 스카이블루: '#82d0f8', 레드: '#e1493f', 화이트: '#f2f4f8', 블랙: '#555555', 그레이: '#9ca5af', 다홍색: '#f45243' }
-const W = 10, T = 5, HOLE_R = ACELAB_FRAME_STD.boreR // 폭 z 10, 두께 y 5, 구멍 지름 4.5
+const W = 10, T = 5, HOLE_R = ACELAB_FRAME_STD.boreR // 폭 z 10, 두께 y 5, 홀 규격사이즈 5.2
 const FRAME_L = 20, ADD = 8, LEN = FRAME_L + ADD // 12프레임 길이 20 + 결합 부분 8 = 전체 28
 const PW = 8, PR = 3, PD = 1 // 위쪽 홈 8×8(모서리 반지름 3)·깊이 1
 const X_L = -FRAME_L / 2, X_B = FRAME_L / 2, HC = [[-5, 0], [5, 0]], half = W / 2 // 몸통 왼쪽 끝(둥근 끝)·몸통 앞면 x, 구멍 가운데
@@ -121,7 +121,7 @@ for (const r of await rest(`ivs_part_catalog?select=id,data&data->>category=eq.$
   const mk = (st, name, extra = {}) => ({ x: 0, y: 0, z: 0, op: 'add', rx: 0, ry: 0, rz: 0, type: 'import', color: hex, fileName: `${NAME}_${name}_에이스랩.stl`, fileDataUrl: toDataUrl(st), brightness: 100, ...extra })
   const spec = { shapes: [{ ...mk(stl, '본체'), fileName: `${NAME}_에이스랩.stl` }, mk(trianglesToStl(tongueTris), '혀', { paint: true, ...off(bt) }), mk(trianglesToStl(fingerTris), '손가락', { paint: true, ...off(bf) }), { ...mk(outlineStl, '바깥선', { paint: true, ...off(bo) }), color: lineColorFor(hex) }] }
   const connectors = { note: `${NAME}(12프레임 ${W}×${FRAME_L} + 결합 부분 ${ADD} = 전체 ${LEN}, 두께 ${T}, 구멍 1×2). 관절수 틈에 끼우는 혀(가운데 관통 구멍)와 톱니 골에 꽂히는 손가락 두 개. 모양은 이후 다듬는다.`, pegs: [], holes: [], size: [LEN, T, W], confidence: 'draft' }
-  const data = { ...r.data, size: `${W}×${LEN}×${T}mm (에이스랩: 12프레임 + 결합 부분 ${ADD}mm = 전체 ${LEN}, 구멍 지름 4.5 구멍 1×2, 위쪽 8×8 사각 홈 1mm, 혀 폭 ${TW * 2}(끝은 옆에서 볼 때 반원, 가운데 관통 구멍 지름 2.1), 뾰족한 손가락 두 개, 밝은 테두리 선)`, spec, connectors, primary_image: 'front' }
+  const data = { ...r.data, size: `${W}×${LEN}×${T}mm (에이스랩: 12프레임 + 결합 부분 ${ADD}mm = 전체 ${LEN}, 홀 규격사이즈 5.2 구멍 1×2, 위쪽 8×8 사각 홈 1mm, 혀 폭 ${TW * 2}(끝은 옆에서 볼 때 반원, 가운데 관통 구멍 지름 2.1), 뾰족한 손가락 두 개, 밝은 테두리 선)`, spec, connectors, primary_image: 'front' }
   delete data.thumbnail3d; delete data.thumbKey
   for (const [n2, t2] of [['본체', bodyTris], ['혀', tongueTris], ['손가락', fingerTris]]) assertPartMesh(`${NAME} ${n2}`, t2) // 규격 검사에 실패하면 여기서 멈춘다(등록 안 함)
   console.log(NAME, r.data.color, hex, '본체 KB', Math.round(stl.length / 1024), JSON.stringify(checkMesh(bodyTris)), '| 혀', JSON.stringify(checkMesh(tongueTris)), '| 손가락', JSON.stringify(checkMesh(fingerTris)), '| 바깥선 KB', Math.round(outlineStl.length / 1024))

@@ -13,7 +13,7 @@ const H = { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: 'Bearer ' + en
 const rest = async (p, opt = {}) => { const r = await fetch(env.SUPABASE_URL + '/rest/v1/' + p, { headers: H, ...opt }); if (!r.ok) throw new Error(p + ' ' + r.status + ' ' + (await r.text()).slice(0, 300)); return opt.method ? null : r.json() }
 const ACE = 'cf342cca-792f-4e70-863b-b12de631f1cc'
 const HEX = { 블루: '#0053fa', 스카이블루: '#82d0f8', 레드: '#e1493f', 화이트: '#f2f4f8', 블랙: '#555555', 그레이: '#9ca5af', 다홍색: '#f45243' }
-const HOLES_N = 2, W = 10, T = 5, HOLE_R = ACELAB_FRAME_STD.boreR // 구멍 1×2, 폭 z 10, 두께 y 5, 구멍 지름 4.5
+const HOLES_N = 2, W = 10, T = 5, HOLE_R = ACELAB_FRAME_STD.boreR // 구멍 1×2, 폭 z 10, 두께 y 5, 홀 규격사이즈 5.2
 const FRAME_L = 20, ADD = 8, LEN = FRAME_L + ADD // 12프레임 길이 20 + 수 부분 8 = 전체 28
 const AW = 2.5, GAP_X = 10, TIP_R = AW / 2, PW = 8, PR = 3, PD = 1 // 팔 폭 2.5(두 팔 사이 틈 5), 틈 바닥 x, 팔 끝 모서리 반지름, 위쪽 홈 8×8(모서리 반지름 3 — 둥근 끝 반지름 5 안에 들어가는 최소 반지름 2.8 이상)·깊이 1
 const X_L = -FRAME_L / 2, X_R = FRAME_L / 2 + ADD, HC = [[-5, 0], [5, 0]] // 왼쪽 끝(둥근 끝), 팔 끝(+x), 구멍 가운데
@@ -105,7 +105,7 @@ for (const r of await rest(`ivs_part_catalog?select=id,data&data->>category=eq.$
   const mk = (st, name, extra = {}) => ({ x: 0, y: 0, z: 0, op: 'add', rx: 0, ry: 0, rz: 0, type: 'import', color: hex, fileName: `${NAME}_${name}_에이스랩.stl`, fileDataUrl: toDataUrl(st), brightness: 100, ...extra })
   const spec = { shapes: [{ ...mk(stl, '본체'), fileName: `${NAME}_에이스랩.stl` }, { ...mk(outlineStl, '바깥선', { paint: true, y: 0 }), color: lineColorFor(hex) }] }
   const connectors = { note: `${NAME}(12프레임 ${W}×${FRAME_L} + 수 부분 ${ADD} = 전체 ${LEN}, 두께 ${T}, 구멍 1×${HOLES_N}, 한쪽 끝에 팔 두 개). 모양은 이후 다듬는다.`, pegs: [], holes: [], size: [LEN, T, W], confidence: 'draft' }
-  const data = { ...r.data, size: `${W}×${LEN}×${T}mm (에이스랩: 12프레임 + 한쪽 끝 수 부분 ${ADD}mm = 전체 ${LEN}, 구멍 지름 4.5 구멍 1×${HOLES_N}, 위쪽 8×8 사각 홈 1mm, 끝 양쪽에서 나온 팔 두 개(폭 ${AW}, 끝은 옆에서 볼 때 톱니바퀴 반원(15° 간격 톱니 13개·골 12개), 위에서 볼 때는 각짐, 안쪽 면에 볼록 돌기 한 개씩), 밝은 테두리 선)`, spec, connectors, primary_image: 'front' }
+  const data = { ...r.data, size: `${W}×${LEN}×${T}mm (에이스랩: 12프레임 + 한쪽 끝 수 부분 ${ADD}mm = 전체 ${LEN}, 홀 규격사이즈 5.2 구멍 1×${HOLES_N}, 위쪽 8×8 사각 홈 1mm, 끝 양쪽에서 나온 팔 두 개(폭 ${AW}, 끝은 옆에서 볼 때 톱니바퀴 반원(15° 간격 톱니 13개·골 12개), 위에서 볼 때는 각짐, 안쪽 면에 볼록 돌기 한 개씩), 밝은 테두리 선)`, spec, connectors, primary_image: 'front' }
   delete data.thumbnail3d; delete data.thumbKey
   assertPartMesh(NAME, bodyTris) // 규격 검사에 실패하면 여기서 멈춘다(등록 안 함)
   console.log(NAME, r.data.color, hex, 'KB', Math.round(stl.length / 1024), '몸통', JSON.stringify(checkMesh(bodyTris)), '바깥선 KB', Math.round(outlineStl.length / 1024))

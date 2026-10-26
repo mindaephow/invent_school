@@ -1,4 +1,4 @@
-// 에이스랩 이빨: 10×10 두께 5 사각(뒤쪽 두 모서리 둥근 반지름 2.5, 가운데 구멍 1개 지름 4.5)의 양쪽 변에서 한 줄씩 나온 선이 앞에서 만나 뾰족한 이빨 모양, 전체 길이 23(사용자 2026-10-27 "이빨 만들자 10, 10, 두께 5mm", "사각에서 양쪽에서 한줄씩 와서 만나서 뾰족하게 이빨모양 전체길이 23"). 모양은 이후 사용자와 다듬는다.
+// 에이스랩 이빨: 10×10 두께 5 사각(뒤쪽 두 모서리 둥근 반지름 2.5, 가운데 구멍 1개 홀 규격사이즈 5.2)의 양쪽 변에서 한 줄씩 나온 선이 앞에서 만나 뾰족한 이빨 모양, 전체 길이 23(사용자 2026-10-27 "이빨 만들자 10, 10, 두께 5mm", "사각에서 양쪽에서 한줄씩 와서 만나서 뾰족하게 이빨모양 전체길이 23"). 모양은 이후 사용자와 다듬는다.
 //   node scripts/make-robotron-tooth.mjs [--write] [--name=이빨]
 import fs from 'node:fs'
 import { makeKit, trianglesToStl } from '../app/lib/cubo-mesh-kit.js'
@@ -13,7 +13,7 @@ const H = { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: 'Bearer ' + en
 const rest = async (p, opt = {}) => { const r = await fetch(env.SUPABASE_URL + '/rest/v1/' + p, { headers: H, ...opt }); if (!r.ok) throw new Error(p + ' ' + r.status + ' ' + (await r.text()).slice(0, 300)); return opt.method ? null : r.json() }
 const ACE = 'cf342cca-792f-4e70-863b-b12de631f1cc'
 const HEX = { 블루: '#0053fa', 스카이블루: '#82d0f8', 레드: '#e1493f', 화이트: '#f2f4f8', 블랙: '#555555', 그레이: '#9ca5af' }
-const SQ = 10, LEN = 23, W = 10, T = 5, HOLE_R = ACELAB_FRAME_STD.boreR // 사각 10, 전체 길이 23(x), 폭 z 10, 두께 y 5, 구멍 지름 4.5
+const SQ = 10, LEN = 23, W = 10, T = 5, HOLE_R = ACELAB_FRAME_STD.boreR // 사각 10, 전체 길이 23(x), 폭 z 10, 두께 y 5, 홀 규격사이즈 5.2
 const [x0, x1, y0, y1, z0, z1] = [-SQ / 2, -SQ / 2 + LEN, 0, T, -W / 2, W / 2] // x0 = 사각 뒤쪽 끝, x1 = 이빨 뾰족한 끝(사각 앞쪽 변은 x=+5)
 const kit = makeKit(24), { quad, P } = kit
 const RC = 2.5, ARC = 8 // 사각 뒤쪽 모서리 반지름(평판과 같다)

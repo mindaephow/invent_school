@@ -39,7 +39,7 @@ async function finish(B, r, hex, { tris, holes, connHoles, size: sz }, note, lab
   if (labeled) holes.forEach((q) => { const label = `X${Math.round((q.z - holes[0].z) / P) + 1}Z${Math.round((q.x - holes[0].x) / P) + 1}`; spec.holeCoords.push({ x: 5 + (q.z - holes[0].z) + 0, z: 5 + (q.x - holes[0].x), face: null, label }); spec.holeLabels.push(label) })
   const hs = (connHoles || holes.map((q) => ({ pos: [q.x, 0, q.z], dir: [0, -1, 0] }))).map((q, j) => ({ id: 'h' + (j + 1), pos: q.pos.map((v) => +v.toFixed(3)), dir: q.dir, len: B.std.thickness, r: j === crossIdx ? B.std.crossSpan / 2 : B.std.boreR, through: true })) // 열십자 구멍은 축(십자 4×4) 돌기 반지름
   const connectors = { note: '구멍이 두께(y) 방향으로 10mm 격자. through=true 면 양쪽에서 끼울 수 있다.', pegs: [], size: sz || [+(x1 - x0).toFixed(1), B.std.thickness, +(z1 - z0).toFixed(1)], holes: hs, confidence: 'checked' }
-  const size = `${connectors.size[0]}×${connectors.size[2]}×${connectors.size[1]}mm (${B.label}·테두리 없음·구멍 지름 ${B.std.boreR * 2}, ${note}, 구멍 ${hs.length}개)`
+  const size = `${connectors.size[0]}×${connectors.size[2]}×${connectors.size[1]}mm (${B.label}·테두리 없음·홀 규격사이즈 ${B.std.boreR * 2}, ${note}, 구멍 ${hs.length}개)`
   const data = { ...r.data, size, spec, connectors, primary_image: 'front' }
   delete data.thumbnail3d; delete data.thumbKey
   console.log(B.label.padEnd(8), r.data.name.padEnd(8), r.data.color, '삼각형', tris.length / 9, '구멍', hs.length, '크기', connectors.size.join('×'))
@@ -72,7 +72,7 @@ for (const B of BRANDS) {
     }
     const worst = Math.max(...holes.map((q, j) => Math.hypot(q.x - hs[j].pos[0], q.z - hs[j].pos[2]))) // 모델 구멍 위치와 연결점 위치 차이(0 이어야 한다)
     const connectors = { note: '구멍이 두께(y) 방향으로 10mm 격자. through=true 면 양쪽에서 끼울 수 있다.', pegs: [], size: [nx * P, B.std.thickness, nz * P], holes: hs, confidence: 'checked' }
-    const size = `${nz * P}×${nx * P}×${B.std.thickness}mm (${B.label}·테두리 없음·구멍 지름 ${B.std.boreR * 2}, 구멍 ${nz}×${nx}, ${P}mm피치 공식)`
+    const size = `${nz * P}×${nx * P}×${B.std.thickness}mm (${B.label}·테두리 없음·홀 규격사이즈 ${B.std.boreR * 2}, 구멍 ${nz}×${nx}, ${P}mm피치 공식)`
     const data = { ...r.data, size, spec, connectors, primary_image: 'front', thumbKey: null, thumbnail3d: null, snapshot: null, snapshots: null }
     delete data.thumbnail3d; delete data.thumbKey
     console.log(B.label.padEnd(8), r.data.name.padEnd(14), r.data.color.padEnd(5), `${nz}×${nx}`, '삼각형', tris.length / 9, '구멍', hs.length, '위치차', worst.toFixed(3), 'KB', Math.round(stl.length / 1024))

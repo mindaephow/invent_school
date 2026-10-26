@@ -7,7 +7,7 @@
 import { makeKit } from './cubo-mesh-kit.js'
 import { ringFace, circlePts } from './cubo-face-mesh.js'
 
-export const WHEELGUIDE_STD = { discR: 15, discH: 4, bossR: 4, totalH: 10, screwR: 1, holeR: 2.25, pitch: 10, pocketSide: 6, pocketDepth: 1, grooveW: 2, grooveDepth: 1, endHexFlat: 4.5, centerHexFlat: 6, centerHexDepth: 4, seg: 64 }
+export const WHEELGUIDE_STD = { discR: 15, discH: 4, bossR: 4, totalH: 10, screwR: 1, holeR: 2.6, pitch: 10, pocketSide: 6, pocketDepth: 1, grooveW: 2, grooveDepth: 1, endHexFlat: 4.5, centerHexFlat: 6, centerHexDepth: 4, seg: 64 }
 
 // 구멍 자리: 열십자 4개(+x, −x, +z, −z) 다음에 이웃한 두 구멍의 가운데 4개(+x+z, +x−z, −x+z, −x−z).
 export const wheelGuideSpots = (S = WHEELGUIDE_STD) => { const p = S.pitch, h = p / 2; return [[p, 0], [-p, 0], [0, p], [0, -p], [h, h], [h, -h], [-h, h], [-h, -h]] }
