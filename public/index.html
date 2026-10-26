@@ -1645,14 +1645,14 @@
         if (!prev) cumulative.set(e.part.id, { part: e.part, qty: e.qty || 0 });
         else prev.qty += (e.qty || 0);
       });
-      if (i > 0) html += partSectionHtml(`${g.label} 1~${v}권 누적`, Array.from(cumulative.values()).map((c) => partRowHtml(c.part, c.qty, false)));
+      if (i > 0) html += partSectionHtml(`${g.label} 1~${v}권 누적`, sortPartsForPicker(Array.from(cumulative.values()).map((c) => c.part)).map((p) => cumulative.get(p.id)).map((c) => partRowHtml(c.part, c.qty, false)));
     });
     return html;
   }
   function renderParts(parts){
     allParts = parts;
     document.querySelectorAll('#partSubjectTabs [data-subject-tab]').forEach((b) => b.classList.toggle('current', b.dataset.subjectTab === partSubjectTab));
-    parts = parts.filter((p) => p.subject === partSubjectTab);
+    parts = sortPartsForPicker(parts.filter((p) => p.subject === partSubjectTab)); // 부품 고르기와 같은 정렬 규칙
     const catTabsEl = document.getElementById('partCategoryTabs');
     const byCategoryKey = new Map();
     parts.forEach((p) => {
