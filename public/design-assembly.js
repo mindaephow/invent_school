@@ -246,6 +246,15 @@
     const tween = (ms, fn, step_) => new Promise((res) => { const t0 = performance.now(); let last = 0; const f = (now) => { const k = Math.min(1, (now - t0) / ms), e = (step_ || ease)(k); fn(e - last); last = e; if (k < 1) requestAnimationFrame(f); else res(); }; requestAnimationFrame(f); });
     const rot = (idxs, pv, ax, r) => { if (idxs.length) b.hinge(idxs, pv, ax, r); };
     const btns = [], resets = [], loads = [];
+    // 기본값(관리자 전용 체크박스): 체크 = 관리자가 확정한 값을 모든 화면(학생 포함)의 시작값으로 보여 줌 / 해제(처음 상태) = 학생이 직접 설정.
+    // 값은 모두가 읽을 수 있는 표 ivs_assembly_cams 의 step 9000 행에 둔다(관리자만 쓰기).
+    let FD = { show: false, vals: {} }, cbEl = null; const applyFns = [], collectFns = [];
+    const isAdm2 = () => !!(window.__ivsIsAdmin && window.__ivsIsAdmin());
+    const pushDefaults = async () => {
+      if (!isAdm2()) return; const vals = {}; collectFns.forEach((c) => { const o = c(); vals[o.name] = o.v; }); FD.vals = vals;
+      const b2 = bridge(); if (b2 && b2.camStore) { try { await b2.camStore.save(def.id, 9000, { fireDefaults: { show: FD.show, vals } }); } catch (e) { notice('기본값 저장에 실패했습니다: ' + e.message); } }
+    };
+    (async () => { const b2 = bridge(); if (!b2 || !b2.camStore) return; try { const m = await b2.camStore.load(def.id); const r = m && m[9000] && m[9000].fireDefaults; if (r) { FD = { show: !!r.show, vals: r.vals || {} }; if (cbEl) cbEl.checked = FD.show; applyFns.forEach((a) => a()); } } catch (e) { /* 기본값 없음 */ } })();
     const lock = (on) => { fireBusy = on; btns.forEach((x) => { x.disabled = on; }); };
     fs.forEach((f) => {
       const _tY = (f.wheelCenter || [0, 0, 0])[1], _dY = (f.path || []).reduce((t, q) => t + q.vec[1], 0), _minY = (f.wheelR || 38) + (f.floorY || 0), _k = (_dY < 0 && _tY + _dY < _minY) ? Math.max(0, (_tY - _minY) / -_dY) : 1;   // 바퀴 중심이 바닥 아래로 내려가지 않게 레인 끝을 바닥 높이에서 멈춘다
@@ -276,6 +285,7 @@
       const saveSet = async () => {   // 확정 저장: 시작 팔 각도·바퀴 위치를 이 브라우저와(관리자면) DB 에 남긴다
         const val = { ang: startAngV, wl: whLimit, lu: levUp, le: levEnd, dn: downAng };
         try { localStorage.setItem(SKEY, JSON.stringify(val)); } catch (e) { /* 저장 못 해도 화면은 계속 */ }
+        if (FD.show) pushDefaults();   // 기본값 체크 중이면 확정한 값을 기본값에도 반영
         const b2 = bridge(); if (b2 && b2.checkStore && def && window.__ivsIsAdmin && window.__ivsIsAdmin()) { try { await b2.checkStore.set(def.id, def.steps.length, 'fireset:' + f.name, 'ok', JSON.stringify(val)); } catch (e) { notice('저장에 실패했습니다: ' + e.message); } }
       };
       const rl = (fpath || []).filter((q) => Math.hypot(q.vec[0], q.vec[1], q.vec[2]) > 60)[0], rv = rl ? rl.vec : [1, 0, 0], rn = Math.hypot(rv[0], rv[1], rv[2]) || 1, rdir = rv.map((x) => x / rn);   // 레인 방향   // 장전(와인드업): 팔이 공 반대쪽으로 올라간다 — 발사 때 도는 방향(swing)의 반대
@@ -435,12 +445,26 @@
       const follow = () => { if (!bar.isConnected) return; if (levForce != null && levSnap && (Math.abs(S.c[0] - levSnap[0]) + Math.abs(S.c[1] - levSnap[1]) + Math.abs(S.c[2] - levSnap[2])) > 0.5) levForce = null; if (laneIdx.length) { const dist = (S.c[0] - lpv[0]) * rdir[0] + (S.c[1] - lpv[1]) * rdir[1] + (S.c[2] - lpv[2]) * rdir[2], th = rad(levForce != null ? levForce : levEnd + (levUp - levEnd) * Math.max(0, Math.min(1, -dist / 25))),   // 바퀴가 위로 올라 있으면 '올렸을 때' 각도, 굴러 내려가 아래에 있으면 '굴러간 최종' 각도 (그 사이는 위치에 따라)
         dd = th - laneA; if (Math.abs(dd) > 1e-4) { rot(laneIdx, lpv, ax, dd); rot(whIdx, lpv, ax, dd); laneA = th; } if (document.activeElement !== levIn) levIn.value = Math.round(laneA * 1800 / Math.PI) / 10; } requestAnimationFrame(follow); };
       requestAnimationFrame(follow);
+      collectFns.push(() => ({ name: f.name, v: { ang: conf.load ? startAngV : null, wl: conf.wheel ? whLimit : null, lu: conf.lu ? levUp : null, le: conf.le ? levEnd : null, dn: conf.down ? downAng : null } }));   // 확정한 것만 기본값으로
+      applyFns.push(() => {   // 기본값이 켜져 있으면 관리자가 확정한 값으로 시작 모습을 맞춘다
+        const v = FD.show && FD.vals[f.name]; if (!v) return;
+        if (v.ang != null) startAngV = v.ang; if (v.dn != null) downAng = v.dn; if (v.lu != null) levUp = v.lu; if (v.le != null) levEnd = v.le; if (v.wl != null) { whLimit = v.wl; whOff = whLimit; }
+        loadIn.value = startAngV; downIn.value = downAng; luIn.value = levUp; leIn.value = levEnd; offIn.value = whOff;
+        conf.load = v.ang != null; conf.down = v.dn != null; conf.wheel = v.wl != null; conf.lu = v.lu != null; conf.le = v.le != null; Object.keys(conf).forEach(paintMode);
+        if (!fireBusy && S.atStart) reset();
+      });
       (async () => {   // 관리자가 DB 에 확정 저장한 값이 있으면 그걸로 시작 모습을 맞춘다
         const b2 = bridge(); if (!b2 || !b2.checkStore || !b2.checkStore.loadFull || !def) return;
         try { const row = ((await b2.checkStore.loadFull(def.id)) || []).find((r) => r && r.issue_key === 'fireset:' + f.name); if (!row) return; const v = JSON.parse(row.note || 'null'); if (!v) return;
           if (isFinite(v.ang)) startAngV = v.ang; if (v.wl != null && isFinite(v.wl)) { whLimit = v.wl; whOff = whLimit; offIn.value = whOff; } conf.load = conf.load || v.ang != null; conf.down = conf.down || v.dn != null; conf.wheel = conf.wheel || v.wl != null; conf.lu = conf.lu || v.lu != null; conf.le = conf.le || v.le != null; Object.keys(conf).forEach(paintMode); if (v.lu != null && isFinite(v.lu)) levUp = v.lu; if (v.le != null && isFinite(v.le)) levEnd = v.le; if (typeof luIn !== 'undefined') { luIn.value = levUp; leIn.value = levEnd; } if (v.dn != null && isFinite(v.dn)) { downAng = v.dn; downIn.value = downAng; } loadIn.value = startAngV; offIn.value = whOff; if (!fireBusy && S.atStart && !S.moved) { reset(); } } catch (e) { /* DB 값 없음 */ }
       })();
     });
+    if (isAdm2()) {   // 관리자 전용 — 학생에게는 보이지 않는다
+      const lab = document.createElement('label'); lab.style.cssText = 'display:inline-flex; align-items:center; gap:5px; font-weight:700; font-size:12.5px; color:#7f1d1d; padding:3px 8px; background:#fff; border:1px solid #fca5a5; border-radius:8px; cursor:pointer;';
+      cbEl = document.createElement('input'); cbEl.type = 'checkbox'; cbEl.checked = FD.show;
+      cbEl.onchange = () => { FD.show = cbEl.checked; pushDefaults(); };
+      lab.append(cbEl, '기본값 (체크 = 확정한 값을 학생에게 보여줌 / 해제 = 학생이 직접 설정)'); bar.appendChild(lab);
+    }
     const rb = document.createElement('button'); rb.type = 'button'; rb.className = 'ghost'; rb.textContent = '원위치'; rb.style.cssText = 'padding:3px 10px;';
     rb.onclick = () => { if (fireBusy) return; resets.forEach((r) => r()); };   // 원위치 = 시작 모습
     bar.appendChild(rb); btns.push(rb);

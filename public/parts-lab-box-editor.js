@@ -509,6 +509,7 @@ function initBoxEditor() {
     attachSelection();
     renderer.render(scene, camera);
     startLoop(() => live);
+    updateSpecInfo();
   }
   function attachSelection() {
     const activeBtn = panel.querySelector('.tfModeBtn.on');
@@ -890,6 +891,13 @@ function initBoxEditor() {
     const shape = shapes[selectedIndex];
     if (!shape) { el.textContent = ''; return; }
     let text = shapeSpecText(shape.type);
+    const mesh = live && live.meshes && live.meshes[selectedIndex];
+    if (mesh && mesh.geometry) { // 실제로 화면에 놓인 크기(회전·크기 반영) — 가져온 파일은 숫자 칸이 없어 이걸로만 알 수 있다(사용자 지시 2026-10-27)
+      mesh.updateMatrixWorld(true);
+      if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+      const sz = mesh.geometry.boundingBox.clone().applyMatrix4(mesh.matrixWorld).getSize(new THREE.Vector3());
+      text = (shape.type === 'import' ? '' : text + ' · ') + '화면 크기 ' + round1(sz.x) + '×' + round1(sz.y) + '×' + round1(sz.z) + 'mm (가로×높이×세로)';
+    }
     if (selectedIndex !== 0 && document.getElementById('shapeOp').value === 'subtract') {
       text += ' · 빼기 도형(다른 도형에 구멍을 뚫어요)';
     }

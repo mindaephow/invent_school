@@ -657,6 +657,7 @@
     authCard.hidden = true;
     appBody.hidden = false;
     const isAdmin = !!(session.user.app_metadata && session.user.app_metadata.role === 'admin');
+    IS_ADMIN = isAdmin;
     document.getElementById('adminLink').hidden = !isAdmin;
     document.getElementById('partsTabBtn').hidden = !isAdmin;
     document.getElementById('textbooksTabBtn').hidden = !isAdmin;
@@ -2657,13 +2658,16 @@
   });
   // 부품 목록 카드와 수정 폼의 "3D 모델" 미리보기가 똑같이 쓰는 모달 열기 로직 — 하나로 모아서 양쪽에서
   // 부른다(사용자 지시: "썸네일 보여주고 클릭하면 크게 보여주고").
+  // 부품 창 제목: 부품명은 누구에게나, 뒤의 크기·설명 글은 관리자에게만 다른 색(주황)으로 보여 준다(사용자 2026-10-27).
+  var IS_ADMIN = false;
+  function partTitleHtml(p){ return escapeHtml(p.name || '') + (IS_ADMIN && p.size ? ' <span style="color:#d97706;font-weight:600;">· ' + escapeHtml(p.size) + '</span>' : ''); }
   async function openPartImageModal(p){
     const has3d = p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.length;
     // spec.shapes(3D 모델)가 있으면 svg 대신 그걸 보여준다 — 회전·줌·카메라 이동만 되는 뷰어(편집 도구
     // 없음, renderShapesPreview에 붙는 건 OrbitControls뿐)이고, svg는 그대로 DB에 남아있으니 보관된
     // 상태 그대로다(사용자 지시, 위 partRowHtml 주석 참고).
     if (has3d) {
-      document.getElementById('imgModalTitle').textContent = [p.name, p.size].filter(Boolean).join(' · ');
+      document.getElementById('imgModalTitle').innerHTML = partTitleHtml(p);
       document.getElementById('imgModalBody').innerHTML = '<canvas id="imgModal3dCanvas" width="600" height="600" style="width:100%;max-width:600px;aspect-ratio:1;touch-action:none;"></canvas><div class="note" id="imgModalNote" style="margin-top:6px;">불러오는 중...</div>';
       document.getElementById('imgModalBackdrop').hidden = false;
       // allParts는 stripSpecFiles로 받아와서(위 loadParts 참고) 'import' 도형이면 fileDataUrl이 빠져있다 —
@@ -2692,15 +2696,18 @@
       }
       if (!document.getElementById('imgModal3dCanvas')) return; // 받아오는 사이에 모달을 닫았으면 그만둔다
       const noteEl = document.getElementById('imgModalNote');
-      if (noteEl) noteEl.textContent = '마우스로 드래그하면 회전, 휠로 확대/축소, 오른쪽 버튼 드래그로 이동돼요.';
+      if (noteEl) noteEl.textContent = '마우스로 드래그하면 회전, 휠로 확대/축소, 오른쪽 버튼 드래그로 이동돼요. 부품을 클릭하면 크기가 3D에 표시돼요.';
       const drawWhenReady = () => {
         if (!document.getElementById('imgModal3dCanvas')) return;
         if (!window.__partsLabViewer) { setTimeout(drawWhenReady, 300); return; }
-        window.__partsLabViewer.renderShapesPreview(document.getElementById('imgModal3dCanvas'), p.spec.shapes);
+        window.__partsLabViewer.renderShapesPreview(document.getElementById('imgModal3dCanvas'), p.spec.shapes, null, (pk) => {
+          const n = document.getElementById('imgModalPick'); if (!n) return;
+          n.textContent = pk ? ('선택: ' + (pk.isBody ? '본체' : '덧붙은 조각') + ' ' + pk.size.join('×') + 'mm · 전체 ' + pk.whole.join('×') + 'mm (가로×높이×세로)') : '마우스로 드래그하면 회전, 휠로 확대/축소, 오른쪽 버튼 드래그로 이동돼요. 부품을 클릭하면 크기가 나와요.';
+        });
       };
       drawWhenReady();
     } else if (p.imageSvg || p.imageSvgDiagonal) {
-      document.getElementById('imgModalTitle').textContent = [p.name, p.size].filter(Boolean).join(' · ');
+      document.getElementById('imgModalTitle').innerHTML = partTitleHtml(p);
       const shots = [];
       if (p.imageSvg) shots.push(`<div class="img-modal-shot"><div class="note" style="margin-bottom:6px;">위/정면${p.primaryImage !== 'diagonal' ? ' · 대표' : ''}</div>${uniquifySvgIds(p.imageSvg, p.id)}</div>`);
       if (p.imageSvgDiagonal) shots.push(`<div class="img-modal-shot"><div class="note" style="margin-bottom:6px;">대각선(입체)${p.primaryImage === 'diagonal' ? ' · 대표' : ''}</div>${uniquifySvgIds(p.imageSvgDiagonal, p.id)}</div>`);

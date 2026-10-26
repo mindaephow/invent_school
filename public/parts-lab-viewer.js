@@ -317,15 +317,51 @@ function meshFromShapes(list) {
   paints.forEach((s) => {
     const g = buildShapeGeometry(s); g.applyMatrix4(paintMatrix(s));
     const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: materialColorForShape(s, 0) }));
+    m.userData.paintShape = s;
     result.add(m); // 합성 결과가 첫 도형의 위치·회전을 물려받으므로 첫 도형이 원점이면 그대로 맞는다
   });
   return result;
 }
 
+// 고른 조각의 3D 치수 표시: 주황 상자 테두리 + 가로·높이·세로 세 모서리 옆에 mm 숫자(사용자 2026-10-27 "3D에 표시를 해줘야지 어디가 어떤 사이즈인지 알수가 있지").
+// 숫자 판은 카메라 확대에 상관없이 같은 크기로 보이게 매 프레임 배율을 맞춘다(userData.px).
+function labelSprite(text) {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 96
+  const g = c.getContext('2d'); g.font = 'bold 60px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'
+  g.lineWidth = 12; g.strokeStyle = '#fff'; g.strokeText(text, 128, 50); g.fillStyle = '#d97706'; g.fillText(text, 128, 50)
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false, transparent: true }))
+  sp.renderOrder = 999; sp.userData.px = 80 // 화면에서 가로 80px 정도
+  return sp
+}
+function dimensionGroup(b) {
+  const grp = new THREE.Group(), helper = new THREE.Box3Helper(b, 0xff8a00)
+  helper.material.depthTest = false; helper.renderOrder = 998; grp.add(helper)
+  const sz = b.getSize(new THREE.Vector3()), mn = b.min, mx = b.max
+  const f = (v) => String(Math.round(v * 10) / 10)
+  const o = Math.max(sz.x, sz.y, sz.z) * 0.18 + 3 // 모서리에서 치수선까지 띄우는 거리
+  const V = (x, y, z) => new THREE.Vector3(x, y, z)
+  // 치수선 "|<-- 50mm -->|": 모서리 a~b 를 off 만큼 띄운 선 + 양 끝 화살표 + 보조선 + 가운데 숫자
+  const dim = (a, bb, off, text) => {
+    const p0 = a.clone().add(off), p1 = bb.clone().add(off), d = p1.clone().sub(p0), len = d.length(); d.normalize()
+    const h = Math.min(len * 0.12, 3), side = off.clone().normalize().multiplyScalar(h * 0.4), pts = []
+    const seg = (u, v) => pts.push(u, v)
+    seg(p0, p1) // 치수선
+    seg(a, p0.clone().add(off.clone().multiplyScalar(0.12))); seg(bb, p1.clone().add(off.clone().multiplyScalar(0.12))) // 보조선
+    for (const [pt, sg] of [[p0, 1], [p1, -1]]) { const tip = pt.clone(), back = pt.clone().add(d.clone().multiplyScalar(sg * h)); seg(tip, back.clone().add(side)); seg(tip, back.clone().sub(side)) } // 화살표
+    const g = new THREE.BufferGeometry().setFromPoints(pts), m = new THREE.LineBasicMaterial({ color: 0xd97706, depthTest: false })
+    const ln = new THREE.LineSegments(g, m); ln.renderOrder = 998; grp.add(ln)
+    const sp = labelSprite(text + 'mm'); sp.position.copy(p0.clone().add(p1).multiplyScalar(0.5)).add(off.clone().normalize().multiplyScalar(h * 0.8)); grp.add(sp)
+  }
+  dim(V(mn.x, mn.y, mx.z), V(mx.x, mn.y, mx.z), V(0, -o, o), f(sz.x)) // 가로
+  dim(V(mx.x, mn.y, mx.z), V(mx.x, mx.y, mx.z), V(o, 0, o), f(sz.y)) // 높이
+  dim(V(mx.x, mn.y, mn.z), V(mx.x, mn.y, mx.z), V(o, -o, 0), f(sz.z)) // 세로
+  grp.userData.isDim = true
+  return grp
+}
 // 부품 관리 모달용 — 캔버스 하나에 독립 렌더러·궤도컨트롤(회전·줌·이동만, 편집 도구 없음)·렌더 루프를
 // 새로 만든다. 그 캔버스가 문서에서 없어지면(모달 닫힘 → innerHTML 교체) 스스로 멈추고 정리한다
 // (parts-lab-box-editor.js의 renderShapesPreview와 동일한 패턴).
-async function renderShapesPreview(canvas, shapesData, camPos) {
+async function renderShapesPreview(canvas, shapesData, camPos, onPick) {
   camPos = camPos || [150, 150, 150];
   const list = await resolveImportGeometries(shapesData);
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
@@ -351,11 +387,35 @@ async function renderShapesPreview(canvas, shapesData, camPos) {
   ['pointerdown', 'pointermove', 'pointerup', 'wheel'].forEach((evt) => {
     renderer.domElement.addEventListener(evt, () => { dirty = true; }, true);
   });
+  // 클릭으로 대상을 고르면 그 조각의 크기(가로×높이×세로 mm)를 onPick 으로 알려 준다(사용자 지시 2026-10-27 "대상을 선택하면 사이즈를 보여줘").
+  // 조각 = 합쳐진 본체, 또는 색칠 조각(프레임 등). 이름에 '선'이 들어간 보조선 조각은 고를 수 없고 전체 크기에서도 뺀다.
+  const isLine = (o) => { const n = o.userData.paintShape && (o.userData.paintShape.name || o.userData.paintShape.fileName); return !!n && n.includes('선'); };
+  const sizeOf = (box) => { const z = box.getSize(new THREE.Vector3()); return [z.x, z.y, z.z].map((v) => Math.round(v * 10) / 10); };
+  if (mesh && onPick) {
+    const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+    let down = null, marker = null;
+    const pieces = () => { const a = [mesh]; mesh.children.forEach((c) => { if (c.userData.paintShape && !isLine(c)) a.push(c); }); return a; };
+    const pieceBox = (o) => { const b = new THREE.Box3(); o.updateMatrixWorld(true); if (!o.geometry.boundingBox) o.geometry.computeBoundingBox(); return b.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld); };
+    renderer.domElement.addEventListener('pointerdown', (e) => { down = [e.clientX, e.clientY]; });
+    renderer.domElement.addEventListener('pointerup', (e) => {
+      if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 4) { down = null; return; }
+      down = null;
+      const r = renderer.domElement.getBoundingClientRect();
+      ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+      ray.setFromCamera(ndc, camera);
+      const hit = ray.intersectObjects(pieces(), false)[0];
+      if (marker) { scene.remove(marker); marker = null; }
+      if (hit) { const b = pieces().reduce((acc, o) => acc.union(pieceBox(o)), new THREE.Box3()); marker = dimensionGroup(b); // 어느 조각을 눌러도 부품 전체 크기를 보여 준다(사용자 2026-10-27)
+         scene.add(marker); onPick({ size: sizeOf(b), whole: sizeOf(pieces().reduce((acc, o) => acc.union(pieceBox(o)), new THREE.Box3())), isBody: hit.object === mesh }); }
+      else onPick(null);
+      dirty = true;
+    });
+  }
   (function loop() {
     if (!document.body.contains(canvas)) { renderer.dispose(); return; }
     requestAnimationFrame(loop);
     controls.update();
-    if (dirty) { renderer.render(scene, camera); dirty = false; }
+    if (dirty) { scene.traverse((o) => { if (o.isSprite) { const w = (camera.right - camera.left) / camera.zoom * (o.userData.px / canvas.clientWidth); o.scale.set(w, w * 0.375, 1) } }); renderer.render(scene, camera); dirty = false; }
   })();
 }
 
