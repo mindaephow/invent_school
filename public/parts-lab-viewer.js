@@ -325,10 +325,10 @@ function meshFromShapes(list) {
 
 // 고른 조각의 3D 치수 표시: 주황 상자 테두리 + 가로·높이·세로 세 모서리 옆에 mm 숫자(사용자 2026-10-27 "3D에 표시를 해줘야지 어디가 어떤 사이즈인지 알수가 있지").
 // 숫자 판은 카메라 확대에 상관없이 같은 크기로 보이게 매 프레임 배율을 맞춘다(userData.px).
-function labelSprite(text) {
+function labelSprite(text, color) {
   const c = document.createElement('canvas'); c.width = 256; c.height = 96
   const g = c.getContext('2d'); g.font = 'bold 60px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'
-  g.lineWidth = 12; g.strokeStyle = '#fff'; g.strokeText(text, 128, 50); g.fillStyle = '#d97706'; g.fillText(text, 128, 50)
+  g.lineWidth = 12; g.strokeStyle = '#fff'; g.strokeText(text, 128, 50); g.fillStyle = color || '#d97706'; g.fillText(text, 128, 50)
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false, transparent: true }))
   sp.renderOrder = 999; sp.userData.px = 80 // 화면에서 가로 80px 정도
   return sp
@@ -341,20 +341,22 @@ function dimensionGroup(b) {
   const o = Math.max(sz.x, sz.y, sz.z) * 0.18 + 3 // 모서리에서 치수선까지 띄우는 거리
   const V = (x, y, z) => new THREE.Vector3(x, y, z)
   // 치수선 "|<-- 50mm -->|": 모서리 a~b 를 off 만큼 띄운 선 + 양 끝 화살표 + 보조선 + 가운데 숫자
-  const dim = (a, bb, off, text) => {
+  // 치수선·숫자 색은 축 색을 따른다: 가로(X) 빨강 · 높이(Y) 초록 · 세로(Z) 파랑(사용자 2026-10-27)
+  const AX = { x: ['#e11d1d', 0xe11d1d], y: ['#16a34a', 0x16a34a], z: ['#1d4ed8', 0x1d4ed8] }
+  const dim = (a, bb, off, text, axis) => {
     const p0 = a.clone().add(off), p1 = bb.clone().add(off), d = p1.clone().sub(p0), len = d.length(); d.normalize()
     const h = Math.min(len * 0.12, 3), side = off.clone().normalize().multiplyScalar(h * 0.4), pts = []
     const seg = (u, v) => pts.push(u, v)
     seg(p0, p1) // 치수선
     seg(a, p0.clone().add(off.clone().multiplyScalar(0.12))); seg(bb, p1.clone().add(off.clone().multiplyScalar(0.12))) // 보조선
     for (const [pt, sg] of [[p0, 1], [p1, -1]]) { const tip = pt.clone(), back = pt.clone().add(d.clone().multiplyScalar(sg * h)); seg(tip, back.clone().add(side)); seg(tip, back.clone().sub(side)) } // 화살표
-    const g = new THREE.BufferGeometry().setFromPoints(pts), m = new THREE.LineBasicMaterial({ color: 0xd97706, depthTest: false })
+    const g = new THREE.BufferGeometry().setFromPoints(pts), m = new THREE.LineBasicMaterial({ color: AX[axis][1], depthTest: false })
     const ln = new THREE.LineSegments(g, m); ln.renderOrder = 998; grp.add(ln)
-    const sp = labelSprite(text + 'mm'); sp.position.copy(p0.clone().add(p1).multiplyScalar(0.5)).add(off.clone().normalize().multiplyScalar(h * 0.8)); grp.add(sp)
+    const sp = labelSprite(text + 'mm', AX[axis][0]); sp.position.copy(p0.clone().add(p1).multiplyScalar(0.5)).add(off.clone().normalize().multiplyScalar(h * 0.8)); grp.add(sp)
   }
-  dim(V(mn.x, mn.y, mx.z), V(mx.x, mn.y, mx.z), V(0, -o, o), f(sz.x)) // 가로
-  dim(V(mx.x, mn.y, mx.z), V(mx.x, mx.y, mx.z), V(o, 0, o), f(sz.y)) // 높이
-  dim(V(mx.x, mn.y, mn.z), V(mx.x, mn.y, mx.z), V(o, -o, 0), f(sz.z)) // 세로
+  dim(V(mn.x, mn.y, mx.z), V(mx.x, mn.y, mx.z), V(0, 0, o), f(sz.x), 'x') // 가로
+  dim(V(mx.x, mn.y, mx.z), V(mx.x, mx.y, mx.z), V(o, 0, o), f(sz.y), 'y') // 높이
+  dim(V(mx.x, mn.y, mn.z), V(mx.x, mn.y, mx.z), V(o, 0, 0), f(sz.z), 'z') // 세로
   grp.userData.isDim = true
   return grp
 }
