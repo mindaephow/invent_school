@@ -5942,10 +5942,11 @@
   const asmExitBtn = document.getElementById('asmExitBtn');
   function refreshExitButtons(){
     if (!student || (mode !== 'student' && mode !== 'teacher')) return;   // 로그인 전·검토 화면은 그대로 둔다
-    const asm = !!(window.__ivsAssembly && window.__ivsAssembly.isViewing && window.__ivsAssembly.isViewing());
+    const asm = !!(window.__ivsAssembly && window.__ivsAssembly.isAssemblyScreen && window.__ivsAssembly.isAssemblyScreen());   // 조립도가 있는 차시를 고르면 번호를 누르기 전부터 조립도 화면
     backLink.hidden = asm;
     discardBtn.hidden = asm;
     asmExitBtn.hidden = !asm;
+    projectBar.style.display = asm ? 'none' : '';   // 조립도 화면에는 "새 설계"(이름 칸·저장·불러오기·제출) 줄이 없다 — 위 오른쪽 "로봇 · 큐보 · 3권 · 2차시 · 조향자동차" 라벨만(사용자 2026-10-26)
   }
   window.__ivsRefreshExitButtons = refreshExitButtons;
   asmExitBtn.addEventListener('click', async () => {

@@ -1467,6 +1467,22 @@
     step = Math.max(0, Math.min(last(), target));
     render();
   }
+  // 스마트폰(폭 760px 이하)은 한 열이라 부품 패널이 위에 쌓이고 3D 화면이 맨 아래로 밀린다(사용자 2026-10-26: "부품이 화면을 다 차지하고 번호를 선택해도 오른쪽이 하나도 안 보임")
+  // — 번호를 고르면 부품 패널을 접고(접은 상태를 저장하지는 않는다) 3D 화면을 맨 위로 보여 준다. 다시 펼치려면 3D 화면 왼쪽 위 "☰ 부품", 번호 이동은 3D 화면의 이전·다음 버튼.
+  // 조립도를 연 동안 맨 위 오른쪽에 "로봇 · N권 · M차시 차시명"을 보여 준다(권·차시를 바꾸면 따라 바뀜, 닫으면 지움) — 사용자 2026-10-26
+  let lessonCtx = null;
+  function paintTopCtx() {
+    if (typeof window.__ivsRefreshExitButtons === 'function') window.__ivsRefreshExitButtons(); // 위 왼쪽 나가기 버튼도 조립도를 여닫을 때 바뀐다(조립도 나가기 / 저장하고·저장 안 하고 나가기)
+    if (typeof window.__ivsSetTopCtx !== 'function') return;
+    window.__ivsSetTopCtx(lessonCtx ? '로봇 · ' + lessonCtx.cat + ' · ' + lessonCtx.volume + '권 · ' + lessonCtx.session + '차시 · ' + lessonCtx.title : '');   // 예: 로봇 · 큐보 · 3권 · 2차시 · 조향자동차 (사용자 2026-10-26: 로봇·카테고리·권·차시·차시명 전부)
+  }
+  function showStageOnPhone() {
+    if (!window.matchMedia || !window.matchMedia('(max-width:760px)').matches) return;
+    const lay = document.querySelector('.layout'), unfold = document.getElementById('unfoldSide'), stage = document.querySelector('.stage');
+    if (lay) lay.classList.add('no-side');
+    if (unfold) unfold.hidden = false;
+    if (stage) stage.scrollIntoView({ block: 'start' });
+  }
   // 재생: 화살표 표시 → 결합 → 다음 단계 화살표 표시 → 결합 … 을 쭉 이어서 보여준다(재생 중에는 초록 점을 숨기고 화살표만).
   // 역재생은 단계를 거꾸로 한 칸씩 넘긴다.
   const ARROW_MS = 1100, JOIN_MS = 700;
@@ -1491,22 +1507,6 @@
         if (timerDir !== 1) return;
         // 결합: 부품마다 순서 번호(joinOrder)가 있으면 작은 번호부터 하나씩(14단계: 15프레임이 올라가 결합 → 그다음 부시)
         const orders = b.pendingOrders ? b.pendingOrders() : [1];
-  // 스마트폰(폭 760px 이하)은 한 열이라 부품 패널이 위에 쌓이고 3D 화면이 맨 아래로 밀린다(사용자 2026-10-26: "부품이 화면을 다 차지하고 번호를 선택해도 오른쪽이 하나도 안 보임")
-  // — 번호를 고르면 부품 패널을 접고(접은 상태를 저장하지는 않는다) 3D 화면을 맨 위로 보여 준다. 다시 펼치려면 3D 화면 왼쪽 위 "☰ 부품", 번호 이동은 3D 화면의 이전·다음 버튼.
-  // 조립도를 연 동안 맨 위 오른쪽에 "로봇 · N권 · M차시 차시명"을 보여 준다(권·차시를 바꾸면 따라 바뀜, 닫으면 지움) — 사용자 2026-10-26
-  let lessonCtx = null;
-  function paintTopCtx() {
-    if (typeof window.__ivsRefreshExitButtons === 'function') window.__ivsRefreshExitButtons(); // 위 왼쪽 나가기 버튼도 조립도를 여닫을 때 바뀐다(조립도 나가기 / 저장하고·저장 안 하고 나가기)
-    if (typeof window.__ivsSetTopCtx !== 'function') return;
-    window.__ivsSetTopCtx(viewing && lessonCtx ? '로봇 · ' + lessonCtx.cat + ' · ' + lessonCtx.volume + '권 · ' + lessonCtx.session + '차시 · ' + lessonCtx.title : '');   // 예: 로봇 · 큐보 · 3권 · 2차시 · 조향자동차 (사용자 2026-10-26: 로봇·카테고리·권·차시·차시명 전부)
-  }
-  function showStageOnPhone() {
-    if (!window.matchMedia || !window.matchMedia('(max-width:760px)').matches) return;
-    const lay = document.querySelector('.layout'), unfold = document.getElementById('unfoldSide'), stage = document.querySelector('.stage');
-    if (lay) lay.classList.add('no-side');
-    if (unfold) unfold.hidden = false;
-    if (stage) stage.scrollIntoView({ block: 'start' });
-  }
         const jm = joinMs();
         const joinOne = (k) => {
           if (timerDir !== 1) return;
@@ -1635,6 +1635,7 @@
     if (!def || viewing) return;
     snapshot = b.serialize();
     viewing = true;
+    paintTopCtx();
     setStudioTitle(true);   // 큐보 조립도를 열면 3D 영역 제목이 "스케치북" -> "큐보 스튜디오"
     lastCamKey = def.camera.theta.toFixed(3) + '|' + def.camera.phi.toFixed(3);
     b.setViewing(true);
@@ -1659,9 +1660,9 @@
   function close() {
     const b = bridge();
     stop();
-    paintTopCtx();
     if (!viewing) return;
     viewing = false;
+    paintTopCtx();
     try { localStorage.removeItem('ivs-asm-last'); } catch (e) { /* */ }
     { const wb = $('asmWarnBox'); if (wb) wb.hidden = true; }
     setStudioTitle(false);
@@ -1686,7 +1687,6 @@
     const mm2 = $('asmMarkMove2');
     const toggleMark = () => { const on = mm2.dataset.on !== '1'; mm2.dataset.on = on ? '1' : '0'; mm2.style.background = on ? '#f97316' : ''; mm2.style.color = on ? '#fff' : ''; mm2.textContent = on ? '📍 끝내기' : '📍 표시하기'; bridge().markMove(on); notice(on ? '표시 모드를 켰어요. 화면의 부품을 누르면 누른 자리에 주황 표시가 생기고, 다시 누르면 지워져요. 끝나면 [끝내기]를 누르세요.' : '표시 모드를 껐어요. 표시한 곳을 사진으로 남기려면 [수정스샷]을 누르세요.'); };
     // 📸 수정스샷: 화면+번호+이동 목록을 한 장의 그림으로 만들어 클립보드에 복사하고 PNG로 내려받는다(번호 = 옮긴 순서)
-    paintTopCtx();
     // 안내는 화면 아래쪽 글줄이라 눈에 안 띄므로, 스케치북 한가운데 위에 잠깐 큼직하게도 띄운다
     const toast = (msg, bad) => {
       let t = $('asmShotToast');
@@ -1849,6 +1849,8 @@
       catAny = cat;
       lessonSession = Number(session);
       lessonFound = !!found;
+      lessonCtx = found ? { cat: cat.name, volume: Number(volume), session: Number(session), title } : null;
+      paintTopCtx();
       syncAllPartsBtn();
       ['asmOrderHead', 'asmOrderList', 'asmSteps'].forEach((id) => { if ($(id)) $(id).style.display = found ? '' : 'none'; });
       buildOrderList();
@@ -1857,6 +1859,7 @@
       $('asmRules').innerHTML = (window.IVS_ASSEMBLY_RULES || []).map((r) => '<li>' + r + '</li>').join('');
     },
     isViewing() { return viewing; },
+    isAssemblyScreen() { return viewing || lessonFound; },   // 조립도가 있는 차시를 고른 상태 = 조립도 화면(번호를 누르기 전에도) — 위쪽 나가기 버튼·라벨 기준(사용자 2026-10-26)
     setViewSlot(n) { if (!viewing || !def || step < 1 || step >= last()) return; viewSlot = (n === slotOfStep(step) || n === viewSlot) ? null : n; render(); },
   };
   // 새로고침 버튼으로 다시 열었으면, 보던 차시(분류·권·차시 선택)와 단계를 자동으로 다시 연다
@@ -1873,8 +1876,6 @@
         clearInterval(timer);
         [0, 1, 2].forEach((k) => { if (sels[k].value !== st.sel[k]) { sels[k].value = st.sel[k]; sels[k].dispatchEvent(new Event('change', { bubbles: true })); } });
         let t2 = 0; const timer2 = setInterval(() => { t2++; const b = document.querySelector('#asmSteps button[data-step="' + st.step + '"]'); if (b) { clearInterval(timer2); b.click(); } else if (t2 > 40) clearInterval(timer2); }, 250);
-      lessonCtx = found ? { cat: cat.name, volume: Number(volume), session: Number(session), title } : null;
-      paintTopCtx();
       } else if (tries > 60) clearInterval(timer);
     }, 250);
   })();
