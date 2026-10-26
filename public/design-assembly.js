@@ -1551,6 +1551,8 @@
   // ── 큐보 부품 전체 리스트(사용자 지시 2026-10-03): 등록된 큐보 부품 전부를 한 화면에 펼쳐 둔다. 조립도 엔진을 그대로 써서(닫기·부품 창·번호·🟢 연결점) 단계 하나짜리 가짜 조립도로 연다.
   let catAny = null;
   let lessonFound = false;
+  const DESIGN_ONLY = new URLSearchParams(location.search).get('view') === 'design'; // 설계 종류 선택에서 "설계도"로 들어오면 조립도 버튼·화면은 쓰지 않는다(사용자 2026-10-26)
+  const ASSEMBLY_ONLY = new URLSearchParams(location.search).get('view') === 'assembly'; // "조립도"로 들어오면 처음부터 조립도 화면(설계 이름·저장 줄 없음)
   let lessonSession = -1; // 지금 고른 차시 번호(0차시 = 0). 부품 전체 리스트·결합원리 버튼은 0차시에서만 보인다(사용자 지시 2026-10-20)
   let connAutoOn = false; // 조립도를 열면서 연결점을 자동으로 켰는지(닫을 때 되돌리기 위해)
   // "큐보 부품 전체 리스트" 버튼은 큐보를 고른 관리자에게만 보인다(사용자 지시 2026-10-03). 조립도가 없는 차시에서도 열 수 있어야 해서 상자도 같이 맞춘다.
@@ -1559,7 +1561,7 @@
     if (!box || !btn) return;
     const zero = !!(catAny && catAny.name === '큐보' && lessonSession === 0); // 큐보 0차시(준비, 부품 알아보기)에서만, 학생도 본다
     btn.hidden = !zero;
-    if (!viewing) box.hidden = !lessonFound && !zero;
+    if (!viewing) box.hidden = DESIGN_ONLY || (!lessonFound && !zero);
     const jb = $('asmJoint');
     if (jb) jb.hidden = !zero;
     document.querySelectorAll('.asm-topic').forEach((b) => { b.hidden = !zero; }); // 리모컨 번호코딩·메인보드 코딩·서보모터 코딩·조립방법 버튼도 0차시에서만(내용은 나중에 lesson-topic.html 에 채운다)
@@ -1849,7 +1851,7 @@
       catAny = cat;
       lessonSession = Number(session);
       lessonFound = !!found;
-      lessonCtx = found ? { cat: cat.name, volume: Number(volume), session: Number(session), title } : null;
+      lessonCtx = DESIGN_ONLY ? null : { cat: cat.name, volume: Number(volume), session: Number(session), title };   // 조립도가 없는 차시(0차시 등)도 라벨은 보여 준다
       paintTopCtx();
       syncAllPartsBtn();
       ['asmOrderHead', 'asmOrderList', 'asmSteps'].forEach((id) => { if ($(id)) $(id).style.display = found ? '' : 'none'; });
@@ -1859,7 +1861,7 @@
       $('asmRules').innerHTML = (window.IVS_ASSEMBLY_RULES || []).map((r) => '<li>' + r + '</li>').join('');
     },
     isViewing() { return viewing; },
-    isAssemblyScreen() { return viewing || lessonFound; },   // 조립도가 있는 차시를 고른 상태 = 조립도 화면(번호를 누르기 전에도) — 위쪽 나가기 버튼·라벨 기준(사용자 2026-10-26)
+    isAssemblyScreen() { return !DESIGN_ONLY && (ASSEMBLY_ONLY || viewing || lessonFound); },   // 조립도가 있는 차시를 고른 상태 = 조립도 화면(번호를 누르기 전에도) — 위쪽 나가기 버튼·라벨 기준(사용자 2026-10-26)
     setViewSlot(n) { if (!viewing || !def || step < 1 || step >= last()) return; viewSlot = (n === slotOfStep(step) || n === viewSlot) ? null : n; render(); },
   };
   // 새로고침 버튼으로 다시 열었으면, 보던 차시(분류·권·차시 선택)와 단계를 자동으로 다시 연다
