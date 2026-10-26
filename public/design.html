@@ -943,17 +943,34 @@
     window.__relabelDesignRobots = labelOptions;
     labelOptions();
     if (robots.some(r => r.key === designRobotKey)) sel.value = designRobotKey;
+    // 보기: "1권 부품"(그 권에서만 쓰는 부품)·"2권 부품"… 따로, "1~2권 누적"(1권+2권 합계)·"권 미지정"(보관 중인 부품). 큐보 때와 같은 구조(사용자 2026-10-26).
+    const viewSel = document.createElement('select');
+    let designView = window.__designView || 'v1';
+    function fillViews(r){
+      viewSel.innerHTML = '';
+      const add = (v, t) => { const o = document.createElement('option'); o.value = v; o.textContent = t; viewSel.appendChild(o); };
+      for (let v = 1; v <= r.cat.volumes; v++) { add('v' + v, v + '권 부품'); if (v >= 2) add('c' + v, '1~' + v + '권 누적'); }
+      add('none', '권 미지정');
+      viewSel.value = [...viewSel.options].some(o => o.value === designView) ? designView : 'v1';
+    }
     function update(){
       const r = robots.find(x => x.key === sel.value) || robots[0];
       designRobotKey = r.key;
-      window.__designRobot = { title: r.title, categoryId: r.key };
+      fillViews(r);
+      designView = viewSel.value; window.__designView = designView;
+      const kind = designView === 'none' ? 'none' : designView[0] === 'c' ? 'cum' : 'vol';
+      const volume = kind === 'none' ? null : Number(designView.slice(1));
+      const label = viewSel.options[viewSel.selectedIndex].textContent;
+      window.__designRobot = { title: r.title + ' ' + label.replace(/ 부품$/, ''), categoryId: r.key, kind, volume };
       card.querySelector('.lesson-tag').textContent = '로봇';
       card.querySelector('.lesson-title').textContent = r.title;
       if (window.__renderVolumeParts) window.__renderVolumeParts(null, null);
       if (window.__refreshRequiredList) window.__refreshRequiredList(null, null, null);
     }
     sel.addEventListener('change', update);
+    viewSel.addEventListener('change', () => { designView = viewSel.value; update(); });
     picker.appendChild(sel);
+    picker.appendChild(viewSel);
     window.__refreshLessonFromTextbooks = () => renderRobotNamePicker(categories);   // 교재가 늦게 도착하면 목록을 다시 만든다
     card.querySelector('.lesson-sub').textContent = '';
     card.querySelector('.lesson-concept').textContent = '';
@@ -1466,8 +1483,14 @@
     if (!el) return;
     const dr = window.__designRobot;   // 설계도로 들어온 경우: 권이 아니라 고른 로봇 하나의 부품 전부(사용자 2026-10-26)
     const rawItems = dr
-      ? robotPartsCache.filter(p => p.category === dr.categoryId).map(p => Object.assign({}, p, { qty: null }))   // 권 구분 없이 그 로봇의 부품 전부(개수 제한 없음)
-      :robotPartsCache.filter(p => p.category === categoryId && (!p.volumes.length || p.volumes.some(v => Number(v.volume) <= Number(volume))));
+      ? robotPartsCache.filter(p => p.category === dr.categoryId).map(p => {
+          const vols = Array.isArray(p.volumes) ? p.volumes : [];
+          if (dr.kind === 'none') return vols.length ? null : Object.assign({}, p, { qty: null });   // 권 미지정(보관 중)
+          if (dr.kind === 'vol') { const e = vols.find(v => Number(v.volume) === dr.volume); return e ? Object.assign({}, p, { qty: e.qty != null ? Number(e.qty) : null }) : null; }   // 그 권에서 쓰는 부품만(그 권 개수)
+          const es = vols.filter(v => Number(v.volume) <= dr.volume);   // 누적: 1권~N권 개수 합계
+          return es.length ? Object.assign({}, p, { qty: es.some(v => v.qty != null) ? es.reduce((s, v) => s + (Number(v.qty) || 0), 0) : null }) : null;
+        }).filter(Boolean)
+      : robotPartsCache.filter(p => p.category === categoryId && (!p.volumes.length || p.volumes.some(v => Number(v.volume) <= Number(volume))));
     if (!rawItems.length) { el.innerHTML = dr ? '<h2>' + esc(dr.title) + ' 부품</h2><p class="part-note">등록된 부품 없음</p>' : '<p class="part-note">아직 등록된 부품이 없어요. 곧 준비할게요!</p>'; return; }
     const items = dr ? rawItems : cumulativePartsAtVolume(rawItems, volume);
     const groups = new Map();

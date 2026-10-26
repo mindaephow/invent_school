@@ -1872,6 +1872,18 @@
       if (!listEl.innerHTML) { document.getElementById('partListEmpty').hidden = false; document.getElementById('partListEmpty').textContent = err.message; }
     }
   }
+  // 부품 관리 탭이 열려 있으면 다른 곳(Claude·다른 선생님)에서 부품을 등록·수정했을 때 새로고침 없이 따라온다(사용자 2026-10-26):
+  // 20초마다, 그리고 다른 창에서 돌아왔을 때 최신 목록을 받아 달라진 때만 다시 그린다(openPartsTab 이 같으면 그리지 않는다).
+  let partsAutoBusy = false;
+  async function autoRefreshParts(){
+    const area = document.getElementById('partListArea');
+    if (partsAutoBusy || !partsTabOpenedOnce || document.hidden || !area || area.offsetParent === null) return;
+    partsAutoBusy = true;
+    try { await openPartsTab(); } finally { partsAutoBusy = false; }
+  }
+  setInterval(autoRefreshParts, 20000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) autoRefreshParts(); });
+  window.addEventListener('focus', autoRefreshParts);
   async function loadParts(){
     // stripSpecFiles: 이 목록 화면은 has3d 여부·저장된 thumbnail3d만 보여주면 되고 3D 원본 파일
     // (fileDataUrl, 부품마다 수백 KB~몇 MB)은 필요 없다 — 그런데도 전체를 매번 통째로 받아와서 카테고리

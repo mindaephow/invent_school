@@ -115,8 +115,10 @@ console.log('\n등록 대상', rows.length, '개:', rows.map((r) => r.data.name)
 const again = rows.filter((r) => existing.has(r.data.name)).map((r) => r.data.name)
 if (again.length) console.log('이미 로보타미주니어에 있어 같은 행을 새 모양으로 바꿈:', again.join(', '))
 if (!WRITE) { console.log('\n(시험 실행: DB 는 바꾸지 않음. 등록하려면 --write)'); process.exit(0) }
+const ONLY_MISSING = process.argv.includes('--only-missing') // 이미 등록된 행은 건드리지 않고 없는 것만 새로 등록한다(삭제된 부품 복구용)
 for (const r of rows) {
   const old = existing.get(r.data.name)
+  if (old && ONLY_MISSING) { console.log('건너뜀(이미 있음):', r.data.name); continue }
   if (old) { // 이미 등록된 행(같은 이름): id·등록 시각은 그대로 두고 모양·연결점만 새 값으로 바꾼다
     r.data.createdAt = old.data.createdAt
     await rest('ivs_part_catalog?id=eq.' + old.id, { method: 'PATCH', headers: { ...H, Prefer: 'return=minimal' }, body: JSON.stringify({ data: r.data }) })
