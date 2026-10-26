@@ -1098,7 +1098,7 @@
     const m = sizeStr.match(/R\s*(\d+(?:\.\d+)?)\s*mm/);
     return m ? Number(m[1]) : null;
   }
-  const ROBOT_COLOR_HEX = { '화이트': '#F2F4F8', '레드': '#E1493F', '블랙': '#2B2F36', '회색': '#9CA5AF', '그레이': '#9CA5AF', '다홍색': '#F45243', '스카이블루': '#82D0F8', '블루': '#0053FA' };
+  const ROBOT_COLOR_HEX = { '화이트': '#F2F4F8', '레드': '#E1493F', '블랙': '#555555', '회색': '#9CA5AF', '그레이': '#9CA5AF', '다홍색': '#F45243', '스카이블루': '#82D0F8', '블루': '#0053FA' };
   // 색 정보가 아예 없는 부품(볼트·기어·블록 등)에 쓰는 갈래별 기본 색 — 등록된 사진 속 재질 느낌(금속=회색, 전자부품=짙은 남색-회색)으로 정했다.
   const ROBOT_GROUP_DEFAULT_COLOR = { '프레임': '#c7cbd1', '브라켓': '#c7cbd1', '블록': '#d7dbe0', '기어': '#8a929c', '축': '#8a929c', '볼트·너트·부속': '#9aa1ab', '모터·서보': '#2c2f33', '센서': '#2c2f33' };
   function parseBoltLengthMM(sizeStr){

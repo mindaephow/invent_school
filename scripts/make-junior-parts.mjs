@@ -19,7 +19,7 @@ const rest = async (p, opt = {}) => { const r = await fetch(env.SUPABASE_URL + '
 
 const CUBO = '6fa8abd9-7684-47a2-bd7f-2bc9a6e3fbe6' // 큐보 카테고리
 const JUNIOR = 'ea24c385-7896-4d40-b343-1cef47e471e7' // 로보타미주니어 카테고리
-const COLORS = { 다홍색: '#f45243', 블랙: '#26282c' }
+const COLORS = { 다홍색: '#f45243', 블랙: '#555555' }
 
 // 만들 프레임: 이름 → 만드는 법. 직선 프레임은 [길이 방향 구멍 수, 폭 방향 구멍 수].
 const FRAMES = {

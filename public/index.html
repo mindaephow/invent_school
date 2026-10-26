@@ -1608,13 +1608,17 @@
   // (큐보 2권을 만들려면 1권 부품도 있어야 하는 것처럼, 뒤 권은 앞 권 부품 위에 쌓이는 구조라서)
   let allParts = [];
   const partFullCache = new Map(); // partId → get_part 전체 응답(3D 원본 파일 포함). 부품 탭을 열 때 비운다.
-  let partSubjectTab = 'robot';
-  let partCategoryTab = null;
+  // 부품 관리의 과목·로봇 종류 선택은 새로고침해도 유지한다(브라우저에만 저장 — 막혀 있으면 기본값으로 시작).
+  const lsGet = (k) => { try { return localStorage.getItem(k) } catch (e) { return null } }
+  const lsSet = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v) } catch (e) {} }
+  let partSubjectTab = lsGet('ivs.partSubjectTab') || 'robot';
+  let partCategoryTab = lsGet('ivs.partCategoryTab');
   document.getElementById('partSubjectTabs').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-subject-tab]');
     if (!btn) return;
     partSubjectTab = btn.dataset.subjectTab;
     partCategoryTab = null;
+    lsSet('ivs.partSubjectTab', partSubjectTab); lsSet('ivs.partCategoryTab', null);
     document.getElementById('partSubjectTabs').querySelectorAll('[data-subject-tab]').forEach((b) => b.classList.toggle('current', b === btn));
     renderParts(allParts);
   });
@@ -1622,6 +1626,7 @@
     const btn = e.target.closest('[data-category-tab]');
     if (!btn) return;
     partCategoryTab = btn.dataset.categoryTab;
+    lsSet('ivs.partCategoryTab', partCategoryTab);
     renderParts(allParts);
   });
   function renderGroupHtml(g){

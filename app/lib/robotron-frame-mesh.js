@@ -75,13 +75,17 @@ function build(S, outlineIn, cells, cornerTargets, outerTargets) {
   const pockets = cells.map((c) => {
     let pk = insetPoly(dedupe(c.poly), S.edgeWall / 2)
     pk = ccw(roundCorners(pk, cornerTargets, S.cornerR - S.edgeWall, S.cornerSeg))
-    return { pk, hole: c.hole }
+    return { pk, hole: c.hole, cross: c.cross }
   })
-  for (const { pk, hole } of pockets) {
+  for (const { pk, hole, cross } of pockets) {
     wall(pk, Y0, Y1, -1); wall(pk, Y4, Y5, -1)
     const [cx, cz] = hole
     let circle
-    if (S.notch) { // 출력용: 구멍 목 둘레에 홈 notch 곳(폭 notchW, 구멍 반지름 밖으로 notchD 만큼 판다)
+    if (cross) { // 열십자 구멍(T축이 들어가는 구멍): 십자 전체 폭 crossSpan, 팔 폭 crossArm
+      const a = S.crossSpan / 2, w = S.crossArm / 2
+      circle = [[a, -w], [a, w], [w, w], [w, a], [-w, a], [-w, w], [-a, w], [-a, -w], [-w, -w], [-w, -a], [w, -a], [w, -w]].map(([x, z]) => [cx + x, cz + z])
+      wall(circle, Y1, Y4, -1)
+    } else if (S.notch) { // 출력용: 구멍 목 둘레에 홈 notch 곳(폭 notchW, 구멍 반지름 밖으로 notchD 만큼 판다)
       circle = notchedHole(cx, cz, S)
       wall(circle, Y1, Y4, -1)
     } else {
@@ -118,7 +122,9 @@ function notchedHole(cx, cz, S) {
 const recenter = (arr, cx, cz) => { for (let i = 0; i < arr.length; i += 3) { arr[i] -= cx; arr[i + 2] -= cz } return arr }
 
 // 구멍 nx(길이) × nz(폭) 개의 직선 프레임. 15프레임 = (5,1), 215프레임 = (15,2) ...
-function straightFrame(S, nx, nz) {
+// crossAt = [i, k] 이면 그 칸의 구멍을 열십자 구멍으로 만든다(3십자프레임).
+// squareEnd 이면 +x 쪽 끝 두 모서리를 둥글리지 않는다(브라켓에서 다른 판·모서리 덩어리와 빈틈 없이 이어지게).
+function straightFrame(S, nx, nz, crossAt, squareEnd) {
   const hx = (nx * S.pitch) / 2, hz = (nz * S.pitch) / 2
   const rect = [[-hx, -hz], [hx, -hz], [hx, hz], [-hx, hz]]
   const outlinePts = [] // 칸 경계마다 점이 있는 바깥 윤곽(타일 윗면과 옆면 모서리가 맞게)
@@ -130,14 +136,88 @@ function straightFrame(S, nx, nz) {
   for (let i = 0; i < nx; i++) for (let k = 0; k < nz; k++) {
     const x0 = -hx + i * S.pitch, x1 = x0 + S.pitch, z0 = -hz + k * S.pitch, z1 = z0 + S.pitch
     const a = i === 0 ? x0 + E / 2 : x0, b = i === nx - 1 ? x1 - E / 2 : x1, c = k === 0 ? z0 + E / 2 : z0, d = k === nz - 1 ? z1 - E / 2 : z1
-    cells.push({ tile: [[x0, z0], [x1, z0], [x1, z1], [x0, z1]], poly: [[a, c], [b, c], [b, d], [a, d]], hole: [x0 + S.margin, z0 + S.margin] })
+    cells.push({ tile: [[x0, z0], [x1, z0], [x1, z1], [x0, z1]], poly: [[a, c], [b, c], [b, d], [a, d]], hole: [x0 + S.margin, z0 + S.margin], cross: !!crossAt && crossAt[0] === i && crossAt[1] === k })
     holes.push({ x: x0 + S.margin, z: z0 + S.margin })
   }
   const tgt = [[-hx + E, -hz + E], [hx - E, -hz + E], [hx - E, hz - E], [-hx + E, hz - E]]
-  return { tris: build(S, roundCorners(outlinePts, rect, S.cornerR, S.cornerSeg), cells, tgt, rect), holes }
+  const keep = (q) => !squareEnd || q[0] < 0
+  const round = rect.filter(keep)
+  return { tris: build(S, roundCorners(outlinePts, round, S.cornerR, S.cornerSeg), cells, tgt.filter(keep), round), holes }
 }
 
-// 꺾인 프레임(135도: 곧은 팔 6 + 꺾인 팔 4 / 90도: 3 + 3). 팔 끝 네 모서리만 둥글게 한다.
+// 칸 목록 [[i,k],…](i = 길이 x 방향, k = 폭 z 방향 칸 번호)으로 이루어진 프레임(T자 등). 윤곽은 칸들을 합친 바깥 둘레이고, 튀어나온(볼록) 모서리만 둥글게 한다.
+// 좌표는 칸 전체를 감싸는 상자의 가운데가 (0,0). 구멍은 칸 목록 순서대로 돌려준다.
+function gridFrame(S, cellList) {
+  const P = S.pitch, E = S.edgeWall
+  const has = (i, k) => cellList.some((c) => c[0] === i && c[1] === k)
+  const xs = cellList.map((c) => c[0]), zs = cellList.map((c) => c[1])
+  const cx = ((Math.min(...xs) + Math.max(...xs) + 1) * P) / 2, cz = ((Math.min(...zs) + Math.max(...zs) + 1) * P) / 2
+  const edges = new Map() // 시작점 → 끝점 (칸 안쪽이 왼쪽에 오는 방향 = 반시계)
+  const key = (p) => p[0] + ',' + p[1]
+  const addEdge = (a, b) => edges.set(key(a), { a, b })
+  const cells = [], holes = []
+  for (const [i, k] of cellList) {
+    const x0 = i * P - cx, x1 = x0 + P, z0 = k * P - cz, z1 = z0 + P
+    const nb = { b: has(i, k - 1), r: has(i + 1, k), t: has(i, k + 1), l: has(i - 1, k) }
+    if (!nb.b) addEdge([x0, z0], [x1, z0])
+    if (!nb.r) addEdge([x1, z0], [x1, z1])
+    if (!nb.t) addEdge([x1, z1], [x0, z1])
+    if (!nb.l) addEdge([x0, z1], [x0, z0])
+    const a = nb.l ? x0 : x0 + E / 2, b = nb.r ? x1 : x1 - E / 2, c = nb.b ? z0 : z0 + E / 2, d = nb.t ? z1 : z1 - E / 2
+    cells.push({ tile: [[x0, z0], [x1, z0], [x1, z1], [x0, z1]], poly: [[a, c], [b, c], [b, d], [a, d]], hole: [x0 + S.margin, z0 + S.margin] })
+    holes.push({ x: x0 + S.margin, z: z0 + S.margin })
+  }
+  const first = edges.values().next().value
+  const loop = [first.a]
+  for (let e = edges.get(key(first.b)); e && key(e.a) !== key(first.a); e = edges.get(key(e.b))) loop.push(e.a)
+  if (loop.length !== edges.size) throw new Error('칸 목록이 한 덩어리가 아니거나 구멍이 있다')
+  const outer = [], tgt = []
+  loop.forEach((V, n) => {
+    const A = loop[(n + loop.length - 1) % loop.length], B = loop[(n + 1) % loop.length]
+    const d1 = [V[0] - A[0], V[1] - A[1]], d2 = [B[0] - V[0], B[1] - V[1]]
+    if (d1[0] * d2[1] - d1[1] * d2[0] > 0) { // 왼쪽으로 꺾임 = 볼록 모서리
+      const l1 = Math.hypot(...d1), l2 = Math.hypot(...d2)
+      outer.push(V)
+      tgt.push([V[0] + E * (-d1[1] / l1 - d2[1] / l2), V[1] + E * (d1[0] / l1 + d2[0] / l2)])
+    }
+  })
+  return { tris: build(S, roundCorners(loop, outer, S.cornerR, S.cornerSeg), cells, tgt, outer), holes }
+}
+
+// 각 브라켓: 13프레임 판(구멍 3개, 바깥 길이 35)과 12프레임 판(구멍 2개, 바깥 길이 25)이 안쪽각 innerDeg 로 붙고 모서리는 채워진 한 덩어리(사용자 2026-10-26).
+// L브라켓 = 안쪽각 90°, V브라켓 = L브라켓을 안쪽각 135°로 벌린 것. 좌표: 긴 팔이 x(바닥 y=0), 폭 z, x 는 전체 상자의 가운데가 0.
+// 긴 팔 구멍 3개는 위아래로, 짧은 팔 구멍 2개는 그 판의 두께 방향으로 끼운다.
+function angleBracket(S, innerDeg) {
+  const P = S.pitch, T = S.thickness, W = S.width
+  const a = straightFrame(S, 3, 1, null, true), b = straightFrame(S, 2, 1, null, true) // 모서리 쪽 끝은 각지게
+  const phi = ((180 - innerDeg) * Math.PI) / 180, d = [Math.cos(phi), Math.sin(phi)], n = [-Math.sin(phi), Math.cos(phi)] // d = 짧은 팔이 뻗는 방향, n = 안쪽을 향한 법선
+  const I = [3 * P, T] // 안쪽 모서리(긴 팔 윗면 끝)
+  const O = [I[0] - T * n[0], I[1] - T * n[1]] // 짧은 팔 시작선의 바깥쪽 끝
+  const toB = (x, y) => [O[0] + (P + x) * d[0] + y * n[0], O[1] + (P + x) * d[1] + y * n[1]] // 짧은 팔 프레임 좌표(x 길이, y 두께 0=바깥면) → 옆모습 (X,Y)
+  const out = []
+  for (let i = 0; i < a.tris.length; i += 3) out.push(a.tris[i] + (3 * P) / 2, a.tris[i + 1], a.tris[i + 2])
+  for (let i = 0; i < b.tris.length; i += 3) { const q = toB(-b.tris[i], b.tris[i + 1]); out.push(q[0], q[1], -b.tris[i + 2]) } // 짧은 팔은 y 축으로 180° 돌려(각진 끝이 모서리 쪽) 놓는다
+  // 모서리: 안쪽 모서리 I 가 중심, 반지름 T(판 두께)인 부채꼴. 바깥 모서리가 반지름 T 로 둥글게 굽고, 긴 팔 바닥(Q)에서 짧은 팔 시작(O)까지 이어진다(끝이 서로 접선).
+  const arcN = Math.max(4, Math.round((phi / (Math.PI / 2)) * 16))
+  const poly = [I, [3 * P, 0]]
+  for (let k = 1; k <= arcN; k++) { const ang = -Math.PI / 2 + (phi * k) / arcN; poly.push([I[0] + T * Math.cos(ang), I[1] + T * Math.sin(ang)]) }
+  const kit = makeKit(S.seg), { quad, tri, P: Pt } = kit
+  poly.forEach((A, i) => { const B = poly[(i + 1) % poly.length], dx = B[0] - A[0], dy = B[1] - A[1], l = Math.hypot(dx, dy); quad(Pt(A[0], A[1], -W / 2), Pt(B[0], B[1], -W / 2), Pt(B[0], B[1], W / 2), Pt(A[0], A[1], W / 2), dy / l, -dx / l, 0) })
+  for (let k = 1; k < poly.length - 1; k++) for (const z of [-W / 2, W / 2]) tri(Pt(poly[0][0], poly[0][1], z), Pt(poly[k][0], poly[k][1], z), Pt(poly[k + 1][0], poly[k + 1][1], z), 0, 0, Math.sign(z))
+  const block = kit.result()
+  const tris = new Float32Array(out.length + block.length); tris.set(out); tris.set(block, out.length)
+  let x0 = Infinity, x1 = -Infinity, y1 = -Infinity
+  for (let i = 0; i < tris.length; i += 3) { x0 = Math.min(x0, tris[i]); x1 = Math.max(x1, tris[i]); y1 = Math.max(y1, tris[i + 1]) }
+  const cx = (x0 + x1) / 2
+  for (let i = 0; i < tris.length; i += 3) tris[i] -= cx
+  const connHoles = [
+    ...a.holes.map((h) => ({ pos: [h.x + (3 * P) / 2 - cx, 0, h.z], dir: [0, -1, 0] })), // 긴 팔 구멍 3개
+    ...b.holes.map((h) => { const q = toB(-h.x, 0); return { pos: [q[0] - cx, q[1], -h.z], dir: [-n[0], -n[1], 0] } }), // 짧은 팔 구멍 2개(바깥면에서 안쪽으로)
+  ]
+  return { tris, holes: connHoles.map((h) => ({ x: h.pos[0], z: h.pos[2] })), connHoles, size: [x1 - x0, y1, W] }
+}
+
+// 꺾인 프레임(135도:곧은 팔 6 + 꺾인 팔 4 / 90도: 3 + 3). 팔 끝 네 모서리만 둥글게 한다.
 function bentFrame(S, straightHoles, slantHoles, bendDeg) {
   Object.assign(BENT_STD, { straightHoles, slantHoles, bendDeg })
   const savedE = CUBO_FRAME_STD.edgeWall
@@ -204,8 +284,11 @@ function arcFrame(S, sub = 4) {
 export function createFrameGenerator(S) {
   return {
     std: S,
-    straight: (nx, nz) => straightFrame(S, nx, nz),
+    straight: (nx, nz, crossAt) => straightFrame(S, nx, nz, crossAt),
     bent: (straightHoles, slantHoles, bendDeg) => bentFrame(S, straightHoles, slantHoles, bendDeg),
     arc: () => arcFrame(S),
+    grid: (cellList) => gridFrame(S, cellList),
+    lBracket: () => angleBracket(S, 90),
+    vBracket: () => angleBracket(S, 120),
   }
 }
