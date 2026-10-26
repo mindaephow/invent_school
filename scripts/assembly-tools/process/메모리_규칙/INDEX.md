@@ -133,3 +133,5 @@
 - [큐보 3권 차시 순서](project_cubo3_chapter_order.md) — 1차시=배틀바이크·2차시=조향자동차(책 '0차시'=앱 1차시); N차시는 DB 차시 목록으로 먼저 확인
 - [부품 테두리 선 규칙](feedback_part_outline_lines.md) — 실제 윤곽 따라 0.1mm, 어두운 색은 밝게·밝은 색은 어둡게(평판 2026-10-27)
 - [3D 부품 규격 먼저 읽기](feedback_3d_part_standard_check.md) — 큐보·에이스랩 모두 get_part_standard 용량·검증(짝 없는 모서리 0) 시작 전 읽고 숫자 보고, 35프레임 기준 비교(2026-10-27)
+- [부품 등록 후 바로 새로 불러와 보여주기](feedback_reload_and_show_after_part_register.md) — invent_school 부품 등록·수정 직후 묻지 말고 pane 새로고침→3D 창 열어 확인 (2026-10-27 원판)
+- [로봇별 센서·리모컨 요약 규칙](project_robot_sensor_remote_summary.md) — 이름에 센서/리모컨/수신 규칙 지켜 등록해야 부품 관리 화면 요약에 자동 반영

@@ -1655,6 +1655,25 @@
     });
     return html;
   }
+  // 로봇(브랜드)마다 센서·리모컨 요약(사용자 2026-10-27 "각 로봇마다 센서리스트 / 몇권에 어떤 센서를 사용하는지 / 리모컨 유무 (몇권에서 사용하는지) 표시"): 등록된 부품 이름에서 뽑는다 — 이름에 '리모컨' 이 들어가면 리모컨(리모컨수신센서 포함), 그 밖에 '센서' 가 들어가면 센서.
+  function sensorSummaryHtml(g){
+    const volSet = new Set(); g.byVolume.forEach((_, v) => volSet.add(v));
+    const volumes = Array.from(volSet).sort((a, b) => a - b);
+    const isRemote = (p) => /리모컨|리모콘/.test(p.name), isSensor = (p) => /센서/.test(p.name); // 리모컨수신센서도 센서 목록에 든다(사용자 2026-10-27 "수신센서를 센서목록에 적어야지")
+    const line = (v, test) => {
+      const items = (g.byVolume.get(v) || []).filter((e) => test(e.part)).map((e) => `${escapeHtml(e.part.name)}${e.qty > 1 ? ' ×' + e.qty : ''}`);
+      return items.length ? `<div style="display:flex; gap:8px; padding:3px 0; font-size:13px;"><b style="flex:none; min-width:42px;">${v}권</b><span>${items.join(', ')}</span></div>` : '';
+    };
+    const remoteVols = volumes.filter((v) => (g.byVolume.get(v) || []).some((e) => isRemote(e.part)));
+    // 리모컨이 처음 나오는 권에 수신센서 부품이 따로 없으면 메인보드에 포함된 것으로 표시한다(사용자 2026-10-27 큐보 "리모컨 수신센서 (메인보드안에 포함)").
+    const builtinRx = remoteVols.length && !(g.byVolume.get(remoteVols[0]) || []).some((e) => /수신/.test(e.part.name)) ? remoteVols[0] : null;
+    const sensorRows = volumes.map((v) => { const l = line(v, isSensor); if (v !== builtinRx) return l; return l ? l.replace('</span></div>', ', 리모컨수신센서(메인보드에 포함, 센서 리스트에 없음)</span></div>') : `<div style="display:flex; gap:8px; padding:3px 0; font-size:13px;"><b style="flex:none; min-width:42px;">${v}권</b><span>리모컨수신센서(메인보드에 포함, 센서 리스트에 없음)</span></div>`; }).join('');
+    const remoteRows = volumes.map((v) => line(v, (p) => isRemote(p) && !/수신/.test(p.name))).join(''); // 수신센서는 센서 목록에만 적는다(리모컨 칸에 다시 적으면 같은 권이 두 번 나와 어수선하다)
+    const box = 'margin:10px 0; padding:10px 12px; border:1px solid var(--line, #e3e6ee); border-radius:10px; background:#fff;';
+    const head = 'font-size:13px; font-weight:700; color:var(--ink-soft); margin-bottom:4px;';
+    return `<div style="${box}"><div style="${head}">센서 목록 <span style="font-weight:400;">(몇 권에서 어떤 센서를 쓰는지)</span></div>${sensorRows || '<div style="font-size:13px; color:var(--ink-soft);">등록된 센서 없음</div>'}</div>`
+      + `<div style="${box}"><div style="${head}">리모컨 <span style="font-weight:400;">${remoteVols.length ? '있음 · ' + remoteVols[0] + '권부터 리모컨을 사용' : '없음'}</span></div>${remoteRows}</div>`;
+  }
   function renderParts(parts){
     allParts = parts;
     document.querySelectorAll('#partSubjectTabs [data-subject-tab]').forEach((b) => b.classList.toggle('current', b.dataset.subjectTab === partSubjectTab));
@@ -1684,7 +1703,7 @@
       catTabsEl.hidden = catKeys.length === 0;
       catTabsEl.innerHTML = catKeys.map((k) => `<button type="button" class="${k === partCategoryTab ? 'current' : ''}" data-category-tab="${escapeHtml(k)}">${escapeHtml(categoryLabel(k) || (byCategoryKey.get(k) && byCategoryKey.get(k).label) || '기타')}</button>`).join('');
       const g = partCategoryTab ? byCategoryKey.get(partCategoryTab) : null;
-      html = g ? renderGroupHtml(g) : '';
+      html = g ? sensorSummaryHtml(g) + renderGroupHtml(g) : '';
       document.getElementById('partListEmpty').hidden = !!g;
     } else {
       catTabsEl.hidden = true;
