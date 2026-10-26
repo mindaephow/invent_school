@@ -821,7 +821,7 @@
   // 설계 종류(design-select.html에서 넘어옴). 골드버그만 실제 커리큘럼·부품이 있고, 로봇·항공은 같은 화면에 빈 상태로 들어간다.
   const SUBJECT = (new URLSearchParams(location.search).get('subject') || 'goldberg').toLowerCase();
   const DESIGN_VIEW = new URLSearchParams(location.search).get('view') === 'design';   // 설계 종류 선택에서 "설계도"로 들어옴
-  const SUBJECT_LABEL ={ goldberg: '골드버그', robot: '로봇', aviation: '항공' }[SUBJECT] || '골드버그';
+  const SUBJECT_LABEL ={ goldberg: '골드버그', robot: '로봇', aviation: '항공', rocket: '로켓' }[SUBJECT] || '골드버그';
   // 맨 위 오른쪽 배지: "3D · 코어 구조(판·기둥·직선길)"는 골드버그 설명이라 로봇·항공에는 없다(사용자 2026-10-26). 로봇은 조립도를 열었을 때 "로봇 · 권 · 차시명"을 그 자리에 보여 준다(design-assembly.js 가 __ivsSetTopCtx 로 채운다). 자리는 유지(가운데 로고가 안 밀리게).
   (function () {
     const el = document.getElementById('topCtx');

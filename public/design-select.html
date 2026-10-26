@@ -42,7 +42,8 @@
   .back-link:hover{color:var(--ink);}
   .intro{margin-bottom:22px;}
   .intro .note{font-size:14px; color:var(--ink-soft);}
-  .subject-grid{display:grid; grid-template-columns:repeat(3, 1fr); gap:14px;}
+  .subject-grid{display:grid; grid-template-columns:repeat(4, 1fr); gap:14px;}
+  @media (max-width:900px){ .subject-grid{grid-template-columns:repeat(2, 1fr);} }
   @media (max-width:640px){ .subject-grid{grid-template-columns:1fr;} }
   .subject-card{
     display:flex; flex-direction:column; align-items:flex-start; gap:8px; text-align:left;
@@ -88,6 +89,12 @@
     <a class="subject-card" href="design.html?subject=aviation">
       <span class="icon">✈️</span>
       <span class="title">항공</span>
+      <span class="desc">같은 설계 화면으로 들어가요.</span>
+      <span class="badge">커리큘럼 준비 중</span>
+    </a>
+    <a class="subject-card" href="design.html?subject=rocket">
+      <span class="icon">🚀</span>
+      <span class="title">로켓</span>
       <span class="desc">같은 설계 화면으로 들어가요.</span>
       <span class="badge">커리큘럼 준비 중</span>
     </a>
