@@ -93,8 +93,9 @@
   button.discard.armed{color:var(--warn); background:var(--warn-bg); border-color:var(--warn); font-weight:700;}
   .level-badge{font-size:13px; font-weight:500; color:var(--ink-soft); background:var(--blueprint-soft); padding:6px 12px; border-radius:999px;}
 
-  .layout{display:grid; grid-template-columns:260px 1fr; gap:20px; align-items:start;}
-  @media (max-width:760px){ .layout{grid-template-columns:1fr;} }
+  .layout{display:grid; grid-template-columns:260px minmax(0,1fr); gap:20px; align-items:start;}
+  .layout > *{min-width:0;}   /* 3D 화면 안의 번호 버튼 줄(35개)이 안 줄어들어 칸이 1500px 로 늘고 휴대폰에서 오른쪽이 가로로 넘치던 문제(2026-10-26) */
+  @media (max-width:760px){ .layout{grid-template-columns:minmax(0,1fr);} }
 
   .sidebar > section{
     background:var(--panel); border:1px solid var(--panel-border); border-radius:14px;
@@ -354,7 +355,7 @@
     body{padding-block:12px; margin-block:0;}
     .app{height:calc(100vh - 24px); display:flex; flex-direction:column;}
     .layout{flex:1; min-height:0; grid-template-rows:minmax(0, 1fr); align-items:stretch;}
-    .layout.no-side{grid-template-columns:1fr;}
+    .layout.no-side{grid-template-columns:minmax(0,1fr);}
     .sidebar, .stage{min-height:0; overflow-y:auto; overflow-anchor:none; overscroll-behavior:contain; padding:2px 6px 2px 2px;}
   }
   button.primary{background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:700;}
@@ -444,9 +445,10 @@
     <div class="tb-left">
       <a href="/" id="backLink" class="level-badge" style="text-decoration:none;">← 처음으로</a>
       <button id="discardBtn" class="level-badge discard" type="button" hidden>저장 안 하고 나가기</button>
+      <button id="asmExitBtn" class="level-badge discard" type="button" hidden>조립도 나가기</button>
     </div>
     <div class="brand"><svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="10" fill="#2D5BFF"/><path d="M6 10 L20 15" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/><path d="M12 23 L26 19" stroke="#fff" stroke-opacity="0.7" stroke-width="2.6" stroke-linecap="round"/><circle cx="9" cy="6.5" r="3" fill="#FF6A3D"/></svg>발명융합과학교실</div>
-    <div class="level-badge">3D · 코어 구조 (판·기둥·직선길)</div>
+    <div class="level-badge" id="topCtx">3D · 코어 구조 (판·기둥·직선길)</div>
   </header>
 
   <div class="project-bar" id="projectBar" hidden>
@@ -817,6 +819,14 @@
   // 설계 종류(design-select.html에서 넘어옴). 골드버그만 실제 커리큘럼·부품이 있고, 로봇·항공은 같은 화면에 빈 상태로 들어간다.
   const SUBJECT = (new URLSearchParams(location.search).get('subject') || 'goldberg').toLowerCase();
   const SUBJECT_LABEL = { goldberg: '골드버그', robot: '로봇', aviation: '항공' }[SUBJECT] || '골드버그';
+  // 맨 위 오른쪽 배지: "3D · 코어 구조(판·기둥·직선길)"는 골드버그 설명이라 로봇·항공에는 없다(사용자 2026-10-26). 로봇은 조립도를 열었을 때 "로봇 · 권 · 차시명"을 그 자리에 보여 준다(design-assembly.js 가 __ivsSetTopCtx 로 채운다). 자리는 유지(가운데 로고가 안 밀리게).
+  (function () {
+    const el = document.getElementById('topCtx');
+    if (!el) return;
+    const goldberg = SUBJECT === 'goldberg';
+    if (!goldberg) { el.textContent = ''; el.style.visibility = 'hidden'; }
+    window.__ivsSetTopCtx = function (text) { if (goldberg) return; el.textContent = text || ''; el.style.visibility = text ? 'visible' : 'hidden'; };
+  })();
   // 세트 정의는 design-sets.js로 분리됨(위치는 mm, 각도는 X·Y·Z °)
   const SETS = window.IVS_SETS;
 
@@ -5927,6 +5937,23 @@
   });
   nameInput.addEventListener('change', () => { persist(false).catch(() => {}); });
 
+  // 위쪽 왼쪽 나가기 버튼(사용자 2026-10-26): 조립도를 보는 동안은 학생·선생님 모두 "조립도 나가기" 하나(기본 = 저장 안 하고 나가기), 설계도에서는 학생·선생님 모두 "저장하고 나가기"·"저장 안 하고 나가기" 둘.
+  // 설계 화면은 로그인하면 항상 열려 있고 조립도는 그 위에서 열므로, 조립도를 여닫을 때마다(design-assembly.js 가 __ivsRefreshExitButtons 호출) 버튼을 바꾼다.
+  const asmExitBtn = document.getElementById('asmExitBtn');
+  function refreshExitButtons(){
+    if (!student || (mode !== 'student' && mode !== 'teacher')) return;   // 로그인 전·검토 화면은 그대로 둔다
+    const asm = !!(window.__ivsAssembly && window.__ivsAssembly.isViewing && window.__ivsAssembly.isViewing());
+    backLink.hidden = asm;
+    discardBtn.hidden = asm;
+    asmExitBtn.hidden = !asm;
+  }
+  window.__ivsRefreshExitButtons = refreshExitButtons;
+  asmExitBtn.addEventListener('click', async () => {
+    asmExitBtn.disabled = true;
+    await logout('조립도를 나왔어요.', false);   // 조립도는 저장할 것이 없다 — 저장 없이 나간다(선생님은 선생님 화면, 학생은 로그인 화면으로)
+    asmExitBtn.disabled = false;
+  });
+
   // 저장하고 로그아웃한 뒤 로그인 화면으로 (공용 태블릿에서 다음 학생이 이어 쓸 수 있게)
   async function logout(message, save = true){
     if (!save) discarding = true;
@@ -5941,8 +5968,10 @@
     restoreParts([]);
     projectBar.hidden = true;
     backLink.textContent = '← 처음으로';
+    backLink.hidden = false;
     startOverlay.hidden = false;
     discardBtn.hidden = true;
+    asmExitBtn.hidden = true;
     showLoginStep(message);
     discarding = false;
     return true;
@@ -6033,7 +6062,8 @@
     discardBtn.hidden = false;
     pbSave.textContent = '';
     projectBar.hidden = false;
-    backLink.textContent = mode === 'teacher' ? '← 저장하고 선생님 화면으로' : '← 저장하고 나가기';
+    backLink.textContent = '← 저장하고 나가기';   // 학생·선생님 같은 글자(2026-10-26)
+    refreshExitButtons();
     startOverlay.hidden = true;
     lastActivity = Date.now();
     refreshSubmitBtn();
@@ -6126,7 +6156,8 @@
     submitBtn.hidden = mode === 'teacher';
     discardBtn.hidden = false;
     projectBar.hidden = false;
-    backLink.textContent = mode === 'teacher' ? '← 저장하고 선생님 화면으로' : '← 저장하고 나가기';
+    backLink.textContent = '← 저장하고 나가기';   // 학생·선생님 같은 글자(2026-10-26)
+    refreshExitButtons();
     startOverlay.hidden = true;
     lastActivity = Date.now();
     refreshSubmitBtn();
