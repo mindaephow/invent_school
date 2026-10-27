@@ -26,6 +26,10 @@ def main():
     if len(sys.argv) != 5: sys.exit(__doc__)
     name, step, shot, note = sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4].strip()
     here = os.path.dirname(os.path.abspath(__file__))
+    if step >= 16 or os.environ.get("OBS_REQUIRED") == "1":   # 관찰 증거(observe.py) — 결합 지점·그룹·뒤 번호를 눈으로 본 기록이 없으면 비교 증거를 안 받는다(2026-10-27 배틀바이크 17번). 기존 번호(1~15)는 그대로.
+        import observe
+        _miss = observe.check(name, step)
+        if _miss: sys.exit("❌ 관찰 증거가 모자라 비교 증거를 기록하지 않는다 — `python observe.py add …` 로 책 확대와 화면을 나란히 본 기록을 먼저 남긴다(SKILL.md ★ 절):\n   - " + "\n   - ".join(_miss))
     if not os.path.isfile(shot): sys.exit("❌ 화면 캡처 파일이 없다: " + shot)
     if time.time() - os.path.getmtime(shot) > 45 * 60: sys.exit("❌ 화면 캡처가 45분보다 오래됐다 — 지금 화면을 새로 찍어 쓴다")
     im = Image.open(shot).convert("RGB")

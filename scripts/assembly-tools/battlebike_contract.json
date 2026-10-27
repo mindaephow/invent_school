@@ -102,28 +102,40 @@
 "noPart": false
 },
 "16": {
-"parts": {},
-"noPart": true
+"parts": {
+"35프레임": 2,
+"리벳": 4,
+"3단블록": 4
+},
+"noPart": false
 },
 "17": {
 "parts": {},
-"noPart": true
+"noPart": false
 },
 "18": {
-"parts": {},
-"noPart": true
+"parts": {
+"축": 1,
+"부시": 2
+},
+"noPart": false
 },
 "19": {
-"parts": {},
-"noPart": true
+"parts": {
+"중간바퀴": 1,
+"부시": 1
+},
+"noPart": false
 },
 "20": {
 "parts": {},
-"noPart": true
+"noPart": false
 },
 "21": {
-"parts": {},
-"noPart": true
+"parts": {
+"부시": 1
+},
+"noPart": false
 },
 "22": {
 "parts": {},

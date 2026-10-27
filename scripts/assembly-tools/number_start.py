@@ -234,3 +234,13 @@ todo = [t for t, ok, h in state if not ok]
 order = ["책 그림 크롭", "가위·회전값(_lv.json)", "구멍 점(fits)", "방향(_axes.json, fit 포함)", "격자 그림(NN_2)"]
 for i, t in enumerate([o for o in order if o in todo], 1): print("  %d. %s" % (i, t))
 print("  → 읽기 표 빈 칸 → 놓기(attach·recv) → python build.py %s --write → 화면 비교 → python record_check.py %s %d <캡처.png> \"<비교 결과>\"" % (name, name, k))
+try:
+    import observe as _ob
+    _need = _ob._need(name, k)
+    print("─ 관찰 증거(끝내기 전 필수 — observe.py, record_check 가 막는다) ─")
+    print("  필요: " + " · ".join("%s %d곳" % (a, b) for a, b in _need.items()) + "  (모두 판정 '같다')")
+    print("  ① 같은 조립이 둘이면 책 확대(원본 PDF 300dpi)에서 두 벌의 같은 부분을 나란히 보고 같은 방향/대칭을 먼저 정한다  ② 합치는 번호는 놓기 전에 뒤 번호·완성 모습으로 층 순서·블록 쪽을 적는다")
+    print("  ③ 놓은 뒤 결합 지점마다 책 크롭·화면 크롭을 찍어  python observe.py add %s %d 결합 \"<지점>\" <책.png> <화면.png> 같다 \"<한 줄>\"  (6방향·그룹비교·뒤번호 도 같은 방법)" % (name, k))
+    _have = _ob._load(name).get(str(k), [])
+    print("  지금 기록: %d건" % len(_have) + ("" if not _ob.check(name, k) else "  → 모자란 것: " + "; ".join(_ob.check(name, k))))
+except Exception as ex_: print("  (관찰 증거 안내를 못 읽었다: %s — 번호 시작은 계속한다)" % str(ex_)[:60])
