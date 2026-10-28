@@ -24,6 +24,11 @@
 - `feedback_dont_prebuild_dont_push_often.md` · `feedback_no_unilateral_action.md` — 요청 안 한 것·푸시 금지
 
 ## 전체 색인
+- [HongHub scratch folder](feedback_honghub_scratch_folder.md) — always use `HongHub_check`, never spawn new clone folders
+- [HongHub unproven pipeline decisions](feedback_honghub_pipeline_unproven_decisions.md) — treat plan_content as provisional until a pipeline has actually produced something
+- [Verify reference before 3D geometry](feedback_verify_reference_before_3d_geometry.md) — check real reference images/data first, verify rendered result before claiming done
+- [Cubo assembly: follow book + guide](feedback_cubo_assembly_follow_book_and_guide.md) — per-number: read pose from book, build it, hide earlier parts, compare screen vs book, then report
+- [invent_school report evidence levels](feedback_invent_school_report_evidence_levels.md) — split reports into read/computed/guessed/unknown; announce plan changes first; no polished after-the-fact reasoning
 - [Diagnose, don't re-explain](feedback_diagnose_dont_explain.md) — when user says a UI element is missing, go look/fix, don't repeat navigation instructions
 - [Parse scope before removing](feedback_parse_scope_before_removing.md) — a scope qualifier in the next message can change what a prior "remove X" meant; don't delete a liked feature on a first-message reading
 - [No unilateral action](feedback_no_unilateral_action.md) — sharing a reference isn't authorization to act on it; propose and wait for go-ahead before writes

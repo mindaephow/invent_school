@@ -381,6 +381,36 @@ s21.note = "[교재 21] 20번에서 둘째 검은 판 바깥으로 나온 바퀴
 BS21 = s21.place("부시", RM_Z, (float(_H18[0]), float(_H18[1]), -252.5 + 2.75), recv=True, dir=[0, 0, 1], hover=60, marks=[[float(_H18[0]), float(_H18[1]), _ZE_F]])   # 부시: 둘째 검은 판 바깥 면(z −252.5)에 닿고 축 끝 −245 가 부시 구멍(깊이 5.1) 안에 7.5 중 5.1 들어가 2mm 나온다(뒤 부시와 좌우 대칭)
 A.steps[20].cam = (-0.47, 0.86, False, None, None, None); A.steps[20].camSrc = "eye"   # mkfit3d.py(21_P.json 판 바깥 면 리벳 4 + 축 끝 링 1 PnP fov 45 평균 1.15px, roll −0.8°)
 
+# ── 22 ── 교재 17쪽 22 "14 + 21" (읽은 것 2026-10-28 — 21번 다리(상자 + 검은 판 둘 + 바퀴·축·부시)를 세워 위쪽 끝 돌기 4개를 14번 몸의 서보혼 35프레임(서보 아래) 아래쪽 구멍 4개에 아래에서 끼운다)
+#   책 22번(원본 PDF 17쪽 400dpi 확대): 14번 몸(긴 프레임·DC모터·서보)이 위에 있고 서보 출력축 아래 서보혼 35프레임(5칸×3줄, 리벳·볼트·서보혼이 판 가운데 줄에 있다) 아래로 21번 다리가 서 있다 — 바퀴가 아래, 검은 판(바깥 면 리벳 4·가운데 너트 1·빨간 부시)이 오른쪽 면. 초록 선 4(상자 윗면 돌기 4 → 판 아래 구멍 4).
+#   판 구멍: 판 모서리 3(왼쪽·앞·오른쪽) 픽셀로 읽은 값 — 긴 변 방향 = 세계 z(칸), 짧은 변 방향 = 세계 x(줄, 줄1 = x 158). 초록 링 3개가 칸 2·4 × 줄 1·3 (서보 아래 가려진 4번째 포함 20mm × 20mm 정사각, 가운데 줄 칸2·3·4 는 리벳·12볼트·볼트가 차지).
+#   다리 방향: 상자 끝 돌기 6(3단블록 8·10번의 바깥 쪽 돌기, 각 3개)에서 책 링이 바깥 두 개씩 4 = 20mm × 20mm. 다리 +z(검은 판 바깥 = 빨간 부시 쪽)가 세계 −z(책 오른쪽 면), 다리 y → 세계 −x, 다리 x(−x 끝 돌기) → 세계 +y(위). 끼우기 전 다리는 판 아래 약 46mm 떠 있다(PnP 로 잰 값: 44~48).
+s22 = SKEL[21]; s22.kw.pop("noPart", None)
+s22.note = "[교재 22] 21번에서 만든 다리를 세워 상자 위쪽 끝 돌기 네 개를 서보혼 판(서보 아래) 아래쪽 구멍 네 개에 아래에서 끼워요. 바퀴가 아래로 가고 빨간 부시가 있는 검은 판이 오른쪽 면이에요."
+_LEG22 = [_q for _q in A.parts if 15 <= _q.step.index <= 21]
+_G22 = A.group("21번 다리", _LEG22)
+_HP22 = next(_q for _q in A.parts if _q.name == "35프레임 2번")
+_B8 = next(_q for _q in A.parts if _q.name == "3단블록 8번"); _B10 = next(_q for _q in A.parts if _q.name == "3단블록 10번")
+_R22 = np.array([[0.0, -1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, -1.0]])   # 다리 x(−x 끝 돌기) → 세계 +y(위), 다리 y → −x, 다리 z(검은 판 바깥·빨간 부시 쪽) → −z (책 PnP: 판 모서리 3 + 검은 판 리벳 끝 4·너트·부시 9점 평균 2.9px, 14번 몸 방향(서보 = +x 끝)과 같은 해)
+def _pg22(_q, _id):
+    return np.array(_q.world("peg", next(_c for _c in _q.conn["pegs"] if _c["id"] == _id))["pos"], float)
+_pegs22 = [(_B8, "p3"), (_B8, "p5"), (_B10, "p3"), (_B10, "p5")]   # 상자 −x 끝 바깥 돌기(z −287.5·−267.5 × y −7.5·12.5)
+_pp22 = [_pg22(_q, _i) for _q, _i in _pegs22]
+_pv22 = np.mean(_pp22, axis=0)
+_holes22 = [np.array(_HP22.world("hole", _h)["pos"], float) for _h in _HP22.conn["holes"] if abs(float(_HP22.world("hole", _h)["dir"][1])) > 0.9]
+_want22 = [np.array([_x, _holes22[0][1], _z]) for _x in (138.0, 158.0) for _z in (-10.0, 10.0)]
+_tg22 = [min(_holes22, key=lambda _h: float(np.linalg.norm(_h - _w))) for _w in _want22]
+_sh22 = np.mean(_tg22, axis=0) - _pv22
+_new22 = [_R22 @ (_p - _pv22) + _pv22 + _sh22 for _p in _pp22]
+_err22 = [min(float(np.linalg.norm(_n - _h)) for _h in _holes22) for _n in _new22]
+assert max(_err22) < 0.6, ("22: 다리 돌기-서보혼 판 구멍 어긋남", _err22)
+s22.move_made(_G22, _R22, pivot=tuple(float(_v) for _v in _pv22), shift=tuple(float(_v) for _v in _sh22), dir=[0, -1, 0], hover=46, group="mm22leg",
+              marks={id(_B8): [[float(_v) for _v in _new22[_k]] for _k in (0, 1)], id(_B10): [[float(_v) for _v in _new22[_k]] for _k in (2, 3)]})
+print("22: 다리 돌기 4 ↔ 서보혼 판 구멍 오차(mm)", [round(_e, 2) for _e in _err22], "| 구멍", [np.round(_h, 1).tolist() for _h in _tg22])
+A.steps[21].cam = (2.49, 0.91, False, None, None, None); A.steps[21].camSrc = "eye"   # mkfit3d.py(22_P.json·22_U.json 서보혼 판 아래 면 모서리 3 + 검은 판 리벳 끝 4·너트·부시 9점 PnP fov 25 평균 1.31px·최대 2.95px, roll 1.6°)
+for _i in range(22, 36): A.meta["lift"][str(_i)] = 142.0   # 다리가 몸 아래로 내려가 바퀴 아래가 약 −103.6 이므로 이후 번호도 올린다(24번 "22 돌리기"에서 다시 정한다)
+A.meta["lift"]["22"] = 188.0   # 22번은 다리가 판 아래 46mm 떠 있으므로(분리 화면) 떠 있는 바퀴 아래가 바닥(y=0)에 닿게 142+46 올린다(사용자 지적 2026-10-28 "바닥에서 올라와야지")
+
 # ── 7번 메인보드는 34번에서 몸에 올라가기 전까지 안 보이게 보관(사용자 지적 2026-10-27: 12번부터 아래쪽에 메인보드가 남아 있었다). hideMade 에 "7:부품순서" 를 쓰면 그 부품만 숨긴다(서보모터는 8번에서 쓰므로 "7" 통째로 숨기지 않는다).
 _MB_IDX = A.steps[6].parts.index(MB7)
 for _k in list(range(8, 34)):
