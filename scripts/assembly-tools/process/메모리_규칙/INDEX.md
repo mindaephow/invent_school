@@ -24,11 +24,7 @@
 - `feedback_dont_prebuild_dont_push_often.md` · `feedback_no_unilateral_action.md` — 요청 안 한 것·푸시 금지
 
 ## 전체 색인
-- [HongHub scratch folder](feedback_honghub_scratch_folder.md) — always use `HongHub_check`, never spawn new clone folders
-- [HongHub unproven pipeline decisions](feedback_honghub_pipeline_unproven_decisions.md) — treat plan_content as provisional until a pipeline has actually produced something
-- [Verify reference before 3D geometry](feedback_verify_reference_before_3d_geometry.md) — check real reference images/data first, verify rendered result before claiming done
-- [Cubo assembly: follow book + guide](feedback_cubo_assembly_follow_book_and_guide.md) — per-number: read pose from book, build it, hide earlier parts, compare screen vs book, then report
-- [invent_school report evidence levels](feedback_invent_school_report_evidence_levels.md) — split reports into read/computed/guessed/unknown; announce plan changes first; no polished after-the-fact reasoning
+- [조립 편집·색칠 도구](project_assembly_edit_and_paint.md) — 표시 옮기기/수정스샷(관리자), paint 도형, DC모터 색칠 완료 내용
 - [Diagnose, don't re-explain](feedback_diagnose_dont_explain.md) — when user says a UI element is missing, go look/fix, don't repeat navigation instructions
 - [Parse scope before removing](feedback_parse_scope_before_removing.md) — a scope qualifier in the next message can change what a prior "remove X" meant; don't delete a liked feature on a first-message reading
 - [No unilateral action](feedback_no_unilateral_action.md) — sharing a reference isn't authorization to act on it; propose and wait for go-ahead before writes
@@ -124,7 +120,6 @@
 - [메모리→저장소 동기화](feedback_sync_memory_rules_to_repo.md) — 조립도 메모리를 고치면 sync_memory_rules.py 로 저장소 사본 갱신(외부 PC 용, 2026-10-19)
 - [T축 헤드 2mm·6방향](feedback_tshaft_head_2mm_six_views.md) — T축은 헤드 2mm만 남기고 끝까지 끼움(44·47번 지적), 끝내기 전 6방향 비교, move hover=0은 60으로 뜸
 - [번호마다 조사·6방향·다음 번호 비교](feedback_survey_every_number_six_views_next_compare.md) — 끝낼 때 앞뒤좌우위아래 확인+다음 번호 같은 부분 비교를 track.py 로 기록
-- [조립 편집·색칠 도구](project_assembly_edit_and_paint.md) — 표시 옮기기/수정스샷(관리자), paint 도형, DC모터 색칠 완료 내용
 - [바이킹 조립도 진행](project_viking_status.md) — 1~36번 전부 완료·남은 일 확인/푸시, 인계는 저장소 진행기록_viking.md 맨 위 "★ 다음 세션 인계"; 리벳은 항상 분리
 - [올린 뒤 다시 불러와 확인](feedback_reload_after_upload.md) — 이미지 올린 뒤 🖼 배지 확인(15번 지적)
 - [좌우 부품은 각각 책으로 확인](feedback_check_arm_sides_from_book.md) — 구멍이 다 안 보이면 눕힌 게 아님, 결합은 옆일 수 있음, 팔 둘 각각 overlay(15·16번)
@@ -135,6 +130,9 @@
 - [로버트론 제품 규격](project_robotron_brands_part_spec.md) — 에이스랩·로보타미주니어=로버트론 제품, 큐보 프레임과 홀 테두리 없음·홀 1mm 작음·끝 더 둥글게
 - [책 글자 읽기](feedback_read_book_text_labels.md) — 책 그림 속 글(긴 쪽·리벳 홈 방향 주의 등)을 번호 시작 때 먼저 읽어 반영(볼링머신 10번, 2026-10-25)
 - [볼링머신 조립도 진행](project_bowling_status.md) — 1~36번 완료·37번 부품 없음(2026-10-25, 푸시 전, 22·24~36번 미달 인정), 남은 것은 사용자 확인·푸시; 격자 한 칸 밀림·3단블록 면 정정 교훈, 상세는 저장소 진행기록_bowling.md
+- [Verify reference before 3D geometry](feedback_verify_reference_before_3d_geometry.md) — check real reference images/data first, verify rendered result before claiming done
+- [Cubo assembly: follow book + guide](feedback_cubo_assembly_follow_book_and_guide.md) — per-number: read pose from book, build it, hide earlier parts, compare screen vs book, then report
+- [invent_school report evidence levels](feedback_invent_school_report_evidence_levels.md) — split reports into read/computed/guessed/unknown; announce plan changes first; no polished after-the-fact reasoning
 - [큐보 3권 차시 순서](project_cubo3_chapter_order.md) — 1차시=배틀바이크·2차시=조향자동차(책 '0차시'=앱 1차시); N차시는 DB 차시 목록으로 먼저 확인
 - [부품 테두리 선 규칙](feedback_part_outline_lines.md) — 실제 윤곽 따라 0.1mm, 어두운 색은 밝게·밝은 색은 어둡게(평판 2026-10-27)
 - [3D 부품 규격 먼저 읽기](feedback_3d_part_standard_check.md) — 큐보·에이스랩 모두 get_part_standard 용량·검증(짝 없는 모서리 0) 시작 전 읽고 숫자 보고, 35프레임 기준 비교(2026-10-27)

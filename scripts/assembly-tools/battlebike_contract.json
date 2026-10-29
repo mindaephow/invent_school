@@ -69,8 +69,7 @@
 "11": {
 "parts": {
 "315프레임": 1,
-"3단블록": 2,
-"2단블록": 1,
+"3단블록": 3,
 "115프레임": 2
 },
 "noPart": false
@@ -142,12 +141,16 @@
 "noPart": false
 },
 "23": {
-"parts": {},
-"noPart": true
+"parts": {
+"중간바퀴": 2,
+"축": 2,
+"부시": 4
+},
+"noPart": false
 },
 "24": {
 "parts": {},
-"noPart": true
+"noPart": false
 },
 "25": {
 "parts": {},
