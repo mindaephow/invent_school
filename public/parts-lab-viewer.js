@@ -288,12 +288,15 @@ async function resolveImportGeometries(shapesData) {
 function computeMergedBrush(list) {
   if (!list.length) return null;
   const evaluator = new Evaluator();
-  let result = new Brush(buildShapeGeometry(list[0]));
+  const geos = list.map(buildShapeGeometry);
+  // 불러온 STL 은 uv 가 없고 원기둥·상자 같은 기본 도형은 있어서, 섞어서 빼기(뚫기)하면 합치는 계산이 터진다(듀얼핀 중심 구멍 2026-10-30) — 하나라도 uv 가 없으면 위치·법선만으로 계산한다.
+  if (geos.some((g) => !g.getAttribute('uv'))) evaluator.attributes = ['position', 'normal'];
+  let result = new Brush(geos[0]);
   result.position.set(list[0].x, list[0].y, list[0].z);
   result.rotation.set(list[0].rx || 0, list[0].ry || 0, list[0].rz || 0);
   result.updateMatrixWorld();
   for (let i = 1; i < list.length; i++) {
-    const b = new Brush(buildShapeGeometry(list[i]));
+    const b = new Brush(geos[i]);
     b.position.set(list[i].x, list[i].y, list[i].z);
     b.rotation.set(list[i].rx || 0, list[i].ry || 0, list[i].rz || 0);
     b.updateMatrixWorld();

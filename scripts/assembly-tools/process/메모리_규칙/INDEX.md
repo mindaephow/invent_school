@@ -139,3 +139,4 @@
 - [Cubo assembly: follow book + guide](feedback_cubo_assembly_follow_book_and_guide.md) — per-number: read pose from book, build it, hide earlier parts, compare screen vs book, then report
 - [invent_school report evidence levels](feedback_invent_school_report_evidence_levels.md) — split reports into read/computed/guessed/unknown; announce plan changes first; no polished after-the-fact reasoning
 - [프로보 부품은 부품 화면에서](feedback_provo_parts_in_parts_screen.md) — 블럭·핀·꺽쇠 3D 는 내 미리보기 말고 앱 부품 화면에서 진행, DB 직접 스크립트는 권한에 막힘, 블럭 흰색
+- [프로보 부품 반복 실수](project_probo_connect_parts_workflow.md) — 기존 생성기 먼저 읽기·부품 관리에서 보여주기·사용자 숫자 오타 해석

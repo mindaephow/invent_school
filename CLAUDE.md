@@ -21,6 +21,13 @@
 4. **현재 상태 파악**: `process/진행기록_<이름>.md`·`user_diffs/요청차이.md`·메모리의 해당 조립도 진행 메모 → git log/status(미푸시·미추적 확인) → 사용자 ✓ 번호(DB).
 5. 그다음 SKILL.md 를 처음부터 읽고 "이번 번호에서 지킬 규칙 3개"를 첫 보고에 적고 시작한다.
 
+## 3D 부품을 만들거나 등록·고칠 때 — 이 순서로 (사용자 지시 2026-10-30: "3D 부품 등록할 거야" 하면 준비되어 진행)
+큐보 → 에이스랩·로보타미주니어 → 프로보 커넥트 순으로 같은 흐름으로 만들어 왔다. 조립도와 별개의 작업이다.
+1. `.claude/skills/part-3d/SKILL.md` 를 읽는다(없으면 `git show HEAD:.claude/skills/part-3d/SKILL.md`).
+2. **`node scripts/part-start.mjs <부품이름>`** — 서버·키·DB·브랜드별 현황·그 부품의 DB 행(모델/연결점/썸네일)·생성기 목록·체크리스트를 한 번에 본다.
+3. **`scripts/assembly-tools/process/06_3D부품_만들기_등록.md`** 가 순서·금지·확인의 입구이고 규격 숫자의 원본은 `get_part_standard`(`app/lib/cubo-part-maker.js`)다.
+4. 보여 주는 곳은 **부품 관리 화면**(부품 수리실이 아니다). 모델 → 숫자 검증 → 등록 → 3D 썸네일 → 연결점까지 끝나야 끝이다.
+
 ## 큐보 조립도(조립 보기) 작업을 이어받을 때 — 이 순서로 읽는다
 0. **메모리 없는 처음 보는 Claude 는 `scripts/assembly-tools/process/05_조립.md` 맨 위 "★ 처음 보는 Claude 를 위한 실행 순서"(환경·번호 하나 12단계·코드 템플릿·함정·도구 지도)를 가장 먼저 읽고 그대로 따른다.** 화면 조작 코드는 `process/viewer_snippets.md`.
 1. `scripts/assembly-tools/process/진행기록_<이름>.md` — 진행 중인 조립도의 현재 상태·다음 할 일(드롭체커: `진행기록_dropchecker.md`, 투석기: `진행기록_catapult.md`).

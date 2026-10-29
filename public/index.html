@@ -405,6 +405,7 @@
       </form>
     </div>
     <div class="card">
+      <input type="search" id="partSearchInput" placeholder="부품 이름으로 찾기 (예: 듀얼핀) — 모든 과목·브랜드·권에서 찾아요" autocomplete="off" style="width:100%; box-sizing:border-box; margin-bottom:8px;">
       <div class="crumbs" id="partSubjectTabs">
         <button type="button" class="current" data-subject-tab="robot">로봇</button>
         <button type="button" data-subject-tab="goldberg">골드버그</button>
@@ -1679,8 +1680,34 @@
       + `<div style="${box}"><div style="${head}">모터 목록 <span style="font-weight:400;">(몇 권에서 어떤 모터가 추가되는지)</span></div>${motorRows || '<div style="font-size:13px; color:var(--ink-soft);">등록된 모터 없음</div>'}</div>`
       + `<div style="${box}"><div style="${head}">리모컨<span style="font-weight:400;">${remoteVols.length ? '있음 · ' + remoteVols[0] + '권부터 리모컨을 사용' : '없음'}</span></div>${remoteRows}</div>`;
   }
+  // 부품 이름 검색(사용자 2026-10-30 "부품별로도 찾을수있게"): 권별 목록이 접혀 있어 이름으로 못 찾던 것을, 과목·브랜드 탭과 상관없이 전체에서 이름으로 찾는다.
+  let partSearchText = '';
+  document.getElementById('partSearchInput').addEventListener('input', (e) => {
+    partSearchText = e.target.value;
+    renderParts(allParts);
+  });
+  function partSearchHtml(parts){
+    const q = normPartName(partSearchText);
+    const hits = sortPartsForPicker(parts.filter((p) => normPartName(p.name).includes(q)));
+    if (!hits.length) return '<p class="list-empty">이름이 맞는 부품이 없어요.</p>';
+    return hits.map((p) => {
+      const where = [(PART_SUBJECT_LABEL[p.subject] || p.subject), p.category ? categoryLabel(p.category) : ''].filter(Boolean).join(' · ');
+      const vols = Array.isArray(p.volumes) && p.volumes.length ? p.volumes.slice().sort((a, b) => a.volume - b.volume).map((v) => v.volume + '권' + (v.qty != null ? ' ' + v.qty + '개' : '')).join(', ') : '권 미배정';
+      return `<div style="font-size:12px; font-weight:700; color:var(--ink-soft); margin:10px 0 0;">${escapeHtml(where)} · ${escapeHtml(vols)}</div>` + partRowHtml(p, null, true, false);
+    }).join('');
+  }
   function renderParts(parts){
     allParts = parts;
+    if (normPartName(partSearchText)) {
+      document.getElementById('partSubjectTabs').style.display = 'none';
+      document.getElementById('partCategoryTabs').style.display = 'none';
+      document.getElementById('partListEmpty').hidden = true;
+      document.getElementById('partListArea').innerHTML = partSearchHtml(parts);
+      renderPart3DThumbnails();
+      return;
+    }
+    document.getElementById('partSubjectTabs').style.display = '';
+    document.getElementById('partCategoryTabs').style.display = '';
     document.querySelectorAll('#partSubjectTabs [data-subject-tab]').forEach((b) => b.classList.toggle('current', b.dataset.subjectTab === partSubjectTab));
     parts = sortPartsForPicker(parts.filter((p) => p.subject === partSubjectTab)); // 부품 고르기와 같은 정렬 규칙
     const catTabsEl = document.getElementById('partCategoryTabs');

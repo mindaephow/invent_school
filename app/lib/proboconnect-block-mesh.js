@@ -113,13 +113,13 @@ export function endRoundRectPts(len, width, S = PROBO_STD, seg = 8) {
 }
 // 꺽쇠 일반형: cols = 폭 방향 구멍 줄 수(폭 = cols×10), db = 바닥 팔의 뚫린 구멍 칸 수(길이 방향), hw = 세운 팔의 뚫린 구멍 칸 수(높이 방향).
 // 이름 L{벽 구멍 수}X{바닥 구멍 수} = L{cols×hw}X{cols×db}: L2X2 = (2,1,1), L2X4 = (2,2,1), L6X9 = (3,3,2). 팔마다 모서리 칸 하나가 더 있고, 모서리 칸은 블라인드 홀(바닥에서 열림).
-export function proboBracketPieces(cols, db, hw, S = PROBO_STD) {   // 어긋남 없이 맞춘 판 조각들(합치기는 make-proboconnect-block.mjs 가 manifold-3d 로 한다)
-  const arm = (cells, trim, shrink = 0) => {   // 팔 바깥 길이 = (칸 수+1)×10 (모서리 칸 + 뚫린 칸들). trim = 모서리 쪽에서 잘라 낼 길이, shrink = 폭을 줄일 양(판 면이 같은 평면에 겹치지 않게)
-    const len = (cells + 1) * S.pitch - trim, width = cols * S.pitch - shrink
+export function proboBracketPieces(cols, db, hw, S = PROBO_STD, wallLen = null, baseLenOverride = null) {   // 어긋남 없이 맞춘 판 조각들(합치기는 make-proboconnect-block.mjs 가 manifold-3d 로 한다)
+  const arm = (cells, trim, shrink = 0, fullLen = (cells + 1) * S.pitch) => {   // 팔 바깥 길이 = (칸 수+1)×10 (모서리 칸 + 뚫린 칸들). trim = 모서리 쪽에서 잘라 낼 길이, shrink = 폭을 줄일 양(판 면이 같은 평면에 겹치지 않게)
+    const len = fullLen - trim, width = cols * S.pitch - shrink
     const hx = len / 2, holes = []
     for (let j = 0; j < cols; j++) {
       const z = -((cols - 1) * S.pitch) / 2 + j * S.pitch
-      for (let k = 1; k <= cells; k++) holes.push({ c: S.pitch * k + S.pitch / 2 - trim - hx, z })   // 모서리에서 10k+5 되는 곳
+      for (let j = 0; j < cells; j++) holes.push({ c: fullLen - 5 - S.pitch * j - trim - hx, z })   // 끝에서 5, 15, 25 … 되는 곳
     }
     return { len, trim, plate: plateTriangles(endRoundRectPts(len, width, S), holes, S) }
   }
@@ -128,12 +128,19 @@ export function proboBracketPieces(cols, db, hw, S = PROBO_STD) {   // 어긋남
   //  · 바닥 y=0 에서 열리고 위쪽(y 4~5)이 막힌 구멍 — 바닥 팔의 모서리 칸(깊이 0~10)
   const cornerHoles = (axis) => plateTriangles([[-5, -cols * 5], [5, -cols * 5], [5, cols * 5], [-5, cols * 5]], Array.from({ length: cols }, (_, j) => ({ c: 0, z: -((cols - 1) * S.pitch) / 2 + j * S.pitch, blind: true })), S)
   const back = cornerHoles(), bottom = cornerHoles()
-  const base = arm(db, 9.5), wall = arm(hw, 9.5), P = {}   // 바닥 판·세운 판은 모서리 칸 속 9.5 부터(모서리 칸 구멍 빈 곳은 8.95 까지)
+  // 바닥 판·세운 판은 모서리부터 끝까지 한 장씩(구멍 포함 / 구멍 없는 윤곽만 둘). 합치는 쪽(make-proboconnect-block.mjs)이 윤곽끼리 합치고 구멍 빈 공간을 뺀다.
+  const baseLen = baseLenOverride || (db + 1) * S.pitch, wallL = wallLen || (hw + 1) * S.pitch, P = {}
+  const base = arm(db, 0, 0, baseLen), wall = arm(hw, 0, 0, wallL)
   const put = (name, tris, f) => { const k = makeKit(20); k.append(tris, f); P[name] = k.result() }
-  put('back', back, ([u, v, tt]) => [-tt, u + 5, 5 - v])                                  // 뒤 블라인드 칸(세운 판 아래 10): 열린 쪽이 바깥 z=0
-  put('bottom', bottom, ([u, v, tt]) => [tt, 5 - v, u + 5])                               // 바닥 블라인드 칸(바닥 판 모서리 10): 열린 쪽이 바닥 y=0
-  put('base', base.plate, ([u, v, tt]) => [-tt, v, u + base.len / 2 + base.trim])         // 바닥 판(깊이 9.5 부터)
-  put('wall', wall.plate, ([u, v, tt]) => [tt, u + wall.len / 2 + wall.trim, v])          // 세운 판(높이 9.5 부터)
+  const baseO = plateTriangles(endRoundRectPts(baseLen, cols * S.pitch, S), [], S), wallO = plateTriangles(endRoundRectPts(wallL, cols * S.pitch, S), [], S)
+  put('back', back, ([u, v, tt]) => [-tt, u + 5, 5 - v])                                 // 뒤 블라인드 칸(세운 판 아래 10): 열린 쪽이 바깥 z=0
+  put('bottom', bottom, ([u, v, tt]) => [tt, 5 - v, u + 5])                              // 바닥 블라인드 칸(바닥 판 모서리 10): 열린 쪽이 바닥 y=0
+  put('base', base.plate, ([u, v, tt]) => [-tt, v, u + baseLen / 2])                     // 바닥 판(구멍 포함)
+  put('wall', wall.plate, ([u, v, tt]) => [tt, u + wallL / 2, v])                        // 세운 판(구멍 포함)
+  put('baseO', baseO, ([u, v, tt]) => [-tt, v, u + baseLen / 2])                         // 바닥 판 윤곽(구멍 없음)
+  put('wallO', wallO, ([u, v, tt]) => [tt, u + wallL / 2, v])                            // 세운 판 윤곽(구멍 없음)
   P.width = cols * S.pitch
+  P.bottomScale = Math.min(1, (baseLen - db * S.pitch) / S.pitch)   // 모서리 칸이 짧아진 만큼 블라인드 홀도 줄인다(사용자 지시 2026-10-29 "길이가 짧아지면 블라인드홀이 줄어들어야지")
+  P.backScale = Math.min(1, (wallL - hw * S.pitch) / S.pitch)
   return P
 }
