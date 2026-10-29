@@ -419,11 +419,10 @@ s23.note = "[교재 23] 중간바퀴 하나에 축을 끼우고, 바퀴 바깥 �
 WH23, AX23, BO23, BI23 = [], [], [], []
 for _k, (_wx, _wz) in enumerate(((-40.0, -330.0), (42.0, -339.0))):   # 15번 창고(z −300 둘레)에 둔다. 둘째 바퀴는 책처럼 오른쪽 앞
     _wy = 38.0 if _k == 0 else 48.0
-    _F23 = np.diag([-1.0, 1.0, -1.0])   # 바퀴 둘 모두 세로(Y)축 180° 뒤집음(사용자 지시 2026-10-29): 무늬 면 −Z, 허브 구멍·축 쪽 +Z
-    WH23.append(s23.place("중간바퀴", _F23 @ RM_Z, (_wx, _wy, _wz), recv=True))
-    AX23.append(s23.place("축", _F23 @ RM_Z, (_wx, _wy, _wz + 18.5)))   # 돌기 끝이 안쪽(+Z) — 들어오는 안쪽 부시가 맞물림으로 잡힌다
-    BO23.append(s23.place("부시", _F23 @ RM_Z, (_wx, _wy, _wz - 13.75), recv=True))
-    BI23.append(s23.place("부시", _F23 @ R18, (_wx, _wy, _wz + 18.75), recv=True, dir=[0, 0, 1], hover=64, marks=[[_wx, _wy, _wz + 51.0]]))
+    WH23.append(s23.place("중간바퀴", np.diag([-1.0, 1.0, -1.0]) @ RM_Z, (_wx, _wy, _wz), recv=True))   # 바퀴만 세로(Y)축 180° 뒤집음(사용자 지시 2026-10-29) — 축·부시·위치는 그대로
+    AX23.append(s23.place("축", RM_Z, (_wx, _wy, _wz - 18.5)))   # 돌기 끝이 안쪽(−Z) — 들어오는 안쪽 부시가 맞물림으로 잡힌다
+    BO23.append(s23.place("부시", RM_Z, (_wx, _wy, _wz + 13.75), recv=True))   # 허브 홈 안에 들어가 얹힌다(뒤집은 바퀴의 깊은 허브 쪽, 사용자 확인 2026-10-29: 들어가는 게 맞다)
+    BI23.append(s23.place("부시", R18, (_wx, _wy, _wz - 18.75), recv=True, dir=[0, 0, -1], hover=64, marks=[[_wx, _wy, _wz - 51.0]]))
 A.meta["lift"]["23"] = 0.0   # 새 창고: 바퀴가 바닥에 서 있다(지름 76 = 중심 y 38)
 A.steps[22].cam = (1.08, 0.73, False, None, None, None); A.steps[22].camSrc = "eye"   # ⚠ 거친 값: mkfit3d.py(23_P.json 허브 부시 2·축 끝 2·들어오는 부시 2 = 6점 PnP 화면 fov 45 평균 3.10px·최대 5.75px, roll 3.0°). 자유 배치라 둘째 바퀴 간격(+82, +10, −9)·들어오는 거리 64 를 카메라와 함께 풀었다(해가 여럿이라 책에서 허브 부시 면·축·화살표가 다 보이는 해를 골랐다)
 
@@ -437,7 +436,7 @@ for _k in (0, 1):
     _side = 1.0 if _k == 0 else -1.0   # 0 = 오른쪽(+z 벽) 바퀴, 1 = 왼쪽(−z 벽) 바퀴
     _G24 = A.group("바퀴 %d" % (_k + 1), [WH23[_k], AX23[_k], BO23[_k], BI23[_k]])
     _pv24 = np.array(WH23[_k].p, float)
-    _R24 = np.diag([-1.0, 1.0, -1.0]) if _side > 0 else np.eye(3)   # 23번에서 바퀴를 뒤집었으므로 24번 회전을 맞바꿔 24번 결과는 그대로   # 왼쪽 바퀴는 세로(Y)축 180° — 무늬 면이 바깥(−z), 축이 몸 쪽(+z)
+    _R24 = np.eye(3) if _side > 0 else np.diag([-1.0, 1.0, -1.0])   # 왼쪽 바퀴는 세로(Y)축 180° — 무늬 면이 바깥(−z), 축이 몸 쪽(+z)   # 왼쪽 바퀴는 세로(Y)축 180° — 무늬 면이 바깥(−z), 축이 몸 쪽(+z)
     _sh24 = np.array([_HOLE24[0], _HOLE24[1], _side * 51.5]) - _pv24
     s24.move_made(_G24, _R24, pivot=tuple(float(_v) for _v in _pv24), shift=tuple(float(_v) for _v in _sh24), dir=[0, 0, _side], hover=75, group="mm24wheel%d" % (_k + 1),
                   marks={id(AX23[_k]): [[_HOLE24[0], _HOLE24[1], _side * 27.5]]})
