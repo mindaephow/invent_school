@@ -134,7 +134,11 @@ def floor_check(A, tol=0.5):
         p, R, off = np.array(p, float), np.array(R, float), np.array(off, float)
         if xf and (stp if stp is not None else pt.step.index) >= xf["at"]:   # xform(16번부터 전체를 세워 놓는 변환)이 걸린 단계는 변환한 서 있는 세계 좌표로 잰다
             Mx = np.array(xf["m"], float); p = Mx @ p + np.array(xf["t"], float); R = Mx @ R; off = Mx @ off
-        half = np.abs(R[1]) @ (np.array(size, float) / 2)
+        sz = np.array(size, float) / 2
+        if pt.n in ("중간바퀴", "작은바퀴"):   # 둥근 부품: 축(모델 y)에 수직인 원판 — 기울여도 가장 낮은 점은 반지름(x·z 최대)·두께 방향의 원통 값(상자 모서리로 재면 기울인 바퀴가 바닥 아래로 잘못 나온다, 사용자 지시 2026-10-29 배틀바이크 35번 기울이기)
+            _ax = R[:, 1]; half = float(sz[1] * abs(_ax[1]) + max(sz[0], sz[2]) * float(np.sqrt(max(0.0, 1.0 - _ax[1] ** 2))))
+        else:
+            half = np.abs(R[1]) @ sz
         return float(p[1] + off[1] + lift - half)
     for st in A.steps:
         for pt in st.parts:

@@ -596,6 +596,17 @@ for _k in list(range(8, 34)):
     _hm = A.steps[_k - 1].kw.get("hideMade") or {}
     if "7" not in _hm: _hm = {**_hm, "7:%d" % _MB_IDX: "7번 메인보드(34번에서 몸에 올림)"}
     A.steps[_k - 1].kw["hideMade"] = _hm
+# ── 35·완성: 뒷바퀴 축을 중심으로 로봇 전체를 앞쪽이 내려오게 기울여 앞바퀴 둘이 바닥에 닿게 한다(사용자 지시 2026-10-29 "기울여서 앞바퀴가 바닥에 닿게", "바퀴가 축으로 기울여지면 돼")
+#   기울이는 중심 = 뒷바퀴(19번) 축 가운데 — 뒷바퀴는 제자리(바닥), 몸 전체가 Z축 둘레로 돌아 앞(−X)이 내려온다. 각도 = 앞바퀴 중심 높이가 뒷바퀴 중심 높이와 같아지는 값(두 바퀴 반지름 38 같음).
+_WR = next(_q for _q in A.parts if _q.name == "중간바퀴 1번"); _WF = next(_q for _q in A.parts if _q.name == "중간바퀴 2번")
+_PV35 = np.array(_WR.p, float); _dv = np.array(_WF.p, float) - _PV35
+_TH35 = math.atan2(-_dv[1], -_dv[0]) if False else math.atan2(_dv[1], -_dv[0])   # 앞바퀴(−x 쪽, 위)를 뒷바퀴 높이로: tanθ = Δy / |Δx|
+_RZ35 = np.array([[math.cos(_TH35), -math.sin(_TH35), 0.0], [math.sin(_TH35), math.cos(_TH35), 0.0], [0.0, 0.0, 1.0]])
+for _q in A.parts:
+    _pose = {"p": rnd(_RZ35 @ (np.array(_q.p, float) - _PV35) + _PV35), "r": R_to_euler(_RZ35 @ _q.R)}
+    _q.extra.setdefault("poseAt", {}).update({"35": _pose, "36": _pose})
+A.meta["lift"]["36"] = A.meta["lift"].get("35", 0.0)
+print("35·완성 기울임: 뒷바퀴 축", [round(float(_v), 1) for _v in _PV35], "각도 %.1f°" % math.degrees(_TH35))
 import stepchecks; stepchecks.apply(A, "battlebike")   # 번호별 점검(없으면 --write 거부)
 # ── 부품 체크(03 B, 2026-10-26) — 이 줄 앞까지가 번호별 조립 코드다(_cellcmp.py·_mates_table.py 가 여기서 자른다). 번호별 새로 쓰는 부품(교재 그림에서 센 값) — 1~20번은 원본 크기 그림에서 구멍·돌기를 세어 LIST 와 맞췄다. **21~35번은 썸네일 추정**(번호 작업 때 확대해 다시 센다).
 #   LIST 와 합계가 안 맞는 것: 부시 합 9 / LIST 11 (모자란 2 — 의심 번호 24·32), 큰기어 합 1~2(32·33번 중 어디에 둘째가 들어가는지 미확정), 25프레임 합 4 는 25·26·28 의 검은 25프레임 읽기가 추정.
