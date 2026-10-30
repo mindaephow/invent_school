@@ -21,7 +21,7 @@ const kindArg = process.argv[3] && !process.argv[3].startsWith('--') ? process.a
 const dir = process.argv[2], write = process.argv.includes('--write')
 if (!dir || !K) { console.error('사용: node scripts/make-proboconnect-motor.mjs <저장 폴더> [DC모터|서보모터|고속모터] [--write]'); process.exit(1) }
 fs.mkdirSync(dir, { recursive: true })
-const S = PROBO_STD, W = 30, H = 40, BAND = S.thick, CZ = 10, RING = 10.5, SCREW_R = 2.2
+const S = PROBO_STD, W = 30, H = 40, BAND = S.thick, CZ = 10, RING = 10, SCREW_R = 2.2
 const wasm = await Module(); wasm.setup()
 const M = wasm.Manifold
 const toArr = (mf) => { const m = mf.getMesh(), t = new Float32Array(m.triVerts.length * 3); for (let i = 0; i < m.triVerts.length; i++) for (let k = 0; k < 3; k++) t[i * 3 + k] = m.vertProperties[m.triVerts[i] * m.numProp + k]; return t }
@@ -32,13 +32,18 @@ const cylY = (x, z, y0, y1, r) => M.cylinder(y1 - y0, r, r, 64, false).rotate([-
 // 구멍 1개 = 커넥트 리벳이 결합하는 규격 홀(사용자 "커넥트 리벳들 결합하는 홀이 아니고 그냥 홀을 뚫어놨잖아"): 프로보 블럭의 보통 홀(톱니 없음) 구조 그대로 —
 //   바깥 둥근 입구(지름 7.9) + 가운데 띠 층(턱, 가운데만 openPts 모양으로 뚫림) + 안쪽 둥근 입구. make-proboconnect-triangle.mjs 의 PLAIN 구멍과 같은 구조.
 //   바깥면 기준 깊이는 같게: 아래 띠(바깥면 y 0)는 y 0→5, 위 띠(바깥면 y 40)는 y 40→35 쪽으로 판다. 띠 층 = 바깥면에서 barY0~barY1.
-const hole = (x, z, y0) => {
-  const bot = y0 === 0, c2 = [x, -z], band = ccw(roundPoly(openPts(c2[0], c2[1], S), S.round)), E = 0.01
+// 홀의 띠·홈 모양 점(openPts)을 (x,z) 평면에서 deg 만큼 돌린다(2D 는 z 가 뒤집혀 −deg) — 휠블럭과 같은 방식.
+const bandPts = (x, z, deg = 0) => { const th = (-deg * Math.PI) / 180; return openPts(x, -z, S).map(([px, py]) => [x + (px - x) * Math.cos(th) - (py + z) * Math.sin(th), -z + (px - x) * Math.sin(th) + (py + z) * Math.cos(th)]) }
+const hole = (x, z, y0, deg = 0) => {
+  const bot = y0 === 0, band = ccw(roundPoly(bandPts(x, z, deg), S.round)), E = 0.01
   return bot
     ? M.union([cylY(x, z, -1, S.barY0 + E, S.boreR), extrude(band, S.barY0 - E, S.barY1 + E), cylY(x, z, S.barY1 - E, BAND, S.boreR)])
     : M.union([cylY(x, z, H - S.barY0 - E, H + 1, S.boreR), extrude(band, H - S.barY1 - E, H - S.barY0 + E), cylY(x, z, H - BAND, H - S.barY1 + E, S.boreR)])
 }
-const ring = (y0) => M.union(Array.from({ length: 8 }, (_, k) => { const a = (k * Math.PI) / 4; return hole(RING * Math.cos(a), CZ + RING * Math.sin(a), y0) }))
+// 돌아가는 부분(윗띠·아랫띠)의 홀 = 휠블럭과 같은 배치(사용자 2026-10-30 "모터도 홀을 이것과 동일하게 다 수정해야해, 회전부분들"): 1X3 줄을 0°·60°·120° 로 돌린 양끝 홀 6개, 둘레 반지름 10(줄 간격), 홀 방향도 줄을 따라 돈다.
+//   가운데는 홀이 아니라 검정 나사 그대로(사용자 "중앙은 검정나사 그대로 둬") — 휠블럭과 다른 점.
+const HOLES = [...[0, 60, 120].flatMap((d) => [d, d + 180].map((a) => [RING * Math.cos((a * Math.PI) / 180), CZ + RING * Math.sin((a * Math.PI) / 180), d]))]
+const ring = (y0) => M.union(HOLES.map(([x, z, d]) => hole(x, z, y0, d)))
 // 그레이: 뒤 네모 + 원통 가운데(y 0~35), 아래 띠 구멍 8개, 아래 나사 자리(홈)
 // 사용자 "아래 사각 기둥이 위 원기둥을 감싸준 모양, 틈 거의 없음 — 모터가 돌아가는 틈만": 사각 기둥(앞뒤 −25~10, 원통 중심선까지)에 원통을 감싸는 둥근 홈(반지름 15.3, 틈 0.3)을 판다.
 const GAP = 0.3, dz = Math.sqrt((W / 2 + GAP) ** 2 - (W / 2) ** 2)   // dz = 홈과 기둥 옆면이 만나는 점의 중심선에서의 거리
@@ -59,11 +64,11 @@ const sideHoles = [-1, 1].flatMap((sg) => [-10, 0, 10].map((dzz) => hole(0, 0, 0
 low = M.difference(low, M.union([boxHoles(0), boxHoles(H - BAND), ...sideHoles]))
 // 아래 5mm 띠(사용자 2026-10-30 "옐로 아래 바닥쪽 5mm도 분리하고 밝은 그레이로, 옐로와 밝은 그레이 부분만 돌아가는 부분"): 옐로 윗띠와 같은 구조(구멍 8개 + 가운데 나사 자리), 색칠 조각.
 const lowerBand = M.difference(M.difference(cylY(0, CZ, 0, BAND, W / 2), ring(0)), cylY(0, CZ, -1, BAND + 1, SCREW_R))   // 아래 나사 자리(띠 두께 전체)
-// 옐로: 원통 위 5mm(y 35~40), 구멍 8개
+// 윗띠(옐로·레드·블루): 원통 위 5mm(y 35~40), 구멍 6개
 const yel = M.difference(M.difference(cylY(0, CZ, H - BAND, H, W / 2), ring(H - BAND)), cylY(0, CZ, H - BAND - 1, H + 1, SCREW_R))   // 위 나사 자리
 // 검정 나사(사용자 "중심에 검정나사 박혀있다고 했잖아"): 띠 두께 전체를 채워 윗면·아랫면과 같은 높이로 박혀 있다.
 const screwTop = cylY(0, CZ, H - BAND, H, SCREW_R), screwBot = cylY(0, CZ, 0, BAND, SCREW_R)
-// 옐로 윗면 테두리 선(사용자 "불투명 옐로엔 테두리 넣어주고"): 바깥 원 + 구멍 8개 입구(둥근 구멍) + 나사 둘레를 0.1mm 선으로(make-proboconnect-sensor.mjs 와 같은 가는 막대)
+// 윗띠 윗면 테두리 선(사용자 "불투명 옐로엔 테두리 넣어주고"): 바깥 원 + 구멍 6개 입구(둥근 구멍) + 나사 둘레를 0.1mm 선으로(make-proboconnect-sensor.mjs 와 같은 가는 막대)
 const LT = LINE_THICKNESS / 2, lineKit = makeKit(24), grayKit = makeKit(24)
 let cur = lineKit
 const bar = (a, b) => {
@@ -81,9 +86,9 @@ const ring3 = (pts, y) => pts.forEach((p, i) => { const q = pts[(i + 1) % pts.le
 const circ = (cx, cz, r, n = 64) => Array.from({ length: n }, (_, i) => [cx + r * Math.cos((2 * Math.PI * i) / n), cz + r * Math.sin((2 * Math.PI * i) / n)])
 const LY = H + 0.03
 ring3(circ(0, CZ, W / 2), LY); ring3(circ(0, CZ, SCREW_R, 32), LY)
-for (let k = 0; k < 8; k++) { const a = (k * Math.PI) / 4, x = RING * Math.cos(a), z = CZ + RING * Math.sin(a); ring3(circ(x, z, S.boreR, 32), LY)
-  // 구멍 안 홈(사용자 "홀 안 부분에 홈들이 안 보인다는 건데, 옐로 부분"): 뷰어는 색칠 조각에는 모서리 선을 안 그려서 노란 구멍 안쪽 홈이 한 색으로 뭉개진다 → 띠 층 위·아래 둘레와 홈 모양(openPts)을 선으로 긋는다.
-  const slot = roundPoly(openPts(x, -z, S), S.round).map(([px, py]) => [px, -py])
+for (const [x, z, d] of HOLES) { ring3(circ(x, z, S.boreR, 32), LY)
+  // 구멍 안 홈(사용자 "홀 안 부분에 홈들이 안 보인다는 건데, 옐로 부분"): 뷰어는 색칠 조각에는 모서리 선을 안 그려서 노란 구멍 안쪽 홈이 한 색으로 뭉개진다 → 띠 층 위·아래 둘레와 홈 모양(bandPts)을 선으로 긋는다.
+  const slot = roundPoly(bandPts(x, z, d), S.round).map(([px, py]) => [px, -py])
   for (const yy of [H - S.barY0, H - S.barY1]) { ring3(circ(x, z, S.boreR, 32), yy); ring3(slot, yy) }
 }   // 2D y → −z
 const linesT = lineKit.result()
@@ -111,7 +116,7 @@ const bandT = toArr(lowerBand), bandAt = at(lowerBand)
 const lowT = toArr(low), yelT = toArr(yel), stT = toArr(screwTop), sbT = toArr(screwBot)
 const yelAt = at(yel), stAt = at(screwTop), sbAt = at(screwBot), lowAt = at(low)   // 몸통도 뷰어가 가운데(x·z)를 다시 맞추므로 실제 가운데 값을 위치로 준다(뒷면 돌기로 앞뒤 가운데가 −2.5 움직여 테두리 선이 어긋났다)
 const report = (n, t) => { const mn = [1e9, 1e9, 1e9], mx = [-1e9, -1e9, -1e9]; for (let i = 0; i < t.length; i += 3) for (let k = 0; k < 3; k++) { mn[k] = Math.min(mn[k], t[i + k]); mx[k] = Math.max(mx[k], t[i + k]) } console.log(`${n}: 삼각형 ${t.length / 9}개`, JSON.stringify(checkMesh(t)), '크기', mx.map((v, k) => +(v - mn[k]).toFixed(2)).join('×'), '범위 y', mn[1].toFixed(2), mx[1].toFixed(2)) }
-report('그레이 몸통', lowT); report('옐로 윗띠', yelT); report('나사 위', stT); report('나사 아래', sbT); report('윗면 선', linesT); report('기둥 윗면 선', grayLinesT); report('핀 홈 표시', grooveT); report(`홈 핀 ${K.pins}개`, pinsT); report('밝은 그레이 아랫띠', bandT)
+report('그레이 몸통', lowT); report('윗띠', yelT); report('나사 위', stT); report('나사 아래', sbT); report('윗면 선', linesT); report('기둥 윗면 선', grayLinesT); report('핀 홈 표시', grooveT); report(`홈 핀 ${K.pins}개`, pinsT); report('밝은 그레이 아랫띠', bandT)
 const sL = trianglesToStl(lowT), sY = trianglesToStl(yelT), sT = trianglesToStl(stT), sBt = trianglesToStl(sbT), sLn = trianglesToStl(linesT), sGl = trianglesToStl(grayLinesT), sGd = trianglesToStl(grooveT), sPn = trianglesToStl(pinsT), sBd = trianglesToStl(bandT)
 for (const [n, b] of [['몸통', sL], ['윗띠', sY], ['아랫띠', sBd], ['나사위', sT], ['나사아래', sBt], ['윗면선', sLn], ['기둥윗면선', sGl], ['핀홈표시', sGd], ['홈핀2', sPn]]) fs.writeFileSync(path.join(dir, `모터블럭_${n}.stl`), b)
 if (write) {

@@ -6,7 +6,7 @@ import { probo1xNTriangles, proboBracketPieces } from '../app/lib/proboconnect-b
 import { trianglesToStl } from '../app/lib/cubo-mesh-kit.js'
 import { checkMesh, conformTJunctions } from '../app/lib/cubo-mesh-repair.js'
 
-const BR = { L2X2: [2, 1, 1], L2X4: [2, 2, 1, undefined, 15], L6X9: [3, 3, 2, undefined, null, 35] }, isL = !!BR[process.argv[2]]   // [줄 수, 바닥 구멍 칸, 벽 구멍 칸, -, 세운 팔 높이(사용자 지시 2026-10-29 "높이 15야", L2X4), 바닥 팔 길이("40이 아니고 35", L6X9)]
+const BR = { L2X2: [2, 1, 1], L2X4: [2, 2, 1, undefined, 15], L6X9: [3, 3, 2, undefined, null, 35], L1X3: [1, 3, 1, undefined, 10, 35, true] }, isL = !!BR[process.argv[2]]   // [줄 수, 바닥 구멍 칸, 벽 구멍 칸, -, 세운 팔 높이(사용자 지시 2026-10-29 "높이 15야", L2X4), 바닥 팔 길이("40이 아니고 35", L6X9)] — L1X3(2026-10-30 "40이 아니고 35", "높이 10", "홀은 왜 없앴어"): 세운 팔 높이 10 에도 벽 구멍 1개는 그대로, 바닥 팔 35
 const n = isL ? 0 : Number(process.argv[2]), out = process.argv[3], rows = Number(process.argv[4] || 1)
 if (!out || (!isL && (!Number.isInteger(n) || n < 1 || n > 19))) { console.error('사용: node scripts/make-proboconnect-block.mjs <구멍 수 1~19> <저장할 파일.stl> [줄 수=1]'); process.exit(1) }
 // 꺽쇠: 바닥 판·세운 판·모서리 칸 상자를 합치고, 모서리 칸의 두 블라인드 홀(빈 공간)을 빼서 한 몸으로 만든다(이음매·겹침 없음).
@@ -26,7 +26,9 @@ async function mergeBracket(P) {
   const inB = M.cube([W + 2, 12, 12], false).translate([-W / 2 - 1, -1, 0]), inK = M.cube([W + 2, 12, 12], false).translate([-W / 2 - 1, 0, -1])   // 깊이 z ≥ 0 / 높이 y ≥ 0 만 남김
   const cavBottomF = M.intersection(P.bottomScale < 1 ? M.intersection(cavBottom0.translate([0, 0, -5]), inB) : cavBottom0, side(45))
   const cavBackF = M.intersection(P.backScale < 1 ? M.intersection(cavBack0.translate([0, -5, 0]), inK) : cavBack0, side(-135))
-  const cavBottom = cavBottomF, cavBack = cavBackF
+  // 세운 팔 길이가 10 이하(L1X3)면 팔의 구멍이 블라인드 홀이 아니라 그냥 규격 홀(사용자 2026-10-30 "블라인드 홀이 아니고 그냥 규격홀") — 모서리 블라인드 홀을 넣지 않는다.
+  //   이때 바닥 쪽 모서리 블라인드 홀도 같은 칸에서 규격 홀과 겹쳐 같은 방향 겹침 20개가 생기므로(검사로 확인) 함께 뺀다.
+  const cavBottom = P.backScale > 0 ? cavBottomF : null, cavBack = P.backScale > 0 ? cavBackF : null
   const cavBase = M.difference(solid(P.baseO), solid(P.base)), cavWall = M.difference(solid(P.wallO), solid(P.wall))   // 뚫린 구멍의 빈 공간
   const body = M.union([solid(P.baseO), solid(P.wallO)])
   let merged = M.difference(M.difference(body, cavBase), cavWall)
@@ -52,7 +54,7 @@ const stl = trianglesToStl(tris)
 fs.writeFileSync(out, stl)
 console.log(`${isL ? process.argv[2] : rows + 'X' + n}블럭: 삼각형 ${tris.length / 9}개, ${(stl.length / 1024).toFixed(0)}KB`, JSON.stringify(checkMesh(tris)), '→', out)
 
-if (isL) {   // 블라인드 홀 안쪽 회색 조각 STL 과, 뷰어가 STL 마다 x·z 가운데·바닥 y=0 으로 옮기는 것을 맞추는 위치(몸통 기준 차이)를 알려 준다.
+if (isL && merged.liner.length) {   // (블라인드 홀이 없는 L1X3 은 안쪽 조각이 없다) 블라인드 홀 안쪽 회색 조각 STL 과, 뷰어가 STL 마다 x·z 가운데·바닥 y=0 으로 옮기는 것을 맞추는 위치(몸통 기준 차이)를 알려 준다.
   const bbox = (a) => { const mn = [1e9, 1e9, 1e9], mx = [-1e9, -1e9, -1e9]; for (let i = 0; i < a.length; i += 3) for (let k = 0; k < 3; k++) { mn[k] = Math.min(mn[k], a[i + k]); mx[k] = Math.max(mx[k], a[i + k]) } return [mn, mx] }
   const [bm, bx] = bbox(tris), [gm, gx] = bbox(merged.liner), dir = out.replace(/[^\/]+$/, '') + '블라인드안쪽/', base = out.split(/[\/]/).pop().replace(/\.stl$/, '')
   fs.mkdirSync(dir, { recursive: true })

@@ -113,13 +113,14 @@ export function endRoundRectPts(len, width, S = PROBO_STD, seg = 8) {
 }
 // 꺽쇠 일반형: cols = 폭 방향 구멍 줄 수(폭 = cols×10), db = 바닥 팔의 뚫린 구멍 칸 수(길이 방향), hw = 세운 팔의 뚫린 구멍 칸 수(높이 방향).
 // 이름 L{벽 구멍 수}X{바닥 구멍 수} = L{cols×hw}X{cols×db}: L2X2 = (2,1,1), L2X4 = (2,2,1), L6X9 = (3,3,2). 팔마다 모서리 칸 하나가 더 있고, 모서리 칸은 블라인드 홀(바닥에서 열림).
-export function proboBracketPieces(cols, db, hw, S = PROBO_STD, wallLen = null, baseLenOverride = null) {   // 어긋남 없이 맞춘 판 조각들(합치기는 make-proboconnect-block.mjs 가 manifold-3d 로 한다)
-  const arm = (cells, trim, shrink = 0, fullLen = (cells + 1) * S.pitch) => {   // 팔 바깥 길이 = (칸 수+1)×10 (모서리 칸 + 뚫린 칸들). trim = 모서리 쪽에서 잘라 낼 길이, shrink = 폭을 줄일 양(판 면이 같은 평면에 겹치지 않게)
+// toothEnd: 바닥 팔 맨 끝 구멍(1번 홀)을 톱니 구멍으로(L1X3, 사용자 2026-10-30 "가장 끝 1번홀은 톱니바퀴 홀").
+export function proboBracketPieces(cols, db, hw, S = PROBO_STD, wallLen = null, baseLenOverride = null, toothEnd = false) {   // 어긋남 없이 맞춘 판 조각들(합치기는 make-proboconnect-block.mjs 가 manifold-3d 로 한다)
+  const arm = (cells, trim, shrink = 0, fullLen = (cells + 1) * S.pitch, tooth = false) => {   // 팔 바깥 길이 = (칸 수+1)×10 (모서리 칸 + 뚫린 칸들). trim = 모서리 쪽에서 잘라 낼 길이, shrink = 폭을 줄일 양(판 면이 같은 평면에 겹치지 않게)
     const len = fullLen - trim, width = cols * S.pitch - shrink
     const hx = len / 2, holes = []
     for (let j = 0; j < cols; j++) {
       const z = -((cols - 1) * S.pitch) / 2 + j * S.pitch
-      for (let j = 0; j < cells; j++) holes.push({ c: fullLen - 5 - S.pitch * j - trim - hx, z })   // 끝에서 5, 15, 25 … 되는 곳
+      for (let j = 0; j < cells; j++) holes.push({ c: fullLen - 5 - S.pitch * j - trim - hx, z, tooth: tooth && j === 0 })   // 끝에서 5, 15, 25 … 되는 곳
     }
     return { len, trim, plate: plateTriangles(endRoundRectPts(len, width, S), holes, S) }
   }
@@ -130,7 +131,7 @@ export function proboBracketPieces(cols, db, hw, S = PROBO_STD, wallLen = null, 
   const back = cornerHoles(), bottom = cornerHoles()
   // 바닥 판·세운 판은 모서리부터 끝까지 한 장씩(구멍 포함 / 구멍 없는 윤곽만 둘). 합치는 쪽(make-proboconnect-block.mjs)이 윤곽끼리 합치고 구멍 빈 공간을 뺀다.
   const baseLen = baseLenOverride || (db + 1) * S.pitch, wallL = wallLen || (hw + 1) * S.pitch, P = {}
-  const base = arm(db, 0, 0, baseLen), wall = arm(hw, 0, 0, wallL)
+  const base = arm(db, 0, 0, baseLen, toothEnd), wall = arm(hw, 0, 0, wallL)
   const put = (name, tris, f) => { const k = makeKit(20); k.append(tris, f); P[name] = k.result() }
   const baseO = plateTriangles(endRoundRectPts(baseLen, cols * S.pitch, S), [], S), wallO = plateTriangles(endRoundRectPts(wallL, cols * S.pitch, S), [], S)
   put('back', back, ([u, v, tt]) => [-tt, u + 5, 5 - v])                                 // 뒤 블라인드 칸(세운 판 아래 10): 열린 쪽이 바깥 z=0

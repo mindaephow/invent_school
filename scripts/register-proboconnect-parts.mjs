@@ -1,6 +1,7 @@
 // 프로보 커넥트 부품 STL 을 부품 DB(ivs_part_catalog) 행의 data.spec.shapes 에 넣는다(기존 부품과 같은 import 형식, 흰색). 다른 필드는 그대로 둔다.
 // 사용(사용자가 "부품 등록은 알아서 하라"고 지시, 2026-10-29): node scripts/register-proboconnect-parts.mjs
 import fs from 'node:fs'
+import { lineColorFor } from '../app/lib/robotron-line-color.js'
 const env = Object.fromEntries(fs.readFileSync('.env.local', 'utf8').split(/\r?\n/).filter((l) => l.includes('=') && !l.startsWith('#')).map((l) => [l.slice(0, l.indexOf('=')).trim(), l.slice(l.indexOf('=') + 1).trim().replace(/^["']|["']$/g, '')]))
 const H = { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json' }
 const url = `${env.SUPABASE_URL}/rest/v1/ivs_part_catalog`
@@ -23,6 +24,9 @@ for (const [id, file, size, color = '#ffffff'] of parts) {
   // 블라인드 홀 안쪽 회색 조각(색칠 조각 paint:true): 몸통과 같은 자리에 맞도록 make-proboconnect-block.mjs 가 계산한 위치(.json)를 쓴다.
   const linerFile = file.replace(/([^/]+)\.stl$/, '블라인드안쪽/$1_블라인드안쪽.stl'), paint = []
   if (fs.existsSync(linerFile)) { const off = JSON.parse(fs.readFileSync(linerFile.replace(/\.stl$/, '.json'), 'utf8')); paint.push({ x: off.x, y: off.y, z: off.z, op: 'add', rx: 0, ry: 0, rz: 0, type: 'import', paint: true, color: '#8c8c8c', fileName: linerFile.split('/').pop(), brightness: 100, fileDataUrl: 'data:application/octet-stream;base64,' + fs.readFileSync(linerFile).toString('base64') }) }
+  // 꺾이는 부분 테두리선(배터리블럭 등, make-proboconnect-battery.mjs): <이름>_코너선.stl + .json 이 있으면 색칠 조각으로 붙인다(색 = 부품 색 ×0.55, 뷰어가 그리는 모서리 선과 같은 짙기 — 사용자 "1층2층처럼" 보이게).
+  const cornerFile = file.replace(/\.stl$/, '_코너선.stl')
+  if (fs.existsSync(cornerFile)) { const off = JSON.parse(fs.readFileSync(cornerFile.replace(/\.stl$/, '.json'), 'utf8')); paint.push({ x: off.x, y: off.y, z: off.z, op: 'add', rx: 0, ry: 0, rz: 0, type: 'import', paint: true, color: '#' + [1, 3, 5].map((i) => Math.round(parseInt(color.slice(i, i + 2), 16) * 0.55).toString(16).padStart(2, '0')).join(''), fileName: cornerFile.split('/').pop(), brightness: 100, fileDataUrl: 'data:application/octet-stream;base64,' + fs.readFileSync(cornerFile).toString('base64') }) }
   const data = { ...row.data, size, spec: { ...(row.data.spec || {}), pitch: 10, margin: 5, shapes: [{ x: 0, y: 0, z: 0, op: 'add', rx: 0, ry: 0, rz: 0, type: 'import', color, fileName: name, brightness: 100, fileDataUrl: 'data:application/octet-stream;base64,' + stl.toString('base64') }, ...paint] }, thumbnail3d: null }   // 썸네일은 비워 두어 "안 그려진 것만 그리기"로 다시 그리게 한다
   const r = await fetch(`${url}?id=eq.${id}`, { method: 'PATCH', headers: { ...H, Prefer: 'return=minimal' }, body: JSON.stringify({ data }) })
   console.log(row.data.name, '→', r.status, r.ok ? '등록됨' : await r.text(), `(${(stl.length / 1024).toFixed(0)}KB)`)
