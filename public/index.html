@@ -412,7 +412,9 @@
         <button type="button" data-subject-tab="aviation">항공</button>
       </div>
       <div class="crumbs" id="partCategoryTabs" hidden style="margin-top:6px;"></div>
-      <div style="display:flex; align-items:center; gap:8px; margin:8px 0;">
+      <div style="margin:8px 0;"><button type="button" class="ghost" id="regenToggleBtn" aria-expanded="false">🖼 썸네일 그리기 ▾</button></div>
+      <div id="regenPanel" hidden style="display:none; align-items:center; flex-wrap:wrap; gap:8px; margin:8px 0;">
+        <select id="regenBrandSelect" title="썸네일 그리기 대상 브랜드"><option value="">전체 브랜드</option></select>
         <button type="button" class="ghost" id="regenChangedThumbsBtn">🔍 바뀐 것만 그리기</button>
         <button type="button" class="ghost" id="regenPickThumbsBtn">✅ 골라서 그리기</button>
         <button type="button" class="ghost" id="regenMissingThumbsBtn">🖼 안 그려진 것만 그리기</button>
@@ -1686,11 +1688,27 @@
     partSearchText = e.target.value;
     renderParts(allParts);
   });
+  // 브랜드 버튼(사용자 2026-10-30 "모터 찾을 때 커넥트·프로보 구분"): 이름으로 찾은 결과에서 브랜드(없으면 과목)별 개수를 버튼으로 보여 주고, 누른 브랜드만 남긴다(여러 개 선택 가능).
+  const partSearchBrands = new Set();
+  const partBrandKey = (p) => p.category || p.subject;
+  const partBrandLabel = (p) => (p.category ? categoryLabel(p.category) : '') || PART_SUBJECT_LABEL[p.subject] || p.subject;
+  document.getElementById('partListArea').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-part-brand]');
+    if (!b) return;
+    const k = b.getAttribute('data-part-brand');
+    if (partSearchBrands.has(k)) partSearchBrands.delete(k); else partSearchBrands.add(k);
+    renderParts(allParts);
+  });
   function partSearchHtml(parts){
     const q = normPartName(partSearchText);
-    const hits = sortPartsForPicker(parts.filter((p) => normPartName(p.name).includes(q)));
-    if (!hits.length) return '<p class="list-empty">이름이 맞는 부품이 없어요.</p>';
-    return hits.map((p) => {
+    const nameHits = sortPartsForPicker(parts.filter((p) => normPartName(p.name).includes(q)));
+    if (!nameHits.length) return '<p class="list-empty">이름이 맞는 부품이 없어요.</p>';
+    const brands = new Map(); // key -> { label, n }
+    nameHits.forEach((p) => { const k = partBrandKey(p); const e = brands.get(k) || { label: partBrandLabel(p), n: 0 }; e.n++; brands.set(k, e); });
+    const chosen = new Set(Array.from(partSearchBrands).filter((k) => brands.has(k)));
+    const hits = chosen.size ? nameHits.filter((p) => chosen.has(partBrandKey(p))) : nameHits;
+    const chips = '<div class="crumbs" style="margin:4px 0 2px;">' + Array.from(brands.entries()).map(([k, e]) => `<button type="button" data-part-brand="${escapeHtml(k)}"${chosen.has(k) ? ' class="current"' : ''}>${escapeHtml(e.label)} ${e.n}</button>`).join('') + '</div>';
+    return chips + hits.map((p) => {
       const where = [(PART_SUBJECT_LABEL[p.subject] || p.subject), p.category ? categoryLabel(p.category) : ''].filter(Boolean).join(' · ');
       const vols = Array.isArray(p.volumes) && p.volumes.length ? p.volumes.slice().sort((a, b) => a.volume - b.volume).map((v) => v.volume + '권' + (v.qty != null ? ' ' + v.qty + '개' : '')).join(', ') : '권 미배정';
       return `<div style="font-size:12px; font-weight:700; color:var(--ink-soft); margin:10px 0 0;">${escapeHtml(where)} · ${escapeHtml(vols)}</div>` + partRowHtml(p, null, true, false);
@@ -1698,6 +1716,7 @@
   }
   function renderParts(parts){
     allParts = parts;
+    fillRegenBrandOptions();
     if (normPartName(partSearchText)) {
       document.getElementById('partSubjectTabs').style.display = 'none';
       document.getElementById('partCategoryTabs').style.display = 'none';
@@ -1825,11 +1844,28 @@
       }
     }
   }
+  // 썸네일 그리기 대상 브랜드 선택(사용자 2026-10-30 "브랜드 선택"): 바뀐 것·골라서·안 그려진 것·전체 모두 고른 브랜드 안에서만 한다("전체 브랜드"면 예전처럼 전부).
+  const regenBrandSel = document.getElementById('regenBrandSelect');
+  const regenCandidates = () => allParts.filter((p) => p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.length && (!regenBrandSel.value || partBrandKey(p) === regenBrandSel.value));
+  function fillRegenBrandOptions(){
+    const keep = regenBrandSel.value, seen = new Map();
+    allParts.forEach((p) => { if (p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.length && !seen.has(partBrandKey(p))) seen.set(partBrandKey(p), [PART_SUBJECT_LABEL[p.subject] || p.subject, partBrandLabel(p)].filter((v, i, a) => a.indexOf(v) === i).join(' · ')); });
+    regenBrandSel.innerHTML = '<option value="">전체 브랜드</option>' + Array.from(seen.entries()).sort((a, b) => a[1].localeCompare(b[1], 'ko')).map(([k, l]) => `<option value="${escapeHtml(k)}">${escapeHtml(l)}</option>`).join('');
+    regenBrandSel.value = seen.has(keep) ? keep : '';
+  }
+  // 썸네일은 매일 그리는 게 아니라서 평소엔 접어 두고, 버튼을 눌렀을 때만 펼친다(사용자 2026-10-30 "항상 있을 필요 없자나").
+  document.getElementById('regenToggleBtn').addEventListener('click', (e) => {
+    const panel = document.getElementById('regenPanel'), open = panel.hidden;
+    panel.hidden = !open; panel.style.display = open ? 'flex' : 'none';
+    e.currentTarget.setAttribute('aria-expanded', String(open)); e.currentTarget.textContent = open ? '🖼 썸네일 그리기 ▴' : '🖼 썸네일 그리기 ▾';
+    if (!open) { const o = document.getElementById('regenPickBox'); if (o) o.remove(); }
+  });
+  regenBrandSel.addEventListener('change', () => { const o = document.getElementById('regenPickBox'); if (o) o.remove(); });
   // mode: 'all' 전부 / 'missing' 썸네일이 없는 것만 / 'changed' 도형이 바뀐 것만(저장해 둔 지문과 비교) / 'pick' pickIds 로 고른 것만
   async function regenThumbs(mode, pickIds){
     const msg = document.getElementById('regenThumbsMsg');
     const btns = ['regenThumbsBtn', 'regenMissingThumbsBtn', 'regenChangedThumbsBtn', 'regenPickThumbsBtn'].map((id) => document.getElementById(id)).filter(Boolean);
-    let targets = allParts.filter((p) => p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.length);
+    let targets = regenCandidates();
     if (mode === 'missing') targets = targets.filter((p) => !p.thumbnail3d);
     if (mode === 'pick') targets = targets.filter((p) => (pickIds || []).includes(p.id));
     if (!targets.length) { msg.textContent = mode === 'missing' ? '안 그려진 부품이 없어요.' : mode === 'pick' ? '고른 부품이 없어요.' : '3D 모델이 있는 부품이 없어요.'; return; }
@@ -1858,19 +1894,20 @@
   function togglePickBox(){
     const old = document.getElementById('regenPickBox');
     if (old) { old.remove(); return; }
-    const list = allParts.filter((p) => p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.length);
+    const list = regenCandidates();
     const box = document.createElement('div');
     box.id = 'regenPickBox';
     box.style.cssText = 'margin:6px 0 10px;padding:10px;border:1px solid #d6dbe6;border-radius:10px;background:#fff;';
     box.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:6px 14px;max-height:200px;overflow:auto;">'
       + list.map((p) => `<label style="font-size:13px;white-space:nowrap;"><input type="checkbox" value="${escapeHtml(p.id)}"> ${escapeHtml(p.name)}</label>`).join('')
-      + '</div><div style="margin-top:8px;display:flex;gap:8px;"><button type="button" class="ghost" id="regenPickGo">고른 것 그리기</button><button type="button" class="ghost" id="regenPickToggleAll">전체 선택/해제</button></div>';
+      + '</div><div style="margin-top:8px;display:flex;gap:8px;"><button type="button" class="ghost" id="regenPickGo">고른 것 그리기</button><button type="button" class="ghost" id="regenPickToggleAll">전체 선택/해제</button><button type="button" class="ghost" id="regenPickClose">닫기</button></div>';
     document.getElementById('regenThumbsMsg').parentElement.after(box);
     document.getElementById('regenPickGo').addEventListener('click', () => {
       const ids = Array.from(box.querySelectorAll('input[type=checkbox]:checked')).map((c) => c.value);
       box.remove();
       regenThumbs('pick', ids);
     });
+    document.getElementById('regenPickClose').addEventListener('click', () => box.remove());
     document.getElementById('regenPickToggleAll').addEventListener('click', () => {
       const cbs = Array.from(box.querySelectorAll('input[type=checkbox]'));
       const all = cbs.every((c) => c.checked);
@@ -2718,7 +2755,9 @@
     // 없음, renderShapesPreview에 붙는 건 OrbitControls뿐)이고, svg는 그대로 DB에 남아있으니 보관된
     // 상태 그대로다(사용자 지시, 위 partRowHtml 주석 참고).
     if (has3d) {
-      document.getElementById('imgModalTitle').innerHTML = partTitleHtml(p);
+      // 같은 이름(DC모터 등)이 브랜드마다 있어서, 제목 위에 "로봇 · 프로보 커넥트"까지만 적는다(사용자 2026-10-30, 권·개수는 넣지 않음).
+      const modalWhere = [(PART_SUBJECT_LABEL[p.subject] || p.subject), p.category ? categoryLabel(p.category) : ''].filter(Boolean).join(' · ');
+      document.getElementById('imgModalTitle').innerHTML = (modalWhere ? '<div style="font-size:12px; font-weight:700; color:var(--ink-soft); margin-bottom:2px;">' + escapeHtml(modalWhere) + '</div>' : '') + partTitleHtml(p);
       document.getElementById('imgModalBody').innerHTML = '<canvas id="imgModal3dCanvas" width="600" height="600" style="width:100%;max-width:600px;aspect-ratio:1;touch-action:none;"></canvas><div class="note" id="imgModalNote" style="margin-top:6px;">불러오는 중...</div>';
       document.getElementById('imgModalBackdrop').hidden = false;
       // allParts는 stripSpecFiles로 받아와서(위 loadParts 참고) 'import' 도형이면 fileDataUrl이 빠져있다 —
