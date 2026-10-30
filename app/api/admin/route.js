@@ -261,14 +261,16 @@ function mapPartRow(r, { light = false, stripSpecFiles = false } = {}) {
   const spec = stripSpecFiles ? stripSpecFileData(r.data?.spec || null) : (r.data?.spec || null)
   return Object.assign(base, { imageSvg: r.data?.image_svg || '', imageSvgDiagonal: r.data?.image_svg_diagonal || '', primaryImage: r.data?.primary_image === 'diagonal' ? 'diagonal' : 'front', spec, snapshot: r.data?.snapshot || null, snapshots: r.data?.snapshots || null, thumbnail3d: r.data?.thumbnail3d || null })
 }
-async function listParts(sb, light = false, stripSpecFiles = false) {
+async function listParts(sb, light = false, stripSpecFiles = false, ids = null) {   // ids: 이 id 의 부품만(접속 때 바뀐 부품만 받을 때)
   // light·stripSpecFiles 목록은 spec(3D 원본, 부품 50개 합쳐 24MB)이 필요 없다 — data 통째로 읽으면 응답은 작아도
   // DB→서버로 24MB가 넘어와서 목록이 3초 넘게 걸렸다(실측: 필요한 열만 읽으면 367KB). 그래서 DB에서 필요한
   // 항목만 골라 읽고, spec은 "3D 모양 있음" 표시(첫 도형의 type)만 받는다. 실제 도형은 get_part로 따로 받는다.
   if (light || stripSpecFiles) {
     const base = 'id, created_at, name:data->>name, icon:data->>icon, subject:data->>subject, category:data->>category, volumes:data->volumes, color:data->>color, size:data->>size, thumb_key:data->>thumbKey, print_file:data->print->>file, print_skin_file:data->printSkin->>file'
     const extra = ', image_svg:data->>image_svg, image_svg_diagonal:data->>image_svg_diagonal, primary_image:data->>primary_image, snapshot:data->snapshot, snapshots:data->snapshots, thumbnail3d:data->thumbnail3d, spec_type:data->spec->shapes->0->>type'
-    const { data, error } = await sb.from('ivs_part_catalog').select(light ? base : base + extra).order('created_at', { ascending: true })
+    let q = sb.from('ivs_part_catalog').select(light ? base : base + extra).order('created_at', { ascending: true })
+    if (Array.isArray(ids)) q = q.in('id', ids)
+    const { data, error } = await q
     if (error) throw new Error(error.message)
     return (data || []).map((r) => {
       const out = { id: r.id, name: r.name || '', icon: r.icon || '', subject: r.subject || '', category: r.category || '', volumes: Array.isArray(r.volumes) ? r.volumes : [], color: r.color || '', size: r.size || '', thumbKey: r.thumb_key || '', printFile: r.print_file || '', printSkinFile: r.print_skin_file || '', createdAt: r.created_at }
@@ -438,7 +440,9 @@ export async function POST(request) {
       return json({ ok: true, teachers: await listTeachers(sb) })
     }
 
-    if (body?.action === 'list_parts') return json({ parts: await listParts(sb, body.light === true, body.stripSpecFiles === true) })
+    if (body?.action === 'list_parts') return json({ parts: await listParts(sb, body.light === true, body.stripSpecFiles === true, Array.isArray(body.ids) ? body.ids.filter((x) => typeof x === 'string').slice(0, 500) : null) })
+    // 부품별 행 버전(ctid) — 행을 고칠 때마다 바뀐다. 큰 3D 원본(data)을 읽지 않아 디스크 입출력이 거의 없다. 접속할 때 이 컴퓨터에 저장해 둔 것과 비교해 바뀐 부품만 받는 데 쓴다(사용자 2026-10-30).
+    if (body?.action === 'parts_versions') { const { data, error } = await sb.from('ivs_part_catalog').select('id, ctid'); if (error) throw new Error(error.message); return json({ versions: data || [] }) }
 
     if (body?.action === 'get_part') {
       const partId = body.partId

@@ -412,7 +412,7 @@
         <button type="button" data-subject-tab="aviation">항공</button>
       </div>
       <div class="crumbs" id="partCategoryTabs" hidden style="margin-top:6px;"></div>
-      <div style="margin:8px 0;"><button type="button" class="ghost" id="regenToggleBtn" aria-expanded="false">🖼 썸네일 그리기 ▾</button></div>
+      <div style="margin:8px 0; display:flex; align-items:center; flex-wrap:wrap; gap:8px;"><button type="button" class="ghost" id="regenToggleBtn" aria-expanded="false">🖼 썸네일 그리기 ▾</button><button type="button" class="ghost" id="partsRefreshBtn" title="이 컴퓨터에 저장된 목록 대신 DB 에서 새로 받는다(바뀐 부품만 3D 를 다시 받는다)">↻ 새로 받기</button><span class="note" id="partsCacheNote" style="margin:0;"></span></div>
       <div id="regenPanel" hidden style="display:none; align-items:center; flex-wrap:wrap; gap:8px; margin:8px 0;">
         <select id="regenBrandSelect" title="썸네일 그리기 대상 브랜드"><option value="">전체 브랜드</option></select>
         <button type="button" class="ghost" id="regenChangedThumbsBtn">🔍 바뀐 것만 그리기</button>
@@ -1611,7 +1611,29 @@
   // 카테고리(예: 큐보) 단위로 묶고, 그 안에서 권별 섹션 + 맨 끝에 전체 권 합친 누적 섹션을 보여준다
   // (큐보 2권을 만들려면 1권 부품도 있어야 하는 것처럼, 뒤 권은 앞 권 부품 위에 쌓이는 구조라서)
   let allParts = [];
-  const partFullCache = new Map(); // partId → get_part 전체 응답(3D 원본 파일 포함). 부품 탭을 열 때 비운다.
+  const partFullCache = new Map(); // partId → get_part 전체 응답(3D 원본 파일 포함). 메모리 보관(창을 닫으면 사라지므로 아래 IndexedDB 에도 한 번 저장해 둔다).
+  // ===== 부품 자료는 이 컴퓨터(IndexedDB)에 한 번 받아 두고 쓴다(사용자 2026-10-30 "PC에 다 불러와서 저장해두는 방식… 3D자료를 한번 받아두고 업데이트된 것만 받아오게") =====
+  // 예전엔 부품 관리 탭을 열어 둔 동안 20초마다·창을 다시 볼 때마다 목록 전체(수십 MB)를 DB 에서 다시 받고, 3D 모양(STL)도 탭을 열 때마다 비워서 매번 새로 받았다 →
+  // Supabase 디스크 입출력 예산(Disk IO Budget)이 바닥나 DB 가 30~50초씩 걸리고 라이브 구글 로그인까지 막혔다. 이제:
+  //   · 목록: 저장본이 있으면 DB 를 부르지 않는다. 처음 한 번, 그리고 "↻ 새로 받기"를 누를 때만 받는다(받은 뒤 바뀐 부품만 골라 3D 저장본을 지운다).
+  //   · 3D 모양: 부품마다 'part-model:<id>' 로 저장하고, 그 부품이 바뀌었을 때(지문 partFp 가 달라졌을 때)만 다시 받는다.
+  const partFp = (p) => { if (!window.IVS_CACHE) return String(Math.random()); const slim = JSON.stringify(p.spec || null, (k, v) => (k === 'fileDataUrl' || k === 'partial') ? undefined : v); return window.IVS_CACHE.hash(slim + '|' + (p.thumbKey || '') + '|' + (p.size || '') + '|' + window.IVS_CACHE.hash(p.thumbnail3d || '')) }
+  let partsVers = {}   // 부품 id → 서버 행 버전(ctid, 행을 고칠 때마다 바뀐다). 접속할 때 한 번 서버 것과 비교해 달라진 부품만 받는다.
+  const vk = (p) => partsVers[p.id] || partFp(p)
+  async function getFullPart(p){   // 부품 하나의 3D 원본 포함 전체: 메모리 → 이 컴퓨터 저장본(버전이 같을 때) → DB(마지막 수단, 받은 뒤 저장)
+    let full = partFullCache.get(p.id)
+    if (full) return full
+    const key = 'part-model:' + p.id, fp = vk(p)
+    if (window.IVS_CACHE) { const c = await window.IVS_CACHE.get(key); if (c && c.fp === fp && c.full) { partFullCache.set(p.id, c.full); return c.full } }
+    full = (await adminApi({ action: 'get_part', partId: p.id })).part
+    if (full) { partFullCache.set(p.id, full); if (window.IVS_CACHE) window.IVS_CACHE.set(key, { fp, full }) }
+    return full
+  }
+  async function rekeyModel(p){   // 썸네일을 저장해 지문이 바뀌었지만 3D 모양은 그대로일 때: 저장본의 지문만 새로 단다
+    if (!window.IVS_CACHE) return
+    const key = 'part-model:' + p.id, c = await window.IVS_CACHE.get(key)
+    if (c && c.full) window.IVS_CACHE.set(key, { fp: vk(p), full: c.full })
+  }
   // 부품 관리의 과목·로봇 종류 선택은 새로고침해도 유지한다(브라우저에만 저장 — 막혀 있으면 기본값으로 시작).
   const lsGet = (k) => { try { return localStorage.getItem(k) } catch (e) { return null } }
   const lsSet = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v) } catch (e) {} }
@@ -1774,11 +1796,7 @@
   async function getPartShapes(p){
     const incomplete = p.spec.partial || p.spec.shapes.some((s) => s.type === 'import' && !s.fileDataUrl);
     if (!incomplete) return p.spec.shapes;
-    let full = partFullCache.get(p.id);
-    if (!full) {
-      full = (await adminApi({ action: 'get_part', partId: p.id })).part;
-      if (full) partFullCache.set(p.id, full);
-    }
+    const full = await getFullPart(p);
     const shapes = full && full.spec && Array.isArray(full.spec.shapes) ? full.spec.shapes : null;
     if (!shapes || shapes.some((s) => s.type === 'import' && !s.fileDataUrl)) throw new Error('3D 원본 파일을 받지 못했어요');
     return shapes;
@@ -1883,12 +1901,15 @@
         const dataUrl = await window.__partsLabViewer.renderShapesThumbnail(shapes, 88);
         await saveThumb(p, dataUrl, key);
         p.thumbKey = key; p.thumbnail3d = dataUrl;
+        await rekeyModel(p)
         done++;
       } catch (e) { failedNames.push(p.name); console.error('썸네일 재생성 실패: ' + p.name, e); }
     }
     msg.textContent = `완료 — ${done}개 갱신` + (mode === 'changed' ? `, ${same}개는 바뀐 게 없어 건너뜀` : '') + (failedNames.length ? `, ${failedNames.length}개 실패(${failedNames.slice(0, 5).join(', ')}${failedNames.length > 5 ? ' …' : ''})` : '') + '.';
     btns.forEach((b) => { b.disabled = false; });
-    loadParts();
+    // DB 에서 목록을 다시 받지 않는다 — 방금 저장한 부품들의 행 버전만 새로 읽어(가벼움) 이 컴퓨터 저장본의 버전을 맞추고, 3D 저장본은 그대로 쓴다.
+    try { const sv = await fetchVersions(); for (const p of targets) { if (sv[p.id]) { partsVers[p.id] = sv[p.id]; await rekeyModel(p) } } } catch (e) { /* 못 받아도 다음 접속 때 그 부품만 다시 받는다 */ }
+    renderParts(allParts); savePartsCache()
   }
   // 골라서 그리기: 부품 이름 체크 목록을 열고, 고른 것만 다시 그린다
   function togglePickBox(){
@@ -1924,66 +1945,87 @@
     try { allParts = (await adminApi({ action: 'list_parts', light: true })).parts || []; }
     catch (err) { allParts = []; }
   }
-  // 부품 관리 탭 열기 — 서버가 부품 목록을 만드는 데 1.5초 안팎이 걸려서(DB 처리 시간), 지난번에 받은 목록을
-  // 브라우저에 저장해 두었다가 탭을 열자마자 먼저 보여주고 뒤에서 최신 목록을 받아온다(사용자 지시:
-  // "빠르게 할수있는 방법이 있으면 그렇게"). 최신 목록이 저장본과 같으면 화면을 다시 그리지 않아 펼침 상태도 그대로다.
+  // 부품 관리 탭 열기(사용자 2026-10-30 "접속했을 때 한 번만 비교해서 업데이트된 것만 받아오게", "변화없는 것은 받지 않고 내부에서 돌리게"):
+  //   1) 이 컴퓨터(PC·태블릿)에 저장해 둔 목록을 먼저 보여 준다. 2) 접속(페이지를 연 뒤 처음 이 탭을 열 때) 한 번만 서버의 부품별 행 버전(ctid, 큰 STL 은 읽지 않는 가벼운 조회)을
+  //   저장해 둔 것과 비교해, 바뀌었거나 새로 생긴 부품만 목록 정보를 받고 없어진 부품은 지운다(바뀐 부품의 3D 저장본도 지운다). 3) 그 뒤에는 DB 를 부르지 않는다.
+  //   저장본이 아예 없을 때(처음)와 "↻ 새로 받기"(force)만 전체를 받는다.
   const PARTS_CACHE_KEY = 'ivs-parts-tab-cache-v1';
-  let partsShownJson = '', catsShownJson = '', partsTabOpenedOnce = false, partsSavedOnce = false;
-  async function openPartsTab(){
-    partFullCache.clear();
+  let partsTabOpenedOnce = false, partsSyncedOnce = false, partsSavedAt = 0;
+  function showPartsNote(extra){
+    const el = document.getElementById('partsCacheNote'); if (!el) return
+    const t = partsSavedAt ? new Date(partsSavedAt) : null
+    el.textContent = t ? `이 컴퓨터에 저장된 목록 · 마지막 확인 ${t.getMonth() + 1}/${t.getDate()} ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}${extra ? ' · ' + extra : ''}` : (extra || '')
+  }
+  function savePartsCache(){   // 목록(3D 원본 파일은 뺀 가벼운 형태)과 부품별 행 버전을 IndexedDB 에 저장
+    partsSavedAt = Date.now()
+    const slim = allParts.map((p) => (p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.some((s) => s.fileDataUrl)) ? Object.assign({}, p, { spec: Object.assign({}, p.spec, { shapes: p.spec.shapes.map((s) => { const { fileDataUrl, ...rest } = s; return rest }) }) }) : p)
+    const rec = { categories: robotCategories, parts: slim, vers: partsVers, savedAt: partsSavedAt }
+    if (window.IVS_CACHE) window.IVS_CACHE.set(PARTS_CACHE_KEY, rec)
+    else { try { localStorage.setItem(PARTS_CACHE_KEY, JSON.stringify(rec)) } catch (e) { /* 용량 초과 등은 무시 */ } }
+    showPartsNote()
+  }
+  async function fetchVersions(){ const o = {}; ((await adminApi({ action: 'parts_versions' })).versions || []).forEach((r) => { o[r.id] = r.ctid }); return o }
+  async function syncParts(){   // 저장해 둔 것과 서버를 한 번 비교해 달라진 부품만 받는다
+    const [sv, cats] = await Promise.all([fetchVersions(), adminApi({ action: 'list_robot_categories' })])
+    const changed = Object.keys(sv).filter((id) => partsVers[id] !== sv[id]), removed = Object.keys(partsVers).filter((id) => !(id in sv))
+    const catList = cats.categories || [], catsChanged = JSON.stringify(catList) !== JSON.stringify(robotCategories)
+    let fresh = []
+    if (changed.length) fresh = (await adminApi({ action: 'list_parts', stripSpecFiles: true, ids: changed })).parts || []
+    for (const id of [...changed, ...removed]) { partFullCache.delete(id); if (window.IVS_CACHE) await window.IVS_CACHE.del('part-model:' + id) }
+    partsVers = sv; robotCategories = catList
+    if (changed.length || removed.length || catsChanged) {
+      const byId = new Map(allParts.map((p) => [p.id, p])); fresh.forEach((p) => byId.set(p.id, p)); removed.forEach((id) => byId.delete(id))
+      allParts = Array.from(byId.values()).sort((x, y) => (x.createdAt < y.createdAt ? -1 : x.createdAt > y.createdAt ? 1 : 0))
+      renderCategories(); renderParts(allParts)
+    }
+    savePartsCache()
+    return { changed: changed.length, removed: removed.length }
+  }
+  async function loadAllParts(){   // 저장본이 없을 때(처음)·"↻ 새로 받기": 전체를 받는다
+    const [cats, parts, sv] = await Promise.all([adminApi({ action: 'list_robot_categories' }), adminApi({ action: 'list_parts', stripSpecFiles: true }), fetchVersions()])
+    const partList = parts.parts || []
+    for (const p of allParts) { if (window.IVS_CACHE && partsVers[p.id] !== sv[p.id]) await window.IVS_CACHE.del('part-model:' + p.id) }
+    partFullCache.clear()
+    robotCategories = cats.categories || []; allParts = partList; partsVers = sv
+    renderCategories(); renderParts(allParts)
+    savePartsCache()
+  }
+  async function openPartsTab(force){
     const listEl = document.getElementById('partListArea');
     if (!partsTabOpenedOnce) {
       partsTabOpenedOnce = true;
       try {
-        // 저장본은 IndexedDB(local-cache.js)에 둔다 — 부품 썸네일 때문에 localStorage 5MB를 넘으면 저장이 조용히 실패해서
-        // 매번 새로 받는 것처럼 느렸다. 예전 localStorage 저장본이 있으면 그것도 읽는다.
+        // 저장본은 IndexedDB(local-cache.js)에 둔다 — 부품 썸네일 때문에 localStorage 5MB를 넘으면 저장이 조용히 실패했다. 예전 localStorage 저장본이 있으면 그것도 읽는다.
         let c = window.IVS_CACHE ? await window.IVS_CACHE.get(PARTS_CACHE_KEY) : null;
         if (!c) { try { c = JSON.parse(localStorage.getItem(PARTS_CACHE_KEY) || 'null'); } catch (e) { c = null; } }
         if (c && Array.isArray(c.parts) && c.parts.length && Array.isArray(c.categories)) {
-          robotCategories = c.categories; allParts = c.parts;
-          renderCategories(); renderParts(allParts);
-          partsShownJson = JSON.stringify(c.parts); catsShownJson = JSON.stringify(c.categories);
+          robotCategories = c.categories; allParts = c.parts; partsSavedAt = c.savedAt || 0; partsVers = c.vers || {};
+          renderCategories(); renderParts(allParts); showPartsNote();
         }
       } catch (e) { /* 저장본이 없거나 깨졌으면 그냥 새로 받는다 */ }
     }
     try {
-      const [cats, parts] = await Promise.all([
-        adminApi({ action: 'list_robot_categories' }),
-        adminApi({ action: 'list_parts', stripSpecFiles: true }),
-      ]);
-      const catList = cats.categories || [], partList = parts.parts || [];
-      const cj = JSON.stringify(catList), pj = JSON.stringify(partList);
-      const changed = cj !== catsShownJson || pj !== partsShownJson || !listEl.innerHTML;
-      robotCategories = catList; allParts = partList;
-      if (changed) { renderCategories(); renderParts(allParts); }
-      catsShownJson = cj; partsShownJson = pj;
-      if (changed || !partsSavedOnce) {
-        partsSavedOnce = true;
-        if (window.IVS_CACHE) { window.IVS_CACHE.set(PARTS_CACHE_KEY, { categories: catList, parts: partList, savedAt: Date.now() }); try { localStorage.removeItem(PARTS_CACHE_KEY); } catch (e) { /* 예전 저장본 정리 */ } }
-        else { try { localStorage.setItem(PARTS_CACHE_KEY, JSON.stringify({ categories: catList, parts: partList })); } catch (e) { /* 용량 초과 등은 무시 */ } }
-      }
+      if (force || !allParts.length) { partsSyncedOnce = true; showPartsNote('받는 중…'); await loadAllParts(); showPartsNote(); return }
+      if (partsSyncedOnce) return   // 접속 후 한 번 비교했으면 DB 를 다시 부르지 않는다
+      partsSyncedOnce = true
+      showPartsNote('바뀐 부품 확인 중…')
+      const r = await syncParts()
+      showPartsNote(r.changed || r.removed ? `바뀐 부품 ${r.changed}개 받음${r.removed ? ', 없어진 부품 ' + r.removed + '개 지움' : ''}` : '바뀐 것 없음')
     } catch (err) {
       if (!listEl.innerHTML) { document.getElementById('partListEmpty').hidden = false; document.getElementById('partListEmpty').textContent = err.message; }
+      else showPartsNote('확인 실패 — 저장본을 씁니다(' + err.message + ')')
     }
   }
-  // 부품 관리 탭이 열려 있으면 다른 곳(Claude·다른 선생님)에서 부품을 등록·수정했을 때 새로고침 없이 따라온다(사용자 2026-10-26):
-  // 20초마다, 그리고 다른 창에서 돌아왔을 때 최신 목록을 받아 달라진 때만 다시 그린다(openPartsTab 이 같으면 그리지 않는다).
-  let partsAutoBusy = false;
-  async function autoRefreshParts(){
-    const area = document.getElementById('partListArea');
-    if (partsAutoBusy || !partsTabOpenedOnce || document.hidden || !area || area.offsetParent === null) return;
-    partsAutoBusy = true;
-    try { await openPartsTab(); } finally { partsAutoBusy = false; }
-  }
-  setInterval(autoRefreshParts, 20000);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) autoRefreshParts(); });
-  window.addEventListener('focus', autoRefreshParts);
+  document.getElementById('partsRefreshBtn').addEventListener('click', async (e) => {
+    const b = e.currentTarget, t = b.textContent; b.disabled = true; b.textContent = '받는 중…'
+    try { await openPartsTab(true) } finally { b.disabled = false; b.textContent = t }
+  })
   async function loadParts(){
     // stripSpecFiles: 이 목록 화면은 has3d 여부·저장된 thumbnail3d만 보여주면 되고 3D 원본 파일
     // (fileDataUrl, 부품마다 수백 KB~몇 MB)은 필요 없다 — 그런데도 전체를 매번 통째로 받아와서 카테고리
     // 탭을 열 때마다 느렸다(사용자 지적: "큐보 부품리스트를 불러오는데 시간이 좀 걸리는데 최적화좀 해줘").
     // 실제 3D를 그려야 하는 "크게 보기"는 openPartImageModal에서 get_part로 그 부품 하나만 따로 받는다.
-    try { renderParts((await adminApi({ action: 'list_parts', stripSpecFiles: true })).parts || []); }
+    try { await syncParts(); }   // 저장·수정·삭제 뒤: 전체를 다시 받지 않고 바뀐 부품만 받는다
     catch (err) { document.getElementById('partListArea').innerHTML = ''; document.getElementById('partListEmpty').hidden = false; document.getElementById('partListEmpty').textContent = err.message; }
   }
 
@@ -2768,11 +2810,7 @@
         try {
           // 한 번 받은 3D 원본은 partFullCache에 따로 보관한다 — 목록이 다시 로드돼도(수정·탭 전환 때마다)
           // allParts가 새로 채워지면서 원본이 사라져, 같은 부품을 열 때마다 매번 서버에서 다시 받고 있었다.
-          let full = partFullCache.get(p.id);
-          if (!full) {
-            full = (await adminApi({ action: 'get_part', partId: p.id })).part;
-            if (full) partFullCache.set(p.id, full);
-          }
+          const full = await getFullPart(p);
           if (full) {
             p = Object.assign({}, p, full);
             const idx = allParts.findIndex((x) => x.id === p.id);
