@@ -5,14 +5,14 @@
 // 등록: node scripts/register-proboconnect-parts.mjs <행 id> <STL> <크기> [색]
 import fs from 'node:fs'
 import Module from 'manifold-3d'
-import { PROBO_STD, probo1xNTriangles, roundRectPts } from '../app/lib/proboconnect-block-mesh.js'
+import { PROBO_STD, probo1xNTriangles, roundRectPts, openPts, roundPoly } from '../app/lib/proboconnect-block-mesh.js'
 import { trianglesToStl, makeKit } from '../app/lib/cubo-mesh-kit.js'
-import { LINE_THICKNESS } from '../app/lib/robotron-line-color.js'
+import { addBendLines } from '../app/lib/bend-lines.js'
 import { conformTJunctions, checkMesh } from '../app/lib/cubo-mesh-repair.js'
 
 const out = process.argv[2]
 if (!out) { console.error('사용: node scripts/make-proboconnect-battery.mjs <저장할 파일.stl> [--column]'); process.exit(1) }
-const S = PROBO_STD, BLOCK = S.thick, TOTAL = 15, OVER = 0.02
+const S = PROBO_STD, BLOCK = S.thick, TOTAL = 15, OVER = process.argv.includes('--shrink') ? 0.02 : 0   // 겹침 0: 층을 줄이지 않을 때는 아래 블럭 안으로 파고들지 않고 면만 맞댄다
 const wasm = await Module(); wasm.setup()
 const M = wasm.Manifold
 const ccw = (poly) => (poly.reduce((s, q, i) => { const n = poly[(i + 1) % poly.length]; return s + q[0] * n[1] - n[0] * q[1] }, 0) > 0 ? poly : poly.slice().reverse())
@@ -21,7 +21,13 @@ const solid = (arr) => {   // 삼각형 목록 → manifold (꼭짓점 합치기
   for (let i = 0; i < t.length; i += 3) { const key = [t[i], t[i + 1], t[i + 2]].map((v) => Math.round(v * 1e4)).join(','); if (!idx.has(key)) { idx.set(key, verts.length / 3); verts.push(t[i], t[i + 1], t[i + 2]) } tri.push(idx.get(key)) }
   return new M(new wasm.Mesh({ numProp: 3, vertProperties: new Float32Array(verts), triVerts: new Uint32Array(tri) }))
 }
-const bottom = solid(probo1xNTriangles(7, S, 5))   // 5X7블럭 70 × 50 × 5, 구멍 35개
+// 5X7블럭 70 × 50 × 5, 구멍 35개. 아래 블럭도 위 몸통과 같은 윤곽(roundRectPts)을 같은 방법(extrude)으로 만들어 구멍만 판다 — 삼각형 목록(probo1xNTriangles)을 합치면 둥근 모서리 점이 어긋나
+//   같은 방향 겹침 25개가 생겼다(사용자 2026-10-31 "결합된 곳에 선이 있다" → 층 사이 계단 없이 벽을 한 면으로 맞추려면 이 겹침을 없애야 한다). 구멍 모양은 make-proboconnect-triangle.mjs 와 같은 구조(아래 둥근 입구 + 가운데 띠 + 위 둥근 입구).
+const extrudeY = (poly, y0, y1) => M.extrude([poly], y1 - y0).rotate([-90, 0, 0]).translate([0, y0, 0])
+const cylY = (x, z, r, h, y0) => M.cylinder(h, r, r, 24, false).rotate([-90, 0, 0]).translate([x, y0, z])
+const cavity = (x, z) => M.union([cylY(x, z, S.boreR, S.barY0 + 1, -1), cylY(x, z, S.boreR, BLOCK - S.barY1 + 1, S.barY1), extrudeY(ccw(roundPoly(openPts(x, -z, S), S.round)), S.barY0 - 0.01, S.barY1 + 0.01)])
+const holesAll = []; for (let j = 0; j < 5; j++) for (let i = 0; i < 7; i++) holesAll.push(cavity(-30 + i * 10, -20 + j * 10))
+const bottom = process.argv.includes('--shrink') ? solid(probo1xNTriangles(7, S, 5)) : M.difference(extrudeY(ccw(roundRectPts(7, 5, S)), 0, BLOCK), M.union(holesAll))
 const upper = M.extrude([ccw(roundRectPts(7, 5, S))], TOTAL - BLOCK + OVER).rotate([-90, 0, 0]).translate([0, BLOCK - OVER, 0])   // 위 몸통(2D y → −z)
 // 위 몸통을 0.02% 줄여 아래 블럭과 바깥 벽이 같은 면에 겹치지 않게 한다(그대로 합치면 같은 방향 겹침 25개 — 검사로 확인). 0.007mm 차이라 눈에 안 보인다.
 // 사각기둥 둘(사용자 2026-10-30 "25, 70, 20 의 사각기둥 (좌우중심) 합쳐줘" → "50, 60, 25 사각기둥 합쳐줘 위쪽라인맞춰주고", "전체높이가 25"):
@@ -31,11 +37,13 @@ const upper = M.extrude([ccw(roundRectPts(7, 5, S))], TOTAL - BLOCK + OVER).rota
 const COLS = [{ w: 25, l: 70, xc: 0, top: 20 }, { w: 50, l: 60, xc: 5, top: 25 }]   // xc = 길이 방향 가운데 위치(②: 끝라인 x 35 에 붙으려면 가운데 35−60/2 = 5)
 // 코너웍(사용자 "이 부분은 코너웍을 맞춰"): 몸통 모서리가 둥근데(반지름 5) 기둥은 각져서 어긋났다 → 기둥을 몸통과 같은 윤곽(roundRectPts(7, 5))으로 잘라 끝라인·모서리가 몸통과 똑같이 둥글게 이어지게 한다.
 //   윤곽을 0.04% 줄여(몸통 위 10mm 는 0.02%) 바깥 벽이 같은 면에 겹치지 않게 한다.
-const outlinePrism = M.extrude([ccw(roundRectPts(7, 5, S))], 60).rotate([-90, 0, 0]).scale([0.9996, 1, 0.9996])
+// 층 사이 선(사용자 2026-10-31 "결합되어 있는 곳인데 왜 라인이 있는 거야"): 위 층을 줄여 벽을 0.007mm 안쪽에 두면 층마다 작은 계단이 생겨 뷰어가 높이 5·15에 선을 긋는다. 기본은 줄이지 않고 벽을 한 면으로 맞춘다(--shrink 를 주면 예전처럼 줄임).
+const SHRINK = process.argv.includes('--shrink'), K_UP = SHRINK ? 0.9998 : 1, K_COL = SHRINK ? 0.9996 : 1
+const outlinePrism = M.extrude([ccw(roundRectPts(7, 5, S))], 60).rotate([-90, 0, 0]).scale([K_COL, 1, K_COL])
 const columns = COLS.map((c) => M.intersection(M.cube([c.l, c.top - TOTAL + OVER, c.w], false).translate([c.xc - c.l / 2, TOTAL - OVER, -c.w / 2]), outlinePrism))
 //   (사용자 "추가로 주는 거면 별도로 해도 되고" → --column 을 주면 사각기둥을 합친 별도 부품, 안 주면 사각기둥 없는 원래 배터리블럭)
 const withColumn = process.argv.includes('--column')
-const battery = M.union([bottom, upper.scale([0.9998, 1, 0.9998]), ...(withColumn ? columns : [])])
+const battery = M.union([bottom, upper.scale([K_UP, 1, K_UP]), ...(withColumn ? columns : [])])
 const m = battery.getMesh(), tris = new Float32Array(m.triVerts.length * 3)
 for (let i = 0; i < m.triVerts.length; i++) for (let k = 0; k < 3; k++) tris[i * 3 + k] = m.vertProperties[m.triVerts[i] * m.numProp + k]
 const stl = trianglesToStl(tris)
@@ -48,30 +56,10 @@ console.log(`배터리블럭: 삼각형 ${tris.length / 9}개, ${(stl.length / 1
 //   그 경계에 세로 0.1mm 선(색칠 조각, 색은 등록 때 lineColorFor)을 긋는다. 폭 50 기둥(②)이 닿는 +x 쪽 두 모서리의 시작·끝 4곳. 별도 STL(<이름>_코너선.stl)과 위치(.json) — register-proboconnect-parts.mjs 가 있으면 붙인다.
 const lineFile = out.replace(/\.stl$/, '_코너선.stl')
 if (withColumn) {
-  const LT = LINE_THICKNESS / 2, kit = makeKit(24)
-  const bar = (a, b) => {
-    const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], len = Math.hypot(...d); if (len < 1e-6) return
-    const e = d.map((c) => c / len), ref = Math.abs(e[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0]
-    const cr = (p, q) => [p[1] * q[2] - p[2] * q[1], p[2] * q[0] - p[0] * q[2], p[0] * q[1] - p[1] * q[0]]
-    let u = cr(e, ref); const ul = Math.hypot(...u); u = u.map((c) => (c / ul) * LT); const v = cr(e, u).map((c) => c / LT * LT)
-    const s0 = a.map((c, i) => c - e[i] * LT), s1 = b.map((c, i) => c + e[i] * LT)
-    const corner = (q, su, sv) => q.map((c, i) => c + su * u[i] + sv * v[i]), C = [[0, 1.2], [-1.04, -0.6], [1.04, -0.6]]
-    const A = C.map(([su, sv]) => corner(s0, su, sv)), B = C.map(([su, sv]) => corner(s1, su, sv))
-    const nrm = (su, sv) => [su * u[0] + sv * v[0], su * u[1] + sv * v[1], su * u[2] + sv * v[2]]
-    for (let i = 0; i < 3; i++) { const j = (i + 1) % 3, mm = nrm((C[i][0] + C[j][0]) / 2, (C[i][1] + C[j][1]) / 2); kit.quad(A[i], A[j], B[j], B[i], mm[0], mm[1], mm[2]) }
-  }
-  const r = S.endR, hx = 35, hz = 25, sc = 0.9998, OUT = 0.03, y0 = TOTAL, y1 = COLS[1].top   // ②(폭 50)가 +x 끝에 붙은 부분: 높이 15~25
-  // ① 둥근 모서리가 시작되는 곳 세로선 4개(평평한 벽 → 둥근 모서리)
-  for (const sg of [-1, 1]) {
-    bar([(hx * sc) + OUT, y0, sg * (hz - r) * sc], [(hx * sc) + OUT, y1, sg * (hz - r) * sc])
-    bar([(hx - r) * sc, y0, sg * (hz * sc + OUT)], [(hx - r) * sc, y1, sg * (hz * sc + OUT)])
-  }
-  // ② 3층 경계선(사용자 "1층2층처럼 꺾이는 부분 표시가 안되어있는데"): 몸통 윗면 높이(y 15)에서 기둥 둘레를 한 바퀴 — 기둥 벽이 몸통 벽과 같은 면으로 이어져 뷰어가 선을 안 그리므로 직접 긋는다.
-  //   ②(폭 50): +x 끝 벽·둥근 모서리 둘·옆 벽(기둥 끝 x −25 까지). ①(폭 25): 양 끝면(x ±35).
-  const arc = (cx, cz, a0) => Array.from({ length: 9 }, (_, i) => { const a = a0 + (Math.PI / 2) * (i / 8); return [(cx + r * Math.cos(a)) * sc + OUT * Math.cos(a), (cz + r * Math.sin(a)) * sc + OUT * Math.sin(a)] })
-  const loop = [[-25, -hz * sc - OUT], [(hx - r) * sc, -hz * sc - OUT], ...arc(hx - r, -(hz - r), -Math.PI / 2), ...arc(hx - r, hz - r, 0), [(hx - r) * sc, hz * sc + OUT], [-25, hz * sc + OUT]]
-  for (let i = 0; i < loop.length - 1; i++) bar([loop[i][0], y0 + 0.02, loop[i][1]], [loop[i + 1][0], y0 + 0.02, loop[i + 1][1]])
-  for (const sg of [-1, 1]) bar([sg * (hx * sc + OUT), y0 + 0.02, -12.5], [sg * (hx * sc + OUT), y0 + 0.02, 12.5])
+  // 꺾인 곳 찾기·선 긋기는 공통 도구 app/lib/bend-lines.js (사용자 2026-10-31 "꺾인곳을 찾아서 라인을 그리라고" → "언제든 쓸 수 있게 등록"). 바닥 블럭(높이 0~5) 안쪽 구멍 모서리는 뺀다.
+  const kit = makeKit(24)
+  const nBend = addBendLines(kit, tris, { skip: (ea, eb) => Math.max(ea[1], eb[1]) <= BLOCK + 0.01 && Math.abs(ea[0]) < 34 && Math.abs(eb[0]) < 34 && Math.abs(ea[2]) < 24 && Math.abs(eb[2]) < 24 })
+  console.log(`꺾인 모서리 ${nBend}개 찾음`)
   const lt = kit.result(), lmn = [1e9, 1e9, 1e9], lmx = [-1e9, -1e9, -1e9]
   for (let i = 0; i < lt.length; i += 3) for (let k = 0; k < 3; k++) { lmn[k] = Math.min(lmn[k], lt[i + k]); lmx[k] = Math.max(lmx[k], lt[i + k]) }
   fs.writeFileSync(lineFile, trianglesToStl(lt)); fs.writeFileSync(lineFile.replace(/\.stl$/, '.json'), JSON.stringify({ x: +((lmn[0] + lmx[0]) / 2).toFixed(4), y: +lmn[1].toFixed(4), z: +((lmn[2] + lmx[2]) / 2).toFixed(4) }))
