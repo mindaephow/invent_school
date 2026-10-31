@@ -1941,7 +1941,9 @@
   document.getElementById('regenPickThumbsBtn').addEventListener('click', togglePickBox);
   // 교재관리 탭용 — 이름·과목만 받아서(SVG/스냅샷 제외) 빠르게 allParts만 채운다. 부품 탭은 열 때마다
   // loadParts로 전체를 다시 받으니 여기서 가벼운 목록으로 덮어써도 문제없다.
-  async function loadPartsLite(){
+  async function loadPartsLite(){   // 이미 받아 둔 목록(부품 관리 저장본)이 있으면 그것을 그대로 쓴다 — 탭을 열 때마다 DB 에서 다시 받지 않는다(사용자 2026-10-31)
+    if (allParts.length) return
+    try { const c = window.IVS_CACHE ? await window.IVS_CACHE.get('ivs-parts-tab-cache-v1') : null; if (c && Array.isArray(c.parts) && c.parts.length) { allParts = c.parts; return } } catch (e) { /* 저장본이 없으면 아래로 */ }
     try { allParts = (await adminApi({ action: 'list_parts', light: true })).parts || []; }
     catch (err) { allParts = []; }
   }
@@ -1990,7 +1992,29 @@
     renderCategories(); renderParts(allParts)
     savePartsCache()
   }
+  // 접속(처음 설치 포함)할 때 3D 모양이 있는데 이 컴퓨터에 저장본이 없는 부품을 뒤에서 하나씩 받아 둔다(사용자 2026-10-31 "접속을 하거나 처음 설치를 할 때 다 받아서 속도를 올리고,
+  //   지속적으로 받아서 쓸데없는 낭비를 하지 않게"). 바뀐 부품은 syncParts/loadAllParts 가 저장본을 지워 두므로 다음 접속 때 그 부품만 다시 받는다. 하나씩·잠깐 쉬면서 받아 DB 부담을 줄이고, 연달아 실패하면 멈춘다.
+  let prefetchingModels = false
+  async function prefetchModels(){
+    if (prefetchingModels || !window.IVS_CACHE) return
+    prefetchingModels = true
+    try {
+      const have = new Set((await window.IVS_CACHE.keys()) || [])
+      const todo = allParts.filter((p) => p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.length && !have.has('part-model:' + p.id))
+      let done = 0, fails = 0
+      for (const p of todo) {
+        showPartsNote(`3D 저장 중 ${done}/${todo.length}`)
+        try { await getFullPart(p); partFullCache.delete(p.id); done++; fails = 0 }
+        catch (e) { if (++fails >= 2) { showPartsNote(`3D 저장 중단(${done}/${todo.length}) — 다음 접속 때 이어 받음`); return } }
+        await new Promise((r) => setTimeout(r, 300))
+      }
+      showPartsNote(todo.length ? `3D ${done}개 저장함` : '')
+    } finally { prefetchingModels = false }
+  }
   async function openPartsTab(force){
+    try { await openPartsTabInner(force) } finally { prefetchModels() }
+  }
+  async function openPartsTabInner(force){
     const listEl = document.getElementById('partListArea');
     if (!partsTabOpenedOnce) {
       partsTabOpenedOnce = true;

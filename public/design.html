@@ -1937,12 +1937,24 @@
     // 저장된 프로젝트를 불러올 때 restoreParts가 즉시 PART_DEFS를 찾을 수 있도록, 화면에 아직 안 띄운 권까지 전부 미리 등록해 둔다.
     robotPartsCache.forEach(registerRobotPartDef);
   }
-  async function fetchCatalogRows(){
+  // 행 버전(ctid — 행을 고칠 때마다 바뀐다)만 가볍게 받는다. 저장해 둔 버전과 같으면 무거운 본문(썸네일·이미지 등)은 받지 않는다(사용자 2026-10-31 "변화가 없으면 받지마").
+  async function fetchRowVersions(table, extra){
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=id,ctid${extra || ''}`, { headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + accessToken } });
+      if (!res.ok) return null;
+      const o = {}; ((await res.json()) || []).forEach(r => { o[r.id] = r.ctid; });
+      return o;
+    } catch (e) { return null; }
+  }
+  const sameVersions = (a, b) => { const ka = Object.keys(a || {}), kb = Object.keys(b || {}); return ka.length === kb.length && ka.every(k => a[k] === b[k]); };
+  const changedIds = (old, now) => Object.keys(now).filter(k => (old || {})[k] !== now[k]);
+  async function fetchCatalogRows(onlyIds){
     const headers = { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + accessToken };
+    const idFilter = Array.isArray(onlyIds) ? `&id=in.(${onlyIds.join(',')})` : '';
     // spec(3D 모델 원본)은 부품 50개 합쳐 17MB라 로딩이 오래 걸리던 주범 — 설계 화면은 미리 저장된
     // thumbnail3d만 쓰므로 spec을 빼고 필요한 필드만 골라서 받는다. 이 형식이 안 통하면 예전 방식으로 대신 받는다.
     const lightSel = 'id,name:data->>name,icon:data->>icon,category:data->>category,volumes:data->volumes,color:data->>color,size:data->>size,image_svg:data->>image_svg,image_svg_diagonal:data->>image_svg_diagonal,primary_image:data->>primary_image,thumbnail3d:data->>thumbnail3d,connectors:data->connectors';
-    let res = await fetch(`${SUPABASE_URL}/rest/v1/ivs_part_catalog?select=${encodeURIComponent(lightSel)}&data->>subject=eq.robot`, { headers });
+    let res = await fetch(`${SUPABASE_URL}/rest/v1/ivs_part_catalog?select=${encodeURIComponent(lightSel)}&data->>subject=eq.robot${idFilter}`, { headers });
     if (res.ok) {
       const rows = (await res.json() || []).map(r => ({ id: r.id, data: { name: r.name, icon: r.icon, category: r.category, volumes: r.volumes, color: r.color, size: r.size, image_svg: r.image_svg, image_svg_diagonal: r.image_svg_diagonal, primary_image: r.primary_image, thumbnail3d: r.thumbnail3d, connectors: r.connectors } }));
       return { rows, light: true };
@@ -1962,19 +1974,33 @@
       const usable = !!(hit && Array.isArray(hit.rows) && hit.rows.length);
       if (usable) { applyCatalogRows(hit.rows); perfMark('catalogFromCache'); }
       const refresh = (async () => {
-        const got = await fetchCatalogRows();
+        // 저장본이 있으면 행 버전만 먼저 받아 비교한다 — 같으면 끝, 다르면 바뀐 부품만 받아 저장본에 합친다.
+        const sv = usable && hit.vers ? await fetchRowVersions('ivs_part_catalog', '&data->>subject=eq.robot') : null;
+        if (sv && sameVersions(hit.vers, sv)) { perfMark('catalogUnchanged'); return; }
+        let got;
+        if (sv) {
+          const ids = changedIds(hit.vers, sv);
+          const part = ids.length ? await fetchCatalogRows(ids) : { rows: [], light: true };
+          if (part && part.light) {
+            const byId = new Map(hit.rows.filter(r => sv[r.id] !== undefined).map(r => [r.id, r]));
+            part.rows.forEach(r => byId.set(r.id, r));
+            got = { rows: Array.from(byId.values()), light: true };
+          }
+        }
+        if (!got) got = await fetchCatalogRows();
         if (!got) return;
+        got.vers = sv || (got.light ? await fetchRowVersions('ivs_part_catalog', '&data->>subject=eq.robot') : null);
         const th = (r) => (C ? C.hash(r.data && r.data.thumbnail3d) : '');
         const ver = C ? C.hash(JSON.stringify(got.rows.map(r => [r.id, r.data && r.data.name, r.data && r.data.category, r.data && r.data.volumes, r.data && r.data.color, r.data && r.data.size, r.data && r.data.icon, r.data && r.data.connectors, th(r)]))) : null;
         perfMark('catalogFromNetwork');
-        if (usable && hit.ver === ver) return; // 달라진 게 없으면 그대로
+        if (usable && hit.ver === ver) { if (C && got.light && got.vers && !hit.vers) C.set('robot-catalog:v1', { rows: got.rows, ver, vers: got.vers, savedAt: Date.now() }); return; } // 달라진 게 없으면 그대로(옛 저장본엔 행 버전만 채운다)
         // 썸네일이 바뀐 부품은 저장해 둔 3D 모델도 낡은 것 — 지운다(다음에 놓을 때 새로 받는다)
         if (usable && C) {
           const old = new Map(hit.rows.map(r => [r.id, th(r)]));
           got.rows.forEach(r => { if (old.has(r.id) && old.get(r.id) !== th(r)) { C.del('robot-model:' + r.id); robotModelCache.delete(r.id); } });
         }
         applyCatalogRows(got.rows);
-        if (C && got.light) C.set('robot-catalog:v1', { rows: got.rows, ver, savedAt: Date.now() });
+        if (C && got.light) C.set('robot-catalog:v1', { rows: got.rows, ver, vers: got.vers || null, savedAt: Date.now() });
         if (usable) refreshRobotPalette(); // 캐시로 먼저 그렸다면 최신으로 다시 그린다
       })();
       if (usable) refresh.catch(() => {}); else await refresh;
@@ -2006,6 +2032,8 @@
     if (usable) { applyTextbookRows(hit.rows); perfMark('textbooksFromCache'); }
     const refresh = (async () => {
       try {
+        const sv = usable && hit.vers ? await fetchRowVersions('ivs_textbooks') : null;   // 행 버전이 같으면 본문은 받지 않는다
+        if (sv && sameVersions(hit.vers, sv)) { perfMark('textbooksUnchanged'); return; }
         const res = await fetch(`${SUPABASE_URL}/rest/v1/ivs_textbooks?select=id,data`, {
           headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + accessToken }
         });
@@ -2013,9 +2041,10 @@
         const rows = await res.json();
         const ver = C ? C.hash(JSON.stringify(rows)) : null;
         perfMark('textbooksFromNetwork');
-        if (usable && hit.ver === ver) return;
+        const vers = sv || await fetchRowVersions('ivs_textbooks');
+        if (usable && hit.ver === ver) { if (C && vers && !hit.vers) C.set('robot-textbooks:v1', { rows, ver, vers, savedAt: Date.now() }); return; }
         applyTextbookRows(rows);
-        if (C) C.set('robot-textbooks:v1', { rows, ver, savedAt: Date.now() });
+        if (C) C.set('robot-textbooks:v1', { rows, ver, vers: vers || null, savedAt: Date.now() });
       } catch (err) { /* 못 불러오면 빈 상태 그대로 둔다 — 교재 없이도 화면은 그대로 동작 */ }
     })();
     if (usable) { refresh.catch(() => {}); return; } // 캐시가 있으면 기다리지 않는다

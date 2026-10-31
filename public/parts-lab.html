@@ -594,6 +594,7 @@ h4{margin:4px 0}
 <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="db-shim.js"></script>
+<script src="local-cache.js"></script>
 <!-- 도형 에디터(parts-lab-box-editor.js) 전용 — 위 three@0.128(브라켓/프레임 화면이 씀)과는 완전히 분리된
      최신 three.js + CSG(진짜 입체 더하기/빼기/뚫기) 스택. import map은 도형 에디터 모듈 안에서만 쓰이고
      나머지 이 페이지 코드(전역 THREE)와는 서로 안 건드림 — 사용자 지시: "부품수리실만 이걸 사용하고
@@ -1942,11 +1943,32 @@ h4{margin:4px 0}
   // 등록돼 있는데도 빈 걸로 보였던 원인).
   let partsLoaded = false;
   let partsLoadError = null;
+  // 부품 목록(3D 원본 포함) — 열 때마다 전부 받지 않는다(사용자 2026-10-31 "변화가 없으면 받지마"). 부품 관리 화면이 이 컴퓨터에 저장해 둔 목록(ivs-parts-tab-cache-v1)과
+  // 부품별 3D 저장본(part-model:<id>)을 쓰고, 서버에는 부품별 행 버전만 물어 바뀐 부품만 하나씩 받는다. 저장본이 없으면(처음) 예전처럼 전체를 받는다.
+  async function loadPartsCached(token){
+    const C = window.IVS_CACHE;
+    const rec = C ? await C.get('ivs-parts-tab-cache-v1') : null;
+    const sv = {}; ((await adminApi({ action:'parts_versions' }, token)).versions || []).forEach(r => { sv[r.id] = r.ctid; });
+    if (!rec || !Array.isArray(rec.parts) || !rec.parts.length || !rec.vers) return (await adminApi({ action:'list_parts' }, token)).parts || [];
+    const hasShapes = (p) => !!(p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.length);
+    const out = [], need = [];
+    for (const p of rec.parts) {
+      if (sv[p.id] === undefined) continue;                       // 서버에서 없어진 부품
+      if (rec.vers[p.id] !== sv[p.id]) { need.push(p.id); continue; }   // 바뀐 부품
+      if (!hasShapes(p)) { out.push(p); continue; }
+      const m = await C.get('part-model:' + p.id);
+      if (m && m.full && m.fp === rec.vers[p.id]) out.push(m.full); else need.push(p.id);   // 3D 저장본이 없으면 그 부품만 받는다
+    }
+    const known = new Set(rec.parts.map(p => p.id));
+    Object.keys(sv).forEach(id => { if (!known.has(id)) need.push(id); });   // 새로 생긴 부품
+    if (need.length > 40) return (await adminApi({ action:'list_parts' }, token)).parts || [];
+    for (const id of need) { const r = await adminApi({ action:'get_part', partId: id }, token); if (r && r.part) out.push(r.part); }
+    return out.sort((x, y) => (x.createdAt < y.createdAt ? -1 : x.createdAt > y.createdAt ? 1 : 0));
+  }
   async function initImporter(token){
     window.__accessToken = token;
     try {
-      const data = await adminApi({ action:'list_parts' }, token);
-      allParts = data.parts || [];
+      allParts = await loadPartsCached(token);
     } catch (e) {
       // 에러를 여기서 DOM에 바로 찍기만 하면, 이 실패 이후 모달을 다시 열 때마다 renderModalPartList()가
       // partsLoaded만 보고 "불러오는 중..."으로 덮어써서 실패 사실 자체가 영영 안 보이게 된다(사용자 지적:
