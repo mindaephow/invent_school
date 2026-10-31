@@ -1620,11 +1620,19 @@
   const partFp = (p) => { if (!window.IVS_CACHE) return String(Math.random()); const slim = JSON.stringify(p.spec || null, (k, v) => (k === 'fileDataUrl' || k === 'partial') ? undefined : v); return window.IVS_CACHE.hash(slim + '|' + (p.thumbKey || '') + '|' + (p.size || '') + '|' + window.IVS_CACHE.hash(p.thumbnail3d || '')) }
   let partsVers = {}   // 부품 id → 서버 행 버전(ctid, 행을 고칠 때마다 바뀐다). 접속할 때 한 번 서버 것과 비교해 달라진 부품만 받는다.
   const vk = (p) => partsVers[p.id] || partFp(p)
+  // 행 버전 비교 — 둘 다 xmin 이 붙은 새 모양('ctid#xmin')이면 그대로, 한쪽이 예전 모양(ctid 만)이면 ctid 부분만 비교한다(저장본을 한꺼번에 다시 받지 않으려고).
+  function verEq(a, b){
+    if (a == null || b == null) return a === b
+    a = String(a); b = String(b)
+    if (a === b) return true
+    if (a.includes('#') && b.includes('#')) return false
+    return a.replace(/#[^@|]*/g, '') === b.replace(/#[^@|]*/g, '')
+  }
   async function getFullPart(p){   // 부품 하나의 3D 원본 포함 전체: 메모리 → 이 컴퓨터 저장본(버전이 같을 때) → DB(마지막 수단, 받은 뒤 저장)
     let full = partFullCache.get(p.id)
     if (full) return full
     const key = 'part-model:' + p.id, fp = vk(p)
-    if (window.IVS_CACHE) { const c = await window.IVS_CACHE.get(key); if (c && c.fp === fp && c.full) { partFullCache.set(p.id, c.full); return c.full } }
+    if (window.IVS_CACHE) { const c = await window.IVS_CACHE.get(key); if (c && verEq(c.fp, fp) && c.full) { partFullCache.set(p.id, c.full); return c.full } }
     full = (await adminApi({ action: 'get_part', partId: p.id })).part
     if (full) { partFullCache.set(p.id, full); if (window.IVS_CACHE) window.IVS_CACHE.set(key, { fp, full }) }
     return full
@@ -1969,7 +1977,7 @@
   async function fetchVersions(){ const o = {}; ((await adminApi({ action: 'parts_versions' })).versions || []).forEach((r) => { o[r.id] = r.ctid }); return o }
   async function syncParts(){   // 저장해 둔 것과 서버를 한 번 비교해 달라진 부품만 받는다
     const [sv, cats] = await Promise.all([fetchVersions(), adminApi({ action: 'list_robot_categories' })])
-    const changed = Object.keys(sv).filter((id) => partsVers[id] !== sv[id]), removed = Object.keys(partsVers).filter((id) => !(id in sv))
+    const changed = Object.keys(sv).filter((id) => !verEq(partsVers[id], sv[id])), removed = Object.keys(partsVers).filter((id) => !(id in sv))
     const catList = cats.categories || [], catsChanged = JSON.stringify(catList) !== JSON.stringify(robotCategories)
     let fresh = []
     if (changed.length) fresh = (await adminApi({ action: 'list_parts', stripSpecFiles: true, ids: changed })).parts || []
@@ -1986,7 +1994,7 @@
   async function loadAllParts(){   // 저장본이 없을 때(처음)·"↻ 새로 받기": 전체를 받는다
     const [cats, parts, sv] = await Promise.all([adminApi({ action: 'list_robot_categories' }), adminApi({ action: 'list_parts', stripSpecFiles: true }), fetchVersions()])
     const partList = parts.parts || []
-    for (const p of allParts) { if (window.IVS_CACHE && partsVers[p.id] !== sv[p.id]) await window.IVS_CACHE.del('part-model:' + p.id) }
+    for (const p of allParts) { if (window.IVS_CACHE && !verEq(partsVers[p.id], sv[p.id])) await window.IVS_CACHE.del('part-model:' + p.id) }
     partFullCache.clear()
     robotCategories = cats.categories || []; allParts = partList; partsVers = sv
     renderCategories(); renderParts(allParts)
@@ -2008,7 +2016,7 @@
         catch (e) { if (++fails >= 2) { showPartsNote(`3D 저장 중단(${done}/${todo.length}) — 다음 접속 때 이어 받음`); return } }
         await new Promise((r) => setTimeout(r, 300))
       }
-      showPartsNote(todo.length ? `3D ${done}개 저장함` : '')
+      if (todo.length) showPartsNote(`3D ${done}개 저장함`)   // 받을 게 없으면 앞의 안내(바뀐 것 없음·확인 실패 등)를 지우지 않는다
     } finally { prefetchingModels = false }
   }
   async function openPartsTab(force){
@@ -2697,8 +2705,19 @@
       return;
     }
   });
+  // 목록 표(교재·카테고리)는 이 컴퓨터에 저장해 두고, 서버에는 행 버전만 물어 같으면 본문을 받지 않는다(사용자 2026-10-31 "변화가 없으면 받지마"). 버전을 못 받으면 예전처럼 받는다.
+  async function cachedAdminList(key, table, action, field){
+    const C = window.IVS_CACHE; let sv = null;
+    try { const { data, error } = await db.client.from(table).select('id,ctid,xmin'); if (!error && Array.isArray(data) && data.length) { sv = {}; data.forEach((r) => { sv[r.id] = r.ctid + '#' + (r.xmin || '') }) } } catch (e) { sv = null }   // 빈 결과는 읽기 권한이 없는 것일 수 있어 버전으로 믿지 않는다
+    const hit = C && sv ? await C.get(key) : null;
+    const same = hit && hit.vers && Object.keys(hit.vers).length === Object.keys(sv).length && Object.keys(sv).every((k) => verEq(hit.vers[k], sv[k]));
+    if (same) { if (JSON.stringify(hit.vers) !== JSON.stringify(sv)) C.set(key, Object.assign({}, hit, { vers: sv })); return hit.list; }   // 예전 모양의 버전이면 새 모양으로 바꿔 둔다
+    const list = (await adminApi({ action }))[field] || [];
+    if (C && sv) C.set(key, { list, vers: sv, savedAt: Date.now() });
+    return list;
+  }
   async function loadTextbooks(){
-    try { allTextbooks = (await adminApi({ action: 'list_textbooks' })).textbooks || []; renderTextbookList(); renderChapters(); }
+    try { allTextbooks = await cachedAdminList('ivs-textbooks-tab:v1', 'ivs_textbooks', 'list_textbooks', 'textbooks'); renderTextbookList(); renderChapters(); }
     catch (err) { document.getElementById('textbookListArea').innerHTML = ''; document.getElementById('textbookListEmpty').hidden = false; document.getElementById('textbookListEmpty').textContent = err.message; }
   }
 
@@ -2990,7 +3009,7 @@
     fillPartCategoryOptions();
   }
   async function loadCategories(){
-    try { robotCategories = (await adminApi({ action: 'list_robot_categories' })).categories || []; renderCategories(); }
+    try { robotCategories = await cachedAdminList('ivs-categories-tab:v1', 'ivs_robot_categories', 'list_robot_categories', 'categories'); renderCategories(); }
     catch (err) { document.getElementById('categoryListArea').innerHTML = ''; document.getElementById('categoryListEmpty').hidden = false; document.getElementById('categoryListEmpty').textContent = err.message; }
   }
 

@@ -1629,12 +1629,22 @@
         if (C) { const hit = await C.get('robot-model:' + partId); if (hit && hit.ver === ver && hit.data && hit.data.position) { perfMark('modelFromCache'); return hit.data; } }
         for (let i = 0; i < 40 && !viewerReady(); i++) await new Promise(r => setTimeout(r, 250)); // 3D 모듈이 아직 로딩 중이면 잠깐 기다린다
         if (!viewerReady()) return null;
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/ivs_part_catalog?select=spec:data->spec&id=eq.${encodeURIComponent(partId)}`, {
-          headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + accessToken }
-        });
-        if (!res.ok) return null;
-        const rows = await res.json();
-        const spec = rows[0] && rows[0].spec;
+        // 부품 관리 화면이 이 컴퓨터에 저장해 둔 3D 원본(part-model:<id>)이 있고 행 버전(ctid)이 지금 목록의 것과 같으면 서버에서 받지 않는다
+        let spec = null;
+        if (C) {
+          try {
+            const [pm, cat] = await Promise.all([C.get('part-model:' + partId), C.get('robot-catalog:v1')]);
+            if (pm && pm.full && pm.full.spec && cat && cat.vers && cat.vers[partId] !== undefined && verEq(pm.fp, cat.vers[partId])) spec = pm.full.spec;
+          } catch (e) { /* 저장본이 없으면 아래에서 받는다 */ }
+        }
+        if (!spec) {
+          const res = await fetch(`${SUPABASE_URL}/rest/v1/ivs_part_catalog?select=spec:data->spec&id=eq.${encodeURIComponent(partId)}`, {
+            headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + accessToken }
+          });
+          if (!res.ok) return null;
+          const rows = await res.json();
+          spec = rows[0] && rows[0].spec;
+        }
         if (!spec || !Array.isArray(spec.shapes) || !spec.shapes.length) return null;
         const built = await window.__partsLabViewer.buildPartGeometryData(spec.shapes);
         if (C && built) C.set('robot-model:' + partId, { ver, data: built, savedAt: Date.now() }); // 다음부터는 바로 쓴다
@@ -1940,14 +1950,78 @@
   // 행 버전(ctid — 행을 고칠 때마다 바뀐다)만 가볍게 받는다. 저장해 둔 버전과 같으면 무거운 본문(썸네일·이미지 등)은 받지 않는다(사용자 2026-10-31 "변화가 없으면 받지마").
   async function fetchRowVersions(table, extra){
     try {
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=id,ctid${extra || ''}`, { headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + accessToken } });
+      // 행 버전 = ctid + '#' + xmin (서버 parts_versions 와 같은 모양). xmin 은 그 행을 마지막에 고친 거래 번호라 정리(VACUUM) 뒤에도 같은 값이 다시 나오지 않는다.
+      let res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=id,ctid,xmin${extra || ''}`, { headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + accessToken } });
+      if (!res.ok) res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=id,ctid${extra || ''}`, { headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + accessToken } });
       if (!res.ok) return null;
-      const o = {}; ((await res.json()) || []).forEach(r => { o[r.id] = r.ctid; });
-      return o;
+      const o = {}; ((await res.json()) || []).forEach(r => { o[r.id] = r.ctid + '#' + (r.xmin || ''); });
+      return Object.keys(o).length ? o : null;   // 비어 있으면 표가 비었거나 읽기 권한이 없는 것 — 버전을 믿지 못하니 저장본으로 건너뛰지 않는다
     } catch (e) { return null; }
   }
-  const sameVersions = (a, b) => { const ka = Object.keys(a || {}), kb = Object.keys(b || {}); return ka.length === kb.length && ka.every(k => a[k] === b[k]); };
-  const changedIds = (old, now) => Object.keys(now).filter(k => (old || {})[k] !== now[k]);
+  // 조립도 자료(표마다 조립도 하나의 행 모음)를 이 컴퓨터에 저장해 두고, 서버에는 행 버전(ctid+수정 시각)만 물어 같으면 저장본을 쓴다(사용자 2026-10-31 "변화가 없으면 받지마").
+  // 로그인 전에는 서버를 부르지 않는다(null). 실패해도 null — 부르는 쪽이 예전처럼 빈 값으로 둔다.
+  // 행 버전 = ctid(행 위치) + xmin(그 행을 마지막에 고친 거래 번호, 고칠 때마다 달라지고 다시 쓰이지 않는다) + 수정 시각. ctid 만으로는 정리(VACUUM) 뒤 같은 위치가 다시 쓰이면 같은 값이 나올 수 있어 xmin 을 더했다.
+  const rowSig = (x) => x.ctid + '#' + (x.xmin || '') + '@' + (x.updated_at || '');
+  const asmSigInflight = new Map();   // 같은 표를 동시에 두 번 물어도 서버에는 한 번만(점검 표처럼 두 형태로 읽는 곳)
+  function asmVersionSig(table, q, headers){
+    const k = table + '?' + q;
+    if (asmSigInflight.has(k)) return asmSigInflight.get(k);
+    const p = (async () => {
+      for (const cols of ['ctid,xmin,updated_at', 'ctid,updated_at', 'ctid']) {
+        try {
+          const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=${cols}&${q}`, { headers });
+          if (r.ok) return ((await r.json()) || []).map(rowSig).sort().join('|');
+        } catch (e) { /* 다음 방법 */ }
+      }
+      return null;
+    })().finally(() => asmSigInflight.delete(k));
+    asmSigInflight.set(k, p);
+    return p;
+  }
+  window.__ivsAsmRows = async function(table, select, assemblyId, order){
+    if (!accessToken) return null;
+    const C = window.IVS_CACHE, q = 'assembly_id=eq.' + encodeURIComponent(assemblyId), headers = { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + accessToken };
+    const key = 'asm:' + table + ':' + assemblyId + ':' + select;
+    const sig = await asmVersionSig(table, q, headers);
+    const hit = C ? await C.get(key) : null;
+    if (sig !== null && hit && verEq(hit.sig, sig)) { if (hit.sig !== sig && C) C.set(key, { sig, rows: hit.rows }); return hit.rows; }   // 예전 모양의 버전이면 새 모양으로 바꿔 둔다
+    let r; try { r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=${select}${order ? '&order=' + order : ''}&${q}`, { headers }); } catch (e) { return null; }
+    if (!r.ok) return null;
+    const rows = await r.json();
+    if (C && sig !== null) C.set(key, { sig, rows });
+    return rows;
+  };
+  // 교재 참고 그림(한 장 약 100KB)은 그림 한 장마다 저장 — 단계를 열 때 행 버전만 물어 바뀐 그림만 받는다.
+  window.__ivsAsmRefs = async function(assemblyId, steps){
+    if (!accessToken) return [];
+    const C = window.IVS_CACHE, q = 'assembly_id=eq.' + encodeURIComponent(assemblyId), headers = { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + accessToken };
+    const inSteps = '&step=in.(' + steps.join(',') + ')', sel = 'step,idx,note,img', ord = '&order=step,idx';
+    let vers = null;
+    for (const cols of ['step,idx,ctid,xmin,updated_at', 'step,idx,ctid,updated_at', 'step,idx,ctid']) {
+      try { const r = await fetch(`${SUPABASE_URL}/rest/v1/ivs_assembly_refs?select=${cols}${ord}&${q}${inSteps}`, { headers }); if (r.ok) { vers = await r.json(); break; } } catch (e) { /* 다음 방법 */ }
+    }
+    const fetchSteps = async (list) => { const r = await fetch(`${SUPABASE_URL}/rest/v1/ivs_assembly_refs?select=${sel}${ord}&${q}&step=in.(${list.join(',')})`, { headers }); if (!r.ok) throw new Error('불러오기 실패 (' + r.status + ')'); return r.json(); };
+    if (!vers || !C) return fetchSteps(steps);
+    const out = [], needSteps = new Set(), keyOf = (v) => 'asm-ref:' + assemblyId + ':' + v.step + ':' + v.idx;
+    const sigOf = rowSig;
+    for (const v of vers) { const hit = await C.get(keyOf(v)); if (hit && verEq(hit.sig, sigOf(v))) { out.push(hit.row); if (hit.sig !== sigOf(v)) C.set(keyOf(v), { sig: sigOf(v), row: hit.row }); } else needSteps.add(v.step); }
+    if (needSteps.size) {
+      const fresh = await fetchSteps(Array.from(needSteps));
+      const vmap = new Map(vers.map(v => [v.step + ':' + v.idx, v]));
+      for (const row of fresh) { const v = vmap.get(row.step + ':' + row.idx); if (v) C.set(keyOf(v), { sig: sigOf(v), row }); out.push(row); }
+    }
+    const seen = new Set(); return out.filter(r => { const k = r.step + ':' + r.idx; if (seen.has(k)) return false; seen.add(k); return true; }).sort((a, b) => (a.step - b.step) || (a.idx - b.idx));
+  };
+  // 행 버전 비교 — 둘 다 xmin 이 붙은 새 모양이면 그대로 비교하고, 한쪽이 예전 모양(ctid 만)이면 ctid 부분만 비교한다(저장본을 한꺼번에 다시 받지 않으려고).
+  function verEq(a, b){
+    if (a == null || b == null) return a === b;
+    a = String(a); b = String(b);
+    if (a === b) return true;
+    if (a.includes('#') && b.includes('#')) return false;
+    return a.replace(/#[^@|]*/g, '') === b.replace(/#[^@|]*/g, '');
+  }
+  const sameVersions = (a, b) => { const ka = Object.keys(a || {}), kb = Object.keys(b || {}); return ka.length === kb.length && ka.every(k => verEq(a[k], b[k])); };
+  const changedIds = (old, now) => Object.keys(now).filter(k => !verEq((old || {})[k], now[k]));
   async function fetchCatalogRows(onlyIds){
     const headers = { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + accessToken };
     const idFilter = Array.isArray(onlyIds) ? `&id=in.(${onlyIds.join(',')})` : '';
@@ -1976,7 +2050,7 @@
       const refresh = (async () => {
         // 저장본이 있으면 행 버전만 먼저 받아 비교한다 — 같으면 끝, 다르면 바뀐 부품만 받아 저장본에 합친다.
         const sv = usable && hit.vers ? await fetchRowVersions('ivs_part_catalog', '&data->>subject=eq.robot') : null;
-        if (sv && sameVersions(hit.vers, sv)) { perfMark('catalogUnchanged'); return; }
+        if (sv && sameVersions(hit.vers, sv)) { perfMark('catalogUnchanged'); if (C && JSON.stringify(hit.vers) !== JSON.stringify(sv)) C.set('robot-catalog:v1', Object.assign({}, hit, { vers: sv })); return; }   // 예전 모양의 버전이면 새 모양으로 바꿔 둔다
         let got;
         if (sv) {
           const ids = changedIds(hit.vers, sv);
@@ -2033,7 +2107,7 @@
     const refresh = (async () => {
       try {
         const sv = usable && hit.vers ? await fetchRowVersions('ivs_textbooks') : null;   // 행 버전이 같으면 본문은 받지 않는다
-        if (sv && sameVersions(hit.vers, sv)) { perfMark('textbooksUnchanged'); return; }
+        if (sv && sameVersions(hit.vers, sv)) { perfMark('textbooksUnchanged'); if (C && JSON.stringify(hit.vers) !== JSON.stringify(sv)) C.set('robot-textbooks:v1', Object.assign({}, hit, { vers: sv })); return; }
         const res = await fetch(`${SUPABASE_URL}/rest/v1/ivs_textbooks?select=id,data`, {
           headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + accessToken }
         });
@@ -4908,11 +4982,18 @@
   async function loadRobotCategoriesFromDb(){
     if (SUBJECT !== 'robot' || !accessToken) return;
     try {
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/ivs_robot_categories?select=id,data&order=created_at.asc`, {
-        headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + accessToken }
-      });
-      if (!res.ok) return;
-      const rows = await res.json();
+      // 저장본이 있고 행 버전이 같으면 본문을 받지 않는다
+      const C = window.IVS_CACHE, sv = await fetchRowVersions('ivs_robot_categories'), hit = C ? await C.get('robot-categories:v1') : null;
+      let rows;
+      if (sv && hit && hit.vers && sameVersions(hit.vers, sv)) { rows = hit.rows; if (C && JSON.stringify(hit.vers) !== JSON.stringify(sv)) C.set('robot-categories:v1', Object.assign({}, hit, { vers: sv })); }
+      else {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/ivs_robot_categories?select=id,data&order=created_at.asc`, {
+          headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + accessToken }
+        });
+        if (!res.ok) return;
+        rows = await res.json();
+        if (C && sv) C.set('robot-categories:v1', { rows, vers: sv, savedAt: Date.now() });
+      }
       const categories = (rows || [])
         .map(r => ({ id: r.id, name: r.data && r.data.name, volumes: r.data && r.data.volumes }))
         .filter(c => c.name && Number.isInteger(c.volumes) && c.volumes > 0);
@@ -5817,9 +5898,8 @@
       _h(extra){ return Object.assign({ apikey: SUPABASE_KEY, Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' }, extra || {}); },
       async load(assemblyId){
         try {
-          const q = 'assembly_id=eq.' + encodeURIComponent(assemblyId);
-          const [a, g] = await Promise.all([fetch(SUPABASE_URL + '/rest/v1/ivs_assembly_joints?select=*&order=step.asc,joint_id.asc&' + q, { headers: this._h() }), fetch(SUPABASE_URL + '/rest/v1/ivs_assembly_joint_groups?select=*&order=group_id.asc&' + q, { headers: this._h() })]);
-          return { joints: a.ok ? await a.json() : [], groups: g.ok ? await g.json() : [] };
+          const [a, g] = await Promise.all([window.__ivsAsmRows('ivs_assembly_joints', '*', assemblyId, 'step.asc,joint_id.asc'), window.__ivsAsmRows('ivs_assembly_joint_groups', '*', assemblyId, 'group_id.asc')]);
+          return { joints: a || [], groups: g || [] };
         } catch (e) { return { joints: [], groups: [] }; }
       },
       async _upsert(table, conflict, row){
@@ -5841,10 +5921,10 @@
       _h(extra){ return Object.assign({ apikey: SUPABASE_KEY, Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' }, extra || {}); },
       async load(assemblyId){
         try {
-          const res = await fetch(SUPABASE_URL + '/rest/v1/ivs_assembly_cams?select=step,cam&assembly_id=eq.' + encodeURIComponent(assemblyId), { headers: this._h() });
-          if (!res.ok) return {};
+          const rows = await window.__ivsAsmRows('ivs_assembly_cams', 'step,cam', assemblyId);
+          if (!rows) return {};
           const out = {};
-          (await res.json()).forEach(r => { if (r && r.cam) out[r.step] = r.cam; });
+          rows.forEach(r => { if (r && r.cam) out[r.step] = r.cam; });
           return out;
         } catch (e) { return {}; }
       },
@@ -5865,17 +5945,15 @@
       _h(extra){ return Object.assign({ apikey: SUPABASE_KEY, Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' }, extra || {}); },
       async meta(assemblyId){ // { 단계: [{ idx, note }] } — 그림 자체는 받지 않는다
         try {
-          const res = await fetch(SUPABASE_URL + '/rest/v1/ivs_assembly_refs?select=step,idx,note&order=step,idx&assembly_id=eq.' + encodeURIComponent(assemblyId), { headers: this._h() });
-          if (!res.ok) return {};
+          const rows = await window.__ivsAsmRows('ivs_assembly_refs', 'step,idx,note', assemblyId, 'step,idx');
+          if (!rows) return {};
           const out = {};
-          (await res.json()).forEach(r => { (out[r.step] = out[r.step] || []).push({ idx: r.idx, note: r.note || '' }); });
+          rows.forEach(r => { (out[r.step] = out[r.step] || []).push({ idx: r.idx, note: r.note || '' }); });
           return out;
         } catch (e) { return {}; }
       },
       async get(assemblyId, steps){ // [{ step, idx, note, img }]
-        const res = await fetch(SUPABASE_URL + '/rest/v1/ivs_assembly_refs?select=step,idx,note,img&order=step,idx&assembly_id=eq.' + encodeURIComponent(assemblyId) + '&step=in.(' + steps.join(',') + ')', { headers: this._h() });
-        if (!res.ok) throw new Error('불러오기 실패 (' + res.status + ')');
-        return await res.json();
+        return await window.__ivsAsmRefs(assemblyId, steps);   // 한 번 받은 그림은 이 컴퓨터에 저장해 두고 바뀐 그림만 다시 받는다
       },
       async save(assemblyId, step, idx, img, note){
         const res = await fetch(SUPABASE_URL + '/rest/v1/ivs_assembly_refs?on_conflict=assembly_id,step,idx', {
@@ -5900,9 +5978,9 @@
       _h(extra){ return Object.assign({ apikey: SUPABASE_KEY, Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' }, extra || {}); },
       async load(assemblyId){
         try {
-          const res = await fetch(SUPABASE_URL + '/rest/v1/ivs_assembly_poses?select=step,poses&assembly_id=eq.' + encodeURIComponent(assemblyId), { headers: this._h() });
-          if (!res.ok) return {};
-          const out = {}; (await res.json()).forEach(r => { if (r && r.poses) out[r.step] = r.poses; }); return out;
+          const rows = await window.__ivsAsmRows('ivs_assembly_poses', 'step,poses', assemblyId);
+          if (!rows) return {};
+          const out = {}; rows.forEach(r => { if (r && r.poses) out[r.step] = r.poses; }); return out;
         } catch (e) { return {}; }
       },
       async save(assemblyId, step, poses){
@@ -5919,9 +5997,9 @@
       _h(extra){ return Object.assign({ apikey: SUPABASE_KEY, Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' }, extra || {}); },
       async load(assemblyId){
         try {
-          const res = await fetch(SUPABASE_URL + '/rest/v1/ivs_assembly_thumbs?select=step,slot,img&assembly_id=eq.' + encodeURIComponent(assemblyId), { headers: this._h() });
-          if (!res.ok) return {};
-          const out = {}; (await res.json()).forEach(r => { if (r && r.img) out[r.step + ':' + r.slot] = r.img; }); return out;
+          const rows = await window.__ivsAsmRows('ivs_assembly_thumbs', 'step,slot,img', assemblyId);
+          if (!rows) return {};
+          const out = {}; rows.forEach(r => { if (r && r.img) out[r.step + ':' + r.slot] = r.img; }); return out;
         } catch (e) { return {}; }
       },
       async save(assemblyId, step, slot, img){
@@ -5934,9 +6012,9 @@
       _h(extra){ return Object.assign({ apikey: SUPABASE_KEY, Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' }, extra || {}); },
       async load(assemblyId){
         try {
-          const res = await fetch(SUPABASE_URL + '/rest/v1/ivs_assembly_status?select=step,status&assembly_id=eq.' + encodeURIComponent(assemblyId), { headers: this._h() });
-          if (!res.ok) return {};
-          const out = {}; (await res.json()).forEach(r => { if (r && r.status) out[r.step] = r.status; }); return out;
+          const rows = await window.__ivsAsmRows('ivs_assembly_status', 'step,status', assemblyId);
+          if (!rows) return {};
+          const out = {}; rows.forEach(r => { if (r && r.status) out[r.step] = r.status; }); return out;
         } catch (e) { return {}; }
       },
       async set(assemblyId, step, status){
@@ -5951,15 +6029,14 @@
       _h(extra){ return Object.assign({ apikey: SUPABASE_KEY, Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' }, extra || {}); },
       async load(assemblyId){
         try {
-          const res = await fetch(SUPABASE_URL + '/rest/v1/ivs_assembly_checks?select=step,issue_key,verdict&assembly_id=eq.' + encodeURIComponent(assemblyId), { headers: this._h() });
-          if (!res.ok) return {};
-          const out = {}; (await res.json()).forEach(r => { if (r && r.verdict) out[r.step + '|' + r.issue_key] = r.verdict; }); return out;
+          const rows = await window.__ivsAsmRows('ivs_assembly_checks', 'step,issue_key,verdict', assemblyId);
+          if (!rows) return {};
+          const out = {}; rows.forEach(r => { if (r && r.verdict) out[r.step + '|' + r.issue_key] = r.verdict; }); return out;
         } catch (e) { return {}; }
       },
       async loadFull(assemblyId){   // 검증 체크 모달용: 판정·설명·시각까지(관리자 RLS 표)
         try {
-          const res = await fetch(SUPABASE_URL + '/rest/v1/ivs_assembly_checks?select=step,issue_key,verdict,note,updated_at&assembly_id=eq.' + encodeURIComponent(assemblyId), { headers: this._h() });
-          return res.ok ? await res.json() : [];
+          return (await window.__ivsAsmRows('ivs_assembly_checks', 'step,issue_key,verdict,note,updated_at', assemblyId)) || [];
         } catch (e) { return []; }
       },
       // note: 글자가 있으면 판정과 함께 설명(이유)을 저장한다 / 없으면(undefined) 설명은 건드리지 않는다(설명 칸이 없는 DB 에서도 판정은 저장된다)

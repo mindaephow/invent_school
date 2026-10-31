@@ -442,7 +442,8 @@ export async function POST(request) {
 
     if (body?.action === 'list_parts') return json({ parts: await listParts(sb, body.light === true, body.stripSpecFiles === true, Array.isArray(body.ids) ? body.ids.filter((x) => typeof x === 'string').slice(0, 500) : null) })
     // 부품별 행 버전(ctid) — 행을 고칠 때마다 바뀐다. 큰 3D 원본(data)을 읽지 않아 디스크 입출력이 거의 없다. 접속할 때 이 컴퓨터에 저장해 둔 것과 비교해 바뀐 부품만 받는 데 쓴다(사용자 2026-10-30).
-    if (body?.action === 'parts_versions') { const { data, error } = await sb.from('ivs_part_catalog').select('id, ctid'); if (error) throw new Error(error.message); return json({ versions: data || [] }) }
+    // 행 버전 = ctid + '#' + xmin — xmin(그 행을 마지막에 고친 거래 번호)을 더해 정리(VACUUM) 뒤 같은 위치가 다시 쓰여도 같은 값이 나오지 않게 한다(사용자 2026-10-31).
+    if (body?.action === 'parts_versions') { const { data, error } = await sb.from('ivs_part_catalog').select('id, ctid, xmin'); if (error) throw new Error(error.message); return json({ versions: (data || []).map((r) => ({ id: r.id, ctid: r.ctid + '#' + (r.xmin || '') })) }) }
 
     if (body?.action === 'get_part') {
       const partId = body.partId

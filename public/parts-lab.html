@@ -1950,14 +1950,16 @@ h4{margin:4px 0}
     const rec = C ? await C.get('ivs-parts-tab-cache-v1') : null;
     const sv = {}; ((await adminApi({ action:'parts_versions' }, token)).versions || []).forEach(r => { sv[r.id] = r.ctid; });
     if (!rec || !Array.isArray(rec.parts) || !rec.parts.length || !rec.vers) return (await adminApi({ action:'list_parts' }, token)).parts || [];
+    // 행 버전 비교 — 둘 다 xmin 이 붙은 새 모양('ctid#xmin')이면 그대로, 한쪽이 예전 모양(ctid 만)이면 ctid 부분만 비교한다.
+    const verEq = (a, b) => { if (a == null || b == null) return a === b; a = String(a); b = String(b); if (a === b) return true; if (a.includes('#') && b.includes('#')) return false; return a.replace(/#[^@|]*/g, '') === b.replace(/#[^@|]*/g, ''); };
     const hasShapes = (p) => !!(p.spec && Array.isArray(p.spec.shapes) && p.spec.shapes.length);
     const out = [], need = [];
     for (const p of rec.parts) {
       if (sv[p.id] === undefined) continue;                       // 서버에서 없어진 부품
-      if (rec.vers[p.id] !== sv[p.id]) { need.push(p.id); continue; }   // 바뀐 부품
+      if (!verEq(rec.vers[p.id], sv[p.id])) { need.push(p.id); continue; }   // 바뀐 부품
       if (!hasShapes(p)) { out.push(p); continue; }
       const m = await C.get('part-model:' + p.id);
-      if (m && m.full && m.fp === rec.vers[p.id]) out.push(m.full); else need.push(p.id);   // 3D 저장본이 없으면 그 부품만 받는다
+      if (m && m.full && verEq(m.fp, rec.vers[p.id])) out.push(m.full); else need.push(p.id);   // 3D 저장본이 없으면 그 부품만 받는다
     }
     const known = new Set(rec.parts.map(p => p.id));
     Object.keys(sv).forEach(id => { if (!known.has(id)) need.push(id); });   // 새로 생긴 부품
