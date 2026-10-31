@@ -33,7 +33,7 @@ def candidates(mode):
         pk = (d == cv2.dilate(d, np.ones((11, 11), np.uint8))) & (d > np.percentile(d[inn > 0], 85))
         ys, xs = np.nonzero(pk); return np.array([[x, y] for x, y in zip(xs, ys)], float)
     inside = np.zeros(sub.shape, np.uint8); cv2.fillPoly(inside, [(C - np.array([x0, y0], np.float32)).astype(np.int32).reshape(-1, 1, 2)], 1); inside = cv2.erode(inside, np.ones((5, 5), np.uint8))
-    if mode == "어두운판": m = ((sub > 200) & (inside > 0)).astype(np.uint8) * 255
+    if mode == "어두운판": m = ((sub > int(os.environ.get("HOLE_BRIGHT", "200"))) & (inside > 0)).astype(np.uint8) * 255
     else: m = ((sub < 140) & (inside > 0)).astype(np.uint8) * 255
     n, lab, st, cen = cv2.connectedComponentsWithStats(m)
     return np.array([[cen[i][0] + x0, cen[i][1] + y0] for i in range(1, n) if 15 < st[i][4] < 700 and 0.3 < st[i][2] / max(1, st[i][3]) < 3.8], float)

@@ -71,6 +71,21 @@ def check(name, only=None):
         else:
             for fn, fj in fs:
                 nm = str(fj.get("name", ""))
+                if fj.get("tool") == "sil-fit":   # 어두운 블록·막대만 있는 번호(2026-10-31 steercar 4번): 눈으로 점을 읽으면 평균 6px 로 흔들려 mkfit3d 기준(2.5px)을 못 채우므로, 책 그림의 부품 실루엣과 모델 실루엣의 겹침(IoU)을 최대로 하는 카메라를 자동으로 푼다(점을 읽지 않는다). 기준 IoU ≥0.85, 통과해도 사용자 확인 권장 ⚠.
+                    ev = fj.get("evidence") or {}; iou = ev.get("iou")
+                    good = iou is not None and iou >= 0.85
+                    why = ("실루엣 겹침 격자(silfit): 책 그림↔모델 실루엣 IoU %s(자동, 눈으로 점을 읽지 않음) — 사용자 확인 권장" % iou) if good else ("실루엣 겹침 격자 근거 부족(IoU %s < 0.85)" % iou)
+                    items.append(("⚠" if good else bad, "격자 " + fn, why)); continue
+                if fj.get("tool") == "infer3d":   # 판이 없는 번호(블록·막대만 있는 번호)의 격자(2026-10-31 사용자 "문제가 해결 안 되게 만든 규칙은 바꿔라"): 격자를 만들 판이 없어 mkfit3d.py 가 모델에서 3D 가 확정된 점(돌기 끝·구멍·리벳 끝)을 책 픽셀과 짝지어 PnP 로 푼다. holefit 가 아니라는 이유로 막던 것을 infer 앵커와 같은 기준으로 인정한다(3D 점 ≥6·평균 ≤2.5·최대 ≤4.5px) — 통과해도 사용자 확인 권장 ⚠.
+                    n3 = len(fj.get("xyz3d") or []); mean = fj.get("err_px"); mx = fj.get("max_err_px")
+                    good = (n3 >= 6 and mean is not None and mean <= 2.5 and mx is not None and mx <= 4.5)
+                    why = ("3D 점 PnP 격자(mkfit3d.py): 3D 확정 점 %d개 평균 %s·최대 %s px — 사용자 확인 권장" % (n3, mean, mx)) if good else ("3D 점 PnP 격자 근거 부족(3D 점 %d개·평균 %s·최대 %s px — 점 ≥6·평균 ≤2.5·최대 ≤4.5 필요)" % (n3, mean, mx))
+                    items.append(("⚠" if good else bad, "격자 " + fn, why)); continue
+                if fj.get("tool") == "line-fit":   # 한 줄 부품(1×N 막대) 격자(2026-10-31 사용자 "한 줄 부품이 많은데 통과 못 하게 만든 규칙부터 잘못"): holefit 는 한 줄이면 호모그래피를 못 구한다 → line_fit.py 가 같은 번호 판 격자의 카메라로 막대 위치를 풀어 만든다. 기준은 infer 앵커와 같은 값(읽은 구멍 ≥6·평균 ≤2.5·최대 ≤4.5px·기준 격자 ≤2.5px) — 통과해도 사용자 확인 권장 ⚠.
+                    ev = fj.get("evidence") or {}; mean = fj.get("err_px"); mx = fj.get("max_err_px")
+                    good = (ev.get("readings", 0) >= 6 and mean is not None and mean <= 2.5 and mx is not None and mx <= 4.5 and ev.get("camera_err_px", 99) <= 2.5)
+                    why = ("한 줄 부품 격자(line_fit.py): 읽은 구멍 %s개 평균 %s·최대 %s px, 카메라 = %s(오차 %s px) — 사용자 확인 권장" % (ev.get("readings"), mean, mx, ev.get("camera_from"), ev.get("camera_err_px"))) if good else ("한 줄 부품 격자 근거 부족(읽은 구멍 %s개·평균 %s·최대 %s px·카메라 오차 %s px — 읽은 구멍 ≥6·평균 ≤2.5·최대 ≤4.5·카메라 ≤2.5 필요)" % (ev.get("readings"), mean, mx, ev.get("camera_err_px")))
+                    items.append(("⚠" if good else bad, "격자 " + fn, why)); continue
                 if fj.get("tool") == "infer":   # 유추 격자(2026-10-13): 판이 가려져 holefit 기준(구멍 40%)을 못 채울 때 모든 근거를 합쳐 푼 격자 — 개수가 아니라 근거 일치도로 본다. ✅ 는 아니고 사용자 확인이 필요한 ⚠.
                     ev = fj.get("evidence") or {}; mean = fj.get("err_px"); mx = fj.get("max_err_px")
                     good = (ev.get("unique_ratio", 0) >= 1.3 and ev.get("visible_holes", 0) >= 8 and len(ev.get("anchors", [])) >= 3 and mean is not None and mean <= 2.5 and mx is not None and mx <= 4.5)
@@ -99,8 +114,15 @@ def check(name, only=None):
         if ax is None: items.append((bad, "카메라", "축 파일(_axes.json)이 없음"))
         else:
             fit = ax.get("fit") or {}; e = fit.get("err_px"); pts = fit.get("points") or 0
+            _sil = None   # 실루엣 겹침으로 푼 카메라(2026-10-31, silfit): 점을 읽지 않으므로 점 수·px 오차 대신 겹침 IoU ≥0.85 로 본다
+            try:
+                _gf = load(os.path.join(R, "fits", fit.get("from", "")), {}) if fit.get("from") else {}
+                if _gf.get("tool") == "sil-fit": _sil = (_gf.get("evidence") or {}).get("iou")
+            except Exception: _sil = None
             guess = ("추정" in json.dumps(fit, ensure_ascii=False)) or e is None or pts < 4
-            if guess or (e is not None and e > 2.0):
+            if _sil is not None:
+                items.append(("✅" if _sil >= 0.85 else bad, "카메라", "실루엣 겹침 IoU %.3f(기준 ≥0.85, 자동 — 점을 읽지 않음)" % _sil))
+            elif guess or (e is not None and e > 2.0):
                 why = "카메라 값이 추정이거나 점이 4개 미만(점 %s, 오차 %s)" % (pts, e) if guess else "카메라 맞춘 오차 %.2fpx > 2.0px(축 계산 기준)" % e
                 items.append(("⚠", "카메라", "승인됨(사용자): " + str(ap["camera"]) + " — " + why) if ap.get("camera") else (bad, "카메라", why))
             else: items.append(("✅", "카메라", "오차 %.2fpx, 점 %d개" % (e, pts)))

@@ -477,8 +477,13 @@ class Step:
         if np.linalg.norm(np.array(L["p"], float) - np.array(lit)) > 0.5:
             A.stale.append(me)
             return p
+        host = None
         try:
             host = A.find(L["host"])
+            if getattr(host, "_base", None) is not None:   # 앞 번호에서 move_made 로 옮겨진 부품은 만들 때의 자세로 계산한다(save_links 의 기록과 같은 기준 — 옮긴 자리로 계산하면 새 창고 부품이 옮겨진 부품 옆으로 날아가 빌드마다 위치가 번갈아 바뀐다, 스티어카 7번 2026-10-31)
+                _pp, _RR = host.p, host.R; host.p, host.R = host._base[0].copy(), host._base[1].copy()
+            else:
+                _pp = None
             tmp = Part(n, np.array(R, float), (0, 0, 0), s)
             mid = _item(tmp, L["mine"][1], L["mine"][0])[0]
             hid = _item(host, L["hostf"][1], L["hostf"][0])[0]
@@ -486,6 +491,8 @@ class Step:
         except (KeyError, IndexError):
             A.stale.append(me)
             return p
+        finally:
+            if host is not None and _pp is not None: host.p, host.R = _pp, _RR
     def place_next(s, n, R, mine, host, hole, offset=(0, 0, 0), **extra):
         """판처럼 돌기가 없는 부품을 **앞 부품의 구멍 옆**에 놓는다(안내 화살표 없이). 내 구멍(mine)이 host 의 구멍(hole)에서 offset(월드 mm)만큼 떨어진 자리가 되게 위치를 계산한다.
         예: s.place_next("35프레임", R, "홀면 +y 열5·줄1", "315프레임 3번", "홀면 +y 열1·줄1", (-10, 0, 0)) — 35프레임 열5·줄1 이 315프레임 열1·줄1 에서 −x 로 한 칸 옆.

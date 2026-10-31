@@ -2051,9 +2051,9 @@
         // 저장본이 있으면 행 버전만 먼저 받아 비교한다 — 같으면 끝, 다르면 바뀐 부품만 받아 저장본에 합친다.
         const sv = usable && hit.vers ? await fetchRowVersions('ivs_part_catalog', '&data->>subject=eq.robot') : null;
         if (sv && sameVersions(hit.vers, sv)) { perfMark('catalogUnchanged'); if (C && JSON.stringify(hit.vers) !== JSON.stringify(sv)) C.set('robot-catalog:v1', Object.assign({}, hit, { vers: sv })); return; }   // 예전 모양의 버전이면 새 모양으로 바꿔 둔다
-        let got;
+        let got, changed = [];
         if (sv) {
-          const ids = changedIds(hit.vers, sv);
+          const ids = changedIds(hit.vers, sv); changed = ids;
           const part = ids.length ? await fetchCatalogRows(ids) : { rows: [], light: true };
           if (part && part.light) {
             const byId = new Map(hit.rows.filter(r => sv[r.id] !== undefined).map(r => [r.id, r]));
@@ -2067,7 +2067,9 @@
         const th = (r) => (C ? C.hash(r.data && r.data.thumbnail3d) : '');
         const ver = C ? C.hash(JSON.stringify(got.rows.map(r => [r.id, r.data && r.data.name, r.data && r.data.category, r.data && r.data.volumes, r.data && r.data.color, r.data && r.data.size, r.data && r.data.icon, r.data && r.data.connectors, th(r)]))) : null;
         perfMark('catalogFromNetwork');
-        if (usable && hit.ver === ver) { if (C && got.light && got.vers && !hit.vers) C.set('robot-catalog:v1', { rows: got.rows, ver, vers: got.vers, savedAt: Date.now() }); return; } // 달라진 게 없으면 그대로(옛 저장본엔 행 버전만 채운다)
+        // 행 버전이 바뀐 부품은 화면에 보이는 값(이름·썸네일)이 같아도 3D 모양(spec)만 바뀌었을 수 있다 — 저장해 둔 3D 모델을 지워 다음에 새로 만든다(2026-10-31 서보모터: spec 만 고쳤더니 조립 화면이 옛 모양을 계속 썼다)
+        if (usable && C) changed.forEach(id => { C.del('robot-model:' + id); robotModelCache.delete(id); });
+        if (usable && hit.ver === ver) { if (C && got.light && got.vers) C.set('robot-catalog:v1', { rows: got.rows, ver, vers: got.vers, savedAt: Date.now() }); return; } // 달라진 값이 없어도 새 행 버전은 저장한다(안 하면 바뀔 때마다 계속 "바뀜"으로 보고 다시 받는다)
         // 썸네일이 바뀐 부품은 저장해 둔 3D 모델도 낡은 것 — 지운다(다음에 놓을 때 새로 받는다)
         if (usable && C) {
           const old = new Map(hit.rows.map(r => [r.id, th(r)]));

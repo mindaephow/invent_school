@@ -13,44 +13,67 @@
 "noPart": false
 },
 "3": {
-"parts": {},
-"noPart": true
+"parts": {
+"115프레임": 1,
+"리벳": 2,
+"8볼트": 1,
+"너트": 1
+},
+"noPart": false
 },
 "4": {
-"parts": {},
-"noPart": true
+"parts": {
+"3단블록": 2
+},
+"noPart": false
 },
 "5": {
-"parts": {},
-"noPart": true
+"parts": {
+"3단블록": 1,
+"135도 프레임": 1
+},
+"noPart": false
 },
 "6": {
 "parts": {},
-"noPart": true
+"noPart": false
 },
 "7": {
-"parts": {},
-"noPart": true
+"parts": {
+"3단블록": 2
+},
+"noPart": false
 },
 "8": {
-"parts": {},
-"noPart": true
+"parts": {
+"3단블록": 1,
+"135도 프레임": 1
+},
+"noPart": false
 },
 "9": {
 "parts": {},
-"noPart": true
+"noPart": false
 },
 "10": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 6,
+"25프레임": 2
+},
+"noPart": false
 },
 "11": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 2,
+"35프레임": 2
+},
+"noPart": false
 },
 "12": {
-"parts": {},
-"noPart": true
+"parts": {
+"DC모터": 2
+},
+"noPart": false
 },
 "13": {
 "parts": {},

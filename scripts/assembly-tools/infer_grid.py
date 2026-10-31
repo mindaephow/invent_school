@@ -8,6 +8,8 @@
 #     --링 "x,y;x,y;…"    책 그림 초록 링 중심 픽셀(칸 번호 없이). 어느 링이 어느 칸인지는 거울 앵커 칸과 모든 짝을 맞춰 보고 잔차가 가장 작은 짝을 고른다.
 #     --anchor "c,r,x,y,높이;…"  칸을 직접 아는 점(링·읽기 표). --거울/--링 과 함께 써도 된다. 높이 = 판 바닥 0 기준 mm(판 윗면 5, 리벳 윗부분 8~9).
 #     --제외 "x,y;x,y;…"  판 위에 있는 다른 밝은 부품(흰 프레임 등)의 윤곽 다각형(원본 그림 좌표) — 그 안의 밝은 조각은 구멍 단서에서 뺀다(여러 번 쓸 수 있다). 통과 기준은 그대로다(2026-10-13 드롭체커 28번: 흰 135도 프레임의 밝은 부분이 구멍 후보로 섞였다).
+#     --DoG               구멍 후보를 holefit 와 같은 DoG(주변보다 어두운 원)로 잡는다 — 검은 판에서 흰 조각이 모자랄 때.
+#     --밝기 200          선명한 구멍(흰 조각)으로 칠 밝기 기준(기본 200) — 판이 어두워 구멍 뒤가 덜 밝게 보이면 낮춘다(스티어카 6번 2026-10-31: 150).
 #     --조각높이 2.5      선명한 구멍(흰 조각)이 보이는 높이.   --cam theta phi  참고 카메라(사용자 📷·뒷 번호 카메라) — 비교만 하고 결과는 안 바꾼다.
 #   쓰는 근거: ① 판의 3차원 구멍 좌표(10mm 간격) ② 그림에서 선명하게 검출된 구멍(흰 조각) ③ 앵커(칸을 아는 링) ④ 줄·칸 배정 가설과 링 짝 가설을 모두 돌려 잔차가 가장 작은 것
 #   출력: 가설별 잔차 표, 1·2등 가설 비교(유일성), 카메라 theta·phi·roll. 가설이 하나로 안 갈리면(2등이 1등의 1.3배 미만) 저장하지 않고 "어떤 추가 근거가 필요한지"를 말한다.
@@ -22,7 +24,7 @@ def parse():
     a = sys.argv[1:]
     if len(a) < 13: sys.exit(__doc__)
     o = dict(name=a[0], step=int(a[1]), label=a[2], cols=int(a[3]), rows=int(a[4]), C=np.array([float(v) for v in a[5:13]], np.float32).reshape(4, 2),
-             anchors=[], excl=[], ys=2.5, cam=None, plate=None, mirror=None, rings=None)
+             anchors=[], excl=[], ys=2.5, bright=200, dog=False, cam=None, plate=None, mirror=None, rings=None)
     i = 13
     while i < len(a):
         k = a[i]
@@ -31,6 +33,8 @@ def parse():
                 c, r, x, y, h = [float(v) for v in tok.split(",")]; o["anchors"].append((((int(c) if c == int(c) else c), (int(r) if r == int(r) else r)), (x, y), h))   # 칸은 정수가 아니어도 된다(세계 3D 점을 판 칸 좌표 c=(x−5)/10+7·r=(z−5)/10+4·h=y−35 로 환산해 준 앵커 — 판 위 칸이 아닌 부품(블록 돌기·리벳 끝)도 앵커가 된다)
             i += 2
         elif k == "--제외": o["excl"].append(np.array([[float(v) for v in tok.split(",")] for tok in a[i + 1].split(";")], np.float32)); i += 2
+        elif k == "--DoG": o["dog"] = True; i += 1
+        elif k == "--밝기": o["bright"] = int(a[i + 1]); i += 2
         elif k == "--조각높이": o["ys"] = float(a[i + 1]); i += 2
         elif k == "--cam": o["cam"] = (float(a[i + 1]), float(a[i + 2])); i += 3
         elif k == "--판": o["plate"] = a[i + 1]; i += 2
@@ -67,8 +71,11 @@ def main():
     x0, y0, x1, y1 = int(C[:, 0].min() - 10), int(C[:, 1].min() - 10), int(C[:, 0].max() + 10), int(C[:, 1].max() + 10)
     ins = np.zeros(g.shape, np.uint8); cv2.fillPoly(ins, [C.astype(np.int32).reshape(-1, 1, 2)], 1)
     sub = g[y0:y1, x0:x1]; ie = cv2.erode(ins[y0:y1, x0:x1], np.ones((5, 5), np.uint8))
-    m = ((sub > 200) & (ie > 0)).astype(np.uint8) * 255; n, lab, st, cen = cv2.connectedComponentsWithStats(m)
+    m = ((sub > o["bright"]) & (ie > 0)).astype(np.uint8) * 255; n, lab, st, cen = cv2.connectedComponentsWithStats(m)
     S = np.array([[cen[i][0] + x0, cen[i][1] + y0] for i in range(1, n) if 15 < st[i][4] < 700 and .3 < st[i][2] / max(1, st[i][3]) < 3.8], float)   # 선명한 흰 조각(구멍 뒤가 비쳐 보이는 곳)
+    if o["dog"]:   # 검은 판: 구멍 뒤가 덜 밝게 보여 흰 조각이 모자랄 때 holefit 의 DoG(주변보다 어두운 원) 후보를 쓴다(스티어카 6번)
+        g32 = g.astype(np.float32); inn = cv2.erode(ins, np.ones((9, 9), np.uint8)); d = cv2.GaussianBlur(g32, (0, 0), 8.0) - cv2.GaussianBlur(g32, (0, 0), 3.0); d[inn == 0] = 0
+        pk = (d == cv2.dilate(d, np.ones((11, 11), np.uint8))) & (d > np.percentile(d[inn > 0], 85)); ys_, xs_ = np.nonzero(pk); S = np.array([[x, y] for x, y in zip(xs_, ys_)], float)
     if o["excl"] and len(S):   # 판 위의 다른 부품(흰 프레임 등) 윤곽 안의 밝은 조각은 구멍 단서가 아니다
         keep = [i for i, s in enumerate(S) if not any(cv2.pointPolygonTest(pg, (float(s[0]), float(s[1])), False) >= 0 for pg in o["excl"])]
         print("제외 영역 안의 밝은 조각 %d개를 뺐다(남은 후보 %d)" % (len(S) - len(keep), len(keep))); S = S[keep]
