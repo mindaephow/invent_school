@@ -157,6 +157,9 @@ def floor_check(A, tol=0.5):
                 checks.append(("새로 놓일 때", euler_p(_own) if _own else p0, euler_to_R(_own["r"]) if _own else R0, off, _lf))
                 if "move" not in ex: checks.append(("제자리", p0, R0, (0, 0, 0), _lf))   # 그 단계가 화면 전체를 띄우면(def.lift) 띄운 값까지 더해서 잰다
                 else: checks.append(("옮긴 뒤 제자리", ex["move"]["p"], euler_to_R(ex["move"]["r"]), (0, 0, 0), float(((A.meta.get("lift") or {}).get(str(ex["move"]["at"]))) or 0), int(ex["move"]["at"])))   # def.lift 가 있는 단계는 띄운 값까지 더해서 잰다
+            if not side and "move" not in ex and not getattr(pt, "_base", None) and not ex.get("poseAt"):   # 뒤 번호·완성에서도 바닥 아래로 안 내려가게(사용자 지적 2026-11-01 조향자동차 완성): 이 부품이 보이는 뒤 모든 번호(완성 = 마지막+1)를 그 번호의 lift 로 잰다
+                for _stp in range(max(st.index + 1, len(A.steps) - 1), len(A.steps) + 2):   # 끝 두 번호와 완성 — 차 전체가 보이는 번호(중간 번호는 창고에 따로 놓아 숨은 부품이 많아 잰 값이 틀린다)
+                    checks.append(("%d단계 제자리" % _stp, p0, R0, (0, 0, 0), float(((A.meta.get("lift") or {}).get(str(_stp))) or 0), _stp))
             for _stp, _po in (ex.get("poseAt") or {}).items():   # 단계마다 다른 자세로 보여 주는 부품(눕혀서 조립)
                 checks.append(("%s단계 자세" % _stp, _po["p"], euler_to_R(_po["r"]), (0, 0, 0), float(((A.meta.get("lift") or {}).get(str(_stp))) or 0), int(_stp)))   # def.lift 가 있는 단계는 띄운 값까지 더해서 잰다
             for where, p, R, o, *_lfx in checks:

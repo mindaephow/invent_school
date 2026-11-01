@@ -193,6 +193,15 @@ try:
     print("규칙 점검(rulecheck): ❌ %d번 %s — 자세한 해결 방법: python rulecheck.py %s" % (len(_badn), _badn[:20], name) if _badn else "규칙 점검(rulecheck): ❌ 없음")
 except Exception as _e_:
     print("규칙 점검(rulecheck) 을 실행하지 못함:", str(_e_)[:100])
+# 도는 부품(축·T축·바퀴·기어·서보혼·DC모터)이 있는데 DB 에 관절이 하나도 없으면 경고 — 번호를 만들 때 바로 등록하는 규칙(사용자 지적 2026-11-01 조향자동차: 완성 직전까지 0개)
+try:
+    import _jq as _jqq
+    _rot = sorted({_n for _st in asm for _p in _st.get("parts", []) for _n in [_p.get("n", "")] if _n in ("축", "T축", "중간바퀴", "작은바퀴", "큰기어", "작은기어", "서보혼", "스프라켓")})
+    _aid = re.search(r'id: "(cubo-[^"]+)"', open(name + "_entry.js", encoding="utf-8").read())
+    if _rot and _aid and not _jqq.get("ivs_assembly_joints", "assembly_id=eq.%s&select=joint_id&limit=1" % _aid.group(1)):
+        print("[경고] 도는 부품(%s)이 있는데 관절이 0개 — 번호를 만들 때 바로 관절·움직이는 묶음을 등록한다(process/05_조립.md, CLAUDE.md '회전하는 곳은 항상 관절')" % ", ".join(_rot))
+except Exception as _e_:
+    print("관절 점검을 실행하지 못함:", str(_e_)[:100])
 if write:  # (규칙 확인은 위에서 이미 검사)
     _m = re.search(r'id: "(cubo-\d+-[A-Za-z0-9_]+)"', open(name + "_entry.js", encoding="utf-8").read())   # 항목 파일의 id(2권은 cubo-2-...). 없으면 1권 규칙
     rc, out = run([sys.executable, "emit.py", name + "_entry.js", _m.group(1) if _m else "cubo-1-" + name]); print(out.strip())
