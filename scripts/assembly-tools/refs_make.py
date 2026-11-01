@@ -43,6 +43,19 @@ BOOKS = {
         },
         "extra": [],
     },
+    "hammerbattle": {
+        "volume": 3,
+        "pages": {
+            33: [(0, (215, 495, 970, 1335), "교재 33쪽 맨 앞 완성품 사진 — 해머 배틀로봇(앞 경사 판, 뒤 위 서보모터에 달린 긴 해머 팔과 큰 바퀴, 큰 바퀴 둘), 앞뒤·위 방향은 여기서 확인"), (1, (105, 1345, 712, 1812), ""), (2, (725, 1345, 1325, 1812), "")],
+            34: [(3 + i, box3(*g), "") for i, g in enumerate(GRID)],
+            35: [(9 + i, box3(*g), "") for i, g in enumerate(GRID)],
+            36: [(15 + i, box3(*g), "") for i, g in enumerate(GRID)],
+            37: [(21 + i, box3(*g), "") for i, g in enumerate(GRID)],
+            38: [(27 + i, box3(*g), "") for i, g in enumerate(GRID)],
+            39: [(33, box3("L", 1), ""), (34, box3("R", 1), ""), (35, box3("L", 2), ""), (36, box3("R", 2), ""), (37, box3("L", 3), ""), (99, box3("R", 3), "완성")],
+        },
+        "extra": [],
+    },
     "steercar": {
         "volume": 3,
         "pages": {

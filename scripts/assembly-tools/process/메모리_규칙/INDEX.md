@@ -148,3 +148,5 @@
 - [기울어진 결합은 tiltjoin.py·obb.py](feedback_tilted_joints_use_tiltjoin.md) — 구멍 축 세계 방향·관통 구멍 앞뒤 가능·회전한 상자로 틈 재기(조향자동차 41번 2026-11-01)
 - [결합 부분을 찾을 때까지 관찰](feedback_observe_joints_until_found.md) — 틀렸다고 하면 먼저 다시 관찰, 안 될 땐 자기에게 6질문 후 마지막에 사용자 질문(2026-11-01)
 - [끝 번호·완성 lift와 관절 즉시 등록](feedback_last_numbers_lift_and_joints.md) — 완성까지 같은 lift, 도는 부품 번호에서 바로 관절; 검사 추가(2026-11-01)
+- [해머배틀 조립도 진행](project_hammerbattle_status.md) — 1~14번 끝(2026-11-02, 푸시 전), 15번 질문 대기, 3번=T축·8번 거울상·observe 재기록 버그 등 교훈
+- [볼트·너트 돌기는 마주본다](feedback_bolt_nut_pegs_face.md) — 같은 회전 R 을 주면 항상 마주봄, 한쪽만 뒤집지 않음(해머배틀 10번 2026-11-02)
