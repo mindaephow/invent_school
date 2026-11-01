@@ -146,3 +146,4 @@
 - [수정마다 6방향 확인](feedback_check_six_views_after_every_edit.md) — 고칠 때마다 앞뒤좌우위아래로 다시 불러와 확인(37번 부시 2026-11-01)
 - [결합 자리는 뒤 번호·자동 계산·책에 있는 부품만](feedback_place_by_later_books_and_rule_calc.md) — 빈 구멍만 보고 끼우지 않고 44·45번 등에서 찾고, p= 손 좌표는 필요할 때만, 구멍-돌기 거리 숫자 확인(멈춤 조건 아님, 조향자동차 36번 2026-11-01)
 - [기울어진 결합은 tiltjoin.py·obb.py](feedback_tilted_joints_use_tiltjoin.md) — 구멍 축 세계 방향·관통 구멍 앞뒤 가능·회전한 상자로 틈 재기(조향자동차 41번 2026-11-01)
+- [결합 부분을 찾을 때까지 관찰](feedback_observe_joints_until_found.md) — 틀렸다고 하면 먼저 다시 관찰, 안 될 땐 자기에게 6질문 후 마지막에 사용자 질문(2026-11-01)
