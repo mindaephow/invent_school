@@ -141,3 +141,7 @@
 - [프로보 부품은 부품 화면에서](feedback_provo_parts_in_parts_screen.md) — 블럭·핀·꺽쇠 3D 는 내 미리보기 말고 앱 부품 화면에서 진행, DB 직접 스크립트는 권한에 막힘, 블럭 흰색
 - [프로보 부품 반복 실수](project_probo_connect_parts_workflow.md) — 기존 생성기 먼저 읽기·부품 관리에서 보여주기·사용자 숫자 오타 해석
 - [막힘이 진짜 문제인지 판단](feedback_judge_if_block_is_real_problem.md) — 확인 근거만 약하면 근사로 만들고 ⚠ 적고 진행, 모델 정보가 없을 때만 멈춤(조향자동차 18번 2026-10-31)
+- [끼우는 쪽 돌기도 읽고 이상 신호 숨기지 않기](feedback_read_inserting_side_pegs_dont_hide_signals.md) — 3단블록 어느 돌기가 링으로 가는지 책 확대로 읽기, 안내만 빼 3개로 맞추기 금지(조향자동차 24·27번 2026-11-01)
+- [책으로 못 정하면 묻는다](feedback_ask_when_book_unclear.md) — 구멍·방향·개수 짐작 금지, 한 줄 질문(2026-11-01 "이제부터 질문해봐"), 이전 '묻지 말고 근사' 규칙보다 우선
+- [수정마다 6방향 확인](feedback_check_six_views_after_every_edit.md) — 고칠 때마다 앞뒤좌우위아래로 다시 불러와 확인(37번 부시 2026-11-01)
+- [결합 자리는 뒤 번호·자동 계산·책에 있는 부품만](feedback_place_by_later_books_and_rule_calc.md) — 빈 구멍만 보고 끼우지 않고 44·45번 등에서 찾고, p= 손 좌표는 필요할 때만, 구멍-돌기 거리 0.00 보고(조향자동차 36번 2026-11-01)
