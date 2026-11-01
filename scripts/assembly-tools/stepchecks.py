@@ -5,7 +5,7 @@
 #   - 사람이 눈으로 하는 항목(화면 확인·책과 나란히 비교·카메라)은 <이름>_rules.json 의 view/count/camera 목록에 번호가 있으면 ☑.
 import json, os, re, collections
 import numpy as np
-import userdone, stepfp
+import userdone, stepfp, obb
 MARK = "\n━ 작업 점검 ━"
 
 def _counts(parts):
@@ -68,10 +68,9 @@ def fastener_protrusion(A, k):
         base = bp + bR @ (np.array(c["pos"], float) - ld * c["len"] / 2)    # 돌기 밑동(구멍 입구 쪽 끝)
         back_t = float(np.dot(bp, dw) + (-half))                              # 부품 상자의 바깥쪽 끝(돌기 방향의 반대쪽) 좌표
         for q, p, R in pool:
-            d = np.array(dims[q.n]) / 2; e = np.abs(R) @ d; lo, hi = p - e, p + e
-            if np.all(base + dw * 1.0 >= lo - 0.3) and np.all(base + dw * 1.0 <= hi + 0.3):   # 밑동에서 구멍 쪽으로 1 들어간 점이 든 프레임 = 받는 프레임
-                cs = [float(np.dot(np.array([x, y, z]), dw)) for x in (lo[0], hi[0]) for y in (lo[1], hi[1]) for z in (lo[2], hi[2])]
-                face_t = min(cs)   # 돌기가 들어가는 입구 면(돌기 방향 쪽으로 가장 안쪽이 아닌 바깥 면)
+            d = np.array(dims[q.n]) / 2
+            if obb.contains(base + dw * 1.0, p, R, d, 0.3):   # 밑동에서 구멍 쪽으로 1 들어간 점이 든 프레임 = 받는 프레임(회전한 상자로 판정)
+                face_t = obb.span(obb.corners(p, R, d), dw)[0]   # 돌기가 들어가는 입구 면(돌기 방향 쪽으로 가장 안쪽이 아닌 바깥 면)
                 prot = face_t - back_t
                 if prot > 0.3: bad.append((b.n, q.n, round(prot, 1)))
                 break
@@ -91,13 +90,10 @@ def rivet_gaps(A, k):
             if e: return np.array(e["p"], float), np.array(euler_to_R(e["r"]), float)
         return _pose(q, k)
     pool = [(q, *pose_k(q)) for k2, st2 in enumerate(A.steps, 1) if k2 <= k and str(k2) not in hide for q in st2.parts if q.n in dims and q.n != "리벳"]
-    def box_of(q, p, R):
-        d = np.array(dims[q.n]) / 2.0; e = np.abs(R) @ d; return p - e, p + e
-    def host(pt, skip=None):
+    def host(pt, skip=None):   # 점이 든 부품 — 부품 자기 좌표 상자(obb)로 재다(기울어진 부품도 맞게, 2026-11-01)
         for q, p, R in pool:
             if q is skip: continue
-            lo, hi = box_of(q, p, R)
-            if np.all(pt >= lo - 0.01) and np.all(pt <= hi + 0.01): return q, p, R
+            if obb.contains(pt, p, R, np.array(dims[q.n]) / 2.0, 0.01): return q, p, R
         return None
     for r in A.steps[k - 1].parts:
         if r.n != "리벳" or r.extra.get("copyOf"): continue   # 복사본(둘째 벌)은 원본 번호에서 이미 점검했다 — 복사 번호에서는 건너뜀
@@ -110,7 +106,7 @@ def rivet_gaps(A, k):
         h2 = host(t2 + ax * 1.0, h1[0])
         if not h2 or any(x[0].n in ("1열브라켓", "2열브라켓") for x in (h1, h2)): continue   # 브라켓은 L 자 모양이라 상자로는 면 위치를 못 잰다 — 건너뜀
         def span(h):
-            lo, hi = box_of(h[0], h[1], h[2]); cs = [float(np.dot(np.array([x, y, z]), ax)) for x in (lo[0], hi[0]) for y in (lo[1], hi[1]) for z in (lo[2], hi[2])]; return min(cs), max(cs)
+            return obb.span(obb.corners(h[1], h[2], np.array(dims[h[0].n]) / 2.0), ax)
         a, b = span(h1), span(h2); gap = max(b[0] - a[1], a[0] - b[1])
         if 0.3 < gap <= 6.0 or gap < -1.0: bad.append((r.n, h1[0].n, h2[0].n, round(gap, 1)))
     return bad

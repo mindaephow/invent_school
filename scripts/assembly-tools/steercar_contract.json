@@ -274,16 +274,25 @@
 "noPart": false
 },
 "41": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 4,
+"515프레임": 1,
+"12볼트": 2,
+"너트": 2
+},
+"noPart": false
 },
 "42": {
-"parts": {},
-"noPart": true
+"parts": {
+"LED센서": 2
+},
+"noPart": false
 },
 "43": {
-"parts": {},
-"noPart": true
+"parts": {
+"메인보드": 1
+},
+"noPart": false
 },
 "44": {
 "parts": {},
