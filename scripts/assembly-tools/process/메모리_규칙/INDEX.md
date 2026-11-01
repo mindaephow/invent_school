@@ -75,7 +75,7 @@
 - [메인보드는 결합 방법부터 확인](feedback_check_mainboard_method.md) — measure_part 실측+교재 뒷모습으로 방향 맞춤, 칸은 관리자 지시 따름(35번 위아래 거꾸로 사례)
 - [격자는 만들면 바로 DB 등록](feedback_register_grids_when_made.md) — 🖼 는 DB 를 읽으므로 render 직후 등록, 푸시만 "업로드" 뒤
 - [카메라 방향은 책에서 읽어 맞춘다](feedback_camera_direction_from_book.md) — theta 규약, 읽기 표 방향 칸·작업 점검, 짐작 금지(28·29번 거울 사고)
-- [전체 새로고침 금지](feedback_no_full_page_reload.md) — build 뒤 차시 select 12→13 토글 + 번호 클릭, location.reload 쓰지 않음
+- [수정하면 전체 새로 불러와 보여 준다](feedback_no_full_page_reload.md) — navigate 로 설계 화면을 다시 연다(차시 토글은 새 데이터를 못 읽음, 2026-11-02 정정); 사용자 화면을 요청 없이 새로고침하진 않고 확인 뒤 기본 모습으로 되돌림
 - [부품은 제자리에 바른 방향으로](feedback_placement_first_button.md) — 첫 단추: 놓기 전 방향 사실을 책 격자에서 읽고 놓은 뒤 좌표로 대조(34 거울·36 강체·41 브래킷 사례)
 - [스피드바이크 조립도 진행](project_speedbike_status.md) — 저장소 process/진행기록_speedbike.md 로 옮김(포인터)
 - [방향은 X·Y·Z 축으로](feedback_direction_xyz_axes.md) — 수평선 대신 번호마다 _axes.json 축선·방향 표시판, 처음 놓을 때·창고 꺼낼 때·모터/메인보드 방향 카드, 센 값만, DB 는 바로 업로드
@@ -91,7 +91,7 @@
 - [홀라인 맞추기가 첫 단추](feedback_hole_line_first_button.md) — holefit.py 로 격자 맞추고 hf 그림 눈으로 확인 후 축·방향
 - [앞 과정 건너뛰지 않기](feedback_no_skipping_prior_process.md) — 드롭체커 1번: 04 창고 정리 건너뜀·눕힌 판 가정·오른쪽 위 xyz 그림; 이제 number_start 가 막음, 판 자세는 책에서 먼저 읽기
 - [드롭체커 조립도 진행](project_dropchecker_status_1012.md) — 저장소 process/진행기록_dropchecker.md 로 옮김(포인터)
-- [막히면 우회하지 않고 멈춘다](feedback_rulecheck_no_workarounds.md) — holefit 옵션·손 격자·추정 카메라 금지, rulecheck.py 가 자동 판정, 승인은 사용자 말씀만
+- [막히면 우회하지 않는다](feedback_rulecheck_no_workarounds.md) — holefit 옵션·손 격자·추정 카메라 금지, 0-1 순서로 풀고 멈추지 않음(2026-11-02 정정), rulecheck.py 가 자동 판정
 - [재시작 시 서버·로그인 먼저](feedback_check_server_login_on_restart.md) — 번호 작업을 (다시) 시작할 때 개발서버 3178·설계 화면 로그인부터 확인하고 요청
 - [원본 그림+구멍 점 축선](feedback_image_original_axes_from_holes.md) — 이미지 회전은 해도 되고 안 해도 된다(2026-10-14) — 기준은 조립도를 잘 그리는 문제 해결; rotate_to·level·no_rotate 모두 선택지로 유지
 - [분리 = 결합 전 모습](feedback_separate_means_pre_assembly.md) — "분리해줘"는 부품마다 띄워 화살표 표시; 제자리는 돌기-구멍 거리 0, 드롭체커 27번(p3→프레임, 프레임→25프레임→블록 순서)
@@ -108,7 +108,7 @@
 - [조립 결과는 책에 겹쳐 증명](feedback_prove_assembly_against_books.md) — PnP 카메라로 모델을 책 그림에 겹쳐 오차로 가설 가르고, 증명 그림(NN_3·4)+읽기 표에 남김(어보이더 18번)
 - [게이트 확인에서 멈추지 않기](feedback_dont_stop_for_gate_confirmations.md) — 방향선 등 '사용자 확인' 문턱에서 wrap_up 으로 멈추지 말고 추정 표시하고 끝까지(2026-10-17 '돌았어?' 화냄)
 - [배틀로봇 조립도 상태](project_battlerobot2_status.md) — 1~37번 완성·증거·관절·그림 업로드 끝, 푸시 전, 32·36번 자세 추정
-- [크게 어긋나면 멈춘다](feedback_stop_when_big_mismatch.md) — 책과 모델이 크게 안 맞으면 추정으로 넘기지 말고 그 번호에서 멈추고 보고(배틀로봇 32번)
+- [문제가 생기면 멈추지 않는다](feedback_stop_when_big_mismatch.md) — 규칙을 순서대로 지켰는지 먼저 확인 → 책을 뒤져 해답 찾기(2026-11-02, 옛 '크게 어긋나면 멈춘다' 폐기)
 - [새 창고는 원점에](feedback_new_warehouse_at_origin.md) — slot 2 번호를 멀리(x200·z250~800) 놓지 않기, 어두운 판은 holesearch 먼저(배틀로봇 2026-10-18 화냄)
 - [규칙이 곧 빠른 길](feedback_rules_are_the_fast_way.md) — '10번까지'는 규칙 생략이 아님, 번호마다 홀라인·돌기↔구멍 표·증거 전부(2026-10-18 화냄)
 - [번호 검증 도구 verify_step.py](project_verify_step_tool.md) — 번호를 끝내기 전에 돌려 홀라인·카메라·돌기↔구멍·대조 그림·증거를 ✅/⚠/❌ 표로 확인
