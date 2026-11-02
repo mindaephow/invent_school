@@ -1,8 +1,7 @@
-"""세션 시작 한 방: 최신 받기 + 메모리 규칙 맞추기 (새 세션·다른 PC 에서 맨 먼저 돌린다).
+"""세션 시작 한 방: 최신 받기 (새 세션·다른 PC 에서 맨 먼저 돌린다).
   cd scripts/assembly-tools && PYTHONIOENCODING=utf-8 python session_start.py
 1) git fetch → 작업트리가 깨끗하고 뒤처졌으면 fast-forward 로 받는다(더럽거나 갈라졌으면 건드리지 않고 알린다).
-2) sync_memory_rules.py --pull 로 저장소의 메모리 규칙을 이 PC 메모리에 반영한다.
-3) 현재 커밋과 필독 목록 위치를 출력한다. (푸시는 하지 않는다 — 사용자가 "업로드"라 할 때만)
+2) 현재 커밋을 출력한다. (푸시는 하지 않는다 — 사용자가 "업로드"라 할 때만)
 """
 import os, subprocess, sys
 
@@ -36,8 +35,6 @@ else:
 _, last = git("log", "-1", "--format=%h %s")
 print("[git] 현재:", last)
 
-r = subprocess.run([sys.executable, os.path.join(HERE, "sync_memory_rules.py"), "--pull"],
-                   cwd=HERE, env={**os.environ, "PYTHONIOENCODING": "utf-8"})
 print()
 print("다음: process/00_규칙.md 를 처음부터 읽고, 첫 보고에 '이번 번호에서 지킬 규칙 3개'를 적는다.")
-sys.exit(r.returncode)
+sys.exit(0)

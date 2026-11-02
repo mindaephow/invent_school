@@ -54,8 +54,8 @@ else:
     say("OK  ", "conn.json, dims.json")
 
 # 6. 규칙 문서
-mem = os.path.join(HERE, "process", "메모리_규칙", "INDEX.md")
-say("OK  " if os.path.exists(mem) else "FAIL", "process/메모리_규칙/INDEX.md (git pull 로 최신을 받았는지 확인)")
+rules = os.path.join(HERE, "process", "00_규칙.md")
+say("OK  " if os.path.exists(rules) else "FAIL", "process/00_규칙.md (git pull 로 최신을 받았는지 확인)")
 
 print()
 print("모두 준비됨 — 다음은 CLAUDE.md '이 PC 에 메모리가 없을 때' 와 process/00_규칙.md 를 읽고 시작" if ok else

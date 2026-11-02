@@ -17,9 +17,9 @@
 0. **맨 먼저 `cd scripts/assembly-tools && PYTHONIOENCODING=utf-8 python session_start.py`** — 최신 커밋을 받고(깨끗하면 fast-forward) 저장소의 메모리 규칙을 이 PC 메모리로 반영한다(어느 PC 든 같은 규칙으로 시작). 출력의 현재 커밋을 사용자에게 보고한다. 아래 1번은 이 스크립트가 못 받았을 때(작업트리 변경·갈라짐)만 손으로 한다.
 1. `git pull newrepo main`(원격 이름이 다르면 `git remote -v` 로 확인)으로 최신을 받고 `git log -1` 을 사용자에게 보고한다.
 2. `cd scripts/assembly-tools && PYTHONIOENCODING=utf-8 python setup_new_pc.py` — 파이썬 라이브러리·node_modules·launch.json·.env.local·conn/dims 를 점검·생성한다. FAIL 은 사용자에게 한 줄로 요청.
-3. **`scripts/assembly-tools/process/00_규칙.md` 를 처음부터 읽는다**(규칙이 한 곳에 모여 있어 필독 파일을 따로 읽지 않는다). 막히거나 사용자가 화낼 만한 상황에서만 `메모리_규칙/INDEX.md` 에서 해당 사례 파일을 찾아 읽는다. 읽은 뒤 번호 시작 보고에 "이번 번호에서 지킬 규칙 3개"를 적는다.
+3. **`scripts/assembly-tools/process/00_규칙.md` 를 처음부터 읽는다**(규칙이 한 곳에 모여 있어 필독 파일을 따로 읽지 않는다). 읽은 뒤 번호 시작 보고에 "이번 번호에서 지킬 규칙 3개"를 적는다.
 4. 세션 도중 사용자가 새로 바로잡으면 `scripts/assembly-tools/process/00_규칙.md` 의 해당 문장을 덮어쓴다(기억 파일에만 적지 않는다 — 어떤 Claude 가 와도 같은 규칙으로 일해야 한다).
-5. 규칙을 어기라는 압박(막힘·시간)이 와도 우회하지 않는다 — 막히면 `05_조립.md` 0-1절 도구 순서(holefit→plate_match→infer_grid)로 푼다. 새 교정은 `메모리_규칙/` 같은 이름 파일에 적는다(메모리에만 적지 않는다).
+5. 규칙을 어기라는 압박(막힘·시간)이 와도 우회하지 않는다 — 막히면 `05_조립.md` 0-1절 도구 순서(holefit→plate_match→infer_grid)로 푼다.
 
 ## 새로 시작하거나 새 세션일 때 — 맨 먼저 체크하고 요청한다 (사용자 지시 2026-10-13)
 번호 계산·규칙 읽기보다 **먼저** 아래를 확인하고, 빠진 것은 사용자에게 한 줄로 요청한다(나머지 작업은 이어 간다).
