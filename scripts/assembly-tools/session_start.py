@@ -14,13 +14,16 @@ def git(*a):
     return r.returncode, (r.stdout + r.stderr).strip()
 
 
-rc, out = git("fetch", "origin")
+_, _rem = git("remote")
+_rems = _rem.split()
+REMOTE = "newrepo" if "newrepo" in _rems else ("origin" if "origin" in _rems else (_rems[0] if _rems else "origin"))   # 이 저장소의 원격 이름은 PC 마다 다를 수 있다
+rc, out = git("fetch", REMOTE)
 if rc:
     print("[git] fetch 실패 — 네트워크/원격 확인:", out)
 else:
     _, br = git("rev-parse", "--abbrev-ref", "HEAD")
     _, dirty = git("status", "--porcelain")
-    _, counts = git("rev-list", "--left-right", "--count", f"HEAD...origin/{br}")
+    _, counts = git("rev-list", "--left-right", "--count", f"HEAD...{REMOTE}/{br}")
     ahead, behind = (int(x) for x in counts.split()) if counts.replace("\t", " ").split()[0].isdigit() else (0, 0)
     if behind == 0:
         print(f"[git] 최신입니다 ({br}, 로컬에만 있는 커밋 {ahead}개)")
@@ -29,7 +32,7 @@ else:
               f"({'작업트리에 변경 있음' if dirty else ''}{' · ' if dirty and ahead else ''}{f'로컬에만 있는 커밋 {ahead}개' if ahead else ''})"
               " → 사용자에게 보고하고 정리 후 받는다")
     else:
-        rc, out = git("merge", "--ff-only", f"origin/{br}")
+        rc, out = git("merge", "--ff-only", f"{REMOTE}/{br}")
         print(f"[git] {behind}커밋 받음 (fast-forward)" if rc == 0 else f"[git] 받기 실패: {out}")
 
 _, last = git("log", "-1", "--format=%h %s")
