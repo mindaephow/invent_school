@@ -1,8 +1,10 @@
 {
- "count": [],
- "view": [],
- "camera": [],
- "strict": true,
- "orient_check": true,
- "placecheck": true
+  "count": [],
+  "view": [],
+  "camera": [],
+  "strict": true,
+  "orient_check": true,
+  "placecheck": true,
+  "parts_sum": true,
+  "img_db": true
 }

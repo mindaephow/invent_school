@@ -39,5 +39,5 @@ print("[git] 현재:", last)
 r = subprocess.run([sys.executable, os.path.join(HERE, "sync_memory_rules.py"), "--pull"],
                    cwd=HERE, env={**os.environ, "PYTHONIOENCODING": "utf-8"})
 print()
-print("다음: process/메모리_규칙/INDEX.md 의 '필독' 파일을 읽고, 첫 보고에 '이번 번호에서 지킬 규칙 3개'를 적는다.")
+print("다음: process/00_규칙.md 를 처음부터 읽고, 첫 보고에 '이번 번호에서 지킬 규칙 3개'를 적는다.")
 sys.exit(r.returncode)

@@ -56,7 +56,7 @@ def _session_check():
     print("  %s .env.local(SUPABASE 키): %s" % ("✅" if keys else "❌", "있음" if keys else "없음 → 사용자에게 달라고 한다(CLAUDE.md)"))
     print("  %s DB 읽기(사용자 ✓): %s" % ("✅" if db is not None else "❌", ("읽음 — ✓ 번호 %s" % db) if db is not None else "못 읽음 → 멈춘다(통과시키지 않는다)"))
     print("  ⚠ 로그인: 스크립트가 확인할 수 없다. 화면 비교(05 5-5)·❄/📷 확인에는 선생님 계정 로그인이 필요하므로 **새로 시작하거나 새 세션이면 사용자에게 먼저 요청한다**(비밀번호는 대신 입력하지 않는다). 브라우저 pane 에서 로그인 화면이 보이면 아직이다.")
-    print("  ⚠ 읽을 것: SKILL.md 처음부터 → process/05_조립.md 체크리스트 → 진행기록_<이름>.md → user_diffs/요청차이.md (이번 번호에서 지킬 규칙 3개를 첫 보고 한 줄에)")
+    print("  ⚠ 읽을 것: process/00_규칙.md 처음부터(맨 위 0번 체크리스트) → process/05_조립.md 실행 순서 → 진행기록_<이름>.md → user_diffs/요청차이.md (이번 번호에서 지킬 규칙 3개를 첫 보고 한 줄에)")
     return up
 _SERVER = _session_check()
 _warn()
@@ -114,10 +114,29 @@ if _miss_img: _gate.append(("02 이미지 자르기", "책 그림이 없는 번�
 if not os.path.exists(os.path.join(_R0, "00_1.jpg")): _gate.append(("02 완성품 방향선 그림", "완성 사진과 한 세트인 방향선 그림(refs/%s/00_1.jpg)이 없다" % name, "02_이미지_자르기.md 3-2 로 만들어 올린다(앞 +Z · 뒤 −Z · 위 +Y · 왼쪽 +X · 오른쪽 −X, 사용자 확인) — 00_개선규칙 9번"))
 _miss_used = [i for i, s in enumerate(asm, 1) if "▣ 사용 부품:" not in (s.get("note") or "")]
 if _miss_used: _gate.append(("03 부품 체크", "▣ 사용 부품이 없는 번호: %s" % _miss_used[:15], "번호별 사용 부품을 적고 LIST 와 대조한다(03 B)"))
+# 03 부품 정리 합계 점검(00_규칙.md A2, 2026-11-02): 번호별 ▣ 사용 부품 합계가 교재 LIST 와 부품별로 같아야 번호를 시작한다. 이미 만든 조립도가 갑자기 막히지 않게 <이름>_rules.json 에 "parts_sum": true 를 켠 조립도만 막는다.
+if load(os.path.join(here, name + "_rules.json"), {}).get("parts_sum") and not _miss_used:
+    import collections as _co
+    _lst0 = load(os.path.join(here, name + "_list.json"), {}); _tot0 = _co.Counter()
+    for _s0 in asm:
+        _m0 = re.search(r"▣ 사용 부품:\s*(.*)", _s0.get("note") or "")
+        for _p0 in strip_paren(_m0.group(1)).split(","):
+            _mm0 = re.match(r"\s*(.+?)\s+(\d+)\s*$", _p0)
+            if _mm0: _tot0[_mm0.group(1).strip()] += int(_mm0.group(2))
+    _bad0 = {n_: (_tot0.get(n_, 0), c_) for n_, c_ in _lst0.items() if n_ != "리모컨" and _tot0.get(n_, 0) != c_}
+    _bad0.update({n_: (c_, _lst0.get(n_, 0)) for n_, c_ in _tot0.items() if n_ not in _lst0})
+    if _bad0: _gate.append(("03 부품 정리(합계)", "사용 부품 합계가 교재 LIST 와 다르다 (부품: 사용합/LIST): %s" % ", ".join("%s %d/%d" % (n_, u_, c_) for n_, (u_, c_) in list(_bad0.items())[:10]), "책을 번호 순서대로 다시 읽어 어느 번호를 잘못 읽었는지 찾아 ▣ 사용 부품을 고친다 — 숫자를 맞추려고 고치지 않는다(00_규칙.md A2)"))
 _miss_slot = [i for i, s in enumerate(asm, 1) if s.get("slot") is None]
 _miss_hist = [i for i in range(2, len(asm) + 1) if asm[i - 1].get("slot") is not None and asm[i - 2].get("slot") is not None and asm[i - 1]["slot"] != asm[i - 2]["slot"] and not asm[i - 1].get("history")]
 if _miss_slot: _gate.append(("04 창고 정리", "창고(slot)가 없는 번호: %s" % _miss_slot[:15], "번호마다 slot·history 를 적는다(04) — 스크립트를 고쳤으면 python %s.py 로 asm 을 다시 만든다" % name))
 if _miss_hist: _gate.append(("04 창고 정리", "창고가 바뀌는데 history 가 없는 번호: %s" % _miss_hist[:15], "history 글을 적는다(04)"))
+# 앞 번호까지의 그림이 DB 에 다 올라갔는지(00_규칙.md B5·I1, dbimgcheck.py): "이미지 작업이 DB 에 올라가 화면에 보이는 것"이 규칙을 순서대로 지킨 증거다. <이름>_rules.json 에 "img_db": true 를 켠 조립도만 막는다. DB 를 못 읽으면 막지 않고 알린다.
+if k > 1 and load(os.path.join(here, name + "_rules.json"), {}).get("img_db"):
+    import subprocess
+    _r0 = subprocess.run([sys.executable, os.path.join(here, "dbimgcheck.py"), name] + [str(i) for i in range(0, k)], capture_output=True, text=True, encoding="utf-8", env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+    _l0 = [l for l in _r0.stdout.splitlines() if l.startswith("❌ 안 올림")]
+    if _l0 and "없음" not in _l0[0]: _gate.append(("앞 번호 그림 DB 업로드", _l0[0].replace("❌ 안 올림(로컬에만 있음): ", "DB 에 없는 그림: "), "python dbimgcheck.py %s 로 확인하고 refs_upload 로 올린 뒤 화면에서 🖼 로 확인한다(00_규칙.md I1)" % name))
+    elif _r0.returncode not in (0, 1): print("⚠ DB 그림 비교를 못 했다: %s" % (_r0.stdout + _r0.stderr).strip()[:120])
 if k > 1:   # 앞 번호: 사용자 ✓ 또는 지금 내용과 같은 지문의 비교 증거(record_check)가 있어야 다음 번호를 시작한다
     _prev = asm[k - 2]
     if _prev.get("noPart") or not (_prev.get("parts") or _prev.get("moveMade")): _gate.append(("앞 번호 %d" % (k - 1), "아직 작성 전(부품 없음)", "앞 번호부터 끝낸다 — 번호는 순서대로"))
@@ -176,7 +195,7 @@ state = [
     ("방향(_axes.json, fit 포함)", bool(ax and ax.get("fit")), "python axes_fit.py %s %d <라벨> <칸수> <줄수> <칸방향> <줄방향>" % (name, k)),
     ("격자 그림(NN_2)", os.path.exists(os.path.join(R, NN + "_2.jpg")), "python refs_rect.py %s %d" % (name, k)),
 ]
-print("═══ %s %d번 시작 ═══   (SKILL.md 를 처음부터 다시 읽고, 이번 번호에서 지킬 규칙 3개를 첫 보고에 적는다)" % (name, k))
+print("═══ %s %d번 시작 ═══   (process/00_규칙.md 를 처음부터 다시 읽고, 이번 번호에서 지킬 규칙 3개를 첫 보고에 적는다)" % (name, k))
 print("교재:", note.split("\n")[0][:80]); print("사용 부품(03):", used or "(적혀 있지 않음 — 03 을 먼저 한다)")
 print("읽기 표 %d번 칸: %s" % (k, made)); print("스크립트에 stepchecks.apply:", "있음" if has_sc else "❌ 없음 — 넣지 않으면 --write 가 거부된다")
 slot = st.get("slot"); pslot = asm[k - 2].get("slot") if k > 1 else None

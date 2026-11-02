@@ -438,6 +438,7 @@ class Step:
         """이미 ✓ 한 앞 번호에서 만든 부품 묶음을 이번 번호에서 옮긴다(투석기 17번). move_group 은 앞 번호 부품 데이터에 move 를 써서 ✓ 단계 지문이 바뀌어 빌드가 막히므로,
         이동은 이번 단계 데이터(kw["moveMade"] = {"만든번호:부품순서": {p, r, dir, hover, moveGroup, marks}})에만 적는다. 화면·도구는 design-assemblies.js 끝의 합치기 코드로 part.move 를 본다.
         marks 는 {부품: [안내점…]} (부품 하나당 한 번). 부품마다 한 번만 옮길 수 있다(여러 번 옮기려면 poseAt)."""
+        if hover == 0: print("[경고] %s단계 move_made hover=0 — 0 은 화면 코드의 `hover || HOVER` 에서 기본 띄움이 되어 옮기는 묶음만 위로 뜬다. 띄움이 필요 없으면 hover=0.01 을 쓴다(00_규칙.md C6)" % getattr(s, "index", "?"))
         R = np.array(R, float); pv = g.center() if pivot is None else np.array(pivot, float); sh = np.array(shift, float)
         mm = s.kw.setdefault("moveMade", {})
         for pt in g.parts:
