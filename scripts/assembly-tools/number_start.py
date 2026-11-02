@@ -54,7 +54,7 @@ def _session_check():
     print("═══ 세션 시작 체크 (번호 작업 전에 읽는다) ═══")
     print("  %s 개발 서버: %s" % ("✅" if up else "❌", ("localhost:%d 응답" % up) if up else "응답 없음 → 서버를 켠다(preview_start invent-school-dev, 포트 3178)"))
     print("  %s .env.local(SUPABASE 키): %s" % ("✅" if keys else "❌", "있음" if keys else "없음 → 사용자에게 달라고 한다(CLAUDE.md)"))
-    print("  %s DB 읽기(사용자 ✓): %s" % ("✅" if db is not None else "❌", ("읽음 — ✓ 번호 %s" % db) if db is not None else "못 읽음 → 멈춘다(통과시키지 않는다)"))
+    print("  %s DB 읽기(사용자 ✓): %s" % ("✅" if db is not None else "❌", ("읽음 — ✓ 번호 %s" % db) if db is not None else "못 읽음 → ✓ 확인은 통과시키지 않는다(키를 한 줄로 요청하고, 키 없이 되는 작업은 계속한다 — 00_규칙.md B6)"))
     print("  ⚠ 로그인: 스크립트가 확인할 수 없다. 화면 비교(05 5-5)·❄/📷 확인에는 선생님 계정 로그인이 필요하므로 **새로 시작하거나 새 세션이면 사용자에게 먼저 요청한다**(비밀번호는 대신 입력하지 않는다). 브라우저 pane 에서 로그인 화면이 보이면 아직이다.")
     print("  ⚠ 읽을 것: process/00_규칙.md 처음부터(맨 위 0번 체크리스트) → process/05_조립.md 실행 순서 → 진행기록_<이름>.md → user_diffs/요청차이.md (이번 번호에서 지킬 규칙 3개를 첫 보고 한 줄에)")
     return up
