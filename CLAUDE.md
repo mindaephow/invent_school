@@ -12,9 +12,9 @@
 
 **무엇이 어디에서 관리되는지(어디에 적어야 하는지)의 기준은 `scripts/assembly-tools/process/문서지도.md` 다. 문서를 고치거나 새로 적기 전에 먼저 본다.**
 
-## ★ 이 PC 에 메모리가 없을 때(외부 PC·새 PC) — 가장 먼저 (사용자 지시 2026-10-19)
-사용자의 교정 규칙 대부분은 Claude 메모리에 있고 메모리는 PC 마다 따로다. 외부 PC 에서 규칙을 어겨 5시간 동안 번호 하나도 못 끝낸 사고가 있었다. 그래서 사본을 git 에 뒀다.
-0. **맨 먼저 `cd scripts/assembly-tools && PYTHONIOENCODING=utf-8 python session_start.py`** — 최신 커밋을 받고(깨끗하면 fast-forward) 저장소의 메모리 규칙을 이 PC 메모리로 반영한다(어느 PC 든 같은 규칙으로 시작). 출력의 현재 커밋을 사용자에게 보고한다. 아래 1번은 이 스크립트가 못 받았을 때(작업트리 변경·갈라짐)만 손으로 한다.
+## ★ 새 PC·외부 PC·새 세션 — 가장 먼저 (사용자 지시 2026-10-19)
+규칙은 기억 파일이 아니라 이 저장소에 있다. 어떤 Claude 가 와도 같은 규칙으로 일해야 한다.
+0. **맨 먼저 `cd scripts/assembly-tools && PYTHONIOENCODING=utf-8 python session_start.py`** — 최신 커밋을 받고(깨끗하면 fast-forward) 현재 커밋을 출력한다. 그 커밋을 사용자에게 보고한다. 아래 1번을 대신한다.
 1. `git pull newrepo main`(원격 이름이 다르면 `git remote -v` 로 확인)으로 최신을 받고 `git log -1` 을 사용자에게 보고한다.
 2. `cd scripts/assembly-tools && PYTHONIOENCODING=utf-8 python setup_new_pc.py` — 파이썬 라이브러리·node_modules·launch.json·.env.local·conn/dims 를 점검·생성한다. FAIL 은 사용자에게 한 줄로 요청.
 3. **`scripts/assembly-tools/process/00_규칙.md` 를 처음부터 읽는다**(규칙이 한 곳에 모여 있어 필독 파일을 따로 읽지 않는다). 읽은 뒤 번호 시작 보고에 "이번 번호에서 지킬 규칙 3개"를 적는다.
@@ -26,7 +26,7 @@
 1. **개발 서버**: `http://localhost:3178/design.html?subject=robot` 하나만 쓴다(포트·서버 이름은 여기서만 정한다). 응답하면 그대로 쓰고(다른 채팅이 띄운 것도 같은 서버), 없으면 `preview_start invent-school-dev`(`.claude/launch.json`, 없는 PC 는 README 새 PC 절 3번).
 2. **로그인**: 브라우저 pane 에서 `design.html` 을 열어 선생님 로그인 화면이 보이면 **사용자에게 로그인을 요청**한다(비밀번호는 대신 입력하지 않는다). 로그인 전에는 화면 비교·❄/📷 확인을 하지 않는다.
 3. **`.env.local`·DB 읽기**: `python number_start.py <이름> <번호>` 맨 위 "세션 시작 체크" 블록이 서버·키·사용자 ✓ 읽기를 한 번에 보여 준다. ❌ 는 먼저 해결하거나 요청한다.
-4. **현재 상태 파악**: `process/진행기록_<이름>.md`·`user_diffs/요청차이.md`·메모리의 해당 조립도 진행 메모 → git log/status(미푸시·미추적 확인) → 사용자 ✓ 번호(DB).
+4. **현재 상태 파악**: `process/진행기록_<이름>.md`·`user_diffs/요청차이.md` → git log/status(미푸시·미추적 확인) → 사용자 ✓ 번호(DB).
 5. 그다음 `scripts/assembly-tools/process/00_규칙.md` 를 처음부터 읽고(맨 위 "00. 조립도를 시작할 때"·"0. 번호 하나 체크리스트") "이번 번호에서 지킬 규칙 3개"를 첫 보고에 적고 시작한다.
 
 ## 3D 부품을 만들거나 등록·고칠 때 — 이 순서로 (사용자 지시 2026-10-30: "3D 부품 등록할 거야" 하면 준비되어 진행)
