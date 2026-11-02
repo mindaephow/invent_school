@@ -38,6 +38,21 @@ else:
 _, last = git("log", "-1", "--format=%h %s")
 print("[git] 현재:", last)
 
+# 다른 PC·아이디가 남긴 "마지막 작업"(handoff.py) — 어느 조립도가 어디까지 됐는지 한눈에
+import glob
+_rows = []
+for _f in glob.glob(os.path.join(HERE, "process", "진행기록_*.md")):
+    _L = open(_f, encoding="utf-8").read().split("\n")
+    _i = next((i for i, l in enumerate(_L[:6]) if l.startswith("## ★ 마지막 작업")), None)
+    if _i is None or _i + 3 >= len(_L): continue
+    _rows.append((_L[_i + 1], os.path.basename(_f)[5:-3], _L[_i + 2].replace("- 어디까지: ", ""), _L[_i + 3].replace("- 다음: ", "")))
+if _rows:
+    print()
+    print("[마지막 작업] 최근 순 (PC·아이디는 handoff.py 가 적은 것)")
+    for _t, _n, _w, _nx in sorted(_rows, reverse=True)[:5]:
+        print("  %s  %s" % (_n, _t.lstrip("- ")))
+        print("    어디까지: %s" % _w)
+        print("    다음: %s" % _nx)
 print()
 print("다음: process/00_규칙.md 를 처음부터 읽고, 첫 보고에 '이번 번호에서 지킬 규칙 3개'를 적는다.")
 sys.exit(0)
