@@ -155,6 +155,8 @@ def apply(A, name):
         grid_ok = (1 in h and 2 in h) and _has_fit
         items.append((True, grid_ok, ("책 그림 격자(수평선·회전·격자 점) 만듦" if _has_fit else "책 그림 격자 점이 없음(이미지만 있음)") if 2 in h else "책 그림 원본 확인(판이 없는 번호)"))
         r = rd.get(str(k)) or {}
+        try: _stg = int(r.get("단계") or 9)   # 번호 하나 순서의 지금 단계(00_규칙.md 0절 1~9). 비어 있으면 9(끝까지) — 이미 만든 번호는 그대로
+        except Exception: _stg = 9
         items.append((True, all(str(r.get(f, "")).strip() for f in ("면", "링", "부품")), "읽기 표(면·링·부품) 적음"))
         rp = _parse(r.get("부품", "")) if r.get("부품") else None
         same = rp is not None and dict(rp) == dict(cnt)
@@ -187,10 +189,14 @@ def apply(A, name):
         _eye = [("화면 확대 확인", True), ("책 그림과 나란히 비교(칸 수 대조)", True), ("카메라 책과 대조", True), ("카메라가 짐작(guess)이 아님 — 책 그림에서 가까운 쪽·오른쪽·위를 읽고 정한 값(camSrc eye)", str(getattr(st, "camSrc", "guess")) != "guess")]
         for _txt, _okc in _eye:
             items.append((not _cur, _ud and _okc, _txt + (" (사용자 ✓ 완료)" if k in _done else (" (비교 증거 있음)" if _evok else ""))))
+        # 단계별 점검(사용자 지시 2026-11-02 "순서가 바뀌었으면 점검도 바뀌어야"): 읽기 표 '단계' 가 N 이면 N 단계 이하에 속한 점검만 필수이고 그 뒤 단계 점검은 표시만 한다. 9 에 닿아야 다음 번호가 시작된다(number_start).
+        _STG = (("책 그림 격자", 3), ("책 그림 원본", 3), ("카메라 방향 파악", 4), ("읽기 표(면", 5), ("부품 방향", 6), ("읽기 표의 부품", 7), ("쓴 부품 합계", 7), ("리벳 결합", 7), ("볼트·너트", 7), ("메인보드", 7), ("부시 방향", 7), ("앞·뒤 번호", 8), ("화면 확대", 8), ("책 그림과 나란히", 8), ("카메라 책과 대조", 8), ("카메라가 짐작", 8))
+        _at = lambda t: next((v for pre, v in _STG if t.startswith(pre)), 9)
+        items = [(need and _stg >= _at(txt), ok, txt + ("" if _stg >= _at(txt) else " — %d단계에서" % _at(txt))) for need, ok, txt in items]
         rows[k] = items
         for need, ok, txt in items:
             if need and not ok: blocking.append("%d번: %s" % (k, txt))
-        block = MARK + "\n" + "\n".join(("☑ " if ok else ("☐ " if not need else "☐ ")) + txt + ("" if need else " (눈으로)") for need, ok, txt in items)
+        block = MARK + ("" if _stg >= 9 else "\n🛠 작업 중 — 번호 하나 순서 %d/9단계(00_규칙.md 0절). 9단계까지 끝내야 다음 번호를 시작한다." % _stg) + "\n" + "\n".join(("☑ " if ok else ("☐ " if not need else "☐ ")) + txt + ("" if need else " (눈으로)") for need, ok, txt in items)
         st.note = st.note.split(MARK)[0] + block
     # 완성 번호(마지막 단계)에는 final_audit.py 가 만든 "완성 마무리 점검"을 작업 점검 블록처럼 뒤에 붙인다(관리자만 보임, 2026-10-16)
     _fa = os.path.join(here, "refs", name, "final_audit.md")

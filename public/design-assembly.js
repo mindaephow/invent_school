@@ -1270,6 +1270,22 @@
       }
     });
     paintStatus();
+    paintPrepBadge();
+  }
+  // 번호판 위 "부품정리·창고정리" 표시(관리자 로그인일 때만, 2026-11-02 관리자 지시). 평소 미완, 1차(모든 번호 기록)가 끝나 build.py 가 def.prepDone 에 넣은 것만 1차 완료.
+  function paintPrepBadge() {
+    const sb = $('asmSteps'); if (!sb || !sb.parentNode) return;
+    let pb = $('asmPrepBadge');
+    if (!pb) { pb = document.createElement('div'); pb.id = 'asmPrepBadge'; pb.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;margin:0 0 6px;font-size:12px;font-weight:700;'; sb.parentNode.insertBefore(pb, sb); }
+    pb.innerHTML = '';
+    const pd = def && def.prepDone; pb.hidden = !(pd && isAdm());
+    if (pb.hidden) return;
+    [['부품정리', !!pd.parts], ['창고정리', !!pd.slots]].forEach(([t, ok]) => {
+      const c = document.createElement('span');
+      c.textContent = (ok ? '✅ ' : '⬜ ') + t + (ok ? ' 1차 완료' : ' 미완');
+      c.style.cssText = 'padding:2px 8px;border-radius:999px;border:1px solid ' + (ok ? '#86efac' : '#fca5a5') + ';background:' + (ok ? '#f0fdf4' : '#fef2f2') + ';color:' + (ok ? '#166534' : '#b91c1c') + ';';
+      pb.appendChild(c);
+    });
   }
   // 왼쪽 카드의 "조립 순서" 목록 — 조립 보기를 열기 전에도 항상 보이고, 누르면 그 단계로 간다.
   function buildOrderList() {
@@ -1331,15 +1347,23 @@
   }
   async function showRefs(steps, title) {
     const b = bridge(); if (!b || !b.refStore || !def) return;
-    refModal(title, [{ img: 'data:image/gif;base64,R0lGODlhAQABAAAAACw=', label: '불러오는 중…' }]);
+    const KIND = { '①': '① 교재 원본', '②': '② 1차 격자(원본 위, 원근 그대로)', '③': '③ 책 그림 작업 1', '④': '④ 책 그림 작업 2' };
+    const draw = (rows) => {
+      rows.sort((a, c) => (a.step - c.step) || ((a.idx === 0 ? 0 : 1) - (c.idx === 0 ? 0 : 1)) || (String(a.note) < String(c.note) ? -1 : String(a.note) > String(c.note) ? 1 : 0)); // 책 원본(idx 0)이 맨 위, 그다음 설명 앞 ①②③④ 순서(사용자 2026-11-02)
+      refModal(title, rows.map((r) => ({ img: r.img, note: String(r.note || '').replace(/^[①②③④]\s*/, ''), label: r.step === 0 ? '교재 맨 앞 완성품 사진' : r.step === 99 ? '교재 마지막 쪽 "완성" 그림' : (r.idx === 0 ? '① 교재 원본' : KIND[String(r.note || '').charAt(0)] || (r.idx ? '그림 ' + (r.idx + 1) : '교재 그림')) })));
+    };
+    // 저장본이 있으면 서버를 기다리지 않고 바로 보여 주고, 버전 확인은 뒤에서 해 바뀐 것이 있을 때만 다시 그린다(사용자 2026-11-02 "수정한 것만 다시 불러오면 되는 거잖아")
+    let shown = null;
+    try { if (b.refStore.cached) shown = await b.refStore.cached(def.id, steps); } catch (_) { shown = null; }
+    if (shown && shown.length) draw(shown.slice()); else refModal(title, [{ img: 'data:image/gif;base64,R0lGODlhAQABAAAAACw=', label: '불러오는 중…' }]);
     try {
       const rows = await b.refStore.get(def.id, steps);
-      rows.sort((a, c) => (a.step - c.step) || (String(a.note) < String(c.note) ? -1 : String(a.note) > String(c.note) ? 1 : 0)); // 설명 앞 ①②③④ 순서
-      const KIND = { '①': '① 교재 원본', '②': '② 1차 격자(원본 위, 원근 그대로)', '③': '③ 책 그림 작업 1', '④': '④ 책 그림 작업 2' };
-      refModal(title, rows.map((r) => ({ img: r.img, note: String(r.note || '').replace(/^[①②③④]\s*/, ''), label: r.step === 0 ? '교재 맨 앞 완성품 사진' : r.step === 99 ? '교재 마지막 쪽 "완성" 그림' : (KIND[String(r.note || '').charAt(0)] || (r.idx ? '그림 ' + (r.idx + 1) : '교재 그림')) })));
-    } catch (e) { refModal(title, []); const p = document.querySelector('#asmRefModal p'); if (p) p.textContent = '불러오지 못했어요: ' + e.message; }
+      const same = shown && shown.length === rows.length && rows.every((r, i) => r.step === shown[i].step && r.idx === shown[i].idx && r.note === shown[i].note && r.img === shown[i].img);
+      if (!same && $('asmRefModal')) draw(rows);   // 저장본과 다를 때만(그 사이 창을 닫았으면 그리지 않는다)
+    } catch (e) { if (shown && shown.length) return; refModal(title, []); const p = document.querySelector('#asmRefModal p'); if (p) p.textContent = '불러오지 못했어요: ' + e.message; }
   }
   function paintRefButtons() { // 관리자일 때만, 그림이 등록된 곳에만 버튼을 단다
+    paintPrepBadge(); // 로그인 정보가 늦게 와도 표시가 따라오게
     const head = $('asmOrderHead'), ol = $('asmOrderList');
     if (head) { const old = head.querySelector('.asm-ref-head'); if (old) old.remove(); head.style.cssText = 'margin:0 0 4px;display:flex;align-items:center;justify-content:space-between;gap:6px;'; }
     if (ol) ol.querySelectorAll('.asm-ref-btn').forEach((e) => e.remove());

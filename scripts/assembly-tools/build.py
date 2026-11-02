@@ -202,6 +202,29 @@ try:
         print("[경고] 도는 부품(%s)이 있는데 관절이 0개 — 번호를 만들 때 바로 관절·움직이는 묶음을 등록한다(process/05_조립.md, CLAUDE.md '회전하는 곳은 항상 관절')" % ", ".join(_rot))
 except Exception as _e_:
     print("관절 점검을 실행하지 못함:", str(_e_)[:100])
+# 화면 "부품정리·창고정리" 표시(관리자 지시 2026-11-02): 평소 미완, 1차(모든 번호 기록)가 끝났을 때만 완료. 손으로 완료로 적지 않는다. parts_sum 을 켠 조립도만 표시한다.
+try:
+    _rl = json.load(open(name + "_rules.json", encoding="utf-8")) if os.path.exists(name + "_rules.json") else {}
+    _ef = name + "_entry.js"; _es = re.sub(r"      prepDone: .*\n", "", open(_ef, encoding="utf-8").read())
+    if _rl.get("parts_sum") and os.path.exists(list_f):
+        import collections as _co2
+        _lst = json.load(open(list_f, encoding="utf-8")); _tot = _co2.Counter(); _all_used = True
+        for _st in _asm0:
+            _mu = re.search(r"▣ 사용 부품:\s*(.*)", _st.get("note") or "")
+            if not _mu: _all_used = False; continue
+            _txt = re.sub(r"\([^)]*\)", "", _mu.group(1))
+            for _pp in _txt.split(","):
+                _mm = re.match(r"\s*(.+?)\s+(\d+)\s*$", _pp)
+                if _mm: _tot[_mm.group(1).strip()] += int(_mm.group(2))
+        _parts_ok = bool(_all_used and all(_tot.get(_n, 0) == _c for _n, _c in _lst.items() if _n != "리모컨") and all(_n in _lst for _n in _tot))   # 1차 완료 = 모든 번호에 ▣ 사용 부품이 있고 합계 = LIST (00_규칙.md A2a)
+        if not _parts_ok: print("   부품정리: 미완 — ▣ 사용 부품이 없는 번호가 있거나 합계가 LIST 와 다름")
+        _slots_ok = any(v is not None for v in _slots) and not _bad_slot   # 1차 완료 = 모든 번호에 slot, 창고가 바뀌는 번호마다 history (00_규칙.md A3a)
+        if not _slots_ok: print("   창고정리: 미완 — slot 이 없는 번호나 history 가 없는 번호가 있음")
+        _es = _es.replace("      steps: [", "      prepDone: %s,\n      steps: [" % json.dumps({"parts": bool(_parts_ok), "slots": bool(_slots_ok)}), 1)
+        print("부품정리 %s · 창고정리 %s (화면 표시)" % ("완료" if _parts_ok else "미완", "완료" if _slots_ok else "미완"))
+    open(_ef, "w", encoding="utf-8").write(_es)
+except Exception as _e_:
+    print("부품정리·창고정리 표시를 만들지 못함:", str(_e_)[:100])
 if write:  # (규칙 확인은 위에서 이미 검사)
     _m = re.search(r'id: "(cubo-\d+-[A-Za-z0-9_]+)"', open(name + "_entry.js", encoding="utf-8").read())   # 항목 파일의 id(2권은 cubo-2-...). 없으면 1권 규칙
     rc, out = run([sys.executable, "emit.py", name + "_entry.js", _m.group(1) if _m else "cubo-1-" + name]); print(out.strip())

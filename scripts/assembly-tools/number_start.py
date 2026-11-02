@@ -137,6 +137,19 @@ if k > 1 and load(os.path.join(here, name + "_rules.json"), {}).get("img_db"):
     _l0 = [l for l in _r0.stdout.splitlines() if l.startswith("❌ 안 올림")]
     if _l0 and "없음" not in _l0[0]: _gate.append(("앞 번호 그림 DB 업로드", _l0[0].replace("❌ 안 올림(로컬에만 있음): ", "DB 에 없는 그림: "), "python dbimgcheck.py %s 로 확인하고 refs_upload 로 올린 뒤 화면에서 🖼 로 확인한다(00_규칙.md I1)" % name))
     elif _r0.returncode not in (0, 1): print("⚠ DB 그림 비교를 못 했다: %s" % (_r0.stdout + _r0.stderr).strip()[:120])
+# 앞 번호가 번호 하나 순서(00_규칙.md 0절 1~9단계)의 9단계까지 끝났는지: 읽기 표 '단계' 가 9 미만이면 아직 작업 중이라 다음 번호를 시작하지 않는다.
+if k > 1:
+    try: _pst = int((load(os.path.join(here, name + "_read.json"), {}).get(str(k - 1)) or {}).get("단계") or 9)
+    except Exception: _pst = 9
+    if _pst < 9: _gate.append(("앞 번호 %d 작업 순서" % (k - 1), "번호 하나 순서 %d/9단계에서 멈춰 있다" % _pst, "읽기 표 '단계' 를 올려 가며 9단계(끝)까지 한다 — 00_규칙.md 0절"))
+# 앞 번호의 이미지 작업이 규칙 순서대로 다 됐는지(00_규칙.md B8): 번호마다 그림 목록(0 교재 원본·1 방향선·2 축선·3 격자·4 확대 눈금·5 hf 홀라인 확인·11~ 관찰 3장 이상)이 있어야 다음 번호를 시작한다. 어느 단계를 건너뛰었는지 그림 목록으로 알려 준다. <이름>_rules.json 의 "img_set_from": N 이 있는 조립도만, 그 번호부터 막는다(DB 에 올라갔는지는 위 img_db 가 본다).
+_isf = load(os.path.join(here, name + "_rules.json"), {}).get("img_set_from")
+if k > 1 and _isf and (k - 1) >= int(_isf):
+    _idx = [r for r in load(os.path.join(here, "refs", name, "index.json"), []) if int(r.get("step", -1)) == k - 1]
+    _have = {int(r.get("idx", -1)) for r in _idx}
+    _NAME = {0: "교재 원본", 1: "방향선", 2: "축선(NN_2)", 3: "격자(NN_3)", 4: "확대 눈금(crop_ticks)", 5: "홀라인 확인(hf)"}
+    _miss_i = [_NAME[i] for i in _NAME if i not in _have]; _obs = len([i for i in _have if i >= 11])
+    if _miss_i or _obs < 3: _gate.append(("앞 번호 %d 이미지 작업 순서" % (k - 1), "빠진 그림: %s%s" % (", ".join(_miss_i) or "없음", ("" if _obs >= 3 else " · 관찰 그림 %d장(3장 이상 필요)" % _obs)), "빠진 그림을 만드는 단계(책 확대 읽기 → crop_ticks → holefit → axes_fit·refs_rect → observe)부터 한다 — 규칙 순서를 건너뛴 것(00_규칙.md B5·B8)"))
 if k > 1:   # 앞 번호: 사용자 ✓ 또는 지금 내용과 같은 지문의 비교 증거(record_check)가 있어야 다음 번호를 시작한다
     _prev = asm[k - 2]
     if _prev.get("noPart") or not (_prev.get("parts") or _prev.get("moveMade")): _gate.append(("앞 번호 %d" % (k - 1), "아직 작성 전(부품 없음)", "앞 번호부터 끝낸다 — 번호는 순서대로"))
@@ -252,7 +265,7 @@ print("─ 다음에 할 일 (05 순서) ─")
 todo = [t for t, ok, h in state if not ok]
 order = ["책 그림 크롭", "가위·회전값(_lv.json)", "구멍 점(fits)", "방향(_axes.json, fit 포함)", "격자 그림(NN_2)"]
 for i, t in enumerate([o for o in order if o in todo], 1): print("  %d. %s" % (i, t))
-print("  → 읽기 표 빈 칸 → 놓기(attach·recv) → python build.py %s --write → 화면 비교 → python record_check.py %s %d <캡처.png> \"<비교 결과>\"" % (name, name, k))
+print("  → 4 방향대로 위치해 비교(앞 번호 조립을 이 번호 카메라·방향에 놓고 책과 나란히, 다른 곳 숫자로 찾기) → 5 어디와 어디가 결합 → 6 어떤 구멍·돌기(양쪽 id·피치) → 7 읽기 표 빈 칸 → 놓기(attach·recv) → python build.py %s --write → 8 화면 6방향·관찰 → python record_check.py %s %d <캡처.png> \"<비교 결과>\"  (순서는 00_규칙.md 0절, 건너뛰지 않는다)" % (name, name, k))
 try:
     import observe as _ob
     _need = _ob._need(name, k)

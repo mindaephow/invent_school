@@ -2010,7 +2010,17 @@
       const vmap = new Map(vers.map(v => [v.step + ':' + v.idx, v]));
       for (const row of fresh) { const v = vmap.get(row.step + ':' + row.idx); if (v) C.set(keyOf(v), { sig: sigOf(v), row }); out.push(row); }
     }
-    const seen = new Set(); return out.filter(r => { const k = r.step + ':' + r.idx; if (seen.has(k)) return false; seen.add(k); return true; }).sort((a, b) => (a.step - b.step) || (a.idx - b.idx));
+    const seen = new Set(); const res = out.filter(r => { const k = r.step + ':' + r.idx; if (seen.has(k)) return false; seen.add(k); return true; }).sort((a, b) => (a.step - b.step) || (a.idx - b.idx));
+    try { C.set('asm-refs-idx:' + assemblyId + ':' + steps.join(','), { keys: res.map(r => r.step + ':' + r.idx) }); } catch (e) { /* 저장 실패는 무시 */ }   // 다음에 누를 때 서버 확인 없이 바로 보여 주려고 이 단계의 그림 목록을 기억
+    return res;
+  };
+  // 저장본만으로 바로 보여 주기(서버 확인 없음) — 이전에 연 적이 있는 단계만 값이 있고, 없으면 null. 버전 확인은 __ivsAsmRefs 가 뒤에서 한다.
+  window.__ivsAsmRefsCached = async function(assemblyId, steps){
+    const C = window.IVS_CACHE; if (!C || !accessToken) return null;
+    const list = await C.get('asm-refs-idx:' + assemblyId + ':' + steps.join(',')); if (!list || !list.keys) return null;
+    const rows = [];
+    for (const k of list.keys) { const [s, i] = k.split(':'); const hit = await C.get('asm-ref:' + assemblyId + ':' + s + ':' + i); if (!hit || !hit.row) return null; rows.push(hit.row); }
+    return rows;
   };
   // 행 버전 비교 — 둘 다 xmin 이 붙은 새 모양이면 그대로 비교하고, 한쪽이 예전 모양(ctid 만)이면 ctid 부분만 비교한다(저장본을 한꺼번에 다시 받지 않으려고).
   function verEq(a, b){
@@ -5957,6 +5967,7 @@
       async get(assemblyId, steps){ // [{ step, idx, note, img }]
         return await window.__ivsAsmRefs(assemblyId, steps);   // 한 번 받은 그림은 이 컴퓨터에 저장해 두고 바뀐 그림만 다시 받는다
       },
+      async cached(assemblyId, steps){ return await window.__ivsAsmRefsCached(assemblyId, steps); },   // 저장본이 있으면 서버 확인 없이 바로
       async save(assemblyId, step, idx, img, note){
         const res = await fetch(SUPABASE_URL + '/rest/v1/ivs_assembly_refs?on_conflict=assembly_id,step,idx', {
           method: 'POST', headers: this._h({ Prefer: 'resolution=merge-duplicates,return=minimal' }),

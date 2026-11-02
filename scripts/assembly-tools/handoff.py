@@ -1,7 +1,7 @@
 # 다음 PC·다음 아이디가 이어받을 "마지막 작업" 한 블록을 process/진행기록_<이름>.md 맨 위에 쓴다(있으면 덮어쓴다 — 쌓지 않는다. 이력은 git 커밋이 갖고 있다).
 #   (끝낼 때) python handoff.py <이름> --아이디 <작업한 계정> --어디까지 "15번 완료, 16번 시작" --다음 "USED 4건 고친 뒤 number_start hammerbattle 16"
 #   (시작할 때) python handoff.py <이름> --아이디 <내 계정> --시작     → 블록에 "이어받음: 날짜 · PC · 아이디" 한 줄을 적는다(마지막 작업 줄은 그대로)
-# PC 이름·날짜·현재 커밋은 자동으로 넣는다. 작업을 끝내거나 멈추기 전에 돌리고 "업로드" 를 요청한다(00_규칙.md I4).
+# PC 이름·날짜·현재 커밋은 자동으로 넣는다. 작업을 끝내거나 멈추기 전에 돌린다(00_규칙.md I4). 푸시는 사용자가 "업로드"라고 할 때만 한다(I2).
 import sys, os, re, socket, subprocess, datetime
 sys.stdout.reconfigure(encoding="utf-8")
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -53,6 +53,6 @@ def main():
     if k: L = L[:1] + [""] + block + L[1:]
     else: L = block + L
     open(p, "w", encoding="utf-8").write("\n".join(L))
-    print("OK  %s 맨 위에 마지막 작업을 적었다 (PC %s · 아이디 %s). 이제 \"업로드\" 를 요청한다." % (os.path.basename(p), socket.gethostname(), arg("--아이디")))
+    print("OK  %s 맨 위에 마지막 작업을 적었다 (PC %s · 아이디 %s). " % (os.path.basename(p), socket.gethostname(), arg("--아이디")))
 
 main()
