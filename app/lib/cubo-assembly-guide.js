@@ -104,7 +104,7 @@ export function buildGuide(rules) {
 
 ## 10-1. 로컬 화면(개발 서버) 열기 — 작업 중 계속 열어 두고 관리자에게 보여 주며 진행한다
 작업 시작할 때 로컬 개발 서버를 열어 오른쪽 브라우저 패널에 설계 화면(/design.html)을 띄워 놓고, 단계를 그릴 때마다 그 화면으로 보이게 한다(관리자 요청 2026-10-01: "오른쪽에 로컬 열어서 그리는 거 보여줘"). **정확한 방법(2026-10-04 롤링봇에서 헤맨 뒤 고침 — 이 순서대로 한다):**
-  1) **서버 주소·켜는 법은 저장소 CLAUDE.md "새로 시작하거나 새 세션일 때" 1번이 기준이다.** launch.json 이 없는 PC 는 scripts/assembly-tools/README.md "새 PC" 3번으로 만든다.
+  1) **서버 주소·켜는 법은 저장소 CLAUDE.md "세션을 시작할 때" 2번이 기준이다.** launch.json 이 없는 PC 는 scripts/assembly-tools/README.md "새 PC" 3번으로 만든다.
   2) **서버가 실제로 떴는지 확인한다**: curl 로 CLAUDE.md 1번의 주소가 200 인지, 아니면 preview_logs 로 서버 로그를 본다. "navigation denied or failed" 가 나오면 권한 문제로 짐작하지 말고 먼저 서버가 떠 있는지(포트가 응답하는지)부터 본다 — 롤링봇에서는 서버가 꺼져 있었을 뿐인데 "허용해 달라"고 잘못 안내했다.
   3) 서버가 떠 있으면 navigate 로 CLAUDE.md 1번의 주소를 연다(탭은 preview_start 결과의 tabId). 브라우저 창(오른쪽 패널)이 숨겨져 있으면 관리자가 연다.
   4) **로그인은 관리자가 직접 한다.** 로그인 화면이 보이면 "오른쪽 창에서 아이디·비밀번호를 입력하고 로그인을 눌러 주세요"라고 한 단계만 말하고 기다린다(비밀번호를 대신 입력하지 말 것).
@@ -293,7 +293,7 @@ export function buildReference() {
 3. 결과를 단계별로 ✓(교재와 일치) / △(0.1mm 같은 사소한 차이·추정) / ✗(틀림)와 근거로 보고하고, **프로그램으로 확인한 것 / 눈으로 판단한 것 / 못 한 것**을 나눈다. 확인한 단계는 <이름>_rules.json(count·view·camera)에 적는다.
 
 ## 5-0. 새 PC에서 조립도 작업 시작하기 (원본은 README.md — 같은 글을 두 곳에 두지 않는다)
-새 PC 준비(준비물·저장소 받기·launch.json 만들기·로그인·.env·build.py)의 원본은 저장소 scripts/assembly-tools/README.md 의 "새 PC에서 조립도 작업 시작하기" 절이다(저장소가 아직 없는 PC 의 Claude 는 get_github_file 로 읽는다). 개발 서버 주소·켜는 법은 CLAUDE.md "새로 시작하거나 새 세션일 때" 1번이다.
+새 PC 준비(준비물·저장소 받기·launch.json 만들기·로그인·.env·build.py)의 원본은 저장소 scripts/assembly-tools/README.md 의 "새 PC에서 조립도 작업 시작하기" 절이다(저장소가 아직 없는 PC 의 Claude 는 get_github_file 로 읽는다). 개발 서버 주소·켜는 법은 CLAUDE.md "세션을 시작할 때" 2번이다.
 ## 6. 작업 절차 (다음 클로드용)
 규칙과 번호별 절차는 `process/00_규칙.md`·`05_조립.md` 가 원본이다. 여기에는 MCP 도구와 데이터 파일 사용법만 둔다.
 1. get_assembly로 현재 단계 데이터를 읽고, 교재 해당 쪽을 이미지로 본다.

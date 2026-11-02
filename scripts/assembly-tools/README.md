@@ -12,7 +12,7 @@
 2. 저장소 받기: `git clone https://github.com/mindaephow/invent_school.git` 후 폴더에서 `npm install` (✔ node_modules 는 .gitignore 라 git 에 없음). 푸시는 GitHub 로그인(계정 mindaephow)이 필요하다.
 3. 로컬 서버: 프로젝트 `.claude/launch.json` 은 .gitignore(`.claude/`) 라서 **새 PC 에는 없다 → 직접 만든다.** 예:
    `{"version":"0.0.1","configurations":[{"name":"invent-school-dev","runtimeExecutable":"npm","runtimeArgs":["run","dev","--","-p","3178"],"port":3178}]}`
-   그다음 `preview_start {name:"invent-school-dev"}` → 주소는 `CLAUDE.md` "새로 시작하거나 새 세션일 때" 1번. (`npm run start` 는 먼저 `npm run build` 가 필요 — 개발 서버 `npm run dev` 가 간단하다.) 같은 이름·포트를 다른 채팅이 쓰는 중이면 "Port in use" 가 나온다 → 그 서버 주소로 그냥 접속하거나 포트를 바꾼다.
+   그다음 `preview_start {name:"invent-school-dev"}` → 주소는 `CLAUDE.md` "세션을 시작할 때" 2번. (`npm run start` 는 먼저 `npm run build` 가 필요 — 개발 서버 `npm run dev` 가 간단하다.) 같은 이름·포트를 다른 채팅이 쓰는 중이면 "Port in use" 가 나온다 → 그 서버 주소로 그냥 접속하거나 포트를 바꾼다.
 4. 로그인: 설계 화면은 선생님 아이디/비밀번호 로그인이 필요하다(✔ 로그인 화면이 뜸). 로그인은 사용자가 직접 한다 — 비밀번호를 대신 입력하지 않는다. 화면의 DB 연결은 브라우저 쪽 설정(db-shim.js)이라 로컬에 `.env` 가 없어도 되는 것으로 보이나 ? 새 PC 에서 확인 필요.
 5. `.env` 가 필요한 것: `/api/admin`·`/api/mcp`(서버 쪽, SUPABASE_URL·SUPABASE_SERVICE_ROLE_KEY 등)은 키가 없으면 로컬에서 500 이다(✔ 안내서 7절). 조립도 화면 확인에는 필요 없다. 키는 Vercel 프로젝트 환경변수에 있다.
 6. 조립도 만들기: `cd scripts/assembly-tools` → `python build.py <이름>` (부품 연결점 생성·스크립트 실행·검사). 결과를 화면에 넣으려면 `--write` (public/design-assemblies.js 수정). 로컬 서버가 public 파일을 바로 서빙하므로 새로고침하면 보인다 (✔).
