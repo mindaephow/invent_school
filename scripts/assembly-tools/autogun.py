@@ -189,7 +189,7 @@ bBt = s22.place("37프레임", R_Z, pt(165, 17.5, 20), recv=True, dir=[0, 1, 0],
 s23 = A.step("[교재 23] 빨간 부시 2개를 T축 끝에 끼우고, 리벳 1개를 위판 구멍에 꽂아요(고무밴드 걸이). (추정)")
 bu1 = s23.place("부시", np.eye(3), pt(55, 26.25, -10), recv=True, dir=[0, 1, 0], hover=45, marks=[list(pt(55, 29, -10))])
 bu2 = s23.place("부시", np.eye(3), pt(95, 26.25, -10), recv=True, dir=[0, 1, 0], hover=45, marks=[list(pt(95, 29, -10))])
-rv23 = s23.attach("리벳", ori("+x", "-y"), {"p1": (bAt, "h5_3")}, hover=45, openEnd=True)   # 교재 23(칸 셈): 위판 가까운 줄(3번째 줄) 5열 = 첫 T축(6열) 바로 왼쪽 열, 고무밴드 걸이
+rv23 = s23.attach("리벳", ori("+x", "-y"), {"p1": (bAt, "h5_3")}, hover=45, openEnd=True, rivet=True)   # 교재 23(칸 셈): 위판 가까운 줄(3번째 줄) 5열 = 첫 T축(6열) 바로 왼쪽 열, 고무밴드 걸이
 rv23.extra["seated"] = True                           # 교재 23: 리벳은 이미 꽂힌 모양(구멍에 초록 원)
 
 s24 = A.step("[교재 24] 고무밴드를 리벳과 방아쇠에 걸어요(고무밴드는 3D 모델이 없어 그림 없음).", noPart=True)
@@ -197,7 +197,7 @@ s24 = A.step("[교재 24] 고무밴드를 리벳과 방아쇠에 걸어요(고�
 # 25: 블록 옆 큰 구멍에 리벳 4개를 먼저 꽂고(교재 그림), 그 위에 흰 19프레임·빨간 17프레임을 얹는다. 큰 구멍은 블록 옆면(z)을 관통한다.
 R_RIN = ori("+x", "-z")                                  # 리벳 p1 이 +z 쪽을 향함(바깥 −z 쪽에서 블록 구멍으로)
 s25 = A.step("[교재 25] 앞쪽 위 가장자리: 블록 옆 큰 구멍 4곳에 리벳을 꽂고, 그 위에 흰 19프레임과 빨간 17프레임을 얹어요. (추정)")
-rvk = [s25.attach("리벳", R_RIN, {"p1": (blk_, hid)}, hover=45, openEnd=True) for blk_, hid in ((k7, "h2"), (k6, "h2"), (k6, "h3"), (k4, "h3"))]
+rvk = [s25.attach("리벳", R_RIN, {"p1": (blk_, hid)}, hover=45, openEnd=True, rivet=True) for blk_, hid in ((k7, "h2"), (k6, "h2"), (k6, "h3"), (k4, "h3"))]
 for _r in rvk: _r.extra["seated"] = True               # 교재 25: 리벳 4개는 이미 꽂힌 모양, 막대만 내려온다
 w19 = s25.recv("19프레임", ori("+x", "+z"), {"h1_1": (rvk[0], "p2"), "h9_1": (rvk[1], "p2")}, hover=45)
 r17 = s25.recv("17프레임", ori("+x", "+z"), {"h1_1": (rvk[2], "p2"), "h7_1": (rvk[3], "p2")}, hover=45)
@@ -218,7 +218,7 @@ ctop = s26.recv("27프레임", R_FLAT, [(b_, pid) for b_ in colk for pid in ("p5
 ctop.extra["joinOrder"] = 2                              # 교재 26: 블록 4개를 아래판에 먼저 꽂고 윗판을 나중에 덮는다
 R_CRV = ori("+x", "+z")                               # 리벳 p1 이 −z(블록 구멍 쪽), p2 가 +z(바깥)
 s27 = A.step("[교재 27] 기둥 옆면(+z) 바깥 블록의 큰 구멍 2곳에 리벳을 꽂고 빨간 17프레임을 얹어요. (추정)")
-crv = [s27.attach("리벳", R_CRV, {"p1": (colk[1], "h1")}, hover=45, openEnd=True), s27.attach("리벳", R_CRV, {"p1": (colk[3], "h2")}, hover=45, openEnd=True)]
+crv = [s27.attach("리벳", R_CRV, {"p1": (colk[1], "h1")}, hover=45, openEnd=True, rivet=True), s27.attach("리벳", R_CRV, {"p1": (colk[3], "h2")}, hover=45, openEnd=True, rivet=True)]
 for _r in crv: _r.extra["seated"] = True               # 교재 27: 리벳 2개는 이미 꽂힌 모양, 17프레임만 내려온다
 cr = s27.recv("17프레임", ori("+x", "+z"), {"h1_1": (crv[0], "p2"), "h7_1": (crv[1], "p2")}, hover=45)
 cr.extra["joinOrder"] = 2                                # 교재 27: 리벳을 먼저 꽂고 빨간 17프레임을 얹는다

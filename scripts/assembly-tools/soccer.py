@@ -183,6 +183,7 @@ Rbd = ori("+z", "+y")
 tmp = Part("메인보드", Rbd, (0, 0, 0), s23)
 pp = tmp.peg("p1")["pos"]
 board_p = np.array([-10, 42.5, 0.0]) - pp
+Rbd = rot_y(180) @ Rbd   # 책 23·24: 주황 버튼 줄이 뒷판에서 먼 쪽(오른쪽·앞)에, 핀 헤더가 뒷판 쪽에 오도록 위에서 본 방향을 180° 돌린다(돌기 2개는 중심 대칭이라 같은 구멍에 그대로 꽂힌다, 사용자 지적 2026-11-03)
 board = s23.place("메인보드", Rbd, board_p, dir=[0, 1, 0], hover=40, marks=[[-10, 45, 0]])
 bp = Part("메인보드", Rbd, board_p, s23)
 board.extra["marks"] = [rnd(np.array(q["pos"]) - np.array(q["dir"]) * 0 + np.array([0, 2.5 + 0, 0]) - np.array([0, 0, 0])) for q in (bp.peg("p1"), bp.peg("p2"))]

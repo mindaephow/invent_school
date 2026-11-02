@@ -263,7 +263,7 @@ R_RV23 = np.array([[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])   # 리�
 RV23 = [s23.attach("리벳", R_RV23, {"p1": (_bl, _hh)}, rivet=True) for _bl in (BL10B, BL10BU) for _hh in ("h1", "h2")]
 R_FR23 = np.array([[0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [1.0, 0.0, 0.0]])   # 프레임 긴 쪽 = z, 줄 = y, 구멍 방향 −x
 _pr = [np.array(_rv.world("peg", next(_pg for _pg in _rv.conn["pegs"] if _pg["id"] == "p2"))["pos"], float) for _rv in RV23]
-FR23 = s23.recv("25프레임", R_FR23, [(_rv, "p2") for _rv in RV23], p=(float(_pr[0][0]), float((_pr[0][1] + _pr[1][1]) / 2), float((_pr[0][2] + _pr[2][2]) / 2)), dir=[-1, 0, 0], hover=45)
+FR23 = s23.recv("25프레임", R_FR23, [(_rv, "p2") for _rv in RV23], p=(float(_pr[0][0]) + 1.0, float((_pr[0][1] + _pr[1][1]) / 2), float((_pr[0][2] + _pr[2][2]) / 2)), dir=[-1, 0, 0], hover=45)
 A.steps[22].cam = (-1.56, 0.89, False, None, None, None); A.steps[22].camSrc = "eye"   # 23_P 손으로 읽은 6점(리벳 링 4 + 막대 모서리 2, 거의 한 평면) PnP 오차 3.11px, fov 40(⚠)
 # ── 24 ── 교재 66쪽 24 (읽은 것 2026-10-17 — 새 서브 조립: 검은 25프레임 둘을 끝끼리 이어 2줄×10칸 띠를 만든다. 아래에서 2단블록 둘이 올라와 이음매의 구멍 둘(줄1·줄2)을 한 개씩 잡는다)
 #   책 24번: 구멍이 위로 보이는 누운 25프레임 둘(왼쪽 판이 위, 오른쪽 판이 조금 아래로 떠 있음)과, 그 아래 누운 회색 2단블록 둘(위 블록 = 줄1, 아래 블록 = 줄2). 링 네 곳: 왼쪽 판 칸5 줄1·줄2, 오른쪽 판 칸1 줄1·줄2 — 각 블록의 윗 돌기 둘이 왼쪽 판 칸5·오른쪽 판 칸1 구멍으로 들어간다(두 판의 끝 구멍 간격 10).
@@ -330,7 +330,7 @@ RV27 = [s27.attach("리벳", np.eye(3), {"p1": (_BLK27, _hh)}, rivet=True) for _
 _pp = [np.array(_rv.world("peg", next(_pg for _pg in _rv.conn["pegs"] if _pg["id"] == "p2"))["pos"], float) for _rv in RV27]
 _bh = np.array(_BLK27.world("hole", next(_h for _h in _BLK27.conn["holes"] if _h["id"] == "h1"))["pos"], float)   # 12볼트가 지나는 블록 구멍(왼쪽 끝)
 _xc27 = float(_bh[0]) + 40.0   # 판 칸1 이 12볼트 구멍 위
-PL27 = s27.recv("59프레임", np.eye(3), [(_rv, "p2") for _rv in RV27], p=(_xc27, float(_pp[0][1]), float(_pp[0][2])), dir=[0, 1, 0], hover=40)   # 판 줄3(가운데 줄)이 팔 블록 줄 → 판 가운데 z = 블록 z
+PL27 = s27.recv("59프레임", np.eye(3), [(_rv, "p2") for _rv in RV27], p=(_xc27, float(_pp[0][1]) - 1.0, float(_pp[0][2])), dir=[0, 1, 0], hover=40)   # 판 줄3(가운데 줄)이 팔 블록 줄 → 판 가운데 z = 블록 z
 BOLT27 = s27.attach("12볼트", np.eye(3), {"p1": (PL27, "h1_3")}, hover=130)
 NUT27 = s27.recv("너트", np.eye(3), [(BOLT27, "p1")], p=(float(_bh[0]), float(_bh[1]) - 3.0, float(_bh[2])), dir=[0, -1, 0], hover=40, noMarkCheck=True)
 A.steps[26].cam = (-0.59, 0.90, False, None, None, None); A.steps[26].camSrc = "eye"   # 27_P 판 모서리 4 + 링 3 + 블록 링 3(비평면, 판 띄움 40) PnP 오차 7.9px, fov 50(⚠ 읽기 오차)
@@ -344,7 +344,7 @@ _RY180 = np.diag([-1.0, 1.0, -1.0])
 _R28 = _RY180 @ _RZ45   # 팔 2 는 팔 1 의 좌우 거울(책 28번: 블록이 안쪽, 긴 쪽이 아래 오른쪽으로 늘어진다)
 _SH28 = (float(_xc27 + 30.0 - _BLK28.p[0]), float(_pp[0][1] - 8.0 - _BLK28.p[1]), float(_pp[0][2] - _BLK28.p[2]))
 s28.move_made(_g28, _R28, pivot=_BLK28.p.copy(), shift=_SH28, dir=[0, -1, 0], hover=25, group="mm28arm2")
-RV28 = [s28.attach("리벳", np.eye(3), {"p1": (_BLK28, _hh)}, dir=[0, -1, 0], hover=12) for _hh in ("h2", "h3")]   # 리벳은 팔 블록(25 아래)과 판 사이(12 아래)에 따로 떠서 양쪽으로 화살표
+RV28 = [s28.attach("리벳", np.eye(3), {"p1": (_BLK28, _hh)}, dir=[0, -1, 0], hover=12, rivet=True) for _hh in ("h2", "h3")]   # 리벳은 팔 블록(25 아래)과 판 사이(12 아래)에 따로 떠서 양쪽으로 화살표
 BOLT28 = s28.attach("12볼트", np.eye(3), {"p1": (PL27, "h9_3")}, hover=90)
 _bh28 = np.array(_BLK28.world("hole", next(_h for _h in _BLK28.conn["holes"] if _h["id"] == "h1"))["pos"], float)
 NUT28 = s28.recv("너트", np.eye(3), [(BOLT28, "p1")], p=(float(_bh28[0]), float(_bh28[1]) - 3.0, float(_bh28[2])), dir=[0, -1, 0], hover=65, noMarkCheck=True)
@@ -375,7 +375,7 @@ for _st, _holes in ((ST30[0], ("h1_1", "h1_2", "h5_2")), (ST30[1], ("h1_1", "h1_
     for _hh in _holes:
         RV30.append(s30.attach("리벳", np.eye(3), {"p1": (_st, _hh)}, rivet=True))
 _pp30 = [np.array(_rv.world("peg", next(_pg for _pg in _rv.conn["pegs"] if _pg["id"] == "p2"))["pos"], float) for _rv in RV30]
-PL30 = s30.recv("515프레임", np.eye(3), [(_rv, "p2") for _rv in RV30], p=(0.0, float(_pp30[0][1]), Z30 + 0.0), dir=[0, 1, 0], hover=50)
+PL30 = s30.recv("515프레임", np.eye(3), [(_rv, "p2") for _rv in RV30], p=(0.0, float(_pp30[0][1]) - 1.0, Z30 + 0.0), dir=[0, 1, 0], hover=50)
 A.steps[29].cam = (-0.67, 0.92, False, None, None, None); A.steps[29].camSrc = "eye"   # 30_P 링 6 + 리벳 6(비평면, 판 띄움 50) PnP 오차 8.0px, fov 40(⚠)
 # ── 31 ── 교재 66쪽 31 (읽은 것 2026-10-17 — 30번 조립(큰 판 + 29프레임 둘) 옆에 두 번째 큰 판을 같은 방법으로 잇는다: 29프레임의 판 밖으로 나온 턱(칸6~9)에 리벳 셋씩을 꽂고 515프레임 하나를 얹는다)
 #   책 31번(리벳 (6)): 아래에 30번 조립(큰 판 + 튀어나온 두 턱)이 있고, 위에 두 번째 515프레임이 떠 있다. 링 6개(판 칸1·2 줄1·칸1 줄4 / 칸14·15 줄1·칸15 줄4)가 턱의 리벳 6개로 화살표를 보낸다. 두 판은 줄 방향으로 이어져 10줄이 된다.
@@ -388,7 +388,7 @@ for _st, _holes in ((ST30[0], ("h9_1", "h9_2", "h6_2")), (ST30[1], ("h9_1", "h9_
     for _hh in _holes:
         RV31.append(s31.attach("리벳", np.eye(3), {"p1": (_st, _hh)}, rivet=True))
 _pp31 = [np.array(_rv.world("peg", next(_pg for _pg in _rv.conn["pegs"] if _pg["id"] == "p2"))["pos"], float) for _rv in RV31]
-PL31 = s31.recv("515프레임", np.eye(3), [(_rv, "p2") for _rv in RV31], p=(0.0, float(_pp31[0][1]), Z30 + 50.0), dir=[0, 1, 0], hover=60)
+PL31 = s31.recv("515프레임", np.eye(3), [(_rv, "p2") for _rv in RV31], p=(0.0, float(_pp31[0][1]) - 1.0, Z30 + 50.0), dir=[0, 1, 0], hover=60)
 A.steps[30].cam = (-2.30, 0.86, False, None, None, None); A.steps[30].camSrc = "eye"   # 31_P 링 6 + 리벳 6(비평면, 판 띄움 60) PnP 오차 5.1px, fov 40(⚠)
 # ── 32 ── 교재 66쪽 32 (읽은 것 2026-10-17 — 30·31번에서 만든 큰 판 조립(두 판 + 29프레임 둘 + 리벳 12)을 몸의 오른쪽 팔(팔 2) 꺾인 쪽 끝에 12볼트 둘·너트 둘·리벳 하나로 단다)
 #   책 32번(리벳 (1), 12볼트 ×2, 너트 ×2): 몸 오른쪽의 팔 끝(두 프레임의 끝 구멍 셋: 노란 링 둘 사이 초록 링 하나)과 큰 판 조립의 구멍 셋(노란·초록·노란)이 맞는다. 12볼트 둘은 판 바깥에서, 너트 둘은 팔 안쪽 프레임 뒤에서 조이고 리벳은 가운데 구멍에 꽂는다.
@@ -433,9 +433,9 @@ for _br in BR33:
     for _hh in ("h5_1", "h7_1"):
         RV33.append(s33.attach("리벳", np.eye(3), {"p1": (_br, _hh)}, rivet=True))
 _pp33 = [np.array(_rv.world("peg", next(_pg for _pg in _rv.conn["pegs"] if _pg["id"] == "p2"))["pos"], float) for _rv in RV33]
-PL33 = s33.recv("39프레임", np.eye(3), [(_rv, "p2") for _rv in RV33], p=(0.0, float(_pp33[0][1]), Z33), dir=[0, 1, 0], hover=34)
+PL33 = s33.recv("39프레임", np.eye(3), [(_rv, "p2") for _rv in RV33], p=(0.0, float(_pp33[0][1]) - 1.0, Z33), dir=[0, 1, 0], hover=34)
 BOLT33 = [s33.attach("8볼트", np.eye(3), {"p1": (PL33, _hid)}, hover=80) for _hid in ("h1_2", "h9_2")]
-NUT33 = [s33.recv("너트", np.eye(3), [(_bo, "p1")], p=(_nx, Y33 - 0.5, Z33), dir=[0, -1, 0], hover=40, noMarkCheck=True) for _bo, _nx in zip(BOLT33, (-40.0, 40.0))]
+NUT33 = [s33.recv("너트", np.eye(3), [(_bo, "p1")], p=(_nx, Y33 + 1.3, Z33), dir=[0, -1, 0], hover=40, noMarkCheck=True) for _bo, _nx in zip(BOLT33, (-40.0, 40.0))]
 A.steps[32].cam = (-0.74, 1.06, False, None, tuple(float(_v) for _v in PL33.hole("h1_1")["pos"]), None); A.steps[32].camSrc = "eye"   # 33_P 판 링 6(칸1·칸9 줄1~3) 앵커 PnP(fov 36, 판 한 평면이라 방향각만 믿음, ⚠ holefit 미달로 링 앵커 유추)
 # ── 34 ── 교재 66쪽 34 (읽은 것 2026-10-17 — 33번 조립(검은 39프레임 + 빨간 17프레임 둘)의 막대 자유 끝 구멍(구멍 1·2·3)에 큰 검은 713프레임(13칸×7줄)을 얹는다: 막대마다 리벳 둘 + 8볼트 하나)
 #   책 34번(리벳 (4), 8볼트 ×2, 너트 ×2): 아래에 33번 조립(작은 판이 막대 구멍 4~6 위, 막대 구멍 1~3 이 자유)이 있고, 위에 큰 713프레임이 떠서 판 링 셋(초록·노랑·초록)씩이 막대 자유 구멍 셋(리벳 둘 + 가운데 볼트 구멍)으로 화살표를 보낸다.
@@ -448,10 +448,10 @@ for _br in BR33:
     for _hh in ("h1_1", "h4_1"):   # 책 34번: 막대 자유 끝 구멍 h1·h4 에 리벳, h3 에 8볼트, h2 는 빈 구멍(판 가까운 쪽 h4 는 33번 판 바로 옆)
         RV34.append(s34.attach("리벳", np.eye(3), {"p1": (_br, _hh)}, rivet=True))
 _pp34 = [np.array(_rv.world("peg", next(_pg for _pg in _rv.conn["pegs"] if _pg["id"] == "p2"))["pos"], float) for _rv in RV34]
-PL34 = s34.recv("713프레임", np.eye(3), [(_rv, "p2") for _rv in RV34], p=(0.0, float(_pp34[0][1]), Z33 - 50.0), dir=[0, 1, 0], hover=40)
+PL34 = s34.recv("713프레임", np.eye(3), [(_rv, "p2") for _rv in RV34], p=(0.0, float(_pp34[0][1]) - 1.0, Z33 - 50.0), dir=[0, 1, 0], hover=40)
 # 큰 판은 33번 판과 칸·줄 방향이 같다(칸 +x, 줄 +z). 링 6개 = 칸3·칸11 의 줄4(리벳 h1)·줄6(8볼트 h3)·줄7(리벳 h4); 칸 양쪽 여백 2칸씩 대칭, 줄7 이 막대 h4 위(33번 판 바로 앞)
 BOLT34 = [s34.attach("8볼트", np.eye(3), {"p1": (PL34, _hid)}, hover=90) for _hid in ("h3_6", "h11_6")]
-NUT34 = [s34.recv("너트", np.eye(3), [(_bo, "p1")], p=(float(_bo.p[0]), Y33 - 0.5, Z33 - 30.0), dir=[0, -1, 0], hover=40, noMarkCheck=True) for _bo in BOLT34]
+NUT34 = [s34.recv("너트", np.eye(3), [(_bo, "p1")], p=(float(_bo.p[0]), Y33 + 1.3, Z33 - 30.0), dir=[0, -1, 0], hover=40, noMarkCheck=True) for _bo in BOLT34]
 A.steps[33].cam = (-0.69, 1.14, False, None, tuple(float(_v) for _v in PL34.hole("h1_1")["pos"]), None); A.steps[33].camSrc = "eye"   # 34_P 큰 판 holefit 0.91px 격자(47점) PnP 0.99px fov 29 — 큰 판 한 평면이라 방향각만 믿음
 # ── 35 ── 교재 66쪽 35 (읽은 것 2026-10-17 — 34번 조립(큰 검은 713프레임 위)에 회색 315프레임(15칸×3줄)을 얹는다: 큰 판 위에 리벳 넷(왼쪽 둘·오른쪽 둘)을 꽂고, 가운데 구멍에 8볼트 하나를 너트로 조인다)
 #   책 35번(리벳 (4), 8볼트, 너트): 아래에 34번 조립이 놓여 큰 검은 판 윗면에 리벳 끝 몇 개가 보이고, 위에 회색 315프레임이 떠서 링 넷(왼쪽 끝 줄1·2 둘, 오른쪽 끝 줄1·2 둘)이 새 리벳 넷으로, 노란 링 하나(회색 판 가운데)가 8볼트로 간다.
@@ -466,7 +466,7 @@ for _gx in (-60.0, 60.0):
     for _gz in (0.0, 10.0):
         RV35.append(s35.attach("리벳", np.eye(3), {"p1": (PL34, _hn(PL34, _gx, _zc35 + _gz))}, rivet=True))
 _pp35 = [np.array(_rv.world("peg", next(_pg for _pg in _rv.conn["pegs"] if _pg["id"] == "p2"))["pos"], float) for _rv in RV35]
-PL35 = s35.recv("315프레임", np.diag([-1.0, 1.0, -1.0]), [(_rv, "p2") for _rv in RV35], p=(0.0, float(_pp35[0][1]), _zc35 + 0.0), dir=[0, 1, 0], hover=50)
+PL35 = s35.recv("315프레임", np.diag([-1.0, 1.0, -1.0]), [(_rv, "p2") for _rv in RV35], p=(0.0, float(_pp35[0][1]) - 1.0, _zc35 + 0.0), dir=[0, 1, 0], hover=50)
 BOLT35 = s35.attach("8볼트", np.eye(3), {"p1": (PL35, "h8_2")}, hover=80)
 NUT35 = s35.recv("너트", np.eye(3), [(BOLT35, "p1")], p=(float(BOLT35.p[0]), 65.0, float(BOLT35.p[2])), dir=[0, -1, 0], hover=40, noMarkCheck=True)
 A.steps[34].cam = (-2.61, 0.92, False, None, tuple(float(_v) for _v in PL35.hole("h1_1")["pos"]), None); A.steps[34].camSrc = "eye"   # 35_P 회색 판 holefit 0.93px(링 5개로 평행이동 보정, ⚠) 격자(칸 −X·줄 −Z) PnP 0.94px fov 36 — 판 한 평면이라 방향각만 믿음

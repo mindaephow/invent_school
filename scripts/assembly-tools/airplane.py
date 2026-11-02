@@ -91,8 +91,8 @@ AX_TIP = [hx, hy, Z_BACK]                                                   # �
 plate2 = s4.place("315프레임", R_PL, (75, 20, 2 * -20.1 - -7.6), recv=True, dir=[0, 0, -1], hover=40, marks=[tip(b1), tip(b2), tip(b3), tip(b4), AX_TIP])
 plate2.extra["faceMarks"] = [[m_[0], m_[1], -35.1] for m_ in plate2.extra["marks"]]   # 초록 점은 판 두께의 가운데에(블록 돌기 4곳 + 축 1곳)
 R_RV2 = orient("리벳", {"돌기면 -y": "+Z"})                                 # 아래돌기가 +Z(판 구멍 쪽)
-rvC = s4.attach("리벳", R_RV2, {"돌기면 -y 1": (plate2, "홀면 -y 열3·줄1")}, hover=65)    # 사용자 순서(2026-10-04): 리벳 3번 → 315프레임 2번 −y쪽 줄1·열3
-rvD = s4.attach("리벳", R_RV2, {"돌기면 -y 1": (plate2, "홀면 -y 열1·줄2")}, hover=65)    #                          리벳 4번 → 줄2·열1
+rvC = s4.attach("리벳", R_RV2, {"돌기면 -y 1": (plate2, "홀면 -y 열3·줄1")}, hover=65, rivet=True)    # 사용자 순서(2026-10-04): 리벳 3번 → 315프레임 2번 −y쪽 줄1·열3
+rvD = s4.attach("리벳", R_RV2, {"돌기면 -y 1": (plate2, "홀면 -y 열1·줄2")}, hover=65, rivet=True)    #                          리벳 4번 → 줄2·열1
 ang90b = s4.recv("90도 프레임", rot_x(90), {"홀면 +y 열3·줄1": (rvC, "돌기면 +y 1"), "홀면 +y 열1·줄2": (rvD, "돌기면 +y 1")}, hover=90)   # 90도 프레임 2번이 +z 로 움직여 리벳 3·4번에 결합
 ang90b.extra["marks"] = list(ang90b.extra.get("marks", [])) + [AX_TIP]; ang90b.extra["dir"] = [0, 0, -1]   # 구멍 3곳: 리벳 2 + 축 1 (블록과는 결합 안 함)
 ang90b.extra["faceMarks"] = [[m_[0], m_[1], ang90b.p[2] - 2.5] for m_ in ang90b.extra["marks"]]   # 초록 점은 90도 프레임 두께의 가운데에
@@ -161,7 +161,7 @@ TOC_STEPS = [A.step(_note, noPart=True) for _note in TOC]
 s12 = TOC_STEPS[0]; s12.kw.pop("noPart", None)
 s12.note = "[교재 9] 315프레임 끝 두 열의 바깥 두 줄(줄1·줄3)에 리벳 4개를 꽂고, 29프레임을 가로로 얹어 T자 조립품을 만들어요. 본체와는 따로 만드는 조립품이에요."
 CT = (-100.0, 2.5, 260.0)                                                  # 본체 옆 빈자리(10번에서 본체 위로 올라감)
-T_FINAL_C = np.array([75.0, 44.0, -20.1])                                  # 최종 자세: T자 315프레임 가운데(열8) — x=5~145, 줄2 선 z=−10.1, 새 리벳 위에 올라앉은 높이 y=44
+T_FINAL_C = np.array([75.0, 42.5, -20.1])                                  # 최종 자세: T자 315프레임 가운데(열8) — x=5~145, 줄2 선 z=−10.1, 새 리벳 위에 올라앉은 높이 y=44
 plT = s12.place("315프레임", np.eye(3), tuple(T_FINAL_C))
 rvT = {(c_, r_): s12.attach("리벳", np.eye(3), {"돌기면 -y 1": (plT, "홀면 +y 열%d·줄%d" % (c_, r_))}, rivet=True) for c_, r_ in ((1, 1), (2, 1), (1, 3), (2, 3))}
 f29 = s12.recv("29프레임", Ry(90), {"홀면 -y 열4·줄1": (rvT[(1, 3)], "돌기면 +y 1"), "홀면 -y 열4·줄2": (rvT[(2, 3)], "돌기면 +y 1"), "홀면 -y 열6·줄1": (rvT[(1, 1)], "돌기면 +y 1"), "홀면 -y 열6·줄2": (rvT[(2, 1)], "돌기면 +y 1")}, hover=45)
@@ -176,7 +176,7 @@ f29.extra["faceMarks"] = [[m_[0], f29.extra["side"]["p"][1] + 2.5, m_[2]] for m_
 #   T자의 315프레임 초록 원 6개는 끝 쪽 열15·13·11 × 줄1·줄3 이라 열15 끝이 x=145, 열1 쪽 29프레임이 x=5 로 놓여 본체 길이와 같다.
 s14 = TOC_STEPS[1]; s14.kw.pop("noPart", None)
 s14.note = "[교재 10] 본체 위쪽 흰 판(59프레임)에 리벳 6개를 꽂고, 9번에서 만든 T자 조립품을 위에서 얹어요."
-rv10 = [s14.attach("리벳", np.eye(3), {"돌기면 -y 1": (top59, "홀면 +y 열%d·줄%d" % (c_, r_))}, hover=12) for c_ in (4, 6) for r_ in (1, 3, 5)]   # 사용자 지시: 리벳이 먼저 결합
+rv10 = [s14.attach("리벳", np.eye(3), {"돌기면 -y 1": (top59, "홀면 +y 열%d·줄%d" % (c_, r_))}, hover=12, rivet=True) for c_ in (4, 6) for r_ in (1, 3, 5)]   # 사용자 지시: 리벳이 먼저 결합
 for r_ in rv10: r_.extra["joinOrder"] = 1; r_.extra["pegDepth"] = 3   # 리벳 끝 점을 리벳 안쪽으로(사용자 지시: 리벳 안으로 집어넣어) — 4번과 같은 값
 def tip_of(part, pid): g = part.peg(pid); return [round(float(v), 3) for v in g["pos"] + g["dir"] * g["len"] / 2]
 plT.extra["recv"] = True
@@ -270,7 +270,7 @@ s18 = TOC2_STEPS[3]; s18.kw.pop("noPart", None)
 s18.note = "[교재 18] 135도 프레임 2개 각각의 짧은 팔 구멍 2곳(2번째·4번째)에 3단블록을 끼우고, 블록 아래에 빨간 15프레임을 끼워 날개 두 개를 만들어요(서로 거울)."
 s19 = TOC2_STEPS[4]; s19.kw.pop("noPart", None)
 s19.note = "[교재 19] 윗판 앞줄에 리벳 6개(왼쪽 3개·오른쪽 3개)를 꽂고, 날개 두 개의 135도 프레임 긴 팔 끝 구멍 3개씩을 위에서 끼워요."
-_Y_F = float(top15.p[1]) + 6.5 - 0.0                                              # 리벳 위에 앉은 프레임 높이(10번 T자와 같은 간격 6.5)
+_Y_F = float(top15.p[1]) + 5.0                                              # 리벳 위에 앉은 프레임 높이(10번 T자와 같은 간격 6.5)
 _s2 = 0.70710678
 def _wing(sign):
     """sign=+1: 왼쪽 날개(모서리 왼쪽, 프레임 그대로), −1: 오른쪽 날개(뒤집어 모서리 오른쪽). 최종 자세로 만든다."""
@@ -292,7 +292,7 @@ def _wing(sign):
     return fr, bk, rd
 wingL = _wing(+1)
 wingR = _wing(-1)
-rv19 = [s19.attach("리벳", np.eye(3), {"돌기면 -y 1": (top15, "홀면 +y 열%d·줄3" % c_)}, hover=12) for c_ in (1, 2, 3, 11, 12, 13)]
+rv19 = [s19.attach("리벳", np.eye(3), {"돌기면 -y 1": (top15, "홀면 +y 열%d·줄3" % c_)}, hover=12, rivet=True) for c_ in (1, 2, 3, 11, 12, 13)]
 for r_ in rv19: r_.extra["joinOrder"] = 1; r_.extra["pegDepth"] = 3
 # 교재 18 그림처럼 날개 두 개를 서로 다른 방향으로 늘어놓는다: 왼쪽 그림 = 오른쪽 날개형(긴 팔이 세로, 모서리가 아래), 오른쪽 그림 = 왼쪽 날개형(긴 팔이 가로, 모서리가 오른쪽). 19번에서 제자리로 합쳐진다.
 for wing_, Rs_, Cf_, Cs_ in ((wingL, Ry(180), np.array([X0 + 20.0, 0.0, Z0 + 5.0]), np.array([X0 + 84.0, 60.0, Z0 + 86.5])),

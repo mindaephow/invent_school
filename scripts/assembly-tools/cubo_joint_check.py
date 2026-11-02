@@ -1,0 +1,128 @@
+# 큐보 부품 결합규칙 점검기 — 사용자가 정한 규칙(부품결합규칙/큐보/11_사용자_확정규칙.txt)을 조립도 번호마다 잰다. 큐보 조립도(cubo-*) 전용.
+#   python cubo_joint_check.py <이름|all> [번호 …]
+#   규칙 2·8  리벳으로 이은 두 부품(프레임·블록·브라켓·기어…) 사이 틈 0 (틈 >0.3, 겹침 >1.0 이면 위반)
+#   규칙 3    프레임끼리는 겹치지 않는다(돌기 부분을 뺀 판 두께 침투 >0.5mm)
+#   규칙 5~7  돌기 하나는 프레임 한 장의 구멍에만 든다(구멍 안에 완전히 든 구멍이 서로 다른 프레임 둘 이상이면 위반)
+#   규칙 10   방향 있는 부품(메인보드…): 책에서 읽은 특징 방향(<이름>_orient.json)과 모델이 같아야 하고, 기록이 없으면 위반
+#   규칙 13   블록·모터·메인보드 돌기를 프레임에 바로 꽂을 때 몸체와 프레임 면 사이 틈 0
+#   규칙 14·15 8볼트=프레임 2장(두께 합 10), 12볼트=프레임 3장(15)이 틈 없이 딱 붙어야 함
+#   규칙 9    볼트·너트: 머리·너트가 판에서 떠 있거나(틈) 볼트 끝이 판 밖으로 나오면 위반
+# 앞 번호 부품이 같은 자리에 겹쳐 잡히는 중복(새 부품과 같은 이름·같은 자세)은 지우고 잰다.
+import sys, os, glob, runpy
+import numpy as np
+sys.stdout.reconfigure(encoding="utf-8")
+HERE = os.path.dirname(os.path.abspath(__file__)); os.chdir(HERE); sys.path.insert(0, HERE)
+import coupling_catalog as cc, stepchecks, obb
+from asmlib import _mate
+dims = stepchecks._dims()
+_orig = cc.view
+def view(A, k):
+    vs = _orig(A, k)
+    return [o for o in vs if not any(q is not o and q.new and not o.new and q.n == o.n and np.allclose(q.p, o.p, atol=0.01) and np.allclose(q.R, o.R, atol=1e-3) for q in vs)]
+cc.view = view
+
+# 규칙 10: 방향 있는 부품의 "특징 방향"(부품 로컬 축, 설명). 부품 실측(measure_part)에서 확인한 것만 적는다 — 새 부품은 실측 뒤에 추가.
+DIRECTIONAL = {"메인보드": ((0, 0, 1), "버튼 줄 쪽(+z)")}
+_AX = {"+X": (1, 0, 0), "-X": (-1, 0, 0), "+Y": (0, 1, 0), "-Y": (0, -1, 0), "+Z": (0, 0, 1), "-Z": (0, 0, -1)}
+def _axis_vec(s): return np.array(_AX[s], float) if s in _AX else None
+def _axis_name(w):
+    k = max(_AX, key=lambda a: float(np.array(_AX[a], float) @ w)); return k if float(np.array(_AX[k], float) @ w) > 0.9 else "기울어짐%s" % np.round(w, 2).tolist()
+def _find_part(A, vs, name, no):   # 기준 부품: 이름 + 그 이름이 조립도 전체에서 나온 순서(get_part_faces 의 "N번"과 같다)
+    n = 0
+    for st in A.steps:
+        for q in st.parts:
+            if q.n == name:
+                n += 1
+                if n == no:
+                    return next((o for o in vs if o.src is q), None)
+    return None
+_orient_cache = {}
+def _orient(aid):   # <이름>_orient.json = {"robot": {"back_ref": "로봇 뒤쪽 기준 부품", "back_no": 번호, "bottom_ref": "로봇 바닥 기준 부품", "bottom_no": 번호}, "번호": {"부품이름": {"face": "앞|뒤|위|아래" (또는 ref·ref_no·relation), "evidence": "책 N번에서 읽은 근거"}}}
+    nm = aid.split("-")[-1]
+    if nm not in _orient_cache:
+        p = nm + "_orient.json"
+        _orient_cache[nm] = __import__("json").load(open(p, encoding="utf-8")) if os.path.exists(p) else {}
+    return _orient_cache[nm]
+
+def inside(pg, ho):   # 돌기 중심이 구멍 안에 완전히 들었는가(느슨한 _mate 와 달리 엄격)
+    rel = pg["pos"] - ho["pos"]; al = float(rel @ ho["dir"]); lat = float(np.linalg.norm(rel - al * ho["dir"]))
+    return lat < 0.4 and abs(al) <= (ho.get("len", 5) or 5) / 2 + 0.1
+
+def check(A, k):
+    out = []; vs = view(A, k); pf = {id(o): cc.feats(o, "pegs") for o in vs}; hf = {id(o): cc.feats(o, "holes") for o in vs}
+    # 규칙 2·8
+    for r in [o for o in vs if o.new and o.n == "리벳"]:
+        c = r.R @ np.array(r.conn["pegs"][0]["dir"], float); best = {}
+        for pg in pf[id(r)]:
+            for a in vs:
+                if a is r or a.n not in dims: continue
+                for ho in hf[id(a)]:
+                    if _mate(pg, ho):
+                        rel = pg["pos"] - ho["pos"]; al = float(rel @ ho["dir"]); lat = float(np.linalg.norm(rel - al * ho["dir"])); sc = abs(al) + lat
+                        if pg["id"] not in best or sc < best[pg["id"]][0]: best[pg["id"]] = (sc, a)
+        if "p1" in best and "p2" in best and best["p1"][1] is not best["p2"][1]:
+            A1, A2 = best["p1"][1], best["p2"][1]
+            s1 = obb.span(obb.corners(A1.p, A1.R, np.array(dims[A1.n], float) / 2), c); s2 = obb.span(obb.corners(A2.p, A2.R, np.array(dims[A2.n], float) / 2), c)
+            g = float(max(s2[0] - s1[1], s1[0] - s2[1]))
+            if g > 0.3 or g < -1.0: out.append("규칙8 리벳 틈: %s↔%s %+.1fmm" % (A1.n, A2.n, g))
+    # 규칙 5~7
+    for b in [o for o in vs if o.new and (("블록" in o.n and o.n != "눈블록") or o.n in ("DC모터", "서보모터", "메인보드", "리벳"))]:
+        for pg in pf[id(b)]:
+            fr = sorted({a.n for a in vs if a is not b and "프레임" in a.n and any(inside(pg, ho) for ho in hf[id(a)])})
+            if len(fr) >= 2: out.append("규칙5~7 %s %s 돌기가 프레임 두 장에: %s" % (b.n, pg["id"], "+".join(fr)))
+    # 규칙 10 (방향 있는 부품: 책 그림의 부품 모양·특징 방향과 같아야 한다 — 기준은 월드 X·Y·Z 가 아니라 같은 로봇 안의 다른 부품과의 상대 관계)
+    od = _orient(A.id)
+    for o in [o for o in vs if o.new and o.n in DIRECTIONAL]:
+        loc, what = DIRECTIONAL[o.n]; dec = (od.get(str(k)) or {}).get(o.n)
+        w = o.R @ np.array(loc, float)
+        if not dec: out.append("규칙10 %s 방향 미기록 — 책에서 %s 이 어느 부품 쪽인지/반대쪽인지 읽어 %s_orient.json 에 적을 것" % (o.n, what, A.id.split("-")[-1])); continue
+        if "face" in dec:   # 로봇 기준 방향: 앞/뒤 = 버튼 줄(+z)이 로봇 뒤쪽 기준 부품(robot.back_ref)에서 먼/가까운 쪽, 위/아래 = 윗면(+y)이 로봇 바닥 기준 부품(robot.bottom_ref)에서 먼/가까운 쪽
+            rb = od.get("robot") or {}; fa = dec["face"]; key = "back" if fa in ("앞", "뒤") else "bottom"
+            if key + "_ref" not in rb: out.append("규칙10 %s_orient.json 에 robot.%s_ref (로봇 %s 기준 부품)가 없음" % (A.id.split("-")[-1], key, "뒤쪽" if key == "back" else "바닥")); continue
+            if key == "bottom": w = o.R @ np.array((0, 1, 0), float)
+            dec = dict(dec, ref=rb[key + "_ref"], ref_no=rb.get(key + "_no"), relation=("away" if fa in ("앞", "위") else "toward"))
+        ref = _find_part(A, vs, dec["ref"], dec.get("ref_no"))
+        if ref is None: out.append("규칙10 %s 기준 부품 %s %s번을 이 번호에서 못 찾음" % (o.n, dec["ref"], dec.get("ref_no"))); continue
+        d = float(w @ (ref.p - o.p)); toward = d > 0
+        if toward != (dec["relation"] == "toward"): out.append("규칙10 %s %s 이 책(%s)과 다름: 책 %s %s 쪽 / 모델 %s" % (o.n, what, dec.get("evidence", "근거 없음"), dec["ref"], dec["relation"] == "toward" and "을 향함" or "반대쪽", toward and "향함" or "반대쪽"))
+    # 규칙 13 (돌기로 프레임에 바로 꽂는 부품 — 블록·모터·메인보드·센서: 몸체와 프레임 면 사이 틈 0)
+    for P in [o for o in vs if o.new and o.conn["pegs"] and o.n in dims and (("블록" in o.n and o.n != "눈블록") or o.n in ("DC모터", "서보모터", "메인보드", "IR센서", "LED센서"))]:
+        done = set()
+        for pg in pf[id(P)]:
+            for F in vs:
+                if F is P or "프레임" not in F.n or F.n not in dims or id(F) in done: continue
+                for ho in hf[id(F)]:
+                    if inside(pg, ho):
+                        done.add(id(F)); ax = ho["dir"]
+                        s1 = obb.span(obb.corners(P.p, P.R, np.array(dims[P.n], float) / 2), ax); s2 = obb.span(obb.corners(F.p, F.R, np.array(dims[F.n], float) / 2), ax)
+                        g = float(max(s2[0] - s1[1], s1[0] - s2[1])) + float(pg.get("len", 5) or 5)   # 상자에 돌기 길이가 들어 있어서 딱 붙으면 −돌기길이 → 보정
+                        if g > 0.3: out.append("규칙13 %s↔%s 직접 결합 틈 %+.1fmm" % (P.n, F.n, g))
+                        elif g < -1.0: out.append("규칙13 %s↔%s 겹침 %+.1fmm" % (P.n, F.n, g))
+                        break
+    # 규칙 9 (볼트·너트)
+    rows = []; fast = []; cc.scan(A, k, dims, rows, fast)
+    for x in fast:
+        if x.get("kind") in ("8볼트", "12볼트"):
+            if abs(x["head_off"]) > 0.05: out.append("규칙9 %s 머리 %+.1fmm (떠 있거나 파묻힘)" % (x["kind"], x["head_off"]))
+            if x["tip_off"] > 0.05: out.append("규칙9 %s 끝이 판 밖으로 %+.1fmm" % (x["kind"], x["tip_off"]))
+            want = {"8볼트": 10.0, "12볼트": 15.0}[x["kind"]]   # 규칙 14·15: 8볼트=프레임 2장, 12볼트=프레임 3장 — 틈 없이 딱 붙으면 판 두께 합이 10·15
+            if x.get("nut") and abs(x["stack"] - want) > 0.3: out.append("규칙14·15 %s 가 지나는 판 두께 합 %.1fmm (프레임 %d장 = %.0fmm 이어야 함 — 틈이 있거나 판 수가 다름, 블록이 낀 번호는 확인)" % (x["kind"], x["stack"], 2 if x["kind"] == "8볼트" else 3, want))
+        elif "nut_off" in x and abs(x["nut_off"]) > 0.05: out.append("규칙9 너트가 판에서 %+.1fmm" % x["nut_off"])
+    return sorted(set(out))
+
+def main():
+    want = sys.argv[1:]; name = want[0] if want else "all"; steps = [int(a) for a in want[1:]]
+    names = [os.path.basename(p)[:-3] for p in sorted(glob.glob("*.py")) if not os.path.basename(p).startswith(("scratch", "new_assembly", "_")) and any(l.startswith("A = Asm(\"cubo-") for l in open(p, encoding="utf-8", errors="ignore"))] if name == "all" else [name]
+    total = 0
+    for nm in names:
+        try: A = runpy.run_path(nm + ".py", run_name="probe")["A"]
+        except BaseException as e: print("⚠ %s 건너뜀: %s" % (nm, repr(e)[:80])); continue
+        n_ = 0
+        for k in (steps or range(1, len(A.steps) + 1)):
+            try: res = check(A, k)
+            except BaseException as e: print("⚠ %s %d번 점검 오류: %s" % (nm, k, repr(e)[:70])); continue
+            for r in res: print("❌ %s %d번 %s" % (nm, k, r)); n_ += 1
+        print("== %s: %d건" % (nm, n_)); total += n_
+    print("합계 %d건" % total)
+
+if __name__ == "__main__": main()
