@@ -5955,16 +5955,35 @@
     // 교재 참고 그림(ivs_assembly_refs, 관리자 전용 — 표 규칙(RLS)이 관리자가 아니면 빈 목록을 돌려준다). 그림은 단계를 열 때 그 단계 것만 받는다.
     refStore: {
       _h(extra){ return Object.assign({ apikey: SUPABASE_KEY, Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' }, extra || {}); },
+      async _local(assemblyId, steps){ // 개발 서버(localhost)에서는 작업 중인 차시 그림을 저장소 파일에서 바로 읽는다 — 라이브 DB 에서 받지 않는다. 파일이 없으면 null(아래에서 DB 로)
+        if (!/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) return null;
+        try {
+          const r = await fetch('/api/local-refs?id=' + encodeURIComponent(assemblyId) + (steps ? '&steps=' + steps.join(',') : '&meta=1'));
+          if (!r.ok) return null;
+          const j = await r.json();
+          return Array.isArray(j.rows) && j.rows.length ? j.rows : null;
+        } catch (e) { return null; }
+      },
+      _prefetched: new Set(),
+      _prefetch(assemblyId, steps){ // 접속한 차시의 그림만, 단계 순서대로 뒤에서 하나씩 이 컴퓨터에 저장해 둔다(사용자 지시 2026-11-03: 다 받을 필요 없이 접속한 차시만). 이미 저장된 그림은 다시 받지 않는다
+        if (this._prefetched.has(assemblyId)) return; this._prefetched.add(assemblyId);
+        // 5단계씩 묶어 확인한다 — __ivsAsmRefs 가 그림마다 버전(ctid·xmin·updated_at)을 비교해 저장본과 같은 그림은 받지 않고 바뀌었거나 없는 그림만 받는다
+        (async () => { for (let i = 0; i < steps.length; i += 5) { try { await window.__ivsAsmRefs(assemblyId, steps.slice(i, i + 5)); } catch (e) { /* 못 받은 단계는 열 때 받는다 */ } await new Promise(r => setTimeout(r, 300)); } })();
+      },
       async meta(assemblyId){ // { 단계: [{ idx, note }] } — 그림 자체는 받지 않는다
         try {
-          const rows = await window.__ivsAsmRows('ivs_assembly_refs', 'step,idx,note', assemblyId, 'step,idx');
+          const local = await this._local(assemblyId, null);
+          const rows = local || await window.__ivsAsmRows('ivs_assembly_refs', 'step,idx,note', assemblyId, 'step,idx');
           if (!rows) return {};
           const out = {};
           rows.forEach(r => { (out[r.step] = out[r.step] || []).push({ idx: r.idx, note: r.note || '' }); });
+          if (!local) this._prefetch(assemblyId, Object.keys(out).map(Number).sort((a, b) => a - b));   // 저장소 파일이 없는 차시(DB 에서 받아야 하는 차시)만
           return out;
         } catch (e) { return {}; }
       },
       async get(assemblyId, steps){ // [{ step, idx, note, img }]
+        const local = await this._local(assemblyId, steps);   // 작업 중인 차시(저장소 refs 폴더)는 DB 를 거치지 않는다
+        if (local) return local;
         return await window.__ivsAsmRefs(assemblyId, steps);   // 한 번 받은 그림은 이 컴퓨터에 저장해 두고 바뀐 그림만 다시 받는다
       },
       async cached(assemblyId, steps){ return await window.__ivsAsmRefsCached(assemblyId, steps); },   // 저장본이 있으면 서버 확인 없이 바로

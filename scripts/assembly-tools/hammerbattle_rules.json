@@ -7,5 +7,6 @@
   "placecheck": true,
   "parts_sum": true,
   "img_db": true,
-  "img_set_from": 15
+  "img_set_from": 15,
+  "bolt_nut_check": true
 }

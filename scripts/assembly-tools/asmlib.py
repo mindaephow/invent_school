@@ -599,6 +599,25 @@ class Step:
         part.extra.update({"dir": rnd(-d0 if dir is None else vec(dir)), "marks": marks})
         if hover: part.extra["hover"] = hover
         return s._add(part)
+    def _seat_nut(s, n, R, p, hosts):
+        """너트를 볼트 끝이 아니라 볼트가 지나는 판 묶음의 맨 아래 면에 앉힌다 — 너트 목(돌기)이 판 구멍 안으로 들어가고 머리(넓은 쪽)가 홀 테두리 면에 닿는다. 볼트가 지나는 판이 없으면 그대로 둔다."""
+        import obb
+        bolt = next((h for h in hosts if h.n in ("8볼트", "12볼트")), None)
+        if bolt is None: return p
+        dims = _sink_dims(); c = bolt.conn["pegs"][0]; ld = np.array(c["dir"], float); dw = bolt.R @ ld
+        base = bolt.p + bolt.R @ (np.array(c["pos"], float) - ld * c["len"] / 2)
+        head = float(np.dot(np.array(c["pos"], float) - ld * c["len"] / 2, ld) + np.array(dims[bolt.n], float)[int(np.argmax(np.abs(ld)))] / 2)
+        hide = s.kw.get("hideMade") or {}; bot = None
+        for q in s.A.parts:
+            if q.n not in dims or not ("프레임" in q.n or "블록" in q.n or q.n == "서보혼") or str(q.step.index) in hide: continue
+            d = np.array(dims[q.n], float) / 2
+            if any(obb.contains(base - dw * head + dw * t, q.p, q.R, d, 0.01) for t in np.arange(0.25, c["len"] + head, 0.5)):
+                sp = obb.span(obb.corners(q.p, q.R, d), dw); bot = sp[1] if bot is None else max(bot, sp[1])
+        if bot is None: return p
+        nc = partlib.get(n)["pegs"][0]; nl = np.array(nc["dir"], float); dn = np.array(R, float) @ nl
+        if float(np.dot(dn, dw)) > -0.9: return p
+        nb = np.array(p, float) + np.array(R, float) @ (np.array(nc["pos"], float) - nl * nc["len"] / 2)
+        return tuple(float(v) for v in np.array(p, float) + dw * (bot - 1.0 - float(np.dot(nb, dw))))   # 너트 머리(넓은 쪽 1mm)는 홀 테두리 안에 들어가 판 면과 같다 → 목 밑동은 면에서 1.0 안쪽(G2, SINK_PARTS 와 같은 값)
     def recv(s, n, R, links, dir=None, hover=None, p=None, **extra):
         """움직이는 쪽이 구멍을 받는 쪽(프레임이 블록 끝 돌기에 얹히는 경우).
         links 가 dict {내 구멍 id: (고정 부품, 돌기 id)} 면 위치 p 를 계산하고, [(고정 부품, 돌기 id), ...] 목록이면 p 를 직접 줘야 한다."""
@@ -625,6 +644,7 @@ class Step:
             p = s._anchored(n, R, p)
             s._resolve_lazy(n, R, p, extra)
             s._lock_extra(n, extra)
+        if calc and n == "너트" and getattr(s.A, "seat_nuts", False): p = s._seat_nut(n, R, p, [h for _, (h, _g) in pairs])   # 너트 머리가 볼트가 지나는 판 묶음 맨 아래 홀 테두리 면에 닿게(사용자 2026-11-03)
         part = Part(n, R, p, s, extra)
         if calc:
             for pid, (host, gid) in pairs[1:]:
@@ -642,7 +662,7 @@ class Step:
         if hover: part.extra["hover"] = hover
         return s._add(part)
 
-SINK_PARTS = ("8볼트", "12볼트", "너트")   # 머리·몸이 프레임 면 밖으로 나오면 안 되는 부품(구멍에 묻는다)
+SINK_PARTS = ("8볼트", "12볼트", "너트", "서보고정볼트")   # 머리·몸이 프레임 면 밖으로 나오면 안 되는 부품(구멍에 묻는다)
 _SINK_DIMS = None
 def _sink_dims():
     global _SINK_DIMS
@@ -705,7 +725,7 @@ def compute_anchors(A):
         if P is None:
             continue
         best = None
-        for Q in sorted((q for q in parts if idx[id(q)] < idx[id(P)]), key=lambda q: -idx[id(q)]):
+        for Q in sorted((q for q in parts if idx[id(q)] < idx[id(P)] and q.step.kw.get("slot", 1) == P.step.kw.get("slot", 1)), key=lambda q: -idx[id(q)]):   # 같은 창고 부품만 — 새 창고(원점)의 부품이 다른 창고 부품의 돌기·구멍과 우연히 같은 자리에 있다고 그 뒤를 따라가면 안 된다(해머배틀 29번 오른쪽 블록이 19번 서보고정볼트를 따라 1.3mm 내려앉음, 2026-11-03)
             for a, pgid, hoid in inn.get(id(P), []):      # Q 의 돌기가 P 의 구멍에
                 if a is Q:
                     best = (("홀", hoid), ("돌기", pgid), Q)

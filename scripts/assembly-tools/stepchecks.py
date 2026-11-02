@@ -62,7 +62,7 @@ def fastener_protrusion(A, k):
         return _pose(q, k)
     pool = [(q, *pose_k(q)) for k2, st2 in enumerate(A.steps, 1) if k2 <= k and str(k2) not in hide for q in st2.parts if q.n in dims and "프레임" in q.n]
     for b in A.steps[k - 1].parts:
-        if b.n not in ("8볼트", "12볼트", "너트") or not b.conn["pegs"]: continue
+        if b.n not in ("8볼트", "12볼트", "너트", "서보고정볼트") or not b.conn["pegs"]: continue
         bp, bR = pose_k(b); c = b.conn["pegs"][0]
         ld = np.array(c["dir"], float); dw = bR @ ld; ax = int(np.argmax(np.abs(ld))); half = np.array(dims[b.n], float)[ax] / 2
         base = bp + bR @ (np.array(c["pos"], float) - ld * c["len"] / 2)    # 돌기 밑동(구멍 입구 쪽 끝)
@@ -74,6 +74,50 @@ def fastener_protrusion(A, k):
                 prot = face_t - back_t
                 if prot > 0.3: bad.append((b.n, q.n, round(prot, 1)))
                 break
+    return bad
+
+def bolt_nut_fit(A, k):
+    """k번에서 너트로 조이는 볼트(8·12볼트)의 물리 결합을 센 값으로 점검한다 — 사용자 기본 규칙(2026-11-03, 해머배틀 20·21번에서 볼트가 프레임을 지나쳐 5mm 깊이 놓였음):
+    ① 볼트 머리는 맨 위 판(축을 지나는 판들 중 머리 쪽 첫 판)의 홀 테두리 안에 묻혀 그 면과 같다(±0.5) ② 볼트 끝은 마지막 판의 반대쪽 면을 지나치지 않고(+0.3) 그 면에서 3.3 안쪽에서 끝난다(너트 목이 판 구멍 안으로 들어가 있어 그 안에 끝이 든다)
+    ③ 너트는 목이 판 구멍 안에 있고 너트 머리(넓은 쪽 1mm)가 마지막 판의 홀 테두리 안에 들어가 그 면과 같다(목 밑동이 면에서 1.0 안쪽, ±0.5). 반환: 어긋난 것의 설명 문장 목록."""
+    from asmlib import euler_to_R
+    dims = _dims(); bad = []
+    hide = A.steps[k - 1].kw.get("hideMade") or {}
+    def pose_k(q):
+        key = "%d:%d" % (q.step.index, q.step.parts.index(q))
+        for j in range(k, 0, -1):
+            e = (A.steps[j - 1].kw.get("moveMade") or {}).get(key)
+            if e: return np.array(e["p"], float), np.array(euler_to_R(e["r"]), float)
+        return _pose(q, k)
+    pool = [(q, *pose_k(q)) for k2, st2 in enumerate(A.steps, 1) if k2 <= k and str(k2) not in hide for q in st2.parts if q.n in dims and ("프레임" in q.n or "블록" in q.n or q.n == "서보혼")]
+    st = A.steps[k - 1]
+    if not any(p.n == "너트" for p in st.parts): return bad
+    def stack_along(pt0, dw, length):   # 축 위 점들이 든 판들의 (가까운 면, 먼 면) 좌표 목록(dw 방향 좌표)
+        faces = []
+        for q, p, R in pool:
+            d = np.array(dims[q.n], float) / 2.0
+            if any(obb.contains(pt0 + dw * s, p, R, d, 0.01) for s in np.arange(0.25, length, 0.5)):
+                sp = obb.span(obb.corners(p, R, d), dw); faces.append((float(sp[0]), float(sp[1]), q.n))
+        return faces
+    for b in st.parts:
+        if b.n not in ("8볼트", "12볼트") or not b.conn["pegs"]: continue
+        bp, bR = pose_k(b); c = b.conn["pegs"][0]; ld = np.array(c["dir"], float); dw = bR @ ld; ax = int(np.argmax(np.abs(ld)))
+        base = bp + bR @ (np.array(c["pos"], float) - ld * c["len"] / 2); tip = base + dw * c["len"]
+        head = float(np.dot(np.array(c["pos"], float) - ld * c["len"] / 2, ld) + np.array(dims[b.n], float)[ax] / 2)   # 밑동에서 머리 윗면까지
+        fr = stack_along(base - dw * head, dw, c["len"] + head)
+        if not fr: continue
+        top = min(f[0] for f in fr); bot = max(f[1] for f in fr); hd = float(np.dot(base - dw * head, dw)); tp = float(np.dot(tip, dw))
+        if abs(hd - top) > 0.5: bad.append("%s 머리가 맨 위 판 면에서 %+.1fmm(머리는 판 면과 같아야 함)" % (b.n, hd - top))
+        if tp - bot > 0.3: bad.append("%s 끝이 마지막 판 반대 면을 %.1fmm 지나침(판 두께 합 %.1f)" % (b.n, tp - bot, bot - top))
+        if bot - tp > 3.3: bad.append("%s 끝이 마지막 판 면에서 %.1fmm 모자람(너트 목에 안 닿음)" % (b.n, bot - tp))
+    for n in st.parts:
+        if n.n != "너트" or not n.conn["pegs"]: continue
+        np_, nR = pose_k(n); c = n.conn["pegs"][0]; ld = np.array(c["dir"], float); dn = nR @ ld
+        nb = np_ + nR @ (np.array(c["pos"], float) - ld * c["len"] / 2)   # 너트 목 밑동(머리 안쪽 면)
+        fr = stack_along(nb, dn, c["len"])
+        if not fr: bad.append("너트 목이 어느 판 구멍에도 안 들어 있음"); continue
+        face = min(f[0] for f in fr)   # 너트가 들어가는 쪽에서 닿는 판 면(dn 방향 가장 가까운 면)
+        if abs(float(np.dot(nb, dn)) - (face + 1.0)) > 0.5: bad.append("너트 머리가 판 홀 테두리 안(면에서 1.0mm 안쪽)에서 %+.1fmm 어긋남(너트 머리는 테두리 안에 들어가 판 면과 같아야 함)" % (float(np.dot(nb, dn)) - (face + 1.0)))
     return bad
 
 def rivet_gaps(A, k):
@@ -171,9 +215,12 @@ def apply(A, name):
         if any(p.n == "리벳" for p in st.parts):   # 리벳으로 프레임과 프레임을 이으면 딱 붙는다(기본 규칙, 사용자 2026-10-24): 틈 0.3 초과(떠 있음)·겹침 1.0 초과면 막는다
             _rg = rivet_gaps(A, k)
             items.append((k not in _done, not _rg, "리벳 결합 프레임이 딱 붙음(틈 0)" + ("" if not _rg else " — 틈 %s" % ", ".join("%s(%s↔%s) %.1fmm" % x for x in _rg[:3]))))
-        if any(p.n in ("8볼트", "12볼트", "너트") for p in st.parts):   # 볼트·너트의 가장 큰 부분은 프레임 구멍 안에 묻혀 프레임 면 밖으로 안 나온다(기본 규칙, 사용자 2026-10-24)
+        if any(p.n in ("8볼트", "12볼트", "너트", "서보고정볼트") for p in st.parts):   # 볼트·너트의 가장 큰 부분은 프레임 구멍 안에 묻혀 프레임 면 밖으로 안 나온다(기본 규칙, 사용자 2026-10-24)
             _fp = fastener_protrusion(A, k)
             items.append((k not in _done, not _fp, "볼트·너트 머리·몸이 프레임 면 밖으로 안 나옴" + ("" if not _fp else " — 나옴 %s" % ", ".join("%s(%s) %.1fmm" % x for x in _fp[:3]))))
+        if rl.get("bolt_nut_check") and any(p.n == "너트" for p in st.parts) and any(p.n in ("8볼트", "12볼트") for p in st.parts):   # 볼트·너트 물리 결합(조립도별 켬: _rules.json "bolt_nut_check": true)(사용자 2026-11-03): 볼트가 프레임을 지나쳐 깊이 놓이면 막는다
+            _bn = bolt_nut_fit(A, k)
+            items.append((k not in _done, not _bn, "볼트 머리는 맨 위 판 면·끝은 마지막 판 안·너트 머리는 판 홀 테두리에 닿음" + ("" if not _bn else " — %s" % "; ".join(_bn[:3]))))
         if rl.get("mainboard_check") and any(p.n == "메인보드" for p in st.parts):   # 메인보드 방향 검사(조립도별 켬: _rules.json "mainboard_check": true). 사용자 ✓ 번호는 막지 않는다
             _mb = mainboard_dir(A, k, str(r.get("부품방향", "")))
             items.append((k not in _done, not _mb, "메인보드 방향: 책 버튼 쪽 = 모델 버튼 쪽(+z)" + ("" if not _mb else " — " + "; ".join(_mb))))
