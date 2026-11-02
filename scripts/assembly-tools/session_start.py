@@ -44,15 +44,26 @@ _rows = []
 for _f in glob.glob(os.path.join(HERE, "process", "진행기록_*.md")):
     _L = open(_f, encoding="utf-8").read().split("\n")
     _i = next((i for i, l in enumerate(_L[:6]) if l.startswith("## ★ 마지막 작업")), None)
-    if _i is None or _i + 3 >= len(_L): continue
-    _rows.append((_L[_i + 1], os.path.basename(_f)[5:-3], _L[_i + 2].replace("- 어디까지: ", ""), _L[_i + 3].replace("- 다음: ", "")))
+    if _i is None: continue
+    _blk = []
+    for l in _L[_i + 1:]:
+        if l.startswith("## "): break
+        _blk.append(l)
+    _pick = lambda key: next((l.split(":", 1)[1].strip() if key != "- 마지막" else l for l in _blk if l.startswith(key)), "")
+    _first = next((l for l in _blk if l.startswith("- 20")), "")
+    if not _first: continue
+    _rows.append((_first, os.path.basename(_f)[5:-3], _pick("- 어디까지"), _pick("- 다음"), _pick("- 이어받음")))
 if _rows:
     print()
     print("[마지막 작업] 최근 순 (PC·아이디는 handoff.py 가 적은 것)")
-    for _t, _n, _w, _nx in sorted(_rows, reverse=True)[:5]:
+    import socket
+    _me = sys.argv[sys.argv.index("--아이디") + 1] if "--아이디" in sys.argv else "(아이디 미지정 — --아이디 <계정> 으로 돌리면 이어받는 쪽도 표시)"
+    for _t, _n, _w, _nx, _rcv in sorted(_rows, reverse=True)[:5]:
         print("  %s  %s" % (_n, _t.lstrip("- ")))
         print("    어디까지: %s" % _w)
         print("    다음: %s" % _nx)
+        if _rcv: print("    (직전 이어받음: %s)" % _rcv)
+        print("    → 이어받음: 지금 PC %s · 아이디 %s" % (socket.gethostname(), _me))
 print()
 print("다음: process/00_규칙.md 를 처음부터 읽고, 첫 보고에 '이번 번호에서 지킬 규칙 3개'를 적는다.")
 sys.exit(0)
