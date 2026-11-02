@@ -68,7 +68,7 @@ def main():
         evid.append("%d번 끼움 %d곳을 %s 거울로 뒤집은 칸 %s" % (mn, len(mir_cells), how, [c for c, h in mir_cells]))
     H0, _ = cv2.findHomography(np.array([[0, 0], [cols, 0], [cols, rows], [0, rows]], np.float32), C, 0)
     nodes = lambda H: {(c, r): cv2.perspectiveTransform(np.array([[[c - .5, r - .5]]], np.float32), H)[0][0] for c in range(1, cols + 1) for r in range(1, rows + 1)}
-    x0, y0, x1, y1 = int(C[:, 0].min() - 10), int(C[:, 1].min() - 10), int(C[:, 0].max() + 10), int(C[:, 1].max() + 10)
+    x0, y0, x1, y1 = max(0, int(C[:, 0].min() - 10)), max(0, int(C[:, 1].min() - 10)), min(g.shape[1], int(C[:, 0].max() + 10)), min(g.shape[0], int(C[:, 1].max() + 10))   # 모서리가 그림 밖(음수)이어도 잘라 쓴다(해머배틀 18번)
     ins = np.zeros(g.shape, np.uint8); cv2.fillPoly(ins, [C.astype(np.int32).reshape(-1, 1, 2)], 1)
     sub = g[y0:y1, x0:x1]; ie = cv2.erode(ins[y0:y1, x0:x1], np.ones((5, 5), np.uint8))
     m = ((sub > o["bright"]) & (ie > 0)).astype(np.uint8) * 255; n, lab, st, cen = cv2.connectedComponentsWithStats(m)

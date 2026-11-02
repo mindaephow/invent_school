@@ -22,7 +22,8 @@ def fit(obj,img,W,H,fov_deg,cx=None,cy=None):   # cx,cy = 주점(책 그림이 �
             proj,_=cv2.projectPoints(obj,rv,tv,K,None)
             err=np.linalg.norm(proj.reshape(-1,2)-img,axis=1)
             C_=-cv2.Rodrigues(rv)[0].T@np.array(tv).reshape(3); up=-(cv2.Rodrigues(rv)[0].T@np.array([0,1.0,0]))
-            key=err.mean()+(0 if up[1]>0 else 1e6)   # 위쪽이 위인 해를 먼저(두 해가 거울이면 위쪽이 위인 것)
+            behind=(cv2.Rodrigues(rv)[0]@obj.T).T[:,2]+np.array(tv).reshape(3)[2]<=0   # 점이 카메라 뒤로 간 해는 거울 해(2026-11-02 해머배틀 17번: 화면에서 프레임이 위아래로 뒤집혀 보였다)
+            key=err.mean()+(0 if up[1]>0 else 1e6)+(1e6 if behind.any() else 0)   # 위쪽이 위인 해를 먼저(두 해가 거울이면 위쪽이 위인 것)
             if best is None or key<best[0]: best=(key,err.mean(),rv,tv)
     if (best is None or best[0]>=1e6) and len(obj)>=4:   # 위쪽이 위인 해를 못 찾았으면(거의 한 평면·가까운 두 평면 점) 여러 초기 방향에서 반복해 위쪽이 위인 해를 찾는다(2026-10-17 배틀로봇 25번)
         ctr=obj.mean(0); span=max(40.0,float(np.abs(obj-ctr).max()))
@@ -37,7 +38,8 @@ def fit(obj,img,W,H,fov_deg,cx=None,cy=None):   # cx,cy = 주점(책 그림이 �
                     if not ok: continue
                     proj,_=cv2.projectPoints(obj,rv,tv,K,None); err=np.linalg.norm(proj.reshape(-1,2)-img,axis=1)
                     up=-(cv2.Rodrigues(rv)[0].T@np.array([0,1.0,0]))
-                    key=err.mean()+(0 if up[1]>0 else 1e6)
+                    behind=(cv2.Rodrigues(rv)[0]@obj.T).T[:,2]+np.array(tv).reshape(3)[2]<=0
+                    key=err.mean()+(0 if up[1]>0 else 1e6)+(1e6 if behind.any() else 0)
                     if best is None or key<best[0]: best=(key,err.mean(),rv,tv)
     if best is None: return None
     return (best[1],best[2],best[3],K)
