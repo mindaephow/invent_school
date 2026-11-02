@@ -608,6 +608,7 @@ _G28 = [F28] + RV28 + [G28]                                               # 28�
 _rt = [np.array(_r.peg("p2")["pos"], float) for _r in RV29]                # 새 리벳 윗돌기 자리 — 프레임 구멍 2·3번째가 여기 와서 끼운다
 _hf = np.array(F28.hole("h2_1")["pos"], float)
 _sh29 = tuple(float(v) for v in (_rt[0] - _hf))
+_sh29 = (_sh29[0], _sh29[1] - 0.5, _sh29[2])   # 리벳 윗돌기 중심은 맞닿는 면에서 3mm, 프레임 판 중심은 2.5mm — 0.5mm 내려 틈 0(규칙 8)
 _mk29 = {id(F28): [rnd(_r) for _r in _rt]}
 s29.move_made(A.group("mm29", _G28), np.eye(3), pivot=np.zeros(3), shift=_sh29, dir=[0.0, 1.0, 0.0], hover=40, group="mm29", marks=_mk29)
 print("29번 28번 조립 이동", [round(v, 1) for v in _sh29], "| 프레임 구멍3 →", [round(float(v), 1) for v in F28.hole("h3_1")["pos"]], "↔ 두 번째 리벳 윗돌기", [round(float(v), 1) for v in _rt[1]])

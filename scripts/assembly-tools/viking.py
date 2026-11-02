@@ -460,7 +460,7 @@ s23.note = "[교재 23] 22번 결과를 뒤집어 놓고, 115프레임 흰 막�
 s23.kw["hideMade"] = {str(_i): "1~19번(창고 1·2)" for _i in range(1, 20)}
 _R_FLIP23 = np.diag([-1.0, -1.0, 1.0])
 G23 = A.group("20~22번 조립", [_q for _q in A.parts if _q.step.index in (20, 21, 22)])
-s23.move_made(G23, _R_FLIP23, pivot=(-3.0, 5.0, 0.0), shift=(0.0, 2.0, 0.0), dir=[0, 1, 0], hover=0, group="mm23flip")
+s23.move_made(G23, _R_FLIP23, pivot=(-3.0, 5.0, 0.0), shift=(0.0, 2.0, 0.0), dir=[0, 1, 0], hover=0.01, group="mm23flip")
 RV23 = s23.attach("리벳", np.eye(3), {"p1": (SP20, "h5_2")}, rivet=True, hover=45)   # 작은 판 노출 면의 구멍(x −3, z −25.5) — 결합 전(분리, 05 표 4번)
 R_BAR23 = np.array([[0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [-1.0, 0.0, 0.0]])   # 115프레임: 국소 x → −Z (구멍 h1 이 z −15.5, h15 가 −155.5), 막대가 −Z 로 뻗음
 BAR23 = s23.recv("115프레임", R_BAR23, {"h2_1": (RV23, "p2")}, p=(-3.0, float(RV23.p[1]) + 2.5, -85.5), dir=[0, 1, 0], hover=57)

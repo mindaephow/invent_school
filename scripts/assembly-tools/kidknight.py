@@ -507,7 +507,7 @@ for _q in [_x for _x in A.parts if _x.step.index <= 32]: _addhide(_q, [33], "32�
 XS33 = 300.0                                                              # 방패 자리(서 있는 세계 좌표)
 P33 = s33._add(Part("59프레임", np.eye(3), (XS33, 2.5, 0.0), s33, {}))                  # 흰 판: 칸 → +X, 줄 → +Z (가운데 줄이 z 0, 칸3·칸7 = x −20·+20)
 rv33 = [s33._add(Part("리벳", np.eye(3), (XS33 + _dx, 5.0, 0.0), s33, dict(dir=[0, 1, 0], hover=28, joinOrder=1, openEnd=True, marks=[[XS33 + _dx, 2.5, 0.0]]))) for _dx in (-20.0, 20.0)]   # 관리자 지시 2026-10-07: 리벳을 먼저 흰 판에 꽂고(순서 1), 그다음 빨간 판(순서 2)을 끼운다(23번과 같은 방식) — 교재 그림은 리벳이 이미 꽂힌 모양이지만 조립 보기는 과정을 보여 준다
-RED33 = s33._add(Part("15프레임", np.eye(3), (XS33, 10.5, 0.0), s33, dict(dir=[0, 1, 0], hover=60, recv=True, joinOrder=2, marks=[[XS33 - 20.0, 11.0, 0.0], [XS33 + 20.0, 11.0, 0.0]])))   # 빨간 판: 리벳 몸(판 위 3mm) 위에 얹힌다 — 판 윗면 5 + 리벳 몸 3 + 판 반 두께 2.5 = 10.5
+RED33 = s33._add(Part("15프레임", np.eye(3), (XS33, 7.5, 0.0), s33, dict(dir=[0, 1, 0], hover=60, recv=True, joinOrder=2, marks=[[XS33 - 20.0, 8.0, 0.0], [XS33 + 20.0, 8.0, 0.0]])))   # 빨간 판: 흰 판 위에 틈 없이 맞닿는다(규칙 8, 새 리벳 규격) — 판 윗면 5 + 판 반 두께 2.5 = 7.5
 _SH33 = [(_q, np.array(_q.p, float), np.array(_q.R, float)) for _q in [P33] + rv33 + [RED33]]   # 34번에서 쓰려고 서 있는 세계 좌표를 적어 둔다(아래 _to_pre 로 바뀌기 전)
 for _q in [P33] + rv33 + [RED33]: _to_pre(_q)
 

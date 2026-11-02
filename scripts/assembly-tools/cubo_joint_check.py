@@ -48,6 +48,19 @@ def inside(pg, ho):   # 돌기 중심이 구멍 안에 완전히 들었는가(�
     rel = pg["pos"] - ho["pos"]; al = float(rel @ ho["dir"]); lat = float(np.linalg.norm(rel - al * ho["dir"]))
     return lat < 0.4 and abs(al) <= (ho.get("len", 5) or 5) / 2 + 0.1
 
+def _pen(pa, Ra, ha, pb, Rb, hb):   # 두 회전 상자(OBB)의 침투 깊이(분리축 정리의 가장 얕은 겹침, 떨어져 있으면 0)
+    A_, B_ = [Ra[:, i] for i in range(3)], [Rb[:, i] for i in range(3)]
+    axes = A_ + B_ + [np.cross(a, b) for a in A_ for b in B_]; best = 1e9; d = pb - pa
+    for ax in axes:
+        n = float(np.linalg.norm(ax))
+        if n < 1e-6: continue
+        ax = ax / n
+        ra = sum(abs(float(ax @ A_[i])) * ha[i] for i in range(3)); rb = sum(abs(float(ax @ B_[i])) * hb[i] for i in range(3))
+        ov = ra + rb - abs(float(ax @ d))
+        if ov <= 0: return 0.0
+        best = min(best, ov)
+    return best
+
 def check(A, k):
     out = []; vs = view(A, k); pf = {id(o): cc.feats(o, "pegs") for o in vs}; hf = {id(o): cc.feats(o, "holes") for o in vs}
     # 규칙 2·8
@@ -59,12 +72,40 @@ def check(A, k):
                 for ho in hf[id(a)]:
                     if _mate(pg, ho):
                         rel = pg["pos"] - ho["pos"]; al = float(rel @ ho["dir"]); lat = float(np.linalg.norm(rel - al * ho["dir"])); sc = abs(al) + lat
-                        if pg["id"] not in best or sc < best[pg["id"]][0]: best[pg["id"]] = (sc, a)
+                        if pg["id"] not in best or sc < best[pg["id"]][0]: best[pg["id"]] = (sc, a, ho)
         if "p1" in best and "p2" in best and best["p1"][1] is not best["p2"][1]:
             A1, A2 = best["p1"][1], best["p2"][1]
-            s1 = obb.span(obb.corners(A1.p, A1.R, np.array(dims[A1.n], float) / 2), c); s2 = obb.span(obb.corners(A2.p, A2.R, np.array(dims[A2.n], float) / 2), c)
+            def _sp(Aq, pid):   # 판 구간: 프레임·블록은 상자, 브라켓은 L자라 리벳이 들어간 구멍의 두께 5mm 날개 조각
+                if "브라켓" in Aq.n:
+                    ho_ = best[pid][2]; z_ = float(ho_["pos"] @ c); return (z_ - 2.5, z_ + 2.5)
+                return obb.span(obb.corners(Aq.p, Aq.R, np.array(dims[Aq.n], float) / 2), c)
+            s1 = _sp(A1, "p1"); s2 = _sp(A2, "p2")
             g = float(max(s2[0] - s1[1], s1[0] - s2[1]))
             if g > 0.3 or g < -1.0: out.append("규칙8 리벳 틈: %s↔%s %+.1fmm" % (A1.n, A2.n, g))
+    # 규칙 3 (프레임은 물리적으로 겹칠 수 없다 — 판 높이가 겹치는 나란한 두 프레임의 구멍 중심이 피치(10mm)보다 훨씬 가까우면 위반. 구부러진 프레임도 구멍 기준이라 상자 크기에 속지 않는다)
+    frs = [o for o in vs if "프레임" in o.n and o.n in dims]
+    for a in [o for o in frs if o.new]:
+        for b in frs:
+            if b is a or (b.new and id(b) < id(a)): continue
+            na = a.R @ np.array((0, 1, 0), float); nb = b.R @ np.array((0, 1, 0), float)
+            if abs(abs(float(na @ nb)) - 1) > 1e-3 or abs(float((b.p - a.p) @ na)) >= 4.5: continue   # 나란하고 판 두께 구간이 0.5mm 넘게 겹치는 두 프레임만
+            ha = [h["pos"] for h in hf[id(a)]]; hb = [h["pos"] for h in hf[id(b)]]
+            if not ha or not hb: continue
+            d_ = min(float(np.linalg.norm(x - y)) for x in ha for y in hb)
+            if d_ < 9.0: out.append("규칙3 %s↔%s 겹침: 구멍 중심 간격 %.1fmm (프레임은 겹칠 수 없음 — 이어지면 10)" % (a.n, b.n, d_))
+    # 규칙 16 (프레임과 프레임이 옆에 같은 판 높이로 이어질 때는 방향이 어떻든 맞닿은 구멍 사이 피치가 10mm — 사용자 확정 2026-11-03)
+    for a in [o for o in frs if o.new]:
+        for b in frs:
+            if b is a or (b.new and id(b) < id(a)): continue
+            na = a.R @ np.array((0, 1, 0), float); nb = b.R @ np.array((0, 1, 0), float)
+            if abs(abs(float(na @ nb)) - 1) > 1e-3 or abs(float((b.p - a.p) @ na)) > 0.3: continue   # 같은 판 높이로 나란한 두 프레임만
+            if _pen(a.p, a.R, np.array(dims[a.n], float) / 2 + 3.0, b.p, b.R, np.array(dims[b.n], float) / 2 + 3.0) <= 0: continue   # 3mm 안쪽으로 가까이 있지 않으면 이어진 게 아님
+            ha = [h["pos"] for h in hf[id(a)]]; hb = [h["pos"] for h in hf[id(b)]]
+            if not ha or not hb: continue
+            if not any(c is not a and c is not b and any(inside(pg, ho) for pg in pf[id(c)] for ho in hf[id(a)]) and any(inside(pg, ho) for pg in pf[id(c)] for ho in hf[id(b)]) for c in vs):
+                continue   # 같은 부품(블록·리벳·볼트·모터)의 돌기가 두 프레임 구멍에 다 들어가야 이어진 것 — 따로 걸려 모서리만 닿는 프레임(홀수 줄·짝수 줄이 같은 중심선에 놓인 경우 등)은 줄이 반 칸 어긋나는 게 정상(사용자 2026-11-03)
+            d_ = min(float(np.linalg.norm(x - y)) for x in ha for y in hb)
+            if abs(d_ - 10.0) > 0.3: out.append("규칙16 옆 프레임 %s↔%s 맞닿은 구멍 피치 %.1fmm (10 이어야 함)" % (a.n, b.n, d_))
     # 규칙 5~7
     for b in [o for o in vs if o.new and (("블록" in o.n and o.n != "눈블록") or o.n in ("DC모터", "서보모터", "메인보드", "리벳"))]:
         for pg in pf[id(b)]:
@@ -103,11 +144,11 @@ def check(A, k):
     rows = []; fast = []; cc.scan(A, k, dims, rows, fast)
     for x in fast:
         if x.get("kind") in ("8볼트", "12볼트"):
-            if abs(x["head_off"]) > 0.05: out.append("규칙9 %s 머리 %+.1fmm (떠 있거나 파묻힘)" % (x["kind"], x["head_off"]))
+            if not (-0.3 <= x["head_off"] <= 0.3): out.append("규칙9 %s 머리 %+.1fmm (머리는 홀라인에 딱 끼워져 프레임·브라켓 면 밖으로 넘치면 안 됨 — 사용자 2026-11-03. 넘치거나 떠 있으면 위반)" % (x["kind"], x["head_off"]))
             if x["tip_off"] > 0.05: out.append("규칙9 %s 끝이 판 밖으로 %+.1fmm" % (x["kind"], x["tip_off"]))
             want = {"8볼트": 10.0, "12볼트": 15.0}[x["kind"]]   # 규칙 14·15: 8볼트=프레임 2장, 12볼트=프레임 3장 — 틈 없이 딱 붙으면 판 두께 합이 10·15
-            if x.get("nut") and abs(x["stack"] - want) > 0.3: out.append("규칙14·15 %s 가 지나는 판 두께 합 %.1fmm (프레임 %d장 = %.0fmm 이어야 함 — 틈이 있거나 판 수가 다름, 블록이 낀 번호는 확인)" % (x["kind"], x["stack"], 2 if x["kind"] == "8볼트" else 3, want))
-        elif "nut_off" in x and abs(x["nut_off"]) > 0.05: out.append("규칙9 너트가 판에서 %+.1fmm" % x["nut_off"])
+            if x.get("nut") and not x.get("gear") and abs(x["stack"] - want) > 0.3: out.append("규칙14·15 %s 가 지나는 판 두께 합 %.1fmm (프레임 %d장 = %.0fmm 이어야 함 — 틈이 있거나 판 수가 다름, 블록이 낀 번호는 확인)" % (x["kind"], x["stack"], 2 if x["kind"] == "8볼트" else 3, want))
+        elif "nut_off" in x and not (-1.2 <= x["nut_off"] <= 0.3): out.append("규칙9 너트가 판에서 %+.1fmm (너트 아래 턱은 프레임 홀 테두리에 1mm 들어가는 게 정상 — 사용자 2026-11-03. 떠 있거나 더 깊이 파묻히면 위반)" % x["nut_off"])
     return sorted(set(out))
 
 def main():

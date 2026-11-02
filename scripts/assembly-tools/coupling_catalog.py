@@ -20,6 +20,8 @@ def pose_at(A, q, k):
     for j in range(k, 0, -1):
         e = (A.steps[j - 1].kw.get("moveMade") or {}).get(key)
         if e: return np.array(e["p"], float), np.array(euler_to_R(e["r"]), float)
+    mv = q.extra.get("move")   # 옛 방식(extra["move"]): 빌드 전 probe 에서는 moveMade 가 없어도 그 번호부터 옮긴 자리·자세로 놓여야 한다
+    if mv and mv.get("at", 10 ** 6) <= k: return np.array(mv["p"], float), np.array(euler_to_R(mv["r"]), float)
     return stepchecks._pose(q, k)
 
 class V: pass
@@ -30,6 +32,11 @@ def view(A, k):
     for k2, st in enumerate(A.steps, 1):
         if k2 > k or str(k2) in hide: continue
         for q in st.parts:
+            _key = "%d:%d" % (q.step.index, q.step.parts.index(q)); _sl = st.kw.get("slot", 1)   # 부품이 지금 있는 창고: 만든 번호의 창고, 옮겨졌으면(moveMade) 옮긴 번호의 창고
+            for _j in range(k, 0, -1):
+                if (A.steps[_j - 1].kw.get("moveMade") or {}).get(_key): _sl = A.steps[_j - 1].kw.get("slot", 1); break
+            if _sl != A.steps[k - 1].kw.get("slot", 1): continue   # 다른 창고에 있는 부품은 이 번호 화면에 같이 안 놓인다
+            if "%d:%d" % (k2, st.parts.index(q)) in hide: continue   # hideMade 의 "번호:부품순서" 칸 — 부품 하나만 숨김
             p, R = pose_at(A, q, k); o = V(); o.p, o.R, o.n, o.conn, o.src, o.new = p, R, q.n, q.conn, q, (k2 == k); out.append(o)
     return out
 
@@ -49,25 +56,30 @@ def scan(A, k, dims, rows, fast):
                             rel = pg["pos"] - ho["pos"]; along = float(np.dot(rel, ho["dir"])); lat = float(np.linalg.norm(rel - along * ho["dir"]))
                             rows.append({"asm": A.id, "step": k, "peg": "%s.%s" % (peg_o.n, pg["id"]), "hole": hole_o.n, "along": round(along, 1), "lat": round(lat, 2)})
     # 볼트·너트 판 묶음
-    pool = [(o, o.p, o.R) for o in vs if o.n in dims and FRAMEISH(o.n)]
+    pool = []   # (부품, 중심, 자세, 반치수) — 브라켓은 L자라 상자 대신 구멍 하나마다 두께 5mm 날개 조각으로 넣는다(프레임과 같은 규격)
+    for o in vs:
+        if o.n not in dims: continue
+        if "브라켓" in o.n or "서보혼" in o.n:
+            for c_ in o.conn["holes"]:
+                ax_ = int(np.argmax(np.abs(c_["dir"]))); d_ = np.array([6.0, 6.0, 6.0]); d_[ax_] = 2.5
+                pool.append((o, o.p + o.R @ np.array(c_["pos"], float), o.R, d_))
+        elif FRAMEISH(o.n) or "기어" in o.n: pool.append((o, o.p, o.R, np.array(dims[o.n], float) / 2.0))   # 기어(두께 8·9)도 볼트가 지나는 판 — 실측 큰기어 9
     for b in [o for o in vs if o.new and o.n in ("8볼트", "12볼트") and o.conn["pegs"]]:
         c = b.conn["pegs"][0]; ld = np.array(c["dir"], float); dw = b.R @ ld; ax = int(np.argmax(np.abs(ld)))
         base = b.p + b.R @ (np.array(c["pos"], float) - ld * c["len"] / 2); tip = base + dw * c["len"]
         head = float(np.dot(np.array(c["pos"], float) - ld * c["len"] / 2, ld) + np.array(dims[b.n], float)[ax] / 2)
-        fr = []
-        for q, p, R in pool:
-            d = np.array(dims[q.n], float) / 2.0
+        fr = []; gear = False
+        for q, p, R, d in pool:
             if any(obb.contains(base - dw * head + dw * s, p, R, d, 0.01) for s in np.arange(0.25, c["len"] + head, 0.5)):
-                sp = obb.span(obb.corners(p, R, d), dw); fr.append((float(sp[0]), float(sp[1])))
+                sp = obb.span(obb.corners(p, R, d), dw); fr.append((float(sp[0]), float(sp[1]))); gear = gear or "기어" in q.n
         if not fr: continue
         top = min(f[0] for f in fr); bot = max(f[1] for f in fr); hd = float(np.dot(base - dw * head, dw)); tp = float(np.dot(tip, dw))
         has_nut = any(o.new and o.n == "너트" for o in vs)
-        fast.append({"asm": A.id, "step": k, "kind": b.n, "nut": has_nut, "stack": round(bot - top, 1), "head_off": round(hd - top, 1), "tip_off": round(tp - bot, 1)})
+        fast.append({"asm": A.id, "step": k, "kind": b.n, "nut": has_nut, "gear": gear, "stack": round(bot - top, 1), "head_off": round(hd - top, 1), "tip_off": round(tp - bot, 1)})
     for n in [o for o in vs if o.new and o.n == "너트" and o.conn["pegs"]]:
         c = n.conn["pegs"][0]; ld = np.array(c["dir"], float); dn = n.R @ ld
         nb = n.p + n.R @ (np.array(c["pos"], float) - ld * c["len"] / 2); fr = []
-        for q, p, R in pool:
-            d = np.array(dims[q.n], float) / 2.0
+        for q, p, R, d in pool:
             if any(obb.contains(nb + dn * s, p, R, d, 0.01) for s in np.arange(0.25, c["len"], 0.5)):
                 sp = obb.span(obb.corners(p, R, d), dn); fr.append(float(sp[0]))
         if fr: fast.append({"asm": A.id, "step": k, "kind": "너트", "nut_off": round(float(np.dot(nb, dn)) - (min(fr) + 1.0), 1)})
