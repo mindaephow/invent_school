@@ -154,7 +154,7 @@ for _pl, _bl in zip(PT4, BL4):
         _links["h1_%d" % _row] = (_blk, "p8"); _links["h3_%d" % _row] = (_blk, "p7")
     _links["h8_1"] = (_bl[2], "p6"); _links["h9_1"] = (_bl[2], "p5")   # 누운 2단블록 p6 = 칸8, p5 = 칸9
     _links["h9_3"] = (_bl[3], "p8")   # 칸 방향으로 누운 3단블록 윗돌기(p8 = 칸9)
-    PU5.append(s5.recv("39프레임", np.eye(3), _links, p=(0.0, 17.5, _zc), dir=[0, 1, 0], hover=48))
+    PU5.append(s5.recv("39프레임", np.eye(3), _links, dir=[0, 1, 0], hover=48))
 A.steps[4].cam = (-0.87, 0.91, False, None, None, None); A.steps[4].camSrc = "eye"   # 위 판 구멍이 어두워(holefit 불가) infer_grid 앵커 7곳 1.46px(안정성 θ 0.029·φ 0.039)
 
 # ── 6 ── 교재 101쪽 6 "3 + 5" (읽은 것 2026-10-25 — 창고 2 의 5번 세트 둘(판·블록·판 묶음)을 창고 1 의 3번 바닥 위에 한 벽씩 세운다: 묶음의 칸1 쪽 끝(−X)이 아래로, 누운 3단블록 둘의 끝 돌기 p2 둘이 바닥 구멍 둘에 꽂힌다)

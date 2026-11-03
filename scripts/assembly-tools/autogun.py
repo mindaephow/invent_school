@@ -214,7 +214,7 @@ colk = []
 for cx in (-25, 25):
     for zz in (-5, 5):
         colk.append(s26.attach("2단블록", R_L, {"p3": (cbot, tuple(COLB + np.array([cx - 5, 5, zz]))), "p4": (cbot, tuple(COLB + np.array([cx + 5, 5, zz])))}, hover=45))
-ctop = s26.recv("27프레임", R_FLAT, [(b_, pid) for b_ in colk for pid in ("p5", "p6")], p=tuple(COLB + np.array([0, 17.5, 0])), hover=45)
+ctop = s26.recv("27프레임", R_FLAT, dict(zip(["h2_1", "h1_1", "h2_2", "h1_2", "h7_1", "h6_1", "h7_2", "h6_2"], [(b_, pid) for b_ in colk for pid in ("p5", "p6")])), hover=45)
 ctop.extra["joinOrder"] = 2                              # 교재 26: 블록 4개를 아래판에 먼저 꽂고 윗판을 나중에 덮는다
 R_CRV = ori("+x", "+z")                               # 리벳 p1 이 −z(블록 구멍 쪽), p2 가 +z(바깥)
 s27 = A.step("[교재 27] 기둥 옆면(+z) 바깥 블록의 큰 구멍 2곳에 리벳을 꽂고 빨간 17프레임을 얹어요. (추정)")

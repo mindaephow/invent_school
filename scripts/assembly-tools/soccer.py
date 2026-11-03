@@ -30,7 +30,7 @@ for sg in (+1, -1):
     for y in (15, 35):
         r = s2.attach("리벳", ori("+x", "+z" if sg > 0 else "-z"), {"p2": (w, (0, y, sg * 47.5))}, rivet=True)
         rv.append(r)
-    b = s2.recv("3단블록", BLK_R, [(rv[0], "p1"), (rv[1], "p1")], p=(0, 25, sg * 40), joinOrder=2)
+    b = s2.recv("3단블록", BLK_R, {"h1": (rv[0], "p1"), "h3": (rv[1], "p1")}, joinOrder=2)
     SIDES[sg].update({"rivets": rv, "block": b})
 
 # ── 3 ── 벽 세우기 + 바닥판
@@ -91,12 +91,12 @@ for sg in (+1, -1):
 # ── 9 ── 윗판: 흰 59프레임은 모터 위 돌기에, 검은 39프레임은 블록 위 끝 돌기에
 st9 = A.step("[교재 9] 모터 위쪽 돌기 4개에 59프레임(흰색)을, 뒤쪽 블록 위 끝 돌기 2개에 39프레임(검정)을 덮어요.")
 Rp = ori("+z", "+y")
-wt = st9.recv("59프레임", Rp, [(SIDES[1]["motor"], "p5"), (SIDES[1]["motor"], "p6"), (SIDES[-1]["motor"], "p5"), (SIDES[-1]["motor"], "p6")], p=(-50, 42.5, 0))
-bt = st9.recv("39프레임", Rp, [(SIDES[1]["block"], "p1"), (SIDES[-1]["block"], "p1")], p=(-10, 42.5, 0))
+wt = st9.recv("59프레임", Rp, {"h8_3": (SIDES[1]["motor"], "p5"), "h8_1": (SIDES[1]["motor"], "p6"), "h2_3": (SIDES[-1]["motor"], "p5"), "h2_1": (SIDES[-1]["motor"], "p6")})
+bt = st9.recv("39프레임", Rp, {"h9_1": (SIDES[1]["block"], "p1"), "h1_1": (SIDES[-1]["block"], "p1")})
 
 # ── 10 ── 뒤판
 st10 = A.step("[교재 10] 39프레임을 뒤쪽 두 블록의 뒤쪽 돌기(위·아래 줄)에 끼워 뒤판을 세워요.")
-rear = st10.recv("39프레임", ori("+z", "+x"), [(SIDES[1]["block"], "p3"), (SIDES[1]["block"], "p5"), (SIDES[-1]["block"], "p3"), (SIDES[-1]["block"], "p5")], p=(7.5, 25, 0))
+rear = st10.recv("39프레임", ori("+z", "+x"), {"h9_3": (SIDES[1]["block"], "p3"), "h9_1": (SIDES[1]["block"], "p5"), "h1_3": (SIDES[-1]["block"], "p3"), "h1_1": (SIDES[-1]["block"], "p5")})
 
 # ── 11~14 ── 팔(왼쪽 → 오른쪽): 3단블록 2개를 벽 바깥에 꽂고, 37프레임·빨간 17프레임
 ARM = {}
@@ -108,10 +108,11 @@ def arm_steps(sg, no_a, no_b):
     for x in (-140, -80):
         b = st.attach("3단블록", Rb, {"p3": (w, (x, 35, sg * 47.5)), "p4": (w, (x, 25, sg * 47.5)), "p5": (w, (x, 15, sg * 47.5))})
         blks.append(b)
-    pl = st.recv("37프레임", ori("+x", "+z" if sg > 0 else "-z"), [(blks[0], "p7"), (blks[0], "p8"), (blks[1], "p7"), (blks[1], "p8")], p=(-110, 25, sg * 62.5))
+    _hr = ("h1_1", "h1_3") if sg > 0 else ("h1_3", "h1_1")   # 뒤집힌 쪽(sg<0)은 줄 번호가 반대
+    pl = st.recv("37프레임", ori("+x", "+z" if sg > 0 else "-z"), {_hr[0]: (blks[0], "p7"), _hr[1]: (blks[0], "p8"), "h7_" + _hr[0][-1]: (blks[1], "p7"), "h7_" + _hr[1][-1]: (blks[1], "p8")})
     st2 = A.step(f"[교재 {no_b}] 빨간 17프레임 2개를 블록 위·아래 끝 돌기에 끼워요.")
-    top = st2.recv("17프레임", ori("+x", "+y"), [(blks[0], "p1"), (blks[1], "p1")], p=(-110, 42.5, sg * 55))
-    bot = st2.recv("17프레임", ori("+x", "+y"), [(blks[0], "p2"), (blks[1], "p2")], p=(-110, 7.5, sg * 55))
+    top = st2.recv("17프레임", ori("+x", "+y"), {"h1_1": (blks[0], "p1"), "h7_1": (blks[1], "p1")})
+    bot = st2.recv("17프레임", ori("+x", "+y"), {"h1_1": (blks[0], "p2"), "h7_1": (blks[1], "p2")})
     ARM[sg] = {"blocks": blks, "plate": pl, "top": top, "bot": bot}
 arm_steps(+1, 11, 12)
 arm_steps(-1, 13, 14)
@@ -133,7 +134,6 @@ b3 = s15.attach("3단블록", RB3, {"p7": (PA, (-62.5, 130, 10)), "p8": (PA, (-6
 b2 = []
 for z in (20, -20):
     b = s15.attach("2단블록", RB2, {"p3": (PA, (-62.5, 50, z)), "p4": (PA, (-62.5, 60, z))}, hover=22)
-    b.p = b.p + np.array([0, 0.65, 0])   # 돌기 위치(−4.4·5.7)가 구멍 간격(10)과 0.65 어긋나 있어 몸통 아래 면이 판 윗면(y=45)에 딱 닿게 맞춘다(끝 돌기가 판 구멍 가운데)
     b2.append(b); HEAD.append(b)
 
 s16 = hs("[교재 16] 판 가운데 줄 양옆(위에서 5번째 줄, 양쪽 끝에서 2번째 구멍)에 리벳 2개를 꽂고, 1열브라켓 2개를 그 위에 얹어요. 브라켓 세로 판이 판 밖으로 나와요(귀).")
@@ -145,14 +145,14 @@ for sg in (+1, -1):
     br = s16.recv("1열브라켓", RBR[sg], [(rv, "p1")], p=(-80, 90, sg * 20)); HEAD.append(br); ears.append(br)
 
 s17 = hs("[교재 17] 앞판 59프레임을 블록 위쪽 돌기 6개(3단블록 2개, 2단블록 2개씩)에 얹어 샌드위치처럼 덮어요.")
-PB = s17.recv("59프레임", Ra, [(b3, "p3"), (b3, "p5"), (b2[0], "p5"), (b2[0], "p6"), (b2[1], "p5"), (b2[1], "p6")], p=(-77.5, 90, 0)); HEAD.append(PB)
+PB = s17.recv("59프레임", Ra, {"h9_2": (b3, "p3"), "h9_4": (b3, "p5"), "h2_1": (b2[0], "p5"), "h1_1": (b2[0], "p6"), "h2_5": (b2[1], "p5"), "h1_5": (b2[1], "p6")}); HEAD.append(PB)
 
 s18 = hs("[교재 18] 앞판에 리벳 6개를 꽂고, 검은 35프레임(위 줄 3개·모서리 4곳)과 빨간 15프레임(2번째·4번째 구멍 2곳)을 얹어요(아래에서 2~5번째 줄).")
 rv4 = [s18.attach("리벳", ori("+y", "+x"), {"p2": (PB, (-77.5, y, z))}, rivet=True) for (y, z) in ((70, 20), (70, -20), (90, 20), (90, -20))]
 rv2 = [s18.attach("리벳", ori("+y", "+x"), {"p2": (PB, (-77.5, 60, z))}, rivet=True) for z in (10, -10)]
 Rf = ori("+z", "-x") if False else np.column_stack([(0, 0, 1), (-1, 0, 0), (0, -1, 0)])  # 35프레임: 길이 z, 구멍축 −x... (구멍축은 x, 줄 방향 −y)
-black35 = s18.recv("35프레임", Rf, [(r, "p1") for r in rv4], p=(-82.5, 80, 0))
-red15 = s18.recv("15프레임", np.column_stack([(0, 0, 1), (-1, 0, 0), (0, -1, 0)]), [(r, "p1") for r in rv2], p=(-82.5, 60, 0))
+black35 = s18.recv("35프레임", Rf, dict(zip(["h5_3", "h1_3", "h5_1", "h1_1"], [(r, "p1") for r in rv4])))
+red15 = s18.recv("15프레임", np.column_stack([(0, 0, 1), (-1, 0, 0), (0, -1, 0)]), dict(zip(["h4_1", "h2_1"], [(r, "p1") for r in rv2])))
 HEAD += rv4 + rv2 + [black35, red15]
 
 s19 = hs("[교재 19] 리벳 1개를 앞판 가운데(위에서 6번째 줄)에 꽂고, 눈블록 2개를 그 위 줄(7번째 줄, 가운데에서 양옆 2칸)에 꽂아요.")
@@ -163,12 +163,12 @@ HEAD += [rv1] + eyes
 s20 = hs("[교재 20] 3단블록 윗면 구멍 양옆 2곳에 리벳 2개를 꽂고, 35프레임(검정)을 머리 위쪽 끝에 얹어요.")
 capR = np.column_stack([(0, 0, 1), (0, 1, 0), (-1, 0, 0)])    # 35프레임 눕힘: 길이 z, 구멍축 y
 rv_top = [s20.attach("리벳", ori("+x", "+y"), {"p1": (b3, hid)}, rivet=True) for hid in ("h1", "h3")]
-cap = s20.recv("35프레임", capR, [(r, "p2") for r in rv_top], p=(-70, 137.5, 0))
+cap = s20.recv("35프레임", capR, dict(zip(["h2_2", "h4_2"], [(r, "p2") for r in rv_top])))
 HEAD += rv_top + [cap]
 
 s21 = hs("[교재 21] 35프레임 위 3곳(1·3·5번째 구멍)에 리벳 3개를 꽂고, 빨간 15프레임을 얹으면 머리 완성이에요.")
 rv3 = [s21.attach("리벳", ori("+x", "+y"), {"p1": (cap, (-70, 137.5, z))}, rivet=True) for z in (-20, 0, 20)]
-red_top = s21.recv("15프레임", np.column_stack([(0, 0, 1), (0, 1, 0), (-1, 0, 0)]), [(r, "p2") for r in rv3], p=(-70, 142.5, 0))
+red_top = s21.recv("15프레임", np.column_stack([(0, 0, 1), (0, 1, 0), (-1, 0, 0)]), dict(zip(["h1_1", "h3_1", "h5_1"], [(r, "p2") for r in rv3])))
 HEAD += rv3 + [red_top]
 
 # 몸체 위 흰 59프레임(wt)에 머리 올리기(교재 22) — 머리 부품은 모두 옆자리에서 합쳐진다
@@ -198,7 +198,7 @@ FF = (np.array([[0, 1, 0], [1, 0, 0], [0, 0, -1.]]), (22.5, 85, 30), (-70, 10, 2
 s26 = A.step("[교재 26] 35프레임(검정)의 한 줄 1·3·5번째 구멍에 리벳 3개를 꽂고, 115프레임(긴 막대)의 1·3·5번째 구멍을 그 위에 얹어요.")
 flag_plate = s26.place("35프레임", ori("+y", "+x"), (27.5, 135, 30))
 rvf = [s26.attach("리벳", ori("+y", "+x"), {"p2": (flag_plate, (25, y, 30))}, rivet=True) for y in (155, 135, 115)]
-pole = s26.recv("115프레임", np.column_stack([(0, -1, 0), (1, 0, 0), (0, 0, 1)]), [(r, "p1") for r in rvf], p=(22.5, 85, 30))
+pole = s26.recv("115프레임", np.column_stack([(0, -1, 0), (1, 0, 0), (0, 0, 1)]), dict(zip(["h1_1", "h3_1", "h5_1"], [(r, "p1") for r in rvf])))
 s27 = A.step("[교재 27] 깃발의 115프레임 아래쪽 끝 2곳(13번째·15번째 구멍)을 3단블록 바깥 돌기 2개에 끼우면 완성!")
 FLAG = [flag_plate] + rvf + [pole]
 for pt in FLAG:

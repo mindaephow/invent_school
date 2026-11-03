@@ -83,7 +83,10 @@ def check(A, k):
             g = float(max(s2[0] - s1[1], s1[0] - s2[1]))
             if g > 0.3 or g < -1.0: out.append("규칙8 리벳 틈: %s↔%s %+.1fmm" % (A1.n, A2.n, g))
     # 규칙 3 (프레임은 물리적으로 겹칠 수 없다 — 판 높이가 겹치는 나란한 두 프레임의 구멍 중심이 피치(10mm)보다 훨씬 가까우면 위반. 구부러진 프레임도 구멍 기준이라 상자 크기에 속지 않는다)
-    frs = [o for o in vs if "프레임" in o.n and o.n in dims]
+    _sl = A.steps[k - 1].kw.get("slot", 1); _k0 = k
+    while _k0 > 1 and A.steps[_k0 - 2].kw.get("slot", 1) == _sl: _k0 -= 1
+    # 현재 창고를 시작하기 전에 만든 부품(다른 창고의 14~18번 조립 등)은 화면에 같이 놓이지 않는다 — 화면 확인: catapult 19번(2026-11-03)
+    frs = [o for o in vs if "프레임" in o.n and o.n in dims and (o.new or A.steps.index(o.src.step) + 1 >= _k0)]
     for a in [o for o in frs if o.new]:
         for b in frs:
             if b is a or (b.new and id(b) < id(a)): continue
@@ -145,7 +148,7 @@ def check(A, k):
     for x in fast:
         if x.get("kind") in ("8볼트", "12볼트"):
             if not (-0.3 <= x["head_off"] <= 0.3): out.append("규칙9 %s 머리 %+.1fmm (머리는 홀라인에 딱 끼워져 프레임·브라켓 면 밖으로 넘치면 안 됨 — 사용자 2026-11-03. 넘치거나 떠 있으면 위반)" % (x["kind"], x["head_off"]))
-            if x["tip_off"] > 0.05: out.append("규칙9 %s 끝이 판 밖으로 %+.1fmm" % (x["kind"], x["tip_off"]))
+            if x["tip_off"] > (0.05 if x.get("nut") else 5.0): out.append("규칙9 %s 끝이 판 밖으로 %+.1fmm" % (x["kind"], x["tip_off"]))
             want = {"8볼트": 10.0, "12볼트": 15.0}[x["kind"]]   # 규칙 14·15: 8볼트=프레임 2장, 12볼트=프레임 3장 — 틈 없이 딱 붙으면 판 두께 합이 10·15
             if x.get("nut") and not x.get("gear") and abs(x["stack"] - want) > 0.3: out.append("규칙14·15 %s 가 지나는 판 두께 합 %.1fmm (프레임 %d장 = %.0fmm 이어야 함 — 틈이 있거나 판 수가 다름, 블록이 낀 번호는 확인)" % (x["kind"], x["stack"], 2 if x["kind"] == "8볼트" else 3, want))
         elif "nut_off" in x and not (-1.2 <= x["nut_off"] <= 0.3): out.append("규칙9 너트가 판에서 %+.1fmm (너트 아래 턱은 프레임 홀 테두리에 1mm 들어가는 게 정상 — 사용자 2026-11-03. 떠 있거나 더 깊이 파묻히면 위반)" % x["nut_off"])

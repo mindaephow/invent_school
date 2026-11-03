@@ -197,7 +197,7 @@ B7 = s7.recv("3단블록", R_B7, {"h1": (RV7["h1"], "p2"), "h3": (RV7["h3"], "p2
 BO7 = s7.attach("12볼트", rot_x(180), {"돌기면 -y 1": (F135, "h2")}, hover=40)             # 볼트: 머리가 프레임 아래, 몸통이 위로(프레임 구멍 h2 → 블록 구멍 h2)
 BO7.extra["loose"] = True; BO7.extra["noMarkCheck"] = True
 NU7 = s7.recv("너트", rot_x(180), {"h1": (BO7, "p1")}, hover=40)                         # 너트: 연결점(좁은 원통, 모델 +y)이 아래(볼트·블록 쪽)를 향하고 넓은 플랜지가 위(책 7번 그림)
-NU7.p = np.array([BO7.p[0], 15.8, BO7.p[2]]); NU7.extra["loose"] = True; NU7.extra["noMarkCheck"] = True   # 추정: 12볼트(몸통 12mm)는 프레임 5 + 블록 10 + 리벳 틈을 다 지나지 못한다(끝 y 13.8) — 너트를 볼트 끝에 앉히고 블록 구멍 안에 겹친다(책 그림은 블록 위에서 조임)
+NU7.extra["loose"] = True; NU7.extra["noMarkCheck"] = True   # 추정: 12볼트(몸통 12mm)는 프레임 5 + 블록 10 + 리벳 틈을 다 지나지 못한다(끝 y 13.8) — 너트를 볼트 끝에 앉히고 블록 구멍 안에 겹친다(책 그림은 블록 위에서 조임)
 A.steps[6].cam = (2.63, 0.70, False, None, None, None); A.steps[6].camSrc = "eye"
 A.meta["lift"]["7"] = 40.0   # 7번: 12볼트가 프레임 아래 40mm 에 떠서(결합 전) 올라오므로 화면 전체를 40mm 띄운다
 
@@ -212,7 +212,7 @@ F15b = s8.recv("15프레임", R_F15, {"h5_1": (RV8, "p2")}, hover=40)
 BO8 = s8.attach("12볼트", rot_x(180), {"돌기면 -y 1": (F135, "h6")}, hover=40)             # 135도 프레임 h6 아래에서 올라와 아래·위 15프레임 구멍 4(=h6 자리)를 지난다
 BO8.extra["loose"] = True; BO8.extra["noMarkCheck"] = True
 NU8 = s8.recv("너트", rot_x(180), {"h1": (BO8, "p1")}, hover=40)   # 너트: 연결점(좁은 원통, 모델 +y)이 아래를 향한다(7번과 같음)
-NU8.p = np.array([BO8.p[0], 15.8, BO8.p[2]]); NU8.extra["loose"] = True; NU8.extra["noMarkCheck"] = True   # 추정: 12볼트 몸통(12mm) 때문에 너트가 책처럼 맨 위에 오지 못한다(7번과 같은 이유)
+NU8.extra["loose"] = True; NU8.extra["noMarkCheck"] = True   # 추정: 12볼트 몸통(12mm) 때문에 너트가 책처럼 맨 위에 오지 못한다(7번과 같은 이유)
 A.steps[7].cam = (2.63, 0.67, False, None, None, None); A.steps[7].camSrc = "eye"
 A.meta["lift"]["8"] = 40.0
 
@@ -397,7 +397,7 @@ B17 = s17.recv("3단블록", R_B17, {"h1": (RV17["h1"], "p2"), "h3": (RV17["h3"]
 BO17 = s17.attach("12볼트", rot_x(180), {"돌기면 -y 1": (F135X, "h2")}, hover=40)
 BO17.extra["loose"] = True; BO17.extra["noMarkCheck"] = True
 NU17 = s17.recv("너트", rot_x(180), {"h1": (BO17, "p1")}, hover=40)
-NU17.p = np.array([BO17.p[0], 15.8, BO17.p[2]]); NU17.extra["loose"] = True; NU17.extra["noMarkCheck"] = True   # 7번과 같은 추정(12볼트가 프레임+블록을 다 지나지 못해 너트를 볼트 끝에 앉힘)
+NU17.extra["loose"] = True; NU17.extra["noMarkCheck"] = True   # 7번과 같은 추정(12볼트가 프레임+블록을 다 지나지 못해 너트를 볼트 끝에 앉힘)
 A.steps[16].cam = (-2.91, 0.67, False, None, None, None); A.steps[16].camSrc = "eye"
 A.meta["lift"]["17"] = 40.0
 # ── 18 ── 교재 34쪽 18 (8번과 같은 구성의 거울쌍 — 사용자 지시 2026-10-12 "똑같은 거 만든 거 있잖아 반대편 거, 그거 보면 되잖아": 8번 구성을 그대로 따른다)
@@ -410,7 +410,7 @@ F15Y = s18.recv("15프레임", R_F15, {"h5_1": (RV18, "p2")}, hover=40)
 BO18 = s18.attach("12볼트", rot_x(180), {"돌기면 -y 1": (F135X, "h6")}, hover=40)
 BO18.extra["loose"] = True; BO18.extra["noMarkCheck"] = True
 NU18 = s18.recv("너트", rot_x(180), {"h1": (BO18, "p1")}, hover=40)
-NU18.p = np.array([BO18.p[0], 15.8, BO18.p[2]]); NU18.extra["loose"] = True; NU18.extra["noMarkCheck"] = True
+NU18.extra["loose"] = True; NU18.extra["noMarkCheck"] = True
 A.steps[17].cam = (-2.91, 0.67, False, None, None, None); A.steps[17].camSrc = "eye"
 A.meta["lift"]["18"] = 40.0
 

@@ -629,6 +629,21 @@ class Step:
             pid2, fc = (None, None) if pid is None else _item(tmp, pid, "홀")
             gid2, _ = _item(hp, gid, "돌기")
             pairs.append((pid2, (hp, gid2))); _faces.append((pid2, hp, fc, pid, gid2))
+        _hand = None
+        if p is not None and not MAGNET_OFF and ("프레임" in n or "블록" in n) and HAND_LOG is None:
+            raise ValueError(f"{s.index}단계 {n}: 프레임·블록 결합에는 손으로 준 위치 p= 를 쓸 수 없다 — 결합(돌기↔구멍)만 적으면 자석처럼 붙는다(사용자 2026-11-03)")
+        if p is not None and not MAGNET_OFF and ("프레임" in n or "블록" in n):   # 결합은 항상 자석처럼 붙는다(사용자 2026-11-03: 큐보 모든 결합이 그 방식) — 손으로 준 p 는 어느 구멍인지 찾는 데만 쓰고, 위치는 규칙(돌기 면과 구멍 면이 딱 맞닿음)으로 다시 계산한다
+            _hint = Part(n, R, p, s); _np = []
+            for pid, (host, gid) in pairs:
+                g = host.peg(gid)
+                if pid is None:
+                    _h, _dist = _hint.hole_near(g["pos"], axis=g["dir"]); pid = _h["id"] if _h else None
+                _np.append((pid, (host, gid)))
+            if all(x[0] is not None for x in _np):
+                _hand = np.array(p, float); pairs = _np; p = None
+                if HAND_LOG is not None:
+                    import sys as _sys
+                    _f = _sys._getframe(1); HAND_LOG.append({"file": _f.f_code.co_filename, "line": _f.f_lineno, "n": n, "ids": [x[0] for x in _np], "was_dict": isinstance(links, dict)})
         marks = []; d0 = None; calc = p is None
         for pid, (host, gid) in pairs:
             g = host.peg(gid); d = g["dir"]; tip = g["pos"] + d * g["len"] / 2
@@ -644,8 +659,9 @@ class Step:
             p = s._anchored(n, R, p)
             s._resolve_lazy(n, R, p, extra)
             s._lock_extra(n, extra)
-        if calc and n == "너트" and getattr(s.A, "seat_nuts", False): p = s._seat_nut(n, R, p, [h for _, (h, _g) in pairs])   # 너트 머리가 볼트가 지나는 판 묶음 맨 아래 홀 테두리 면에 닿게(사용자 2026-11-03)
+        if calc and n == "너트" and getattr(s.A, "seat_nuts", True): p = s._seat_nut(n, R, p, [h for _, (h, _g) in pairs])   # 너트 머리가 볼트가 지나는 판 묶음 맨 아래 홀 테두리 면에 닿게(사용자 2026-11-03)
         part = Part(n, R, p, s, extra)
+        if calc and _hand is not None and float(np.linalg.norm(np.array(p, float) - _hand)) > 0.2: s.A.log(f"{s.index}단계 {n}: 손으로 준 위치가 결합 규칙 위치와 {float(np.linalg.norm(np.array(p, float) - _hand)):.1f}mm 달라 규칙 위치로 놓음")
         if calc:
             for pid, (host, gid) in pairs[1:]:
                 g = host.peg(gid); h = part.hole(pid); diff = h["pos"] - g["pos"]; err = float(np.linalg.norm(diff - np.dot(diff, g["dir"]) * g["dir"]))
@@ -662,6 +678,8 @@ class Step:
         if hover: part.extra["hover"] = hover
         return s._add(part)
 
+HAND_LOG = None
+MAGNET_OFF = False   # True 면 옛 방식(손으로 준 p 를 그대로 씀)
 SINK_PARTS = ("8볼트", "12볼트", "너트", "서보고정볼트")   # 머리·몸이 프레임 면 밖으로 나오면 안 되는 부품(구멍에 묻는다)
 _SINK_DIMS = None
 def _sink_dims():
