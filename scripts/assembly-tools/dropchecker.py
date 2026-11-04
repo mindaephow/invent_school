@@ -320,10 +320,8 @@ for _q in [SP12[1]] + TR12[14:]:   # 둘째 바퀴(스프라켓 + 캐터필러 1
 _zw = 0.0
 R_AX13 = rot_x(-90)                                                                          # 축: 돌기(모델 +y)가 −Z(앞, 카메라 쪽)를 향해 뒤쪽(+Z)에서 허브로 들어온다
 AX13 = s13.attach("축", R_AX13, {"p1": (SP12[0], "h1")}, hover=70)
-AX13.p = np.array([SP12[0].p[0], SP12[0].p[1], 13.5])                                         # 축 끝(−Z)이 허브 앞면(z −13.5)에서 5.5mm 앞(−19)까지, 길이 65 → 뒤로(+Z) 46 까지
 AX13.extra["loose"] = True; AX13.extra["noMarkCheck"] = True
 BU13 = s13.recv("부시", rot_x(90), {"h1": (AX13, "p1")}, hover=40)                           # 부시: 좁은 쪽(모델 +y)이 허브 쪽(+Z), 넓은 쪽이 바깥(−Z, 앞)
-BU13.p = np.array([SP12[0].p[0], SP12[0].p[1], -16.25])                                       # 허브 앞면(−13.5)에 닿고 두께 5.5
 BU13.extra["loose"] = True; BU13.extra["noMarkCheck"] = True; BU13.extra["dir"] = [0, 0, -1]; BU13.extra["hover"] = 40
 A.steps[12].cam = (-2.40, 1.20, False, None, None, None); A.steps[12].camSrc = "eye"
 A.meta["lift"]["13"] = 0.0
@@ -339,7 +337,6 @@ _h14 = PL1.hole(asmlib._item(PL1, "홀면 -y 열4·줄2", "홀")[0])
 _mk14 = [rnd(_h14["pos"] - np.array([0.0, 0.0, 1.0]) * (_h14["len"] / 2))]                   # 안내점 = 판 칸4 줄2 구멍의 −Z 쪽 입구
 s14.move_made(A.group("mm14wheel", _G14), np.eye(3), pivot=SP12[0].p.copy(), shift=_sh14, dir=[0, 0, -1], hover=60, group="mm14wheel", marks={id(AX13): _mk14})   # 책 14: 바퀴가 축선(−Z, 판 뒤쪽)으로 떠 있다가 +Z 로 들어온다(전엔 −X 로 띄워 팔 쪽에 겹쳐 보였다 — 사용자 지시 2026-10-12 "수정을 하라고")
 BU14 = s14.recv("부시", rot_x(-90), {"h1": (AX13, "p1")}, hover=40)                         # 부시: 좁은 쪽(모델 +y)이 35프레임 쪽(−Z), 넓은 쪽이 바깥(+Z)
-BU14.p = np.array([-40.0, 20.0, 70.25])                                                       # 35프레임 바깥 면(z 67.5)에 닿고 두께 5.5
 BU14.extra["loose"] = True; BU14.extra["noMarkCheck"] = True; BU14.extra["dir"] = [0, 0, 1]; BU14.extra["hover"] = 40
 A.steps[13].cam = (-0.70, 1.00, False, None, None, None); A.steps[13].camSrc = "eye"
 A.meta["lift"]["14"] = 18.0
@@ -491,9 +488,11 @@ s22.note = "[교재 22] 둘째 모터 유닛 판 칸12 줄2 구멍에 축을 앞
 s22.kw["hideMade"] = dict(s21.kw["hideMade"])
 _pz22 = float(PL1b.p[2]); _zs22 = _pz22 - 50.0
 AX22 = s22.attach("축", rot_x(90), {"p1": (PL1b, "홀면 -y 열12·줄2")}, hover=70)
-AX22.p = np.array([40.0, 20.0, 40.5 + _zs22]); AX22.extra["loose"] = True; AX22.extra["noMarkCheck"] = True; AX22.extra["dir"] = [0, 0, -1]; AX22.extra["hover"] = 70
+AX22.extra["loose"] = True; AX22.extra["noMarkCheck"] = True; AX22.extra["dir"] = [0, 0, -1]; AX22.extra["hover"] = 70
+AX22.extra["loose"] = True; AX22.extra["noMarkCheck"] = True; AX22.extra["dir"] = [0, 0, -1]; AX22.extra["hover"] = 70
 BU22 = s22.recv("부시", rot_x(-90), {"h1": (AX22, "p1")}, hover=40)
-BU22.p = np.array([40.0, 20.0, 70.25 + _zs22]); BU22.extra["loose"] = True; BU22.extra["noMarkCheck"] = True; BU22.extra["dir"] = [0, 0, 1]; BU22.extra["hover"] = 40
+BU22.extra["loose"] = True; BU22.extra["noMarkCheck"] = True; BU22.extra["dir"] = [0, 0, 1]; BU22.extra["hover"] = 40
+BU22.extra["loose"] = True; BU22.extra["noMarkCheck"] = True; BU22.extra["dir"] = [0, 0, 1]; BU22.extra["hover"] = 40
 A.steps[21].cam = (2.34, 0.81, False, [[20.0, 25.0, -110.0], [-45.0, 25.0, -125.0], [85.0, 15.0, -75.0]], None, None); A.steps[21].camSrc = "eye"
 
 # ── 23 ── 교재 35쪽 23 (창고의 둘째 바퀴를 22번 축에 끼우고 앞쪽(−Z)에서 빨간 부시 — 거울 유닛)
@@ -504,7 +503,8 @@ _W2 = [SP12[1]] + TR12[14:]
 _sh23 = np.array([40.0 - float(SP12[1].p[0]), 20.0 - 34.0, 27.0 + _zs22])
 s23.move_made(A.group("mm23wheel", _W2), np.eye(3), pivot=SP12[1].p.copy(), shift=_sh23, dir=[0, 0, -1], hover=60, group="mm23wheel", marks={id(SP12[1]): [rnd(np.array([40.0, 20.0, 27.0 + _zs22 - 13.5]))]})
 BU23 = s23.recv("부시", rot_x(90), {"h1": (AX22, "p1")}, hover=40)
-BU23.p = np.array([40.0, 20.0, -16.25 + 27.0 + _zs22]); BU23.extra["loose"] = True; BU23.extra["noMarkCheck"] = True; BU23.extra["dir"] = [0, 0, -1]; BU23.extra["hover"] = 95   # 책 23: 부시는 바퀴(링크 띠 z 폭 38) 바깥에 떠서 들어온다 — 바퀴 안쪽에 겹쳐 보이지 않게 띄운 거리를 늘림
+BU23.extra["loose"] = True; BU23.extra["noMarkCheck"] = True; BU23.extra["dir"] = [0, 0, -1]; BU23.extra["hover"] = 95   # 책 23: 부시는 바퀴(링크 띠 z 폭 38) 바깥에 떠서 들어온다 — 바퀴 안쪽에 겹쳐 보이지 않게 띄운 거리를 늘림
+BU23.extra["loose"] = True; BU23.extra["noMarkCheck"] = True; BU23.extra["dir"] = [0, 0, -1]; BU23.extra["hover"] = 95   # 책 23: 부시는 바퀴(링크 띠 z 폭 38) 바깥에 떠서 들어온다 — 바퀴 안쪽에 겹쳐 보이지 않게 띄운 거리를 늘림
 A.steps[22].cam = (2.34, 0.81, False, [[40.0, 25.0, -130.0], [60.0, 20.0, -90.0], [-10.0, 25.0, -150.0]], None, None); A.steps[22].camSrc = "eye"
 
 # ── 24 ── 교재 35쪽 24 ("16 + 23": 16번(첫째 유닛+713프레임 판, 창고 1)에 23번(둘째 유닛+팔+바퀴)을 합친다)
@@ -685,13 +685,10 @@ PL31 = s31.place("37프레임", R31, (0.0, 2.5, 0.0))
 _h31 = PL31.hole("h4_3")
 R_T31 = rot_x(180)                                                               # T축: 돌기(로컬 +y) 아래(−Y), 접시 머리 위
 TA31 = s31.attach("T축", R_T31, {"p1": (PL31, "h4_3")}, hover=70)
-TA31.p = np.array([_h31["pos"][0], 0.0, _h31["pos"][2]])                         # 축 끝(아래)이 부시 바닥 y −5.5, 위는 큰기어 위로 10.5 — 길이 30
 TA31.extra["loose"] = True; TA31.extra["noMarkCheck"] = True; TA31.extra["dir"] = [0, 1, 0]; TA31.extra["hover"] = 70; TA31.extra["joinOrder"] = 1
 GR31 = s31.recv("큰기어", np.eye(3), {"h3": (TA31, "p1")}, hover=40)
-GR31.p = np.array([TA31.p[0], 9.5, TA31.p[2]])                                   # 큰기어(두께 9)가 판(y 0~5) 위에 앉는다
 GR31.extra["loose"] = True; GR31.extra["noMarkCheck"] = True; GR31.extra["dir"] = [0, 1, 0]; GR31.extra["hover"] = 40; GR31.extra["joinOrder"] = 2
 BU31 = s31.recv("부시", np.eye(3), {"h1": (TA31, "p1")}, hover=40)
-BU31.p = np.array([TA31.p[0], -2.75, TA31.p[2]])                                 # 판 아래(두께 5.5) — 좁은 쪽(모델 +y)이 위(판 쪽), 넓은 쪽이 바깥(아래)
 BU31.extra["loose"] = True; BU31.extra["noMarkCheck"] = True; BU31.extra["dir"] = [0, -1, 0]; BU31.extra["hover"] = 40; BU31.extra["joinOrder"] = 3
 A.steps[30].cam = (-0.98, 0.77, False, None, None, None); A.steps[30].camSrc = "eye"   # 31_P holefit 격자 axes_fit(+Z +X) 오차 0.64px 21점
 A.meta["lift"]["31"] = 46.0   # 부시가 결합 전(판 아래 40 띄움)일 때 가장 낮은 y −45.5(검사 표시는 올린 뒤 −3.5) — 규칙대로 화면 전체를 그만큼 올린다

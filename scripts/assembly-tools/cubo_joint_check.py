@@ -110,7 +110,7 @@ def check(A, k):
             d_ = min(float(np.linalg.norm(x - y)) for x in ha for y in hb)
             if abs(d_ - 10.0) > 0.3: out.append("규칙16 옆 프레임 %s↔%s 맞닿은 구멍 피치 %.1fmm (10 이어야 함)" % (a.n, b.n, d_))
     # 규칙 5~7
-    for b in [o for o in vs if o.new and (("블록" in o.n and o.n != "눈블록") or o.n in ("DC모터", "서보모터", "메인보드", "리벳"))]:
+    for b in [o for o in vs if o.new and (("블록" in o.n) or o.n in ("DC모터", "서보모터", "메인보드", "리벳"))]:
         for pg in pf[id(b)]:
             fr = sorted({a.n for a in vs if a is not b and "프레임" in a.n and any(inside(pg, ho) for ho in hf[id(a)])})
             if len(fr) >= 2: out.append("규칙5~7 %s %s 돌기가 프레임 두 장에: %s" % (b.n, pg["id"], "+".join(fr)))
@@ -130,7 +130,7 @@ def check(A, k):
         d = float(w @ (ref.p - o.p)); toward = d > 0
         if toward != (dec["relation"] == "toward"): out.append("규칙10 %s %s 이 책(%s)과 다름: 책 %s %s 쪽 / 모델 %s" % (o.n, what, dec.get("evidence", "근거 없음"), dec["ref"], dec["relation"] == "toward" and "을 향함" or "반대쪽", toward and "향함" or "반대쪽"))
     # 규칙 13 (돌기로 프레임에 바로 꽂는 부품 — 블록·모터·메인보드·센서: 몸체와 프레임 면 사이 틈 0)
-    for P in [o for o in vs if o.new and o.conn["pegs"] and o.n in dims and (("블록" in o.n and o.n != "눈블록") or o.n in ("DC모터", "서보모터", "메인보드", "IR센서", "LED센서"))]:
+    for P in [o for o in vs if o.new and o.conn["pegs"] and o.n in dims and (("블록" in o.n) or o.n in ("DC모터", "서보모터", "메인보드", "IR센서", "LED센서"))]:
         done = set()
         for pg in pf[id(P)]:
             for F in vs:
@@ -154,12 +154,34 @@ def check(A, k):
         elif "nut_off" in x and not (-1.2 <= x["nut_off"] <= 0.3): out.append("규칙9 너트가 판에서 %+.1fmm (너트 아래 턱은 프레임 홀 테두리에 1mm 들어가는 게 정상 — 사용자 2026-11-03. 떠 있거나 더 깊이 파묻히면 위반)" % x["nut_off"])
     return sorted(set(out))
 
+STORED_JS = os.path.join(HERE, "..", "..", "public", "design-assemblies.js")
+
+def stored_ids():
+    """스크립트 없이 저장 데이터(design-assemblies.js)로만 있는 큐보 조립도 이름(id 의 마지막 토막: cubo-1-balance → balance)."""
+    import re
+    ids = re.findall(r"id: '(cubo-\d-[^']+)'", open(STORED_JS, encoding="utf-8").read())
+    return [i.split("-", 2)[2] for i in ids if not os.path.exists(i.split("-", 2)[2] + ".py")]
+
+def load_asm(nm):
+    """조립도를 읽는다 — 스크립트(<이름>.py)가 있으면 그것을, 없으면 저장 데이터를 그대로 asmlib 부품으로 놓는다(모든 조립도를 같은 점검기로 잰다)."""
+    if os.path.exists(nm + ".py"): return runpy.run_path(nm + ".py", run_name="probe")["A"]
+    import json, subprocess
+    from asmlib import Asm, euler_to_R
+    code = "global.window={};require(%s);const a=window.IVS_ASSEMBLIES.find(x=>x.id.endsWith('-'+%s));process.stdout.write(JSON.stringify(a||null));" % (json.dumps(os.path.abspath(STORED_JS)), json.dumps(nm))
+    a = json.loads(subprocess.run(["node", "-e", code], capture_output=True, text=True, encoding="utf-8").stdout or "null")
+    if not a: raise FileNotFoundError(nm)
+    A = Asm(a["id"], a["chapter"], a["book"], camera=a.get("camera"))
+    for st in a["steps"]:
+        S = A.step(st["note"])
+        for pt in st["parts"]: S.place(pt["n"], euler_to_R(pt["r"]), pt["p"], **{k: v for k, v in pt.items() if k not in ("n", "p", "r")})
+    return A
+
 def main():
     want = sys.argv[1:]; name = want[0] if want else "all"; steps = [int(a) for a in want[1:]]
-    names = [os.path.basename(p)[:-3] for p in sorted(glob.glob("*.py")) if not os.path.basename(p).startswith(("scratch", "new_assembly", "_")) and any(l.startswith("A = Asm(\"cubo-") for l in open(p, encoding="utf-8", errors="ignore"))] if name == "all" else [name]
+    names = [os.path.basename(p)[:-3] for p in sorted(glob.glob("*.py")) if not os.path.basename(p).startswith(("scratch", "new_assembly", "_")) and any(l.startswith("A = Asm(\"cubo-") for l in open(p, encoding="utf-8", errors="ignore"))] + stored_ids() if name == "all" else [name]
     total = 0
     for nm in names:
-        try: A = runpy.run_path(nm + ".py", run_name="probe")["A"]
+        try: A = load_asm(nm)
         except BaseException as e: print("⚠ %s 건너뜀: %s" % (nm, repr(e)[:80])); continue
         n_ = 0
         for k in (steps or range(1, len(A.steps) + 1)):

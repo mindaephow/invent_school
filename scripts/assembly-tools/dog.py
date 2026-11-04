@@ -349,10 +349,8 @@ s13 = SKEL[12]; s13.kw.pop("noPart", None)
 s13.note = "[교재 13] 작은기어에 T축을 끼워 판 가운데 줄 구멍에 꽂아요. 큰기어와 맞물려요. 판 끝에 리벳 1개를 꽂아요."
 _PH13 = _g10(PB, s13)                                                       # 둘째 벽 판(10번 끝 자세, 뒤집기 전 좌표: 바깥이 +Z 쪽)
 T13 = s13.attach("T축", R_TF, {"p1": (_PH13, "h8_2")}, hover=40)                    # 판 구멍을 지나 모터 뒤쪽 십자 구멍으로(바깥 +Z 쪽에서 −Z 로)
-T13.p = np.array([T13.p[0], T13.p[1], 71.5])   # T축 머리(두께 1)가 작은기어 바깥 면(z 85.5) 바깥에 닿게 — 머리 두께만큼 기어 밖으로 나온다(관리자 지시 2026-10-08)                   # 돌기 끝이 모터 십자 구멍(깊이 5)에 닿도록 바깥으로 21mm 당김(T축 길이 30)
 T13.extra["horizontal"] = True; T13.extra["loose"] = True; T13.extra["noMarkCheck"] = True
 SG13 = s13.recv("작은기어", R_TB, {"h1": (T13, "p1")}, hover=40)
-SG13.p = np.array([T13.p[0], T13.p[1], 81.5])                               # 큰기어(z 85)와 같은 높이에서 맞물린다(두 기어 중심 간격 30)
 SG13.extra["loose"] = True; SG13.extra["noMarkCheck"] = True
 SG13.extra["dir"] = [0, 0, 1]; SG13.extra["hover"] = 40; SG13.extra["joinOrder"] = 2; T13.extra["joinOrder"] = 1; T13.extra["hover"] = 70   # T축이 기어보다 30mm 더 바깥에 떠서 먼저 기어에 끼고(화살표 T축→기어), 그다음 함께 판·모터로   # T축에 작은기어를 먼저 끼우고 그다음 T축이 판 구멍·모터로(관리자 지시 2026-10-08)   # 작은기어는 T축처럼 벽 바깥(+Z)에서 내려온다 — recv 기본 방향이 안쪽이라 몸 속에 숨어 안 보였다(관리자 지적 2026-10-08)
 RV13 = s13.attach("리벳", R_RV, {"돌기면 -y 1": (_PH13, "h15_1")}, rivet=True, hover=28)
@@ -366,10 +364,8 @@ s14 = SKEL[13]; s14.kw.pop("noPart", None)
 s14.note = "[교재 14] 조립품을 돌려 반대쪽 벽이 앞에 오게 해요. 작은기어에 T축을 끼워 판 가운데 줄 구멍에 꽂고, 판 끝에 리벳 1개를 꽂아요."
 _PH14 = _g10(P1, s14)                                                       # 첫째 벽 판(바깥이 −Z 쪽)
 T14 = s14.attach("T축", R_TB, {"p1": (_PH14, "h8_2")}, hover=40)
-T14.p = np.array([T14.p[0], T14.p[1], 3.5])    # 머리 두께 1 만큼 기어 바깥(z −10.5 밖)
 T14.extra["horizontal"] = True; T14.extra["loose"] = True; T14.extra["noMarkCheck"] = True
 SG14 = s14.recv("작은기어", R_TF, {"h1": (T14, "p1")}, hover=40)
-SG14.p = np.array([T14.p[0], T14.p[1], -6.5])
 SG14.extra["loose"] = True; SG14.extra["noMarkCheck"] = True
 SG14.extra["dir"] = [0, 0, -1]; SG14.extra["hover"] = 40; SG14.extra["joinOrder"] = 2; T14.extra["joinOrder"] = 1; T14.extra["hover"] = 70   # 첫째 벽 바깥은 −Z 쪽
 RV14 = s14.attach("리벳", R_TF, {"돌기면 -y 1": (_PH14, "h1_1")}, rivet=True, hover=28)
