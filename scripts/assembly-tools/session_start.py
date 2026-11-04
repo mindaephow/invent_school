@@ -41,7 +41,7 @@ print("[git] 현재:", last)
 # 다른 PC·아이디가 남긴 "마지막 작업"(handoff.py) — 어느 조립도가 어디까지 됐는지 한눈에
 import glob
 _rows = []
-for _f in glob.glob(os.path.join(HERE, "process", "진행기록_*.md")):
+for _f in glob.glob(os.path.join(HERE, "process", "인수인계_진행기록_*.md")):
     _L = open(_f, encoding="utf-8").read().split("\n")
     _i = next((i for i, l in enumerate(_L[:6]) if l.startswith("## ★ 마지막 작업")), None)
     if _i is None: continue
@@ -52,7 +52,7 @@ for _f in glob.glob(os.path.join(HERE, "process", "진행기록_*.md")):
     _pick = lambda key: next((l.split(":", 1)[1].strip() if key != "- 마지막" else l for l in _blk if l.startswith(key)), "")
     _first = next((l for l in _blk if l.startswith("- 20")), "")
     if not _first: continue
-    _rows.append((_first, os.path.basename(_f)[5:-3], _pick("- 어디까지"), _pick("- 다음"), _pick("- 이어받음")))
+    _rows.append((_first, os.path.basename(_f)[len("인수인계_진행기록_"):-3], _pick("- 어디까지"), _pick("- 다음"), _pick("- 이어받음")))
 if _rows:
     print()
     print("[마지막 작업] 최근 순 (PC·아이디는 handoff.py 가 적은 것)")

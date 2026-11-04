@@ -17,7 +17,7 @@
 | 번호 하나를 시작 | `00_규칙.md` 맨 위 "0. 번호 하나 체크리스트" → `python number_start.py <이름> <번호>` |
 | 조립도를 처음 시작 | `00_규칙.md` "00. 조립도를 시작할 때" → `process/01~04_*.md` |
 | 코드 쓰는 법·도구 사용법 | `process/05_조립.md`, 화면 조작 코드는 `process/viewer_snippets.md` |
-| 이 조립도가 어디까지 됐나 | `process/진행기록_<이름>.md` |
+| 이 조립도가 어디까지 됐나 | `process/인수인계_진행기록_<이름>.md` |
 | 사용자가 바로잡은 기록 | `scripts/assembly-tools/user_diffs/요청차이.md`, `수정저장차이.md` |
 | 대칭 조립·n족 로봇 | `process/ref_대칭조립.md`(모범 = 드롭체커), `process/ref_n족로봇.md`, `python symcheck.py <이름>` |
 | 부품 면·구멍·돌기 사실 | MCP `get_assembly_guide` 3-1·4·4-1절, `get_part_connectors` |
@@ -30,10 +30,10 @@
 1. `cd scripts/assembly-tools && PYTHONIOENCODING=utf-8 python session_start.py --아이디 <내 계정>` — 최신 커밋을 받고(깨끗하면 fast-forward) 현재 커밋과 조립도별 "마지막 작업"을 보여 준다. **사용자에게 이렇게 정리해 보고하고 시작한다: "마지막 작업은 <PC>·<아이디>가 <날짜>에 <어디까지> 했고, 지금 <이 PC>·<내 아이디>가 이어받아 시작합니다. 다음 할 일은 <다음>."** 작업할 조립도가 정해지면 `python handoff.py <이름> --아이디 <내 계정> --시작` 으로 이어받음을 기록한다. 새 PC 면 이어서 `python setup_new_pc.py`(라이브러리·node_modules·launch.json·.env.local 점검, FAIL 은 사용자에게 한 줄로 요청). 푸시 원격 이름은 `newrepo`(`git remote -v`).
 2. **개발 서버**: `http://localhost:3178/design.html?subject=robot` 하나만 쓴다. 응답하면 그대로 쓰고, 없으면 `preview_start invent-school-dev`(없는 PC 는 `scripts/assembly-tools/README.md` 새 PC 절 3번).
 3. **로그인**: 설계 화면에 선생님 로그인이 보이면 사용자에게 요청한다(비밀번호는 대신 입력하지 않는다). 로그인 전에는 화면 비교·❄/📷 확인을 하지 않는다.
-4. **현재 상태**: `진행기록_<이름>.md`·`user_diffs/요청차이.md` → `git log`/`git status` → `number_start.py` 맨 위 "세션 시작 체크"(서버·키·사용자 ✓). ❌ 는 먼저 해결하거나 한 줄로 요청한다.
+4. **현재 상태**: `인수인계_진행기록_<이름>.md`·`user_diffs/요청차이.md` → `git log`/`git status` → `number_start.py` 맨 위 "세션 시작 체크"(서버·키·사용자 ✓). ❌ 는 먼저 해결하거나 한 줄로 요청한다.
 5. **`process/00_규칙.md` 를 처음부터 읽고** 첫 보고에 "이번 번호에서 지킬 규칙 3개"를 적은 뒤 시작한다.
 6. 막힘·시간 압박이 와도 규칙을 우회하지 않는다 — 막히면 `05_조립.md` 0-1절 순서(holefit → plate_match → infer_grid)로 푼다.
-7. 작업을 끝내거나 멈추기 전에 `python handoff.py <이름> --아이디 <계정> --어디까지 "…" --다음 "…"` 로 어느 PC·어느 아이디가 어디까지 했는지 `진행기록_<이름>.md` 맨 위에 적는다. 푸시는 사용자가 "업로드"라고 할 때만 한다(`00_규칙.md` I2).
+7. 작업을 끝내거나 멈추기 전에 `python handoff.py <이름> --아이디 <계정> --어디까지 "…" --다음 "…"` 로 어느 PC·어느 아이디가 어디까지 했는지 `인수인계_진행기록_<이름>.md` 맨 위에 적는다. 푸시는 사용자가 "업로드"라고 할 때만 한다(`00_규칙.md` I2).
 
 ## 3D 부품을 만들거나 등록·고칠 때 (조립도와 별개)
 큐보 → 에이스랩·로보타미주니어 → 프로보 커넥트 순으로 같은 흐름이다.

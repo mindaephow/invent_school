@@ -56,7 +56,7 @@ def _session_check():
     print("  %s .env.local(SUPABASE 키): %s" % ("✅" if keys else "❌", "있음" if keys else "없음 → 사용자에게 달라고 한다(CLAUDE.md)"))
     print("  %s DB 읽기(사용자 ✓): %s" % ("✅" if db is not None else "❌", ("읽음 — ✓ 번호 %s" % db) if db is not None else "못 읽음 → ✓ 확인은 통과시키지 않는다(키를 한 줄로 요청하고, 키 없이 되는 작업은 계속한다 — 00_규칙.md B6)"))
     print("  ⚠ 로그인: 스크립트가 확인할 수 없다. 화면 비교(05 5-5)·❄/📷 확인에는 선생님 계정 로그인이 필요하므로 **새로 시작하거나 새 세션이면 사용자에게 먼저 요청한다**(비밀번호는 대신 입력하지 않는다). 브라우저 pane 에서 로그인 화면이 보이면 아직이다.")
-    print("  ⚠ 읽을 것: process/00_규칙.md 처음부터(맨 위 0번 체크리스트) → process/05_조립.md 실행 순서 → 진행기록_<이름>.md → user_diffs/요청차이.md (이번 번호에서 지킬 규칙 3개를 첫 보고 한 줄에)")
+    print("  ⚠ 읽을 것: process/00_규칙.md 처음부터(맨 위 0번 체크리스트) → process/05_조립.md 실행 순서 → 인수인계_진행기록_<이름>.md → user_diffs/요청차이.md (이번 번호에서 지킬 규칙 3개를 첫 보고 한 줄에)")
     return up
 _SERVER = _session_check()
 _warn()
@@ -90,7 +90,7 @@ def _remind():
         _pf = os.path.join(here, "refs", name, "fits", "%02d_P.json" % (k - 1))
         if os.path.exists(_pf):   # 29번에서 배운 것: 판이 가려져 holefit 가 안 되면 앞 번호 책 그림과 판 무늬를 맞춘다(눈으로 안 된다고 건너뛰지 말고 도구를 먼저 돌린다)
             print('  ⑥ 판이 이번 번호에서 가려졌으면(앞 번호 %d 판 격자 있음): holefit → python plate_match.py %s %d %d P --검증 "c,r,h,x,y;…" (앞 번호에서 놓아 3D 가 확정된 리벳 끝·블록 돌기·판 모서리 5개 이상의 칸·높이·픽셀) → infer_grid --anchor. 05_조립.md 0-2 절. 유추 격자는 규칙 점검이 사용자 ✓ 를 요구한다.' % (k - 1, name, k - 1, k))
-        print("  ⑦ 진행 상태 문서: process/진행기록_%s.md (앞 번호 절) — 번호 하나로 안 풀리면 05_조립.md 0-1 절." % name)
+        print("  ⑦ 진행 상태 문서: process/인수인계_진행기록_%s.md (앞 번호 절) — 번호 하나로 안 풀리면 05_조립.md 0-1 절." % name)
     except Exception as ex_:
         print("  (리마인드를 읽지 못했다: %s — 번호 시작은 계속한다)" % ex_)
 _remind()

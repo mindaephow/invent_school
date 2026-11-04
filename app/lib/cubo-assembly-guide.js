@@ -27,7 +27,7 @@ export function buildGuide(rules) {
 > 필요한 편·절은 get_assembly_guide 의 part 로 고른다(읽을 곳 메뉴가 절 제목에서 자동으로 만들어진다).
 
 ## ★ 작업 절차의 기준
-번호 하나를 만드는 절차의 기준은 저장소 \`scripts/assembly-tools/process/\` 의 파일이다: \`00_규칙.md\`(규칙 원본) → \`01_새조립도_시작_번호등록.md\` → \`02_이미지_자르기.md\` → \`03_부품체크.md\` → \`04_창고정리.md\` → \`05_조립.md\`(책 보기·부품 올려두기·결합·유추·확인). 번호를 시작할 때는 \`python number_start.py <이름> <번호>\` 부터 돌린다. 진행 중인 조립도의 현재 상태는 \`process/진행기록_<이름>.md\`, 사용자가 바로잡은 것은 \`scripts/assembly-tools/user_diffs/요청차이.md\`(같은 실수 반복 금지, 바로잡으시면 한 항목 추가)에 있다. 번호 확인은 사용자 ✓ 가 없어도 책↔화면 비교 증거(\`record_check.py\`)로 진행할 수 있다(완료 버튼은 절대 누르지 않는다). 저장소 루트 \`CLAUDE.md\` 가 시작점이다.
+번호 하나를 만드는 절차의 기준은 저장소 \`scripts/assembly-tools/process/\` 의 파일이다: \`00_규칙.md\`(규칙 원본) → \`01_새조립도_시작_번호등록.md\` → \`02_이미지_자르기.md\` → \`03_부품체크.md\` → \`04_창고정리.md\` → \`05_조립.md\`(책 보기·부품 올려두기·결합·유추·확인). 번호를 시작할 때는 \`python number_start.py <이름> <번호>\` 부터 돌린다. 진행 중인 조립도의 현재 상태는 \`process/인수인계_진행기록_<이름>.md\`, 사용자가 바로잡은 것은 \`scripts/assembly-tools/user_diffs/요청차이.md\`(같은 실수 반복 금지, 바로잡으시면 한 항목 추가)에 있다. 번호 확인은 사용자 ✓ 가 없어도 책↔화면 비교 증거(\`record_check.py\`)로 진행할 수 있다(완료 버튼은 절대 누르지 않는다). 저장소 루트 \`CLAUDE.md\` 가 시작점이다.
 
 이 안내서는 설명·사례·측정 메모이고 규칙은 \`00_규칙.md\` 한 곳에만 있다. 관리자가 "큐보 스튜디오"라고 하면 바로 아래 "작업 흐름" 절로 간다.
 
@@ -373,7 +373,7 @@ export function buildReference() {
 - 번호 N 순서: ① number_start.py <이름> N ② 책 그림 Read·링 색 검출 ③ crop_ticks.py <이름> N corners x1 y1 … 로 판 모서리 4곳 읽기 ④ holefit.py(기본→어두운판→자동 DoG, 판이 가려지면 infer_grid.py) 후 hf 그림 눈 확인 ⑤ axes_fit.py → NN_axes.json 에 no_rotate true → refs_rect.py → 그림 DB 바로 업로드 ⑥ pegprobe.py 위돌기·빈구멍·빈돌기 로 받는 돌기·빈 구멍을 숫자로(점수·후보 탐색 금지, 대칭 쪽은 반대편 거울) ⑦ 읽기 표(부품 칸은 "713프레임 1, 리벳 2" 형식) ⑧ <이름>.py 의 stepchecks.apply 바로 앞에 코드(attach: 새 돌기→기존 구멍, rivet=True 면 리벳 가운데가 구멍 입구 면 / recv: 새 구멍←기존 돌기, 아래에서 올라오는 돌기는 홀면 -y) ⑨ build.py --write ⑩ 화면 비교 → record_check.py ⑪ rulecheck.py·symcheck.py ⑫ 푸시는 사용자가 "업로드"라고 할 때만(안내서 JS 템플릿 안 백틱은 이스케이프, node --check).
 - 함정: run_path(run_name="probe") 로 분석(__main__ 이면 asm.json 을 덮어씀), 읽기 표 빈 번호·부품 칸 형식이 다르면 빌드가 저장 안 함, 사용자 📷 카메라가 코드 시점보다 우선, ivs_assembly_refs 에는 created_at 이 없다(get_rows 에 order_by), 윈도우에서 긴 경로 cv2.imwrite 는 조용히 실패.
 - 결합 방향은 책 화살표 선의 방향을 재서(수평에서 몇 도) 축선 각도와 비교해 정한다(세로로 짐작 금지). 기준 부품 = 결합을 받는 부품(격자·축은 그 부품에, 한 줄·L자 프레임은 frame_fit.py: 부품 모델 구멍 좌표 PnP). 같은 조립이 다른 방향으로 둘 그려져 있으면 대칭(반대쪽에서 본 것). 책대로 서면 바닥 아래로 내려가는지 숫자로 보고 내려가면 lift. 이미지 작업(확대 눈금 그림·hf·fit 확인 그림)도 그 번호 idx 3~ 으로 DB 에 올린다.
-- 상태·구조: process/진행기록_dropchecker.md(1~27번 완료, 다음 28번), 대칭 ref_대칭조립.md, n족 ref_n족로봇.md, 화면 조작 viewer_snippets.md.
+- 상태·구조: process/인수인계_진행기록_dropchecker.md(1~27번 완료, 다음 28번), 대칭 ref_대칭조립.md, n족 ref_n족로봇.md, 화면 조작 viewer_snippets.md.
 
 ## 8. 화면·코드 위치
 - public/design-assemblies.js: 규칙(IVS_ASSEMBLY_RULES) + 조립 단계 데이터(IVS_ASSEMBLIES) — 여기가 원본
