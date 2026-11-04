@@ -1,0 +1,21 @@
+<!doctype html><meta charset="utf-8"><title>프로보 커넥트 1X5블럭 미리보기</title>
+<style>html,body{margin:0;height:100%;background:#e8eef4;font-family:sans-serif}#i{position:fixed;left:10px;top:8px;font-size:13px;color:#234}</style>
+<div id="i">드래그: 회전 · 휠: 확대 — 1X5블럭 50×10×5 (구멍 5, 홈 4 추정)</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const R=new THREE.WebGLRenderer({antialias:true});R.setSize(innerWidth,innerHeight);document.body.appendChild(R.domElement);
+const S=new THREE.Scene();S.background=new THREE.Color(0xe8eef4);
+const C=new THREE.PerspectiveCamera(35,innerWidth/innerHeight,1,2000);
+S.add(new THREE.AmbientLight(0xffffff,.55));const L=new THREE.DirectionalLight(0xffffff,.9);L.position.set(40,80,60);S.add(L);
+S.add(new THREE.GridHelper(120,12,0x9aa,0xccd));
+fetch('1X5.stl').then(r=>r.arrayBuffer()).then(b=>{const dv=new DataView(b),n=dv.getUint32(80,true),pos=new Float32Array(n*9);
+ for(let t=0;t<n;t++)for(let v=0;v<3;v++){const o=84+t*50+12+v*12;const x=dv.getFloat32(o,true),y=dv.getFloat32(o+4,true),z=dv.getFloat32(o+8,true);pos[t*9+v*3]=x;pos[t*9+v*3+1]=z;pos[t*9+v*3+2]=-y}
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(pos,3));g.computeVertexNormals();
+ const m=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:0xf2f2f0,roughness:.6,metalness:.05}));S.add(m);
+ const e=new THREE.LineSegments(new THREE.EdgesGeometry(g,20),new THREE.LineBasicMaterial({color:0x606870}));S.add(e)});
+let th=-.6,ph=.9,rad=95;const upd=()=>{C.position.set(rad*Math.sin(ph)*Math.sin(th),rad*Math.cos(ph),rad*Math.sin(ph)*Math.cos(th));C.lookAt(0,2,0);R.render(S,C)};
+let d=false,px,py;R.domElement.onmousedown=e=>{d=true;px=e.clientX;py=e.clientY};onmouseup=()=>d=false;
+onmousemove=e=>{if(!d)return;th-=(e.clientX-px)*.01;ph=Math.max(.05,Math.min(3.1,ph-(e.clientY-py)*.01));px=e.clientX;py=e.clientY;upd()};
+R.domElement.onwheel=e=>{rad=Math.max(30,Math.min(300,rad*(1+e.deltaY*.001)));upd();e.preventDefault()};
+(function loop(){upd();requestAnimationFrame(loop)})();
+</script>
