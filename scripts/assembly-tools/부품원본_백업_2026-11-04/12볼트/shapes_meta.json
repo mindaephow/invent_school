@@ -1,0 +1,21 @@
+{
+ "id": "b805c9a6-05bf-4b5a-8c12-df12bc5b9c59",
+ "name": "12볼트",
+ "size_text": "길이 12mm, 지름 5.4mm 미만(여유끼움), 머리(접시) 지름 = 프레임 홀 사이즈, 너트 체결용",
+ "shapes_without_files": [
+  {
+   "x": 0,
+   "y": 0,
+   "z": 0,
+   "op": "add",
+   "rx": 0,
+   "ry": 0,
+   "rz": 0,
+   "type": "import",
+   "fileName": "12볼트_규격.stl",
+   "brightness": 100,
+   "백업파일": "01_12볼트_규격.stl",
+   "바이트": 16784
+  }
+ ]
+}
