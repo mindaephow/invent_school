@@ -4274,6 +4274,7 @@
   }
   document.querySelectorAll('.viewcube .face').forEach(el => {
     el.addEventListener('click', () => {
+      if (cubeDragged) return;   // 정육면체를 끌고 놓은 직후의 클릭은 면 맞추기로 보지 않는다
       const face = el.dataset.face;
       if (face === 'top') { orbit.phi = 0.25; return; }
       if (face === 'bottom') { orbit.phi = Math.PI - 0.25; return; }
@@ -4282,6 +4283,32 @@
       orbit.phi = 1.4;
     });
   });
+  // 정육면체를 끌면 화면 빈 곳을 끌 때와 같은 방식으로 시점이 돌아간다(가로 = theta, 세로 = phi). 끌지 않고 면만 누르면 위 클릭 동작 그대로.
+  const viewCubeWrap = document.querySelector('.viewcube-wrap');
+  let cubeDrag = null, cubeDragged = false;
+  if (viewCubeWrap) {
+    viewCubeWrap.style.touchAction = 'none';
+    viewCubeWrap.addEventListener('pointerdown', (e) => { cubeDrag = { x: e.clientX, y: e.clientY, id: e.pointerId, moved: false }; });
+    viewCubeWrap.addEventListener('pointermove', (e) => {
+      if (!cubeDrag || cubeDrag.id !== e.pointerId) return;
+      const dx = e.clientX - cubeDrag.x, dy = e.clientY - cubeDrag.y;
+      if (!cubeDrag.moved) {
+        if (Math.abs(dx) + Math.abs(dy) < 4) return;
+        cubeDrag.moved = true; cubeDragged = true;
+        try { viewCubeWrap.setPointerCapture(e.pointerId); } catch (_) {}   // 끌기가 시작된 뒤에만 잡는다(그냥 누르는 클릭이 면에 가도록)
+      }
+      orbit.theta -= dx * 0.008;
+      orbit.phi = Math.min(Math.max(orbit.phi - dy * 0.008, 0.05), Math.PI - 0.05);
+      cubeDrag.x = e.clientX; cubeDrag.y = e.clientY;
+    });
+    const endCubeDrag = (e) => {
+      if (!cubeDrag || cubeDrag.id !== e.pointerId) return;
+      cubeDrag = null;
+      setTimeout(() => { cubeDragged = false; }, 0);
+    };
+    viewCubeWrap.addEventListener('pointerup', endCubeDrag);
+    viewCubeWrap.addEventListener('pointercancel', endCubeDrag);
+  }
 
   const raycaster = new THREE.Raycaster();
   function ndcFromEvent(e){
