@@ -1,0 +1,37 @@
+{
+ "id": "d909c4d9-f062-4023-893b-8513c1d4c9b1",
+ "name": "터치센서",
+ "shapes_without_files": [
+  {
+   "x": 0,
+   "y": 0,
+   "z": 0,
+   "op": "add",
+   "rx": 0,
+   "ry": 0,
+   "rz": 0,
+   "type": "import",
+   "color": "#c7cbd1",
+   "fileName": "터치센서.stl",
+   "brightness": 100,
+   "백업파일": "01_터치센서.stl",
+   "바이트": 137084
+  },
+  {
+   "x": 0,
+   "y": 20.15,
+   "z": 0,
+   "op": "add",
+   "rx": -1.5707963267948966,
+   "ry": 0,
+   "rz": -1.5707963267948966,
+   "text": "touch",
+   "type": "text",
+   "color": "#1f2937",
+   "paint": true,
+   "width": 0.4,
+   "radius": 6,
+   "brightness": 100
+  }
+ ]
+}
