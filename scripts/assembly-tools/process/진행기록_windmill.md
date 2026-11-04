@@ -4,7 +4,7 @@
 
 ## 현재 상태 (2026-10-14, 확인한 것)
 - 조립도 25단계가 `public/design-assemblies.js` 의 `cubo-1-windmill`(약 270행~)에 **직접 들어가 있다**. 조립 프로그램(`windmill.py`)·`windmill_asm.json` 이 없는 초기 조립도라서 `number_start.py`·`rulecheck.py`·`build.py` 의 대상이 아니다.
-- 사용자 ✓: DB(`ivs_assembly_status`)에 풍차 기록이 없다. `build.py` 는 풍차를 `LEGACY_NO_GRID`(격자 검사 면제 옛 조립도 목록)에 넣어 둔다.
+- 사용자 ✓: DB(`ivs_assembly_status`)에 풍차 기록이 없다.
 - 카메라 출처가 `guess` 인 단계가 13개다(대부분 12번 이후).
 - 같은 방식(도구 없이 직접 넣음)으로 만든 초기 조립도는 토끼(`cubo-1-rabbit`)·양팔저울(`cubo-1-balance`)·로봇팽이(`cubo-1-spinner`)이고, 이 셋의 진행기록은 따로 없다(`문서지도.md` 5번 절).
 

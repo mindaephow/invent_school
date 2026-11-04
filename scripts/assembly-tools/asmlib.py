@@ -243,7 +243,7 @@ def _enters(host, face, travel):
 class Asm:
     def __init__(s, id, chapter, book, camera=None, **meta):
         s.id, s.chapter, s.book, s.camera, s.meta = id, chapter, book, camera, meta
-        s.steps = []; s.parts = []; s.warn = []
+        s.steps = []; s.parts = []; s.warn = []; s.info = []
         s.fixes = []; s.fix_used = set()
     def load_fixes(s, path):
         """관리자 수정 지시(<이름>_fixes.json)를 읽는다. 스크립트가 아니라 이 파일에 적어 두면 다시 빌드해도 지워지지 않는다.
@@ -373,6 +373,7 @@ class Asm:
     def step(s, note, cam=None, camSrc="guess", **kw):
         st = Step(s, note, cam, camSrc, kw); s.steps.append(st); return st
     def log(s, msg): s.warn.append(msg); print("  [경고]", msg)
+    def note(s, msg): s.info.append(msg); print("  [규칙 자동]", msg)
     def numbering(s):
         """부품 번호 — 조립도 전체에서 같은 이름이 나온 순서(단계 → 부품 순). public/design-faces.js numberParts 와 같다."""
         order = [p for st in s.steps for p in st.parts]
@@ -454,6 +455,12 @@ class Step:
         p = s._anchored(n, R, p)
         f = s.A.fix_of("shift", s.A.next_name(n))
         if f: p = tuple(np.array(p, float) + np.array(f["delta"], float))
+        if "enter" in extra:   # enter=(받는 부품, 구멍) — 이 부품의 돌기가 들어가는 구멍 입구가 안내점(손 좌표 금지: 결합에서 계산, 옆자리 조립이면 옆자리만큼 옮긴다)
+            _host_, _hole_ = extra.pop("enter"); hp = _host(s.A, _host_); h = hp.hole(_item(hp, _hole_, "홀")[0])
+            _tmp = Part(n, np.array(R, float), (0, 0, 0), s); d = _tmp.peg(_tmp.conn["pegs"][0]["id"])["dir"]
+            ent = h["pos"] - d * (h["len"] / 2); sd = extra.get("side")
+            if sd: ent = ent + (np.array(sd["p"], float) - np.array(p, float))
+            extra["marks"] = [rnd(ent)]
         s._resolve_lazy(n, R, p, extra)
         s._lock_extra(n, extra)
         return s._add(Part(n, R, p, s, extra))
@@ -506,6 +513,21 @@ class Step:
         p = hp.hole(hid)["pos"] + np.array(offset, float) - tmp.hole(mid)["pos"]
         f = s.A.fix_of("shift", s.A.next_name(n))
         if f: p = p + np.array(f["delta"], float)
+        return s._add(Part(n, R, p, s, extra))
+    def place_rest(s, n, R, mine, host, hole, toward, **extra):
+        """부품을 **앞 부품 구멍의 끝면에 몸통이 닿게** 놓는다(물리법칙: 겹치지 않고 떠 있지도 않다). toward = 이 부품이 놓이는 쪽(세계 방향, 예: (0, 1, 0) 은 host 구멍 위쪽).
+        끝면 = host 구멍 가운데에서 toward 로 구멍 길이의 절반(홀 테두리 끝면 포함), 몸통 두께 = 부품 크기(dims.json)를 자세 R 로 돌린 toward 방향 폭.
+        구멍 길이(place_next)가 아니라 몸통 크기로 재므로 몸통이 구멍보다 길어도 파고들지 않는다. 옆으로는 내 구멍(mine)이 host 구멍(hole) 위에 오게 맞춘다."""
+        R = np.array(R, float); tmp = Part(n, R, (0, 0, 0), s); t = np.array(toward, float); t = t / np.linalg.norm(t)
+        hp = _host(s.A, host); mid = _item(tmp, mine, "홀")[0]; hid = _item(hp, hole, "홀")[0]; h = hp.hole(hid)
+        size = np.array(tmp.conn.get("size") or partlib.get(n)["size"], float)
+        half = float(np.dot(np.abs(t), np.abs(R) @ (size / 2)))   # toward 방향으로 몸통 반폭(상자, 몸통 중심 = 부품 원점)
+        face = h["pos"] + t * (h["len"] / 2)
+        lateral = (h["pos"] - tmp.hole(mid)["pos"]); lateral = lateral - np.dot(lateral, t) * t
+        p = lateral + np.dot(face, t) * t + t * half
+        f = s.A.fix_of("shift", s.A.next_name(n))
+        if f: p = p + np.array(f["delta"], float)
+        if extra.get("recv") and "thick" not in extra: extra["thick"] = round(2 * half, 3)   # 받는 판 두께 = 몸통 두께(dims)
         return s._add(Part(n, R, p, s, extra))
     def place_by(s, n, R, links, **extra):
         """안내 화살표 없이 놓되 위치를 **앞 부품에 대한 결합으로** 정한다(place 의 상대 위치 판). 앞 부품이 옮겨지면 이 부품도 따라온다.
@@ -587,6 +609,10 @@ class Step:
                     _ld = np.array(_pc["dir"], float); _ax = int(np.argmax(np.abs(_ld)))
                     _prot = float(np.dot(np.array(_pc["pos"], float) - _ld * _pc["len"] / 2, _ld) + _dm[_ax] / 2)
                     if _prot > 0.05: p = p + d0 * _prot
+        if p is not None and n == "T축" and d0 is not None and "기어" in items[0][1][0].n:   # 규칙(큐보 부품결합규칙.md '구멍보다 큰 것은 지나갈 수 없다'): 홀 테두리가 없는 기어에서는 T축 머리가 구멍을 못 지나가 기어 윗면 위에 남는다 — T축 길이 30 안에 머리가 들어 있어 몸통 시작점에서 머리 두께만큼 바깥으로 올린다(사용자 2026-11-04, 44·47번 지적)
+            _ht = head_thickness(n)
+            if _ht is None: s.A.log(f"{s.index}단계 {n}: 머리 두께가 부품 상세내역에 없어 머리가 밖으로 남는 위치를 못 정했다(partlib.py 로 heads.json 을 만든다)")
+            else: p = p - d0 * _ht
         part = Part(n, R, p if p is not None else (0, 0, 0), s, extra)
         for pid, (host, tgt) in items[1:]:
             pg = part.peg(pid); h = target(host, tgt, pg)
@@ -598,6 +624,8 @@ class Step:
                 s.A.log(f"{s.index}단계 {n}: '{tgt}' 은(는) {hp.n} 에서 돌기가 들어오는 쪽 면이 아니다(앞뒤가 반대)")
         part.extra.update({"dir": rnd(-d0 if dir is None else vec(dir)), "marks": marks})
         if hover: part.extra["hover"] = hover
+        if n == "T축" and "pegDepth" not in part.extra and _lk and _ht_ok(n):
+            part.extra["pegDepth"] = round(float(tmp.peg(_lk[0][0])["len"]) - head_thickness(n), 3)   # 안내 화살표 시작 = 돌기 길이 − 머리 두께(손 pegDepth 금지)
         return s._add(part)
     def _seat_nut(s, n, R, p, hosts):
         """너트를 볼트 끝이 아니라 볼트가 지나는 판 묶음의 맨 아래 면에 앉힌다 — 너트 목(돌기)이 판 구멍 안으로 들어가고 머리(넓은 쪽)가 홀 테두리 면에 닿는다. 볼트가 지나는 판이 없으면 그대로 둔다."""
@@ -618,7 +646,7 @@ class Step:
         if float(np.dot(dn, dw)) > -0.9: return p
         nb = np.array(p, float) + np.array(R, float) @ (np.array(nc["pos"], float) - nl * nc["len"] / 2)
         return tuple(float(v) for v in np.array(p, float) + dw * (bot - 1.0 - float(np.dot(nb, dw))))   # 너트 머리(넓은 쪽 1mm)는 홀 테두리 안에 들어가 판 면과 같다 → 목 밑동은 면에서 1.0 안쪽(G2, SINK_PARTS 와 같은 값)
-    def recv(s, n, R, links, dir=None, hover=None, p=None, **extra):
+    def recv(s, n, R, links, dir=None, hover=None, p=None, keep_dropped_check=True, **extra):
         """움직이는 쪽이 구멍을 받는 쪽(프레임이 블록 끝 돌기에 얹히는 경우).
         links 가 dict {내 구멍 id: (고정 부품, 돌기 id)} 면 위치 p 를 계산하고, [(고정 부품, 돌기 id), ...] 목록이면 p 를 직접 줘야 한다."""
         R = np.array(R, float); tmp = Part(n, R, (0, 0, 0), s)
@@ -629,6 +657,11 @@ class Step:
             pid2, fc = (None, None) if pid is None else _item(tmp, pid, "홀")
             gid2, _ = _item(hp, gid, "돌기")
             pairs.append((pid2, (hp, gid2))); _faces.append((pid2, hp, fc, pid, gid2))
+        _keep = [i for i, (pid, (host, gid)) in enumerate(pairs) if not _peg_occupied_by(s.A, host, gid, None)]   # 규칙 7: 돌기 하나는 프레임 한 장에만 든다 — 이미 다른 프레임 구멍에 든 돌기는 이 부품에 잇지 않는다(안내점도 안 낸다, 토끼 22번 2026-11-04)
+        if keep_dropped_check and 0 < len(_keep) < len(pairs):
+            for i, (pid, (host, gid)) in enumerate(pairs):
+                if i not in _keep: s.A.note(f"{s.index}단계 {n}: 돌기 {host.n}.{gid} 는 이미 {_peg_occupied_by(s.A, host, gid, None)} 구멍에 들어 있어 결합에서 뺐다(규칙 7)")
+            pairs = [pairs[i] for i in _keep]; _faces = [_faces[i] for i in _keep]
         _hand = None
         if p is not None and not MAGNET_OFF and ("프레임" in n or "블록" in n) and HAND_LOG is None:
             raise ValueError(f"{s.index}단계 {n}: 프레임·블록 결합에는 손으로 준 위치 p= 를 쓸 수 없다 — 결합(돌기↔구멍)만 적으면 자석처럼 붙는다(사용자 2026-11-03)")
@@ -675,10 +708,40 @@ class Step:
             if fc is not None and not _enters(part, fc, hp.peg(gid2)["dir"]):
                 s.A.log(f"{s.index}단계 {n}: '{pname}' 은(는) {n} 에서 돌기가 들어오는 쪽 면이 아니다(앞뒤가 반대)")
         part.extra.update({"recv": True, "dir": rnd(d0 if dir is None else vec(dir)), "marks": marks})
+        if "settleDir" in part.extra and "settleMarks" not in part.extra and marks: part.extra["settleMarks"] = [list(m) for m in marks]; part.extra["marks"] = []   # 옆자리에서 합쳐지는 번호의 안내점 = 받는 돌기 끝(손 좌표 금지, 토끼 15번 2026-11-04)
         if hover: part.extra["hover"] = hover
+        _ex = part.extra.get("explode")
+        if isinstance(_ex, dict) and "offset" not in _ex and hover: _ex["offset"] = [round(float(x) * hover, 3) for x in vec(part.extra["dir"])]   # 결합 전에 띄운 모습 = 끼우는 방향으로 hover 만큼(손 offset 금지)
         return s._add(part)
 
+def _peg_occupied_by(A, host, gid, skip):
+    """host 의 돌기 gid 가 이미 들어가 있는 다른 부품(구멍 하나라도 축 어긋남 ≤1.2mm·돌기와 구멍 구간이 1mm 이상 겹침)의 이름, 없으면 None."""
+    if host.n in ("T축", "8볼트", "12볼트", "너트", "서보고정볼트") or host.n.endswith("축"): return None   # 축·볼트는 여러 판을 지나는 부품(규칙 7 은 리벳·블록·서보·모터 돌기)
+    g = host.peg(gid); d = g["dir"]
+    for o in A.parts:
+        if o is host or o is skip or not o.conn: continue
+        for c in o.conn["holes"]:
+            h = o.world("hole", c)
+            if abs(float(np.dot(h["dir"], d))) < 0.98: continue
+            rel = g["pos"] - h["pos"]; a = float(np.dot(rel, h["dir"])); lat = float(np.linalg.norm(rel - h["dir"] * a))
+            if lat > 1.2: continue
+            ov = min(a + g["len"] / 2, h["len"] / 2) - max(a - g["len"] / 2, -h["len"] / 2)
+            if ov >= 1.0: return f"{o.n}.{h['id']}"
+    return None
+
+def _ht_ok(n):
+    return head_thickness(n) is not None
+
 HAND_LOG = None
+_HEADS = None
+def head_thickness(name):
+    """대가리(머리) 두께 mm — 부품 상세내역(대가리_몸통."대가리 두께_mm")에서 partlib.py 가 만든 heads.json. 없으면 None(숫자를 지어내지 않는다)."""
+    global _HEADS
+    if _HEADS is None:
+        import os as _o
+        _p = _o.path.join(_o.path.dirname(_o.path.abspath(__file__)), "heads.json")
+        _HEADS = json.load(open(_p, encoding="utf-8")) if _o.path.exists(_p) else {}
+    h = _HEADS.get(name); return None if not h else float(h["두께"])
 MAGNET_OFF = False   # True 면 옛 방식(손으로 준 p 를 그대로 씀)
 SINK_PARTS = ("8볼트", "12볼트", "너트", "서보고정볼트")   # 머리·몸이 프레임 면 밖으로 나오면 안 되는 부품(구멍에 묻는다)
 _SINK_DIMS = None

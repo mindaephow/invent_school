@@ -1,105 +1,69 @@
 # 부품 연결점 라이브러리 — 조립 프로그램(asmlib.py)과 로컬 검사(check_local.js)가 같이 쓴다.
-# 프레임(N프레임)은 규칙대로 만들어 내고(구멍 10mm 격자, 두께 5, 긴 쪽 x), 나머지는 부품 DB(get_part_connectors)에서 읽은 값을 적어 둔 것이다.
-# 새 부품이 필요하면 아래 OTHER 에 get_part_connectors 결과(pegs/holes/size)를 그대로 옮긴다.
-import json, re
+# 부품의 크기·돌기·구멍은 부품 DB 의 상세내역(ivs_part_catalog 의 data.detail)이 원본이다(사용자 지시 2026-11-04).
+# build_all() 이 DB 상세내역을 읽어 conn.json·dims.json 을 만든다. 부품 값을 이 파일에 따로 적지 않는다(프레임 규칙·OTHER 삭제).
+import json, re, os, urllib.request
 
-def frame(name):
-    m = re.fullmatch(r"(\d)(\d+)프레임", name)
-    if not m: return None
-    W, L = int(m.group(1)), int(m.group(2))
-    holes = []
-    for i in range(L):
-        for j in range(W):
-            holes.append({"id": f"h{i+1}_{j+1}", "pos": [(i - (L - 1) / 2) * 10, 0, (j - (W - 1) / 2) * 10], "dir": [0, -1, 0], "len": 5, "r": 3.5, "through": True})
-    return {"pegs": [], "holes": holes, "size": [L * 10, 5, W * 10]}
+_DIR = {"+x": [1, 0, 0], "-x": [-1, 0, 0], "+y": [0, 1, 0], "-y": [0, -1, 0], "+z": [0, 0, 1], "-z": [0, 0, -1]}
 
-def peg(id, pos, d, ln, r): return {"id": id, "pos": pos, "dir": d, "len": ln, "r": r}
-def hole(id, pos, d, ln, r, through=True): return {"id": id, "pos": pos, "dir": d, "len": ln, "r": r, "through": through}
+def load_details():
+    """DB 상세내역을 읽는다 → {부품이름: detail}. 같은 이름이 여러 행이면 상세내역이 있는 행을 쓴다. 읽지 못하면 {}."""
+    env = {}
+    try:
+        for ln in open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".env.local"), encoding="utf-8"):
+            if "=" in ln and not ln.lstrip().startswith("#"):
+                k, v = ln.split("=", 1); env[k.strip()] = v.strip().strip('"').strip("'")
+        url = (env.get("SUPABASE_URL") or env.get("NEXT_PUBLIC_SUPABASE_URL")).rstrip("/"); key = env["SUPABASE_SERVICE_ROLE_KEY"]
+        q = url + "/rest/v1/ivs_part_catalog?select=name:data->>name,detail:data->detail&data->>subject=eq.robot&limit=1000"
+        rows = json.loads(urllib.request.urlopen(urllib.request.Request(q, headers={"apikey": key, "Authorization": "Bearer " + key}), timeout=30).read().decode("utf-8"))
+    except Exception as e:
+        print("⚠ 부품 DB 상세내역을 읽지 못했다:", e); return {}
+    out = {}
+    for r in rows:
+        if r.get("detail") and r["name"] not in out: out[r["name"]] = r["detail"]
+    return out
 
-def block(n, ends, zs, r):  # N단블록: 앞뒤(±z) 면에 zs 위치 돌기, 양 끝(±x) 십자 돌기, 위·아래 구멍
-    pegs = [peg("p1", [ends, 0, 0], [1, 0, 0], 5, r), peg("p2", [-ends, 0, 0], [-1, 0, 0], 5, r)]
-    return pegs
+def from_detail(d):
+    """상세내역 → {size, pegs, holes}. 지름→r, 방향 문자열→벡터."""
+    sz = d.get("크기_mm") or {}
+    size = [sz.get("가로(x)"), sz.get("높이(y)"), sz.get("세로(z)")]
+    pegs = [{"id": p["번호"], "pos": p["위치"], "dir": _DIR[p["방향"]], "len": p["길이"], "r": p["지름"] / 2} for p in (d.get("돌기") or {}).get("목록", [])]
+    holes = [{"id": h["번호"], "pos": h["위치"], "dir": _DIR[h["방향"]], "len": h["길이"], "r": h["지름"] / 2, "through": bool(h.get("관통"))} for h in (d.get("구멍") or {}).get("목록", [])]
+    return {"size": size, "pegs": pegs, "holes": holes}
 
-OTHER = {
-    "3단블록": {"size": [40, 10, 20], "pegs": [
-        peg("p1", [17.5, 0, 0], [1, 0, 0], 5, 3.8), peg("p2", [-17.5, 0, 0], [-1, 0, 0], 5, 3.8),
-        peg("p3", [10, 0, 7.5], [0, 0, 1], 5, 3.8), peg("p4", [0, 0, 7.5], [0, 0, 1], 5, 3.8), peg("p5", [-10, 0, 7.5], [0, 0, 1], 5, 3.8),
-        peg("p6", [0, 0, -7.5], [0, 0, -1], 5, 3.8), peg("p7", [10, 0, -7.5], [0, 0, -1], 5, 3.8), peg("p8", [-10, 0, -7.5], [0, 0, -1], 5, 3.8)],
-        "holes": [hole("h1", [-10, 0, 0], [0, -1, 0], 10, 4), hole("h2", [0, 0, 0], [0, -1, 0], 10, 4), hole("h3", [10, 0, 0], [0, -1, 0], 10, 4)]},
-    "2단블록": {"size": [30, 10, 20], "pegs": [
-        peg("p1", [12.5, 0, 0], [1, 0, 0], 5, 3.5), peg("p2", [-12.5, 0, 0], [-1, 0, 0], 5, 3.5),
-        peg("p3", [-5, 0, 7.5], [0, 0, 1], 5, 3.4), peg("p4", [5, 0, 7.5], [0, 0, 1], 5, 3.4),
-        peg("p5", [5, 0, -7.5], [0, 0, -1], 5, 3.4), peg("p6", [-5, 0, -7.5], [0, 0, -1], 5, 3.4)],
-        "holes": [hole("h1", [-5, 0, 0], [0, -1, 0], 10, 3.5), hole("h2", [5, 0, 0], [0, -1, 0], 10, 3.5)]},   # 구멍 길이 = 블록 두께 10(옛 9 는 리벳·볼트가 0.5 깊게 놓이던 원인, 2026-11-03)
-    "리벳": {"size": [7.6, 9, 7.6], "pegs": [peg("p1", [0, -3, 0], [0, -1, 0], 3, 3.2), peg("p2", [0, 3, 0], [0, 1, 0], 3, 3.2)], "holes": []},
-    "반원프레임": {"size": [70, 5, 32.4], "pegs": [], "holes": [   # 2026-10-07 부품 DB 에 등록한 연결점과 같다(부품 설명 h1~h9 좌표): 호 위 구멍 9개, h5 가 꼭짓점(z −11.2), 양 끝 h1·h9 는 z +11.2 로 열린 쪽
-        hole("h1", [-30, 0, 11.2], [0, -1, 0], 5, 3.5), hole("h2", [-25.7, 0, 2.2], [0, -1, 0], 5, 3.5), hole("h3", [-18.7, 0, -5], [0, -1, 0], 5, 3.5),
-        hole("h4", [-9.9, 0, -9.6], [0, -1, 0], 5, 3.5), hole("h5", [0, 0, -11.2], [0, -1, 0], 5, 3.5), hole("h6", [9.9, 0, -9.6], [0, -1, 0], 5, 3.5),
-        hole("h7", [18.7, 0, -5], [0, -1, 0], 5, 3.5), hole("h8", [25.7, 0, 2.2], [0, -1, 0], 5, 3.5), hole("h9", [30, 0, 11.2], [0, -1, 0], 5, 3.5)]},
-    "DC모터": {"size": [40, 38, 53], "pegs": [   # 2026-10-03 새 모델 실측(DB 연결점과 같다): 위 돌기 피치 40(z -21.5/18.5), 옆 돌기 피치 20(z -11.5/8.5)
-        peg("p1", [0, 16.5, 18.5], [0, 1, 0], 5, 2.5), peg("p2", [0, 16.5, -21.5], [0, 1, 0], 5, 2.5),
-        peg("p3", [17.5, -1, 8.5], [1, 0, 0], 5, 2.5), peg("p4", [17.5, -1, -11.5], [1, 0, 0], 5, 2.5),
-        peg("p5", [-17.5, -1, 8.5], [-1, 0, 0], 5, 2.5), peg("p6", [-17.5, -1, -11.5], [-1, 0, 0], 5, 2.5)],
-        "holes": [{"id": "cross", "pos": [0, 14, -11.5], "dir": [0, -1, 0], "r": 3, "through": False},          # 위 십자 소켓(+ 모양): 돌기 p2 에서 10mm = 프레임 격자 칸 (STL 실제는 -12.0)
-                  {"id": "cross_back", "pos": [0, -19, -11.5], "dir": [0, 1, 0], "r": 3, "through": False},    # 뒷면 대칭 십자 소켓
-                  {"id": "b1", "pos": [-10, -19, -11.5], "dir": [0, 1, 0], "r": 3.5, "through": False}, {"id": "b2", "pos": [-10, -19, -1.5], "dir": [0, 1, 0], "r": 3.5, "through": False},
-                  {"id": "b3", "pos": [-10, -19, 8.5], "dir": [0, 1, 0], "r": 3.5, "through": False}, {"id": "b4", "pos": [10, -19, -11.5], "dir": [0, 1, 0], "r": 3.5, "through": False},
-                  {"id": "b5", "pos": [10, -19, -1.5], "dir": [0, 1, 0], "r": 3.5, "through": False}, {"id": "b6", "pos": [10, -19, 8.5], "dir": [0, 1, 0], "r": 3.5, "through": False}]},
-    "서보모터": {"size": [24, 48.5, 58], "pegs": [   # 2026-10-26 DB 연결점(get_part_connectors·measure_part 실측과 일치): 위(+y) 출력축 p1, 아래(-y) 결합 돌기 p2(긴 것, 케이블 쪽 z +9)·p3·p4
-        peg("p1", [0, 22.3, 7], [0, 1, 0], 4, 3), peg("p2", [0, -22.25, 9], [0, -1, 0], 4, 2.5),
-        peg("p3", [0, -21.25, -1], [0, -1, 0], 2, 2.5), peg("p4", [0, -21.25, -11], [0, -1, 0], 2, 2.5)], "holes": []},
-    "서보혼": {"size": [50, 5, 10], "pegs": [], "holes": [   # 2026-10-26 DB 연결점: 막대형, 한쪽 끝부터 보통 구멍 h1·h2, 나사 구멍 s3·s4(반지름 1.1), 육각 구멍 hex(서보 출력축이 끼는 곳, 바닥 두께 1 막힘)
-        hole("h1", [-20, 0, 0], [0, -1, 0], 5, 3.5), hole("h2", [-10, 0, 0], [0, -1, 0], 5, 3.5),
-        hole("s3", [0, 0, 0], [0, -1, 0], 5, 1.1), hole("s4", [10, 0, 0], [0, -1, 0], 5, 1.1), hole("hex", [20, 0, 0], [0, -1, 0], 5, 2.5, False)]},
-    "둥근서보혼": {"size": [30, 5, 30], "pegs": [], "holes": [   # 2026-10-26 DB 연결점(배틀바이크 9번): 지름 30×5 원판, 가운데 육각 구멍 hex(서보 출력축이 끼는 곳, 위에서 깊이 4·바닥 두께 1 막힘), 둘레 h1~h4 는 가운데에서 10mm 떨어진 보통 구멍(관통). 위 면에서 끼움(dir -y)
-        hole("hex", [0, 0, 0], [0, -1, 0], 5, 2.5, False), hole("h1", [10, 0, 0], [0, -1, 0], 5, 3.5), hole("h2", [0, 0, 10], [0, -1, 0], 5, 3.5),
-        hole("h3", [-10, 0, 0], [0, -1, 0], 5, 3.5), hole("h4", [0, 0, -10], [0, -1, 0], 5, 3.5)]},
-    "서보고정볼트": {"size": [6.8, 7, 6.8], "pegs": [peg("p1", [0, -0.8, 0], [0, -1, 0], 6, 1.3)], "holes": []},   # 2026-10-26 DB 연결점: 몸통이 아래(-y)로 뻗어 서보혼 나사 구멍(반지름 1.1)에 조인다
-    "눈블록": {"size": [17, 7, 17], "pegs": [peg("p1", [0, 1.0, 0], [0, 1, 0], 5, 3.4)], "holes": []},
-    "1열브라켓": {"size": [10, 30, 30], "pegs": [], "holes": [
-        hole("h1", [0, -12.5, 0], [0, 1, 0], 5, 3.1), hole("h2", [0, -12.5, 10], [0, 1, 0], 5, 3.1),
-        hole("h3", [0, 0, -12.5], [0, 0, 1], 5, 3.1), hole("h4", [0, 10, -12.5], [0, 0, 1], 5, 3.1)]},   # 구멍 위치·개수·반지름: measure_part 실측(2026-10-12) — DB 와 같다
-    "2열브라켓": {"size": [20, 25, 30], "pegs": [], "holes": [
-        hole("h1", [-5, -10, 0], [0, 1, 0], 5, 4), hole("h2", [5, -10, 0], [0, 1, 0], 5, 4),
-        hole("h3", [-5, -10, 10], [0, 1, 0], 5, 4), hole("h4", [5, -10, 10], [0, 1, 0], 5, 4),
-        hole("h5", [-5, -2.5, -12.5], [0, 0, 1], 5, 4), hole("h6", [5, -2.5, -12.5], [0, 0, 1], 5, 4),
-        hole("h7", [-5, 7.5, -12.5], [0, 0, 1], 5, 4), hole("h8", [5, 7.5, -12.5], [0, 0, 1], 5, 4)]},   # 가이드 4절: 긴 판 구멍 2×2(dir y)·짧은 팔 구멍 2×2(dir z), 위치는 1열브라켓 측정 패턴(추정)
-    "메인보드": {"size": [90, 42.5, 67], "pegs": [peg("p1", [0, -18.75, -10], [0, -1, 0], 5, 2.5), peg("p2", [0, -18.75, 10], [0, -1, 0], 5, 2.5)], "holes": []},
-    "T축": {"size": [7, 30, 7], "pegs": [peg("p1", [0, 0, 0], [0, 1, 0], 30, 3.5)], "holes": []},
-    "축": {"size": [5, 65, 5], "pegs": [peg("p1", [0, 0, 0], [0, 1, 0], 65, 3.5)], "holes": []},
-    "작은기어": {"size": [17.6, 8, 17.6], "pegs": [], "holes": [hole("h1", [0, 0.2, 0], [0, -1, 0], 7.6, 3.5)]},
-    "큰기어": {"size": [46, 9, 46], "pegs": [], "holes": [hole(f"h{k+1}", pos, [0, -1, 0], 9, 4) for k, pos in enumerate([[-10, 0, 0], [0, 0, -10], [0, 0, 0], [0, 0, 10], [10, 0, 0]])]},
-    "작은바퀴": {"size": [50, 16, 50], "pegs": [], "holes": [hole(f"h{k+1}", pos, [0, 1, 0], 9, 4, False) for k, pos in enumerate([[-10, -3.5, 0], [0, -3.5, -10], [0, -3.5, 0], [0, -3.5, 10], [10, -3.5, 0]])] + [hole("h6", [0, 4.5, 0], [0, -1, 0], 7, 3.5, False)]},   # h6 = 반대 면(허브 쪽) 둥근 구멍 — 뒤집어 끼울 때(어보이더 2026-10-17, DB h4 와 같은 구멍)
-    "부시": {"size": [12, 5.5, 12], "pegs": [], "holes": [hole("h1", [0, 0.2, 0], [0, -1, 0], 5.1, 3.5)]},
-    "135도 프레임": {"size": [83.3, 5, 33.3], "pegs": [], "holes": [hole(f"h{k+1}", [x, 0, z], [0, -1, 0], 5, 3.5) for k, (x, z) in enumerate([(-34.5, -9.5), (-27.5, -2.5), (-20.5, 4.5), (-13.5, 11.5), (-3.5, 11.5), (6.5, 11.5), (16.5, 11.5), (26.5, 11.5), (36.5, 11.5)])]},
-    "90도 프레임": {"size": [30, 5, 30], "pegs": [], "holes": [hole(f"h{k+1}", [x, 0, z], [0, -1, 0], 5, 3.5) for k, (x, z) in enumerate([(-10, -10), (-10, 0), (-10, 10), (0, -10), (10, -10)])]},
-    # ── 큐보 2권(스피드바이크)에서 새로 쓰는 부품 — 2026-10-09 부품 DB 연결점(get_part_connectors)과 실측(measure_part)을 그대로 옮김 ──
-    "중간바퀴": {"size": [76, 32, 76], "pegs": [], "holes": [hole("h1", [0, -6, 0], [0, -1, 0], 20, 3.35)]},   # 가운데 십자 구멍 1개(축이 관통)
-    "스프라켓": {"size": [49.8, 27, 49.7], "pegs": [], "holes": [hole("h1", [0, 0, 0], [0, -1, 0], 27, 3.35)]},   # 가운데 십자 구멍 1개(축이 관통)
-    "캐터필러": {"size": [38, 15.5, 16], "pegs": [dict(peg("p1", [-10, 4.835, 4], [0, 1, 0], 5.83, 2.5), inert=True), dict(peg("p2", [10, 4.835, 4], [0, 1, 0], 5.83, 2.5), inert=True)], "holes": []},   # 링크 1개: 위쪽 속 빈 돌기 2개(간격 20) — inert: 모양만 돌기일 뿐 다른 부품과 결합하는 돌기가 아니다(사용자 지시 2026-10-14 "캐터필러의 돌기는 돌기의 역할을 하지 않아") → 빈 돌기 목록·후보 계산에서 뺀다
-    "너트": {"size": [6.8, 4, 6.8], "pegs": [peg("p1", [0, 0.5, 0], [0, 1, 0], 3, 2.7)], "holes": [hole("h1", [0, 0, 0], [0, -1, 0], 14, 1.6)]},   # (h1 len 14 = 볼트가 물리는 범위, DB 와 같게) 몸통이 프레임 구멍에 아래에서 들어가고, 가운데 나사 구멍에 볼트가 물린다
-    "8볼트": {"size": [9, 9.8, 9], "pegs": [peg("p1", [0, -0.9, 0], [0, -1, 0], 8, 2)], "holes": []},      # 몸통이 아래(-y)로 뻗고 머리가 프레임 테두리 위에 얹힌다
-    "12볼트": {"size": [7, 13, 7], "pegs": [peg("p1", [0, -0.5, 0], [0, -1, 0], 12, 2)], "holes": []},   # 2026-11-03 measure_part 실측: 7×13×7, 머리 반지름 3.5·두께 1(위 +y), 몸통 12 가 아래 — 옛 값(9×13.8, 8볼트식)은 틀렸다
-    "데코바퀴": {"size": [48, 16, 48], "pegs": [], "holes": [hole("h1", [0, -0.3, 0], [0, 1, 0], 15.3, 3.3)]},
-    # ── 큐보 2권(드롭체커)에서 새로 쓰는 부품 — 부품 DB 연결점(get_part_connectors)과 실측(measure_part, 14×19.8×40)을 옮김. 바닥 돌기 3개(길이 DB 5.83, 실측 4.7). 3P 케이블 소켓은 연결용이 아님 ──
-    "LED센서": {"size": [14, 19.83, 40], "pegs": [peg("p1", [1, -7, -10], [0, -1, 0], 5.83, 2.5), peg("p2", [1, -7, 0], [0, -1, 0], 5.83, 2.5), peg("p3", [1, -7, 10], [0, -1, 0], 5.83, 2.5)], "holes": []},   # 오토타깃(2026-10-18): get_part_connectors·measure_part 실측(몸통 가운데보다 x +1)
-    "IR센서": {"size": [14, 19.8, 40], "pegs": [peg("p1", [0, -7, -10], [0, -1, 0], 5.83, 2.5), peg("p2", [0, -7, 0], [0, -1, 0], 5.83, 2.5), peg("p3", [0, -7, 10], [0, -1, 0], 5.83, 2.5)], "holes": []},
-}
-FRAMES = ["15프레임", "17프레임", "19프레임", "115프레임", "25프레임", "27프레임", "29프레임", "35프레임", "37프레임", "39프레임", "315프레임", "59프레임", "215프레임", "515프레임", "713프레임"]   # 2권(스피드바이크)에서 215·713 을 쓰면서 추가 — 목록에 없으면 검사 프로그램이 그 프레임의 구멍을 못 본다
+_CACHE = {}
 
 def get(name):
-    return frame(name) or OTHER[name]
+    """부품 하나의 {size, pegs, holes} — build_all() 이 만든 conn.json·dims.json 에서 읽는다(원본은 DB 상세내역)."""
+    if not _CACHE:
+        here = os.path.dirname(os.path.abspath(__file__))
+        conn = json.load(open(os.path.join(here, "conn.json"), encoding="utf-8")); dims = json.load(open(os.path.join(here, "dims.json"), encoding="utf-8"))
+        for n in conn: _CACHE[n] = {"pegs": conn[n]["pegs"], "holes": conn[n]["holes"], "size": dims[n]}
+    return _CACHE[name]
 
-def build_all():
+def build_all(details=None):
+    """DB 상세내역(크기·돌기·구멍)이 있는 모든 부품 → (conn, dims). 상세내역이 없는 부품은 만들지 않는다."""
+    details = load_details() if details is None else details
     conn, dims = {}, {}
-    for n in FRAMES + list(OTHER):
-        c = get(n)
-        conn[n] = {"pegs": c.get("pegs", []), "holes": c.get("holes", [])}
-        dims[n] = c["size"]
+    for n, d in details.items():
+        sz = d.get("크기_mm") or {}
+        if not all(isinstance(sz.get(k), (int, float)) for k in ("가로(x)", "높이(y)", "세로(z)")): continue
+        c = from_detail(d)
+        conn[n] = {"pegs": c["pegs"], "holes": c["holes"]}; dims[n] = c["size"]
     return conn, dims
 
+def build_heads(details=None):
+    """대가리(머리) 두께·지름이 상세내역에 있는 부품 → {부품이름: {"두께": mm, "지름": mm}} (heads.json). asmlib 가 머리가 밖으로 남는 두께로 쓴다."""
+    details = load_details() if details is None else details
+    out = {}
+    for n, d in details.items():
+        hb = d.get("대가리_몸통") or {}
+        if isinstance(hb.get("대가리 두께_mm"), (int, float)): out[n] = {"두께": hb["대가리 두께_mm"], "지름": hb.get("대가리 지름_mm")}
+    return out
+
 if __name__ == "__main__":
+    json.dump(build_heads(), open("heads.json", "w", encoding="utf-8"), ensure_ascii=False)
     conn, dims = build_all()
+    if not conn: raise SystemExit("상세내역을 읽지 못해 conn.json 을 만들지 않았다")
     json.dump(conn, open("conn.json", "w", encoding="utf-8"), ensure_ascii=False)
     json.dump(dims, open("dims.json", "w", encoding="utf-8"), ensure_ascii=False)
     print(len(conn), "parts")

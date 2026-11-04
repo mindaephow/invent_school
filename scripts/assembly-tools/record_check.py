@@ -47,7 +47,7 @@ def main():
     out = os.path.join(out_dir, "%02d.png" % step); side.save(out)
     ef = os.path.join(here, name + "_evidence.json")
     ev = json.load(open(ef, encoding="utf-8")) if os.path.exists(ef) else {}
-    ev[str(step)] = {"fp": fp, "note": note, "time": time.strftime("%Y-%m-%d %H:%M:%S"), "cmp": "refs/%s/cmp/%02d.png" % (name, step)}
+    ev[str(step)] = {"fp": fp, "shape": stepfp.shape_fp(asm[step - 1], stepfp.anchor(asm)), "note": note, "time": time.strftime("%Y-%m-%d %H:%M:%S"), "cmp": "refs/%s/cmp/%02d.png" % (name, step)}
     json.dump(ev, open(ef, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     print("✅ %d번 비교 증거 기록: %s" % (step, out)); print("   지문", fp, "| 결과:", note)
 

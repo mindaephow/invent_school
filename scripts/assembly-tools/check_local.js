@@ -25,7 +25,7 @@ const fin=(pt,k,i)=>{ const me=MM[k+':'+i]; if(me&&me.p) return {p:me.p,r:me.r||
 const items=all.map(a=>{const f=fin(a.pt,a.k,a.i);return {a,boxes:C.coreBoxes(a.pt.n,dims[a.pt.n]||[0,0,0]),q:quat(f.r),pos:{x:f.p[0],y:f.p[1],z:f.p[2]}};});
 let n=0;
 for(let i=0;i<items.length;i++)for(let j=i+1;j<items.length;j++){const A=items[i],B=items[j];if(!A.boxes||!B.boxes)continue;
- if(C.boxesOverlap(A.boxes,A.pos,A.q,B.boxes,B.pos,B.q,0.6)){n++;if(n<=40)console.log('  겹침',A.a.k+'.'+A.a.i,A.a.pt.n,'<>',B.a.k+'.'+B.a.i,B.a.pt.n);}}
+ if(C.boxesOverlap(A.boxes,A.pos,A.q,B.boxes,B.pos,B.q,0.05)){n++;if(n<=40)console.log('  겹침',A.a.k+'.'+A.a.i,A.a.pt.n,'<>',B.a.k+'.'+B.a.i,B.a.pt.n);}}
 console.log('몸통 겹침:',n);
 // 바닥 기준: 가장 낮은 부품 바닥
 const cnt={};all.forEach(a=>cnt[a.pt.n]=(cnt[a.pt.n]||0)+1);console.log('부품 개수:',JSON.stringify(cnt));
@@ -60,6 +60,7 @@ if (process.argv[3]) {
     }));
     const arrSet = new Set(arriving.map(a => a.key));
     arriving.forEach(({ key, pt, mode }) => {
+      if (mode === 'settle' && pt.n === 'T축') return; // T축은 묶음(기어·프레임)과 같이 합쳐지고, 끝이 아래 구멍에 그냥 들어가 있어도 결합이 아니다(사용자 2026-11-04 토끼 15번) — 안내는 구멍을 받는 부품이 맡는다
       if (pt.n === '리벳' || pt.noGuide) return; // noGuide = 우연히 맞닿아 보일 뿐 결합이 아닌 부품(안내 화살표 없음). 리벳은 교재도 화살표 없이 꽂힌 채로 그린다(같이 도착하는 묶음 안의 결합도 제외)
       const outside = (k) => prior.has(k) && !arrSet.has(k); // 같이 합쳐지는 묶음 안의 결합은 빼고, 이미 있던 부품과의 결합만 본다
       const hasPrior = res.mated.some(m => (m.part === key && outside(m.into)) || (m.into === key && outside(m.part)));

@@ -6,7 +6,7 @@
 // (방향·위치·구멍을 손으로 짐작해서 틀리던 문제를 없앤다). 배치 형식은 조립 데이터와 같다: { n: 부품 이름, p: [x,y,z], r: [rx,ry,rz](도) }.
 // 검사·좌표 코드는 배포된 public/design-mates.js·design-collision.js 를 읽어 쓴다(화면과 같은 코드).
 import { z } from 'zod'
-import { dimsOf, PART_DIMS } from './cubo-assembly-guide.js'
+import { detailDims, dimsMap } from './cubo-assembly-guide.js'
 import { loadSite, quatFromEulerZYX, checkOverlaps, resolveConnectorName } from './cubo-assembly-tools.js'
 import { CUBO_FRAME_STD, CUBO_BLOCK_STD, PART_STANDARD_TEXT } from './cubo-part-maker.js'
 import { frameTriangles } from './cubo-frame-mesh.js'
@@ -59,7 +59,7 @@ function eulerFromMat(m) {
 let _catalog = null, _catalogAt = 0
 async function loadCatalog(sb) {
   if (_catalog && Date.now() - _catalogAt < 60_000) return _catalog
-  const { data, error } = await sb.from('ivs_part_catalog').select('id, name:data->>name, category:data->>category, volumes:data->volumes, color:data->>color, connectors:data->connectors').eq('data->>subject', 'robot')
+  const { data, error } = await sb.from('ivs_part_catalog').select('id, name:data->>name, category:data->>category, volumes:data->volumes, color:data->>color, connectors:data->connectors, detail:data->detail').eq('data->>subject', 'robot')
   if (error) throw new Error(error.message)
   const byName = {}, byId = {}
   ;(data || []).forEach((r) => { byName[r.name] = r; byId[r.id] = r })
@@ -216,7 +216,7 @@ export function registerCuboDesignTools(server, getSupabase) {
           if (!r) return fail(`"${name}" 부품이 없어요.`)
           const c = r.connectors || {}
           const fmt = (a) => `[${a.map((v) => round(v, 10)).join(', ')}]`
-          const lines = [`${r.name} (id=${r.id}) 크기 ${c.size ? c.size.join('×') : (dimsOf(r.name) || []).join('×') || '?'} confidence=${c.confidence || '기록 없음'}`]
+          const lines = [`${r.name} (id=${r.id}) 크기 ${c.size ? c.size.join('×') : (detailDims(r.detail) || []).join('×') || '?'} confidence=${c.confidence || '기록 없음'}`]
           if (c.note) lines.push(`설명: ${c.note}`)
           ;(c.pegs || []).forEach((p) => lines.push(`돌기 ${p.id}: pos ${fmt(p.pos)} dir ${fmt(p.dir)} len ${p.len} r ${p.r}`))
           ;(c.holes || []).forEach((h) => lines.push(`구멍 ${h.id}: pos ${fmt(h.pos)} dir ${fmt(h.dir)} len ${h.len} ${h.through ? '관통' : '막힘'}`))
@@ -226,7 +226,7 @@ export function registerCuboDesignTools(server, getSupabase) {
         const rows = cat.rows.filter((r) => (!category || r.category === category) && (volume == null || !Array.isArray(r.volumes) || !r.volumes.length || r.volumes.some((v) => Number(v.volume) <= volume)))
         const lines = rows.map((r) => {
           const c = r.connectors || {}
-          return `- ${r.name}: ${c.size ? c.size.join('×') : (dimsOf(r.name) || []).join('×') || '크기 ?'} / 돌기 ${(c.pegs || []).length} 구멍 ${(c.holes || []).length} [${c.confidence || '연결점 없음'}]`
+          return `- ${r.name}: ${c.size ? c.size.join('×') : (detailDims(r.detail) || []).join('×') || '크기 ?'} / 돌기 ${(c.pegs || []).length} 구멍 ${(c.holes || []).length} [${c.confidence || '연결점 없음'}]`
         })
         return text(`부품 ${rows.length}종\n${lines.join('\n')}`)
       } catch (e) { return fail(e.message) }
@@ -307,7 +307,7 @@ export function registerCuboDesignTools(server, getSupabase) {
     const issues = [...errs]
     const info = []
     if (!clean.length) return { issues: issues.length ? issues : ['부품이 하나도 없어요.'], info, clean }
-    const ov = checkOverlaps([{ parts: clean }], site.IVS_COLLISION, 0.6)
+    const ov = checkOverlaps([{ parts: clean }], site.IVS_COLLISION, 0.6, dimsMap(cat.rows))
     ov.overlaps.forEach((o) => issues.push(`겹침: ${o.replace(/1단계 /g, '')}`))
     if (ov.skipped.length) info.push(`겹침 검사 안 한 부품(몸통 규칙 없음): ${ov.skipped.join(', ')}`)
     const keyed = clean.map((pt, i) => ({ key: `#${i} ${pt.n}`, ...pt }))

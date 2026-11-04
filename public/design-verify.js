@@ -128,6 +128,7 @@
         const lack = arriving.filter((a) => {
           const q = a.ref
           if (q.noGuide) return false // 우연히 맞닿아 보일 뿐 결합이 아닌 부품(안내 화살표 없음)
+          if (q.n === 'T축' && q.side && q.side.until === si) return false // 합치는 번호의 T축은 끝이 구멍에 그냥 들어갈 뿐 결합이 아니다(큐보 부품결합규칙, 사용자 2026-11-04)
           if (!res.mated.some((m) => (m.part === a.key && outside(m.into)) || (m.into === a.key && outside(m.part)))) return false
           const got = mvIs(q, si) ? ((mvAt(q, si) || {}).marks || []) : q.side && q.side.until === si ? (q.settleMarks || []) : (q.marks || [])
           return !got.length

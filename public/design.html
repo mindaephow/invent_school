@@ -1889,7 +1889,7 @@
     if (selected === part) updateSelectionOutline();
   }
   // ----- 부품끼리 겹침 방지: 홀에 돌기가 끼워지는 것 외에는 서로를 통과할 수 없다 -----
-  const COLLISION_TOL = 0.6; // mm — 맞닿는 것·약간의 오차는 겹침으로 세지 않는다
+  const COLLISION_TOL = 0.05; // mm — 맞닿는 것은 겹침이 아니다. 겹침은 물리적으로 허용하지 않고, 이 값은 계산 오차만 거른다(사용자 2026-11-05)
   function coresOf(part){ return part && part.type && part.type.indexOf('robot:') === 0 ? (robotCores.get(part.type.slice(6)) || null) : null; }
   function overlappingPart(part){
     const a = coresOf(part);
@@ -4955,6 +4955,54 @@
       try { await navigator.clipboard.writeText(out); setStatus('좌표를 복사했어요: ' + out, 'success'); }
       catch (e) { const ta = document.createElement('textarea'); ta.value = out; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); setStatus('좌표를 복사했어요: ' + out, 'success'); } catch (e2) { setStatus('복사하지 못했어요. 좌표 글을 직접 드래그해서 복사하세요.', 'warn'); } ta.remove(); }
     }); }
+  // ----- 같은 색 프레임끼리 면이 맞닿은 자리 표시(사용자 지시 2026-11-04): 틈 0 으로 붙으면 경계가 안 보여서 닿은 면 둘레에 선을 긋는다. 색이 다른 부품끼리는 하지 않는다 -----
+  const frameContactGroup = new THREE.Group();
+  scene.add(frameContactGroup);
+  let frameContactSig = '';
+  function frameContactLineColor(hex){ // 부품 색이 어두우면 밝게, 밝으면 어둡게
+    const c = new THREE.Color(hex), lum = 0.299 * c.r + 0.587 * c.g + 0.114 * c.b;
+    return lum < 0.5 ? c.clone().lerp(new THREE.Color(0xffffff), 0.6) : c.clone().lerp(new THREE.Color(0x000000), 0.65);
+  }
+  function updateFrameContacts(){
+    const viewing = !!(window.__ivsAssembly && window.__ivsAssembly.isViewing());
+    const fr = [];
+    if (viewing) parts.forEach((p) => {
+      if (!p.type || p.type.indexOf('robot:') !== 0 || !p.mesh) return;
+      const id = p.type.slice(6), rp = robotPartsCache.find(x => String(x.id) === id), md = robotModelCache.get(rp && rp.id) || robotModelCache.get(id);
+      if (!rp || !md || !/^\d+프레임$/.test(rp.name || '')) return;
+      p.mesh.updateWorldMatrix(true, false);
+      const g = p.mesh.geometry; if (!g.boundingBox) g.computeBoundingBox();
+      fr.push({ box: g.boundingBox.clone().applyMatrix4(p.mesh.matrixWorld), color: md.color });
+    });
+    const f = (v) => Math.round(v * 10);
+    const sig = fr.map(o => [o.color, f(o.box.min.x), f(o.box.min.y), f(o.box.min.z), f(o.box.max.x), f(o.box.max.y), f(o.box.max.z)].join(',')).join('|');
+    if (sig === frameContactSig) { frameContactGroup.visible = robotEdgeMaterial.visible; return; }
+    frameContactSig = sig;
+    while (frameContactGroup.children.length) { const c = frameContactGroup.children.pop(); c.geometry.dispose(); c.material.dispose(); }
+    const AX = ['x', 'y', 'z'];
+    for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length; j++) {
+      const A = fr[i].box, B = fr[j].box;
+      if (String(fr[i].color).toLowerCase() !== String(fr[j].color).toLowerCase()) continue; // 같은 색끼리만
+      for (let a = 0; a < 3; a++) {
+        const ax = AX[a], o1 = AX[(a + 1) % 3], o2 = AX[(a + 2) % 3];
+        let plane = null;
+        if (Math.abs(A.max[ax] - B.min[ax]) < 0.3) plane = (A.max[ax] + B.min[ax]) / 2;
+        else if (Math.abs(B.max[ax] - A.min[ax]) < 0.3) plane = (B.max[ax] + A.min[ax]) / 2;
+        if (plane === null) continue;
+        const lo1 = Math.max(A.min[o1], B.min[o1]), hi1 = Math.min(A.max[o1], B.max[o1]);
+        const lo2 = Math.max(A.min[o2], B.min[o2]), hi2 = Math.min(A.max[o2], B.max[o2]);
+        if (hi1 - lo1 < 1 || hi2 - lo2 < 1) continue; // 면이 실제로 겹친 곳만
+        const P = (u, v) => { const o = {}; o[ax] = plane; o[o1] = u; o[o2] = v; return [o.x, o.y, o.z]; };
+        const c = [P(lo1, lo2), P(hi1, lo2), P(hi1, hi2), P(lo1, hi2)], seg = [];
+        for (let k = 0; k < 4; k++) seg.push(...c[k], ...c[(k + 1) % 4]);
+        const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(seg, 3));
+        const line = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: frameContactLineColor(fr[i].color), transparent: true, opacity: 0.95 }));
+        line.raycast = () => {}; line.userData.edgeLine = true;
+        frameContactGroup.add(line);
+      }
+    }
+    frameContactGroup.visible = robotEdgeMaterial.visible;
+  }
   function animate(){
     requestAnimationFrame(animate);
     if (playing) {
@@ -4963,6 +5011,7 @@
     }
     if (timerRunSince !== null) timerRender();
     applyJoins();
+    updateFrameContacts();
     if (selected && selected.asmLabel) refreshFaceInfo(false);
     { const sc = document.getElementById('selCoord'); // 부품 창에 지금 좌표(mm)·회전(도) — 조립 보기에서 관리자만(옮긴 자리를 말로 전할 때 쓴다)
       if (sc) {
@@ -5389,6 +5438,7 @@
   let assemblyAxesGroup = null; // 조립 보기의 베이스 X·Y·Z 방향선
   let assemblyListParts = []; // 조립 보기 목록 번호(i) → 부품
   window.__ivsAssemblyBridge = {
+    frameContactCount(){ return frameContactGroup.children.length; }, // 같은 색 프레임 맞닿음 표시 선 개수(확인용)
     resolve(name, categoryId){
       const p = robotPartsCache.find(x => x.name === name && (!categoryId || x.category === categoryId));
       return p && PART_DEFS['robot:' + p.id] ? 'robot:' + p.id : null;

@@ -31,11 +31,30 @@ rc, out = run(args)
 try: _MATE_MARKS = bool(json.load(open(name + "_rules.json", encoding="utf-8")).get("mate_marks"))
 except Exception: _MATE_MARKS = False
 bad = []
+# 아직 시작하지 않은 번호(격자 그림 1·2 또는 읽기 표가 없는 뒤 번호)의 문제는 세지 않는다 — 번호를 순서대로 만드는 규칙(A1)과 같다
+def _worked_upto():
+    try: ix = json.load(open(os.path.join("refs", name, "index.json"), encoding="utf-8"))
+    except Exception: ix = []
+    hv = {}
+    for r in ix: hv.setdefault(r["step"], set()).add(r["idx"])
+    try: rd = json.load(open(name + "_read.json", encoding="utf-8"))
+    except Exception: rd = {}
+    w = [k for k in range(1, 200) if {1, 2} <= hv.get(k, set()) or any(str((rd.get(str(k)) or {}).get(f, "")).strip() for f in ("면", "링"))]
+    return max(w) if w else 0
+_UP0 = _worked_upto()
+_cnt = {}; _cur = None
 for line in (out0 + chr(10) + out).splitlines():
     s = line.strip()
-    if s.startswith("단계별 정밀 검사 문제:") and not s.endswith(" 0"): bad.append(s)
-    if s.startswith("단계별 검증 절차 문제:") and not s.endswith(" 0"): bad.append(s)
-    if s.startswith("안내 화살표 없는 부품:") and not s.endswith(" 0"): bad.append(s)
+    _h = next((h for h in ("단계별 정밀 검사 문제:", "단계별 검증 절차 문제:", "안내 화살표 없는 부품:") if s.startswith(h)), None)
+    if _h: _cur = _h; _cnt.setdefault(_h, [s, 0]); continue
+    _m = re.match(r"(\d+)단계", s)
+    if _cur and _m:
+        if int(_m.group(1)) <= _UP0: _cnt[_cur][1] += 1
+    elif s and not _m: _cur = None
+for _h, (_s, _n) in _cnt.items():
+    if _n: bad.append("%s %d (1~%d번)" % (_h.rstrip(":"), _n, _UP0))
+for line in (out0 + chr(10) + out).splitlines():
+    s = line.strip()
     if s.startswith("안내점 맞물림 없는 부품:") and not s.endswith(" 0"):   # 안내점(marks)이 가리키는 구멍에 돌기가 제자리에서 안 들어가 있으면 화살표가 안 나온다(드롭체커 27번). <이름>_rules.json 에 "mate_marks": true 인 조립도만 막고, 나머지는 경고로 보여 준다(옛 조립도 ✓ 번호는 못 고친다)
         if _MATE_MARKS: bad.append(s)
         else: print("⚠ " + s + " (참고 — <이름>_rules.json 에 \"mate_marks\": true 를 넣으면 이 조립도는 막는다)")
@@ -124,8 +143,7 @@ for key, label in (("view", "화면 확대 확인"), ("count", "교재와 칸 �
 print("(위 rules.json 목록은 참고용이다 — 눈으로 하는 확인의 근거는 화면↔책 비교 증거(record_check.py)나 사용자 ✓ 이고, Claude 가 이 목록에 적어서 막힘을 풀 수 없다)")
 # ───── 책 이미지 작업 게이트(관리자 지시 2026-10-07: 방향 표시·격자·부품 배치가 이 작업의 전부 — 기억이 없는 Claude 도 이 검사로 강제된다) ─────
 # 부품이 있는 단계마다 refs/<이름>/index.json 에 그 단계의 격자 그림이 있어야 한다: 1차(idx 1)와 2차(idx 2, 방향에 맞춰 돌린 그림 위의 격자). 판이 없는 단계는 설명이 ① 로 시작하는 원본 1장(idx 1)만 인정한다.
-# 이 검사는 건너뛸 수 없다. 옛 조립도(아래 목록)만 면제.
-LEGACY_NO_GRID = {"formula1", "rabbit", "balance", "windmill", "spinner", "trike", "soccer", "autogun", "airplane", "rollingbot", "battlerobot"}
+# 이 검사는 건너뛸 수 없다.
 _skip = set()   # --grid-skip 는 없앴다(2026-10-08): 격자를 "못 만든다/불필요하다"고 Claude 가 혼자 정하던 일을 막는다
 if any(_a.startswith("--grid-skip") for _a in sys.argv): sys.exit("❌ --grid-skip 은 쓸 수 없다. 격자를 만든다(가려지면 보이는 구멍으로 맞추고 그 사실을 note 에 적는다).")
 _idxf = os.path.join("refs", name, "index.json")
@@ -133,14 +151,20 @@ _idx = json.load(open(_idxf, encoding="utf-8")) if os.path.exists(_idxf) else []
 _have = {}
 for _r in _idx: _have.setdefault(_r["step"], {})[_r["idx"]] = _r.get("note", "")
 _nogrid = []
+_rdf0 = name + "_read.json"
+_rd0 = json.load(open(_rdf0, encoding="utf-8")) if os.path.exists(_rdf0) else {}
+# 아직 시작하지 않은 번호는 검사하지 않는다: 격자 그림(1·2)이나 읽기 표가 있는 가장 뒤 번호까지만 본다(그 앞 번호가 비면 막는다). 번호를 순서대로 만드는 규칙(A1)과 같다.
+_worked = [k for k in range(1, len(asm) + 1) if (1 in _have.get(k, {}) and 2 in _have.get(k, {})) or any(str((_rd0.get(str(k)) or {}).get(f, "")).strip() for f in ("면", "링"))]
+_upto = max(_worked) if _worked else 0
 for _k, _st in enumerate(asm, 1):
+    if _k > _upto: continue
     if not _st.get("parts") or _k in _skip: continue
     _h = _have.get(_k, {})
     _plate = any(("프레임" in str(_p.get("n", "")) and "브라켓" not in str(_p.get("n", ""))) for _p in _st.get("parts", [])) or any("프레임" in str(_p.get("n", "")) for _p in _st.get("parts", []))
     ok = (1 in _h and 2 in _h)   # 2026-10-08: 판이 없다는 이유의 원본 1장 예외 폐지(격자는 큰기어 구멍·판 구멍 등 보이는 구멍으로 항상 만든다)   # 프레임(판)이 있는 단계는 반드시 회전·방향 표시·격자(idx 2) — 원본 한 장으로 때우지 못한다
     if not ok: _nogrid.append(_k)
-print("책 이미지 작업(방향 표시·격자) 단계별 그림:", "면제(옛 조립도)" if name in LEGACY_NO_GRID else (f"{len([1 for k, st in enumerate(asm, 1) if st.get('parts')]) - len(_nogrid)}단계 있음" + (f" — ❌ 격자가 없는 단계 {_nogrid}" if _nogrid else "")))
-if write and _nogrid and name not in LEGACY_NO_GRID:
+print("책 이미지 작업(방향 표시·격자) 단계별 그림:", (f"{len([1 for k, st in enumerate(asm, 1) if st.get('parts')]) - len(_nogrid)}단계 있음" + (f" — ❌ 격자가 없는 단계 {_nogrid}" if _nogrid else "")))
+if write and _nogrid:
     sys.exit("❌ 책 이미지 작업(방향에 맞춰 돌린 그림 위의 격자 1차·2차)이 없는 단계가 있어 --write 를 하지 않는다: " + str(_nogrid) + "\n   안내서 '★★★ 최우선 규칙'대로 그 단계의 격자를 먼저 만든다(refs_make → refs_rect). 이 검사는 건너뛸 수 없다.")
 
 # ───── 철칙 순서 게이트(관리자 지시 2026-10-08, 우회 불가): 부품이 있는 번호마다 refs/<이름>/NN_lv.json(잘라내기→방향 표시→회전)이 있어야 한다 — 원본 위에서 격자를 먼저 맞춘 번호는 막는다(옛 조립도·--sync 이전 번호는 면제 목록 IRON_EXEMPT).
@@ -150,11 +174,11 @@ if name == "dog":
     print("철칙 순서(잘라내기→방향 표시→회전→격자) 그림:", "전 번호 있음" if not _lv_missing else "❌ 새 순서로 안 만든 번호 %s" % _lv_missing)
     if write and _lv_missing: print("   (경고) --write 는 막지 않는다 — 기존 1~14번을 새 순서로 다시 만드는 중. 새로 만드는 번호는 level 부터 한다.")
 # ───── 번호별 읽기 표 게이트(관리자 지시 2026-10-08, 우회 불가): <이름>_read.json = {"번호": {"면": "카메라가 보는 면", "링": "초록 링이 있는 칸·줄(센 근거)", "부품": "쓴 부품"}} — 부품이 있는 단계마다 세 칸이 모두 채워져야 --write 한다.
-#   격자를 만들고 점이 구멍 위에 앉았는지 확인한 뒤 센 값을 적는다. 건너뛰고 "나중에"가 안 되게 하는 장치다. 건너뛸 수 없다. 옛 조립도는 면제.
+#   격자를 만들고 점이 구멍 위에 앉았는지 확인한 뒤 센 값을 적는다. 건너뛰고 "나중에"가 안 되게 하는 장치다. 건너뛸 수 없다.
 _rdf = name + "_read.json"; _rd = json.load(open(_rdf, encoding="utf-8")) if os.path.exists(_rdf) else {}
-_noread = [_k for _k, _st in enumerate(asm, 1) if _st.get("parts") and not all(str((_rd.get(str(_k)) or {}).get(_f, "")).strip() for _f in ("면", "링", "부품"))]
-print("번호별 읽기 표(" + _rdf + "):", "면제(옛 조립도)" if name in LEGACY_NO_GRID else (f"{len([1 for k, st in enumerate(asm, 1) if st.get('parts')]) - len(_noread)}단계 있음" + (f" — ❌ 안 적은 단계 {_noread}" if _noread else "")))
-if write and _noread and name not in LEGACY_NO_GRID:
+_noread = [_k for _k, _st in enumerate(asm, 1) if _k <= _upto and _st.get("parts") and not all(str((_rd.get(str(_k)) or {}).get(_f, "")).strip() for _f in ("면", "링", "부품"))]
+print("번호별 읽기 표(" + _rdf + "):", (f"{len([1 for k, st in enumerate(asm, 1) if st.get('parts')]) - len(_noread)}단계 있음" + (f" — ❌ 안 적은 단계 {_noread}" if _noread else "")))
+if write and _noread:
     sys.exit("❌ 번호별 읽기 표가 비어 있는 단계가 있어 --write 를 하지 않는다: " + str(_noread) + " — " + _rdf + " 에 그 번호의 면·링·부품을 적는다(격자를 만든 뒤 구멍을 센 결과). 묻지 말고 적고 계속한다.")
 
 # ───── 그룹 이동 참고 정보(관리자 지시 2026-10-09: 막는 장치가 아니라 판단을 돕는 정보): rules 에 "placecheck": true 가 있으면 그룹으로 옮겨 붙이는 부품의 상대 자세가 옮기기 전·후에 같은지 보여 준다.
@@ -166,14 +190,15 @@ if rules.get("placecheck"):
     for _x in _pcp: print("   ⚠ 판단 필요:", _x)
 # ───── 번호별 점검 게이트(관리자 지시 2026-10-08, 우회 불가): <이름>_checks.json 의 blocking(격자 없음·읽기 표 빈칸·읽기 표 부품≠모델·LIST 초과)이 있으면 --write 하지 않는다.
 _ckf = name + "_checks.json"
-if name not in LEGACY_NO_GRID and not os.path.exists(_ckf):   # 2026-10-10: 조립 스크립트 끝에 import stepchecks; stepchecks.apply(A, "<이름>") 가 없으면 번호별 점검이 한 번도 안 돌아 규칙을 건너뛰게 된다
+if not os.path.exists(_ckf):   # 2026-10-10: 조립 스크립트 끝에 import stepchecks; stepchecks.apply(A, "<이름>") 가 없으면 번호별 점검이 한 번도 안 돌아 규칙을 건너뛰게 된다
     sys.exit("❌ " + _ckf + " 가 없다 — 조립 스크립트 끝(A.save_links() 앞)에 `import stepchecks; stepchecks.apply(A, \"" + name + "\")` 를 넣고 다시 돌린다. 이 검사는 건너뛸 수 없다.")
-if os.path.exists(_ckf) and name not in LEGACY_NO_GRID:
+if os.path.exists(_ckf):
     _ck = json.load(open(_ckf, encoding="utf-8")); _bl = _ck.get("blocking", [])
+    _bl = [b_ for b_ in _bl if not (re.match(r"(\d+)번", b_) and int(re.match(r"(\d+)번", b_).group(1)) > _upto)]   # 아직 시작하지 않은 뒤 번호는 막지 않는다(번호를 순서대로 만드는 규칙 A1)
     print("번호별 점검(" + _ckf + "):", "통과" if not _bl else "❌ 막힌 항목 %d개" % len(_bl)); [print("   ☐", b_) for b_ in _bl]
     _evf = name + "_evidence.json"; _evd = json.load(open(_evf, encoding="utf-8")) if os.path.exists(_evf) else {}
     for _k, _st in enumerate(asm, 1):   # 비교 증거는 번호 내용이 바뀐 뒤에는 무효 — 지금 최종 내용의 지문과 같아야 한다
-        if str(_k) in _evd and _evd[str(_k)].get("fp") != stepfp.fp(_st) and _k not in _USER_DONE: _bl.append("%d번: 책과 비교한 뒤 내용이 바뀜 — 다시 비교하고 record_check.py 로 증거를 새로 남긴다" % _k)
+        if str(_k) in _evd and not stepfp.same(_evd[str(_k)], _st, asm) and _k not in _USER_DONE: _bl.append("%d번: 책과 비교한 뒤 내용이 바뀜 — 다시 비교하고 record_check.py 로 증거를 새로 남긴다" % _k)
     # 이미 저장해 둔 번호를 고치는 저장(마지막 번호가 늘지 않음)은 앞 번호 증거가 낡았어도 허용한다 — 고친 것을 화면으로 봐야 다시 비교할 수 있다.
     #   새 번호를 더하는 저장(마지막 번호가 늘어남)은 앞 번호 전부가 증거(또는 사용자 ✓)를 갖춰야 한다. 마지막으로 저장에 성공한 번호는 <이름>_gate.json 에 build.py 가 적는다.
     _gf = name + "_gate.json"; _gate = json.load(open(_gf, encoding="utf-8")) if os.path.exists(_gf) else {}

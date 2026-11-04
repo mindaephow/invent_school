@@ -5,7 +5,7 @@
 // 조립 규칙·단계 데이터·겹침 검사 코드는 배포된 public/design-assemblies.js·design-collision.js 를 읽어 온다 —
 // 화면과 같은 파일이 원본이라 둘이 어긋나지 않는다. (선택 환경변수 SITE_ORIGIN, 기본 https://invent-school-sigma.vercel.app)
 import { z } from 'zod'
-import { buildGuide, buildGuideParts, buildReferenceParts, buildReference, dimsOf } from './cubo-assembly-guide.js'
+import { buildGuide, buildGuideParts, buildReferenceParts, buildReference, dimsMap } from './cubo-assembly-guide.js'
 import { autoAssemble, autoCamera } from './cubo-auto-assemble.js'
 import { stlFromDataUrl, measureModel, formatMeasure } from './cubo-part-measure.js'
 import { stepContext } from './cubo-step-context.js'
@@ -59,11 +59,11 @@ export function quatFromEulerZYX(r) {
 }
 
 // 조립 데이터의 모든 부품을 "제자리" 배치로 모아 몸통 겹침을 검사한다
-export function checkOverlaps(steps, COL, tol) {
+export function checkOverlaps(steps, COL, tol, dimsByName) {
   const items = []
   const skipped = new Set()
   steps.forEach((s, si) => (s.parts || []).forEach((pt) => {
-    const dims = dimsOf(pt.n)
+    const dims = (dimsByName || {})[pt.n] || null
     const cores = dims ? COL.coreBoxes(pt.n, dims) : null
     if (!cores) { skipped.add(pt.n); return }
     items.push({ step: si + 1, name: pt.n, cores, pos: { x: pt.p[0], y: pt.p[1], z: pt.p[2] }, q: quatFromEulerZYX(pt.r || [0, 0, 0]) })
@@ -294,11 +294,11 @@ export function registerCuboAssemblyTools(server, getSupabase) {
             if (!a) return fail('assemblyId 또는 steps 를 주세요 (list_assemblies 로 id 확인).')
             list = applyPoseRotations(a.steps, await loadPoses(getSupabase(), assemblyId), a.xform)   // 관리자가 ❄ 로 저장한 회전도 검사에 반영
           }
-          const r = checkOverlaps(list, site.IVS_COLLISION, tolerance)
           // 돌기↔구멍 결합 검사: 부품 DB의 연결점(data.connectors)으로 각 돌기가 다른 부품 구멍에 들어가 있는지 본다
           const partsFinal = partsFinalOf(list)
-          const names = [...new Set(partsFinal.map((p) => p.n))]
-          const { data: rows, error: cErr } = await getSupabase().from('ivs_part_catalog').select('name:data->>name, connectors:data->connectors').eq('data->>subject', 'robot').in('data->>name', names)
+          const names = [...new Set([...partsFinal.map((p) => p.n), ...list.flatMap((st) => (st.parts || []).map((pt) => pt.n))])]
+          const { data: rows, error: cErr } = await getSupabase().from('ivs_part_catalog').select('name:data->>name, connectors:data->connectors, detail:data->detail').eq('data->>subject', 'robot').in('data->>name', names)
+          const r = checkOverlaps(list, site.IVS_COLLISION, tolerance, dimsMap(rows))
           const conn = {}
           ;(rows || []).forEach((row) => { if (row.connectors) conn[row.name] = row.connectors })
           const mates = cErr ? null : site.IVS_MATES.check(partsFinal, conn)
@@ -322,7 +322,7 @@ export function registerCuboAssemblyTools(server, getSupabase) {
           if (mates && site.IVS_VERIFY) {
             // 단계별 검증 절차(방향 확인 → 구멍 위치 → 앞뒤 단계 비교 → 바닥·개수·카메라)
             const def = assemblyId ? (site.IVS_ASSEMBLIES || []).find((x) => x.id === assemblyId) : { steps: list }
-            const dims = {}; names.forEach((n) => { const d = dimsOf(n); if (d) dims[n] = d })
+            const dims = dimsMap(rows)
             let listCounts = null
             try { listCounts = await textbookList(getSupabase(), def) } catch (e) { /* 교재 LIST 를 못 읽어도 나머지는 진행 */ }
             const v = site.IVS_VERIFY.verify(def, conn, dims, { list: listCounts })
@@ -362,10 +362,10 @@ export function registerCuboAssemblyTools(server, getSupabase) {
             a.steps.slice(0, afterStep == null ? a.steps.length : afterStep).forEach((st, k) => (st.parts || []).forEach((pt, i) => base.push({ key: `${k + 1}.${i}`, n: pt.n, p: pt.p, r: pt.r || [0, 0, 0] })))
           }
           const names = [...new Set([...base.map((b) => b.n), ...plan.map((q) => q.n)])]
-          const { data: rows, error } = await getSupabase().from('ivs_part_catalog').select('name:data->>name, connectors:data->connectors').eq('data->>subject', 'robot').in('data->>name', names)
+          const { data: rows, error } = await getSupabase().from('ivs_part_catalog').select('name:data->>name, connectors:data->connectors, detail:data->detail').eq('data->>subject', 'robot').in('data->>name', names)
           if (error) return fail(error.message)
           const conn = {}; (rows || []).forEach((r) => { if (r.connectors) conn[r.name] = r.connectors })
-          const dims = {}; names.forEach((n) => { const d = dimsOf(n); if (d) dims[n] = d })
+          const dims = dimsMap(rows)
           // 연결점 이름("홀면 +y 열5·줄1")·부품 번호("315프레임 3번")를 id·key 로 바꾼다
           const alias = {}
           if (!placed && assemblyId) { const cnt = {}; base.forEach((b) => { cnt[b.n] = (cnt[b.n] || 0) + 1; alias[`${b.n} ${cnt[b.n]}번`] = b.key }) }

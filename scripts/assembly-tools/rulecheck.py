@@ -8,7 +8,7 @@
 #   R 읽기 표 면·링·부품 칸이 채워져 있어야 한다.
 #   P 증명  <이름>_rules.json 에 "overlay_proof": true 가 있으면 번호마다 refs/<이름>/NN_3.jpg(overlay_check.py 로 모델을 책 그림에 겹친 증명 그림)이 있어야 한다.
 # 예외 승인: <이름>_approvals.json 에 {"<번호>": {"fits": "이유", "camera": "이유", "사용자 말씀": "사용자가 한 말 그대로"}} — "사용자 말씀" 이 없으면 인정하지 않는다. Claude 는 이 파일에 적지 않는다.
-# <이름>_rules.json 에 "rulecheck": true 가 있는 조립도만 ❌ 로 막는다(없는 옛 조립도는 ⚠ 로만 표시).
+# 모든 조립도를 같은 기준으로 ❌ 로 막는다(옛 조립도 구분 삭제 2026-11-04).
 import json, os, re, sys
 sys.stdout.reconfigure(encoding="utf-8")
 here = os.path.dirname(os.path.abspath(__file__))
@@ -36,13 +36,13 @@ def load(p, d):
 def check(name, only=None):
     asm = load(os.path.join(here, name + "_asm.json"), {"steps": []})["steps"]
     rules = load(os.path.join(here, name + "_rules.json"), {})
-    strict = bool(rules.get("rulecheck"))
+    strict = True
     approvals = load(os.path.join(here, name + "_approvals.json"), {})
     evid = load(os.path.join(here, name + "_evidence.json"), {})
     read = load(os.path.join(here, name + "_read.json"), {})
     try:
-        import stepfp; fp = stepfp.fp
-    except Exception: fp = lambda st: None
+        import stepfp; fp = stepfp.fp; same_ev = lambda e, st: stepfp.same(e, st, asm)
+    except Exception: fp = lambda st: None; same_ev = lambda e, st: False
     done = set()
     try:
         import userdone, re as _re
@@ -129,7 +129,7 @@ def check(name, only=None):
         # E 증거 ───────────────
         ev = evid.get(str(k))
         if k in done: items.append(("✅", "증거", "사용자 ✓"))
-        elif ev and ev.get("fp") == fp(st): items.append(("✅", "증거", "책↔화면 비교 증거(지문 일치)"))
+        elif ev and same_ev(ev, st): items.append(("✅", "증거", "책↔화면 비교 증거(지문 일치)"))
         elif ev: items.append((bad, "증거", "비교 뒤 내용이 바뀜 — 다시 비교한다"))
         else: items.append((bad, "증거", "비교 증거도 사용자 ✓ 도 없음"))
         # R 읽기 표 ───────────────
@@ -147,7 +147,7 @@ def main():
     name = sys.argv[1]; only = {int(a) for a in sys.argv[2:]} or None
     res, strict = check(name, only)
     nb = 0
-    print("═══ %s 규칙 점검 (%s) ═══" % (name, "❌ 로 막는 조립도" if strict else "옛 조립도 — ⚠ 로만 표시"))
+    print("═══ %s 규칙 점검 (%s) ═══" % (name, "❌ 로 막는 조립도"))
     for k, items in res.items():
         sym = "❌" if any(s == "❌" for s, _, _ in items) else ("⚠" if any(s == "⚠" for s, _, _ in items) else "✅")
         nb += sym == "❌"

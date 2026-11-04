@@ -157,7 +157,7 @@ if k > 1:   # 앞 번호: 사용자 ✓ 또는 지금 내용과 같은 지문의
         _ok = False
         try:
             import stepfp; _ev = load(os.path.join(here, name + "_evidence.json"), {}).get(str(k - 1))
-            _ok = bool(_ev and _ev.get("fp") == stepfp.fp(_prev))
+            _ok = bool(_ev and stepfp.same(_ev, _prev, asm))
         except Exception: pass
         if not _ok:
             try:
