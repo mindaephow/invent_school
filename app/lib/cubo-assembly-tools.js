@@ -747,7 +747,7 @@ export function registerCuboAssemblyTools(server, getSupabase) {
       'set_part_connectors',
       {
         title: '부품 돌기·구멍 연결점 기록(이 부품을 쓰는 조립도 영향 검사 포함)',
-        description: '로봇 부품의 돌기(pegs)·구멍(holes) 연결점을 ivs_part_catalog.data.connectors 에 기록한다(다른 필드는 그대로). 좌표는 3D 모델 bbox 가운데를 원점으로 한 모델 로컬 좌표(y 위). 형식은 get_part_connectors 로 읽은 기존 값을 따른다.',
+        description: '로봇 부품의 돌기(pegs)·구멍(holes) 연결점을 ivs_part_catalog.data.connectors 에 기록한다(다른 필드는 그대로). 단 부품 상세내역(data.detail)에 돌기·구멍 목록이 있는 부품은 상세내역이 원본이라 거절한다(연결점은 거기서 자동으로 만들어진다). 좌표는 3D 모델 bbox 가운데를 원점으로 한 모델 로컬 좌표(y 위). 형식은 get_part_connectors 로 읽은 기존 값을 따른다.',
         inputSchema: {
           partId: z.string().describe('ivs_part_catalog 행 id'),
           connectors: z.object({
@@ -765,6 +765,9 @@ export function registerCuboAssemblyTools(server, getSupabase) {
         if (getErr) return fail(getErr.message)
         if (!existing) return fail(`id="${partId}" 부품을 찾을 수 없어요.`)
         const partName = existing.data?.name || partId
+        // 상세내역(data.detail)이 있는 부품은 연결점이 상세내역에서 자동으로 만들어진다(supabase/part_catalog_sync_connectors.sql) — 여기서 따로 쓰면 저장 순간 덮이므로 막는다(사용자 지시 2026-11-06: 하나 고치면 같이 반영).
+        const _det = existing.data?.detail
+        if (_det && ((_det['돌기']?.['목록'] || []).length || (_det['구멍']?.['목록'] || []).length)) return fail(`${partName} 은(는) 부품 상세내역(data.detail 의 돌기·구멍 목록)이 원본이에요. 연결점은 거기서 자동으로 만들어지니, 상세내역을 고치세요(update_part_spec 아님 — data.detail 수정).`)
         // 이 부품을 쓰는 조립도: 바꾸기 전·후의 결합 검사를 비교해서 어긋남이 생기는지 바로 알려 준다(사용자 지시 2026-10-03)
         let impact = []
         try {
