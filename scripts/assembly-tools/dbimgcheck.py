@@ -2,6 +2,7 @@
 #   python dbimgcheck.py <이름> [번호 ...]     번호를 주면 그 번호만, 없으면 전체
 # 결과: 로컬에 있는데 DB 에 없는 그림(안 올림) / DB 에 있는데 로컬 index 에 없는 그림 / 설명(note)이 다른 그림.
 # 안 올린 그림이 있으면 종료 코드 1 — 번호를 끝내기 전에 돌려서 0 이 되게 한다.
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, os, json, urllib.request
 sys.stdout.reconfigure(encoding="utf-8")
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)

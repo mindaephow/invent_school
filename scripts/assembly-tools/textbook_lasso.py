@@ -6,6 +6,7 @@
 #     python textbook_lasso.py --page <권> <쪽> --poly "x,y x,y x,y …" [--out 결과.png] [--scale 1]
 #       점들을 이은 다각형 안쪽만 남기고 그 범위로 자른다. 좌표는 textbook_view.py 로 같은 범위를 잘라 본 그림의 좌표 + 범위 시작점으로 계산한다.
 # 결과: 선 안쪽만 남은 PNG(바깥은 흰색) 와 마스크(_mask.png). Read 도구로 열어 본다.
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, os
 import numpy as np, cv2
 

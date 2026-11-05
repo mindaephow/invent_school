@@ -1,4 +1,5 @@
 # 조립 스크립트의 구멍 번호(옛 hN_M 등)를 DB 상세내역 번호로 바꾼다 — 구멍 위치로 짝을 지어 바꾸므로 같은 구멍을 가리킨다. 한 번 쓰는 변환 도구.
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import ast, json, re, sys, os, math
 T = os.path.join(os.environ.get("TEMP", "/tmp"), "conn_old.json")
 old = json.load(open(T, encoding="utf-8")); new = json.load(open("conn.json", encoding="utf-8"))

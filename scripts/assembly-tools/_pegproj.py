@@ -1,5 +1,6 @@
 # 한 번호의 책 그림 위에 모델 돌기 끝(peg tip)을 점으로 찍는다 — 카메라는 fits/NN_P.json 점으로 푼 값 (2026-10-18, 코너 블록 위치를 책 돌기와 직접 대조)
 #   python _pegproj.py <이름> <번호> <부품이름들 콤마> 
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, json, numpy as np, cv2
 sys.stdout.reconfigure(encoding="utf-8")
 from pnp import fit, cam_from

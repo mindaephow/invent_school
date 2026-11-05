@@ -5,6 +5,7 @@
 #                "axes_target":[x,y,z](축선 원점, 기본 격자 가운데), "note":"근거"}
 #   선택: --허용 <평균 px>  (기본 3 — 올리면 거친 값, 근거에 적을 것)
 #   하는 일: PnP(fit) 로 카메라를 풀고 점별 오차(px)·theta·phi 를 출력, fits/NN_<라벨>.json(pts=격자 점 투영, xyz3d·xyz3d_img=입력 점, tool="infer3d") 과 NN_axes.json 을 쓴다. 평균 오차 3px 초과면 쓰지 않는다.
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, os, json, math
 import numpy as np, cv2
 sys.stdout.reconfigure(encoding="utf-8")

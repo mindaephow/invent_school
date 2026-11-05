@@ -3,6 +3,7 @@
 # 하는 일: ① 읽기 표(<이름>_read.json)에 그 번호 칸을 만들고 '부품'을 03 에서 적은 "▣ 사용 부품" 으로 채운다(이미 있으면 건드리지 않는다)
 #          ② <이름>_rules.json 의 strict·orient_check·placecheck 를 켠다 ③ 그 번호의 파일 상태와 창고·✓ 상태를 보여 주고 다음에 할 일을 순서대로 적는다.
 # 하지 않는 일: 방향·격자·자세 같은 판단은 하지 않는다(그림을 읽는 사람이 한다). axes 파일은 만들지 않는다(0 값이 진짜로 오해되는 것을 막으려고).
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import json, os, re, sys
 sys.stdout.reconfigure(encoding="utf-8")
 here = os.path.dirname(os.path.abspath(__file__))
@@ -90,7 +91,7 @@ def _remind():
         _pf = os.path.join(here, "refs", name, "fits", "%02d_P.json" % (k - 1))
         if os.path.exists(_pf):   # 29번에서 배운 것: 판이 가려져 holefit 가 안 되면 앞 번호 책 그림과 판 무늬를 맞춘다(눈으로 안 된다고 건너뛰지 말고 도구를 먼저 돌린다)
             print('  ⑥ 판이 이번 번호에서 가려졌으면(앞 번호 %d 판 격자 있음): holefit → python plate_match.py %s %d %d P --검증 "c,r,h,x,y;…" (앞 번호에서 놓아 3D 가 확정된 리벳 끝·블록 돌기·판 모서리 5개 이상의 칸·높이·픽셀) → infer_grid --anchor. 05_조립.md 0-2 절. 유추 격자는 규칙 점검이 사용자 ✓ 를 요구한다.' % (k - 1, name, k - 1, k))
-        print("  ⑦ 진행 상태 문서: 큐보/조립도/%s/진행기록.md (앞 번호 절) — 번호 하나로 안 풀리면 05_조립.md 0-1 절." % name)
+        print("  ⑦ 진행 상태 문서: 큐보/조립도/<N>권/%s/진행기록.md (앞 번호 절) — 번호 하나로 안 풀리면 05_조립.md 0-1 절." % name)
     except Exception as ex_:
         print("  (리마인드를 읽지 못했다: %s — 번호 시작은 계속한다)" % ex_)
 _remind()

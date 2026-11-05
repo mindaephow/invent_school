@@ -3,6 +3,7 @@
 #   - 번호마다 점검 항목을 계산해 그 번호 설명(note) 끝에 "━ 작업 점검 ━" 블록으로 붙인다(빌드할 때마다 새로 계산).
 #   - 막는 항목(blocking)은 <이름>_checks.json 에 적고, build.py 가 --write 때 막는다: 격자 그림 없음, 읽기 표 빈칸, 읽기 표 부품 ≠ 모델 부품, 쓴 부품 합계가 LIST 를 넘음.
 #   - 사람이 눈으로 하는 항목(화면 확인·책과 나란히 비교·카메라)은 <이름>_rules.json 의 view/count/camera 목록에 번호가 있으면 ☑.
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import json, os, re, collections
 import numpy as np
 import userdone, stepfp, obb

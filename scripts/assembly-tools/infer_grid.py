@@ -14,6 +14,7 @@
 #   쓰는 근거: ① 판의 3차원 구멍 좌표(10mm 간격) ② 그림에서 선명하게 검출된 구멍(흰 조각) ③ 앵커(칸을 아는 링) ④ 줄·칸 배정 가설과 링 짝 가설을 모두 돌려 잔차가 가장 작은 것
 #   출력: 가설별 잔차 표, 1·2등 가설 비교(유일성), 카메라 theta·phi·roll. 가설이 하나로 안 갈리면(2등이 1등의 1.3배 미만) 저장하지 않고 "어떤 추가 근거가 필요한지"를 말한다.
 #   저장: refs/<이름>/fits/NN_<라벨>.json (모든 칸을 풀이한 카메라로 투영한 점, tool="infer", evidence 기록) — rulecheck 는 ✅ 가 아니라 ⚠ 로 보고한다(사용자 확인 필요).
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, os, json, math, itertools
 import numpy as np, cv2
 sys.stdout.reconfigure(encoding="utf-8")

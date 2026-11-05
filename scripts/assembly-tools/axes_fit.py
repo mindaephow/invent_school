@@ -4,6 +4,7 @@
 #     라벨 = fits/NN_<라벨>.json (한 판의 격자 점, 원본 그림 좌표). 판이 눕혀 있으면(홀면 위) 칸·줄이 X·Z, 서 있으면 칸은 X 또는 Z 이고 줄은 ±Y 다. 책 그림에서 판이 서 있는지 눕는지를 먼저 읽고 정한다.
 #     칸방향·줄방향 = +X -X +Y -Y +Z -Z 중 하나(칸이 늘어나는 쪽이 세계 어느 쪽인지). 두 방향은 서로 다른 축이어야 한다(칸 +X 면 줄은 ±Z — 눕힌 판, 또는 ±Y — 서 있는 판).
 #   출력: 맞춘 오차(px)·theta·phi·화면에서 +X +Y +Z 가 가리키는 방향. 오차 2px 넘으면 칸·줄 방향이 거울이거나 점이 틀린 것이니 쓰지 않는다.
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, os, json, math
 import numpy as np, cv2
 sys.stdout.reconfigure(encoding="utf-8")

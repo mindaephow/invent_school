@@ -1,6 +1,7 @@
 # 3D 점(모델 좌표)과 책 그림 점(픽셀) 목록으로 카메라(fov 도 같이)·축선을 풀고, 판 격자 pts 를 그 카메라로 투영해 fits/NN_P.json·NN_axes.json 에 쓴다 (격자 holefit 가 미달인 번호 — 링·윤곽 점 앵커 방식, ⚠)
 #   python _anchor_fit.py <이름> <번호> <앵커.json> [no_lines]
 #   앵커.json = {"obj": [[x,y,z]...], "img": [[px,py]...], "plate": {"cols":15,"rows":2,"center":[0,5,0],"colDir":"+X","rowDir":"+Z"}, "name": "근거 설명", "origin": [x,y,z] (축선 원점, 생략하면 판 칸1 줄1 구멍 윗면)}
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import json, math, sys, numpy as np, cv2
 sys.stdout.reconfigure(encoding="utf-8")
 from pnp import fit, cam_from, angles

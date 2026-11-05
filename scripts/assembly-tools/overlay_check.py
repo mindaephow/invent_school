@@ -9,6 +9,7 @@
 #   3) 읽은 점 오차·카메라 값을 그림 아래에 적는다. 가설이 둘이면(예: 안쪽 블록 / 바깥 블록) fits 점의 xyz 만 바꿔 다시 돌려 오차로 가린다.
 # 마지막으로 만든 번호만 정확하다(모델 좌표가 그 번호 이후 자세라서). 앞 번호는 그 번호를 만들 때 한 번 돌려 둔다.
 # 이 그림과 "무엇을 어떻게 가렸는지 한 줄"을 읽기 표 판단과정에 적고, 올린 뒤 DB 에 올린다(viewer_snippets.md 3). rulecheck 가 NN_3.jpg 가 있는지 본다.
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import json, math, os, runpy, sys
 import numpy as np, cv2
 sys.stdout.reconfigure(encoding="utf-8")

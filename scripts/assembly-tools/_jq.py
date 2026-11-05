@@ -1,3 +1,4 @@
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import os,json,urllib.request,sys
 sys.stdout.reconfigure(encoding='utf-8')
 env=dict(l.strip().split('=',1) for l in open('../../.env.local',encoding='utf-8') if '=' in l and not l.startswith('#'))

@@ -1,4 +1,5 @@
 # 같은 시점 번호끼리 점 옮기기: python _xfer.py <이름> <앞번호> <번호> <x0> <x1> [TLx TLy]  — 앞 번호 fits(xyz3d·xyz3d_img)를 SIFT 유사변환(모터·판 오른쪽 특징)으로 이 번호 그림에 옮겨 fits/NN_P.json 에 쓴다(⚠ 옮긴 점). TLx TLy 를 주면 첫 점은 직접 읽은 값으로 바꾼다
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import cv2, json, sys, numpy as np
 sys.stdout.reconfigure(encoding="utf-8")
 n, a, b, x0, x1 = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4]), int(sys.argv[5])

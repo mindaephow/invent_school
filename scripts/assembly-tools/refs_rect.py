@@ -3,6 +3,7 @@
 #   python refs_rect.py <이름> [번호 ...]   번호를 안 주면 fits 가 있는 모든 번호.  입력: refs/<이름>/NN.jpg(원본), NN_lv.json(자르기 영역 crop), fits/NN_<라벨>.json(구멍 점, 원본 좌표)
 #   axes.json 의 "column_axis": "Y" = 서 있는 판처럼 가운데 열이 Z 가 아니라 Y 선을 따를 때 그 축을 적는다.
 #   출력: refs/<이름>/NN_1.jpg(보정한 그림 + X·Y·Z 축선), NN_2.jpg(+ 격자 점·칸·줄 번호), index.json 의 ③·④ 설명 갱신. 점이 없는 번호(한 줄 막대)는 막대 축이 수직/수평이 되게 회전만 한다.
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import json, os, glob, re, sys, math
 import cv2, numpy as np
 sys.stdout.reconfigure(encoding='utf-8')

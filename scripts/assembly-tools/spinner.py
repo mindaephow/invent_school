@@ -1,5 +1,6 @@
 # 큐보 1권 로봇팽이(교재 35~43쪽 · 로봇팽이 (1~21단계 로봇, 22~26 팽이, 27~30 손잡이, 31 합체)) — 저장 데이터(public/design-assemblies.js)를 asmlib 스크립트로 옮긴 것(2026-11-03). 결합점검기가 읽을 수 있게 한다.
 # 아직 좌표 그대로다 — 결합(recv·attach)으로 바꿔 규칙이 위치를 계산하게 해야 한다. 빌드(--write)는 하지 않는다.
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import numpy as np
 from asmlib import *
 

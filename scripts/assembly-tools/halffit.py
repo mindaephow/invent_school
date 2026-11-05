@@ -1,4 +1,5 @@
 # usage: halffit.py N label cols rows x1 y1 ... x8 y8 [mode]  -> runs holefit on 0.5x copy, writes refs/bowling/fits/NN_label.json (x2) with true px errors
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, os, json, subprocess, shutil, cv2, numpy as np
 N=int(sys.argv[1]); lab=sys.argv[2]; cols=sys.argv[3]; rows=sys.argv[4]; C=[float(v) for v in sys.argv[5:13]]; mode=sys.argv[13:] 
 root="refs/bowling_half"; os.makedirs(root+"/fits",exist_ok=True); os.makedirs(root+"/hf",exist_ok=True)

@@ -3,6 +3,7 @@
 # 하는 일: 화면 캡처와 책 그림(refs/<이름>/NN.jpg)을 나란히 붙인 refs/<이름>/cmp/NN.png 를 만들고, 그 번호의 지금 내용 지문·비교 결과·시각을 <이름>_evidence.json 에 적는다.
 # build.py 의 번호별 점검은 이 증거(지문이 지금 내용과 같은 것)가 있어야 그 번호의 눈으로 하는 확인 3개(화면 확대·칸 수 대조·카메라 대조)를 통과시킨다.
 # 번호 내용이 바뀌면 지문이 달라져 증거가 무효가 되므로 다시 비교해야 한다. 사용자는 나중에 cmp 이미지를 열어 검토한다.
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, os, json, time
 try:
     from PIL import Image
@@ -29,7 +30,7 @@ def main():
     if step >= 16 or os.environ.get("OBS_REQUIRED") == "1":   # 관찰 증거(observe.py) — 결합 지점·그룹·뒤 번호를 눈으로 본 기록이 없으면 비교 증거를 안 받는다(2026-10-27 배틀바이크 17번). 기존 번호(1~15)는 그대로.
         import observe
         _miss = observe.check(name, step)
-        if _miss: sys.exit("❌ 관찰 증거가 모자라 비교 증거를 기록하지 않는다 — `python observe.py add …` 로 책 확대와 화면을 나란히 본 기록을 먼저 남긴다(SKILL.md ★ 절):\n   - " + "\n   - ".join(_miss))
+        if _miss: sys.exit("❌ 관찰 증거가 모자라 비교 증거를 기록하지 않는다 — `python observe.py add …` 로 책 확대와 화면을 나란히 본 기록을 먼저 남긴다(큐보 부품결합규칙.md H 절):\n   - " + "\n   - ".join(_miss))
     if not os.path.isfile(shot): sys.exit("❌ 화면 캡처 파일이 없다: " + shot)
     if time.time() - os.path.getmtime(shot) > 45 * 60: sys.exit("❌ 화면 캡처가 45분보다 오래됐다 — 지금 화면을 새로 찍어 쓴다")
     im = Image.open(shot).convert("RGB")

@@ -1,5 +1,6 @@
 # faces.py(파이썬)와 public/design-faces.js(화면·MCP)가 모든 부품에서 같은 면·번호를 내는지 대조한다.
 # 규칙을 바꿀 때(양쪽을 같이 고친 뒤) 반드시 돌린다:  python test_faces.py
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import json, os, subprocess, sys
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 import partlib, faces

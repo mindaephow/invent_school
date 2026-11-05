@@ -1,4 +1,5 @@
 # 사용: python camfile.py <번호> <theta> <phi> "<설명>" [from_tag]   — 손으로 맞춘 카메라(theta·phi)에서 축선 벡터를 계산해 NN_axes.json 을 쓴다(눈으로 맞춘 값 = 추정)
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, json, math, numpy as np
 n=int(sys.argv[1]); th=float(sys.argv[2]); ph=float(sys.argv[3]); why=sys.argv[4]
 f=-np.array([math.sin(ph)*math.sin(th), math.cos(ph), math.sin(ph)*math.cos(th)])

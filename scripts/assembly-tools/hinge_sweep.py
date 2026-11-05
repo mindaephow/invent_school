@@ -1,4 +1,5 @@
 # 투석기 팔을 T축(z 방향 선)을 기준으로 당길 때(−각도) 처음 부딪히는 각도를 구한다 — 팔 묶음 부품 상자(OBB)와 나머지 부품 상자의 겹침(SAT) 검사.
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import numpy as np
 def obb(pt):
     size = (pt.conn or {}).get("size")

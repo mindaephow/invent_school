@@ -4,6 +4,7 @@
 #        부품 자세 R 계산: 예) python tiltjoin.py R "0,1,0=0.7071,0.7071,0"  (로컬 +y 를 세계 n 으로)
 # 규칙(큐보 부품결합규칙.md G14): 기울어진 부품의 구멍·돌기 축은 모델 좌표 dir 을 R 로 돌려 세계 방향을 읽는다(부품 한 개의 축만 보고 판단하지 않는다 — 집게 팔은 구멍 축이 Z 였지만
 #   판이 붙는 3단블록 관통 구멍은 (0.71,0.71,0) 이었다). 틈·겹침·소속은 obb.py(회전한 상자)로 잰다. 관통 구멍은 앞·뒤 어느 쪽으로도 들어간다.
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, json, itertools
 import numpy as np
 sys.stdout.reconfigure(encoding="utf-8")

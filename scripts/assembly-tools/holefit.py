@@ -6,6 +6,7 @@
 #   하는 일: 모서리로 호모그래피를 만들어 각 구멍 자리(칸 가운데)를 예측 → 그 근처의 실제 구멍 블롭에 붙임 → 붙은 점으로 호모그래피를 다시 맞춤(반복).
 #   통과 기준(하나라도 어기면 fits 를 쓰지 않는다): 붙은 구멍 ≥ 격자 칸수의 40%, 평균 오차 ≤ 2.0px, 최대 오차 ≤ 4.5px.
 #   출력: refs/<이름>/fits/NN_<라벨>.json(찾은 점 + est=찾지 못해 격자로 채운 점), refs/<이름>/hf/NN_<라벨>.png(찾은 구멍 ●·격자 ✚·번호 겹친 확인 그림 — **반드시 눈으로 본다**).
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, os, json
 import numpy as np, cv2
 sys.stdout.reconfigure(encoding="utf-8")

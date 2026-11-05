@@ -3,6 +3,7 @@
 #   python vk_tools.py cmp N 링.json           — 책 링 ↔ 모델 구멍 번호 대조 그림 refs/viking/NN_6.jpg 를 만들고 index.json 에 적는다
 #       링.json = {"title": "...", "note": "...", "rings": [["라벨", x, y, "설명"], ...]}
 #   python vk_tools.py stage N                 — public/_refs_tmp/viking 에 그 번호 그림과 index.json 을 복사한다(올린 뒤 지운다)
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, os, json, shutil
 from PIL import Image, ImageDraw, ImageFont
 sys.stdout.reconfigure(encoding="utf-8")

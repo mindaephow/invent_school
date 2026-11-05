@@ -3,6 +3,7 @@
 #   환경변수 IVS_MCP_URL = 발명학교 MCP 주소(키 포함, 예: https://invent-school-sigma.vercel.app/api/mcp?key=...)
 # 서버에 올라가 있는 교재 PDF 는 원본의 절반 해상도라 작은 구멍을 세기 어려워서, 원본(쪽 사진 2524×3531)에서 직접 뽑는다.
 # 쪽마다 원본 해상도 JPEG(hi)와 가로 절반짜리(small)를 올린다. 이미 올라가 있어도 덮어쓴다.
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, os, json, base64, urllib.request
 try:
     import pymupdf

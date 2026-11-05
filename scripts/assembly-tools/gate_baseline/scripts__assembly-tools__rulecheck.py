@@ -6,8 +6,10 @@
 #   C 카메라 axes.json 의 fit.err_px ≤ 2.0, 점 4개 이상, "추정" 이 아니어야 한다. 아니면 ❌.
 #   E 증거  사용자 ✓ 이거나 책↔화면 비교 증거의 지문이 지금 내용과 같아야 한다.
 #   R 읽기 표 면·링·부품 칸이 채워져 있어야 한다.
+#   P 증명  <이름>_rules.json 에 "overlay_proof": true 가 있으면 번호마다 refs/<이름>/NN_3.jpg(overlay_check.py 로 모델을 책 그림에 겹친 증명 그림)이 있어야 한다.
 # 예외 승인: <이름>_approvals.json 에 {"<번호>": {"fits": "이유", "camera": "이유", "사용자 말씀": "사용자가 한 말 그대로"}} — "사용자 말씀" 이 없으면 인정하지 않는다. Claude 는 이 파일에 적지 않는다.
-# <이름>_rules.json 에 "rulecheck": true 가 있는 조립도만 ❌ 로 막는다(없는 옛 조립도는 ⚠ 로만 표시).
+# 모든 조립도를 같은 기준으로 ❌ 로 막는다(옛 조립도 구분 삭제 2026-11-04).
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import json, os, re, sys
 sys.stdout.reconfigure(encoding="utf-8")
 here = os.path.dirname(os.path.abspath(__file__))
@@ -16,6 +18,7 @@ FIX = {
     "격자": "python holefit.py <이름> <번호> <라벨> <칸> <줄> <모서리 8개> [어두운판] 로 규칙대로 다시 만든다(옵션 추가·손으로 만든 격자 금지). 기준 미달(판이 가려 구멍이 일부만 보임)이면 멈추지 말고 python infer_grid.py <이름> <번호> <라벨> <칸> <줄> 모서리8개 --판 <앞번호>:<라벨> --거울 <대칭번호> 줄 --링 'x,y;…' 로 앞·뒤 번호·대칭·링 정보를 모아 유추한다(05_조립 0-1). 유추로도 가설이 하나로 안 갈릴 때만 멈추고 시도·수치·필요한 추가 근거를 보고한다.",
     "카메라": "python axes_fit.py <이름> <번호> <라벨> <칸> <줄> <칸방향> <줄방향> 로 그 번호 격자에서 계산한다(오차 ≤2px, 점 4개 이상). 격자가 ❌ 면 격자부터 해결한다.",
     "증거": "화면에서 책과 나란히 비교한 뒤 python record_check.py <이름> <번호> <캡처.png> \"<비교 결과>\" 로 증거를 남긴다(내용이 바뀌었으면 다시).",
+    "증명": "python overlay_check.py <이름> <번호> 로 모델을 책 그림 위에 같은 카메라로 겹쳐 NN_3.jpg 를 만들고(점 오차 px), 부품 상자가 책 부품 위에 올라갔는지 눈으로 본 뒤 읽기 표 판단과정에 한 줄 적고 DB 에 올린다.",
     "읽기": "<이름>_read.json 의 그 번호 면·링·부품을 책에서 읽은 값으로 채운다.",
 }
 
@@ -34,13 +37,13 @@ def load(p, d):
 def check(name, only=None):
     asm = load(os.path.join(here, name + "_asm.json"), {"steps": []})["steps"]
     rules = load(os.path.join(here, name + "_rules.json"), {})
-    strict = bool(rules.get("rulecheck"))
+    strict = True
     approvals = load(os.path.join(here, name + "_approvals.json"), {})
     evid = load(os.path.join(here, name + "_evidence.json"), {})
     read = load(os.path.join(here, name + "_read.json"), {})
     try:
-        import stepfp; fp = stepfp.fp
-    except Exception: fp = lambda st: None
+        import stepfp; fp = stepfp.fp; same_ev = lambda e, st: stepfp.same(e, st, asm)
+    except Exception: fp = lambda st: None; same_ev = lambda e, st: False
     done = set()
     try:
         import userdone, re as _re
@@ -69,6 +72,21 @@ def check(name, only=None):
         else:
             for fn, fj in fs:
                 nm = str(fj.get("name", ""))
+                if fj.get("tool") == "sil-fit":   # 어두운 블록·막대만 있는 번호(2026-10-31 steercar 4번): 눈으로 점을 읽으면 평균 6px 로 흔들려 mkfit3d 기준(2.5px)을 못 채우므로, 책 그림의 부품 실루엣과 모델 실루엣의 겹침(IoU)을 최대로 하는 카메라를 자동으로 푼다(점을 읽지 않는다). 기준 IoU ≥0.85, 통과해도 사용자 확인 권장 ⚠.
+                    ev = fj.get("evidence") or {}; iou = ev.get("iou")
+                    good = iou is not None and iou >= 0.85
+                    why = ("실루엣 겹침 격자(silfit): 책 그림↔모델 실루엣 IoU %s(자동, 눈으로 점을 읽지 않음) — 사용자 확인 권장" % iou) if good else ("실루엣 겹침 격자 근거 부족(IoU %s < 0.85)" % iou)
+                    items.append(("⚠" if good else bad, "격자 " + fn, why)); continue
+                if fj.get("tool") == "infer3d":   # 판이 없는 번호(블록·막대만 있는 번호)의 격자(2026-10-31 사용자 "문제가 해결 안 되게 만든 규칙은 바꿔라"): 격자를 만들 판이 없어 mkfit3d.py 가 모델에서 3D 가 확정된 점(돌기 끝·구멍·리벳 끝)을 책 픽셀과 짝지어 PnP 로 푼다. holefit 가 아니라는 이유로 막던 것을 infer 앵커와 같은 기준으로 인정한다(3D 점 ≥6·평균 ≤2.5·최대 ≤4.5px) — 통과해도 사용자 확인 권장 ⚠.
+                    n3 = len(fj.get("xyz3d") or []); mean = fj.get("err_px"); mx = fj.get("max_err_px")
+                    good = (n3 >= 6 and mean is not None and mean <= 2.5 and mx is not None and mx <= 4.5)
+                    why = ("3D 점 PnP 격자(mkfit3d.py): 3D 확정 점 %d개 평균 %s·최대 %s px — 사용자 확인 권장" % (n3, mean, mx)) if good else ("3D 점 PnP 격자 근거 부족(3D 점 %d개·평균 %s·최대 %s px — 점 ≥6·평균 ≤2.5·최대 ≤4.5 필요)" % (n3, mean, mx))
+                    items.append(("⚠" if good else bad, "격자 " + fn, why)); continue
+                if fj.get("tool") == "line-fit":   # 한 줄 부품(1×N 막대) 격자(2026-10-31 사용자 "한 줄 부품이 많은데 통과 못 하게 만든 규칙부터 잘못"): holefit 는 한 줄이면 호모그래피를 못 구한다 → line_fit.py 가 같은 번호 판 격자의 카메라로 막대 위치를 풀어 만든다. 기준은 infer 앵커와 같은 값(읽은 구멍 ≥6·평균 ≤2.5·최대 ≤4.5px·기준 격자 ≤2.5px) — 통과해도 사용자 확인 권장 ⚠.
+                    ev = fj.get("evidence") or {}; mean = fj.get("err_px"); mx = fj.get("max_err_px")
+                    good = (ev.get("readings", 0) >= 6 and mean is not None and mean <= 2.5 and mx is not None and mx <= 4.5 and ev.get("camera_err_px", 99) <= 2.5)
+                    why = ("한 줄 부품 격자(line_fit.py): 읽은 구멍 %s개 평균 %s·최대 %s px, 카메라 = %s(오차 %s px) — 사용자 확인 권장" % (ev.get("readings"), mean, mx, ev.get("camera_from"), ev.get("camera_err_px"))) if good else ("한 줄 부품 격자 근거 부족(읽은 구멍 %s개·평균 %s·최대 %s px·카메라 오차 %s px — 읽은 구멍 ≥6·평균 ≤2.5·최대 ≤4.5·카메라 ≤2.5 필요)" % (ev.get("readings"), mean, mx, ev.get("camera_err_px")))
+                    items.append(("⚠" if good else bad, "격자 " + fn, why)); continue
                 if fj.get("tool") == "infer":   # 유추 격자(2026-10-13): 판이 가려져 holefit 기준(구멍 40%)을 못 채울 때 모든 근거를 합쳐 푼 격자 — 개수가 아니라 근거 일치도로 본다. ✅ 는 아니고 사용자 확인이 필요한 ⚠.
                     ev = fj.get("evidence") or {}; mean = fj.get("err_px"); mx = fj.get("max_err_px")
                     good = (ev.get("unique_ratio", 0) >= 1.3 and ev.get("visible_holes", 0) >= 8 and len(ev.get("anchors", [])) >= 3 and mean is not None and mean <= 2.5 and mx is not None and mx <= 4.5)
@@ -97,20 +115,29 @@ def check(name, only=None):
         if ax is None: items.append((bad, "카메라", "축 파일(_axes.json)이 없음"))
         else:
             fit = ax.get("fit") or {}; e = fit.get("err_px"); pts = fit.get("points") or 0
+            _sil = None   # 실루엣 겹침으로 푼 카메라(2026-10-31, silfit): 점을 읽지 않으므로 점 수·px 오차 대신 겹침 IoU ≥0.85 로 본다
+            try:
+                _gf = load(os.path.join(R, "fits", fit.get("from", "")), {}) if fit.get("from") else {}
+                if _gf.get("tool") == "sil-fit": _sil = (_gf.get("evidence") or {}).get("iou")
+            except Exception: _sil = None
             guess = ("추정" in json.dumps(fit, ensure_ascii=False)) or e is None or pts < 4
-            if guess or (e is not None and e > 2.0):
+            if _sil is not None:
+                items.append(("✅" if _sil >= 0.85 else bad, "카메라", "실루엣 겹침 IoU %.3f(기준 ≥0.85, 자동 — 점을 읽지 않음)" % _sil))
+            elif guess or (e is not None and e > 2.0):
                 why = "카메라 값이 추정이거나 점이 4개 미만(점 %s, 오차 %s)" % (pts, e) if guess else "카메라 맞춘 오차 %.2fpx > 2.0px(축 계산 기준)" % e
                 items.append(("⚠", "카메라", "승인됨(사용자): " + str(ap["camera"]) + " — " + why) if ap.get("camera") else (bad, "카메라", why))
             else: items.append(("✅", "카메라", "오차 %.2fpx, 점 %d개" % (e, pts)))
         # E 증거 ───────────────
         ev = evid.get(str(k))
         if k in done: items.append(("✅", "증거", "사용자 ✓"))
-        elif ev and ev.get("fp") == fp(st): items.append(("✅", "증거", "책↔화면 비교 증거(지문 일치)"))
+        elif ev and same_ev(ev, st): items.append(("✅", "증거", "책↔화면 비교 증거(지문 일치)"))
         elif ev: items.append((bad, "증거", "비교 뒤 내용이 바뀜 — 다시 비교한다"))
         else: items.append((bad, "증거", "비교 증거도 사용자 ✓ 도 없음"))
         # R 읽기 표 ───────────────
         r = read.get(str(k), {}); miss = [f for f in ("면", "링", "부품") if not str(r.get(f, "")).strip()]
         items.append(("✅", "읽기 표", "채워짐") if not miss else (bad, "읽기 표", "빈 칸: " + ", ".join(miss)))
+        if rules.get("overlay_proof"):   # P 증명 — 책 그림 위 겹침 그림(NN_3.jpg)
+            items.append(("✅", "증명", "겹침 그림 있음(NN_3.jpg)") if os.path.exists(os.path.join(R, "%02d_3.jpg" % k)) else (bad, "증명", "책 그림 위 겹침 그림(NN_3.jpg)이 없음 — overlay_check.py 로 만든다"))
         if k in done:   # 사용자가 화면에서 직접 ✓ 한 번호는 사용자 승인으로 본다(❌ → ⚠)
             items = [("⚠" if sym == "❌" else sym, t, ("사용자 ✓ 로 승인됨 — " + why) if sym == "❌" else why) for sym, t, why in items]
         out[k] = items
@@ -121,7 +148,7 @@ def main():
     name = sys.argv[1]; only = {int(a) for a in sys.argv[2:]} or None
     res, strict = check(name, only)
     nb = 0
-    print("═══ %s 규칙 점검 (%s) ═══" % (name, "❌ 로 막는 조립도" if strict else "옛 조립도 — ⚠ 로만 표시"))
+    print("═══ %s 규칙 점검 (%s) ═══" % (name, "❌ 로 막는 조립도"))
     for k, items in res.items():
         sym = "❌" if any(s == "❌" for s, _, _ in items) else ("⚠" if any(s == "⚠" for s, _, _ in items) else "✅")
         nb += sym == "❌"

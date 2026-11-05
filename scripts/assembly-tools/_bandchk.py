@@ -1,4 +1,5 @@
 # 밴드 점·가닥이 부품 상자(dims) 안으로 들어가는지 수치로 본다 (2026-10-19): python _bandchk.py <번호>
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, json, numpy as np
 sys.stdout.reconfigure(encoding="utf-8")
 a = json.load(open("autotarget_asm.json", encoding="utf-8"))["steps"]; N = int(sys.argv[1]); st = a[N - 1]

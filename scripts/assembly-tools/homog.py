@@ -1,4 +1,5 @@
 # 평면 호모그래피: 판의 네 모서리(그림 픽셀)로 그림 속 점(초록 원 등)을 판 위 좌표(mm)로 바꾼다.
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import numpy as np, cv2
 def plane(pix4, mm4):
     return cv2.getPerspectiveTransform(np.array(pix4, np.float32), np.array(mm4, np.float32))

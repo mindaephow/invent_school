@@ -1,4 +1,5 @@
 # 앵커 JSON 의 점으로 카메라를 풀고 하나씩 빼 안정성을 본다: python _lo.py <이름> <번호> [fov고정]
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import json, sys, numpy as np, cv2
 sys.stdout.reconfigure(encoding="utf-8")
 from pnp import fit, cam_from, angles

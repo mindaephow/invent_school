@@ -2,6 +2,7 @@
 #   python pose_edit.py <이름> <번호> "리벳 15번:x,y,z;리벳 16번:x,y,z"      → 그 라벨의 p 를 바꾼다(회전 r·q 는 그대로). 바꾸기 전 기록 전체를 refs/<이름>/_pose_backup/NN_<시각>.json 에 저장한다.
 #   python pose_edit.py <이름> <번호> --보기 [라벨 일부]                         → 기록된 위치를 코드 최종 위치와 같이 보여 준다(읽기만).
 # 배경: 사용자 ❄ 기록이 있으면 화면은 코드 위치(hover 포함)가 아니라 기록된 p 를 쓴다 — 코드를 고쳐도 사용자 화면에서 안 바뀌는 이유(드롭체커 29번 "리벳 분리해줘": 기록에 리벳이 제자리로 저장돼 있었다).
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import json, os, re, sys, time, urllib.request
 sys.stdout.reconfigure(encoding="utf-8")
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)

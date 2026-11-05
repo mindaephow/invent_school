@@ -2,6 +2,7 @@
 #   python hfpnp.py <이름> <번호> <라벨> <칸수> <줄수> <부품이름> <부품이 놓인 번호> x1 y1 x2 y2 x3 y3 x4 y4 [--줄뒤집기] [--칸뒤집기]   (모서리 4곳은 holefit 와 같은 순서·눈대중 OK)
 #   하는 일: DoG 로 구멍 후보를 찾고(holefit 와 같은 방식) → 눈대중 모서리의 호모그래피로 칸에 붙이고 → 모델 구멍 3D 와 pnp.fit(fov 15~60)으로 카메라를 풀어 투영 → 다시 붙이기를 되풀이하며 오차 큰 점을 덜어낸다.
 #   통과 기준: 붙은 구멍 ≥ 6개·평균 오차 ≤ 2.0px. 통과하면 refs/<이름>/fits/NN_<라벨>.json 에 pts(칸·줄·픽셀)·xyz3d·xyz3d_img·fov 를 쓴다(overlay_check·axes 용).
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, os, json, runpy
 import numpy as np, cv2
 sys.stdout.reconfigure(encoding="utf-8")

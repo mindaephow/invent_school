@@ -3,6 +3,7 @@
 # 기능 사용 = 파일 흔적(refs/<이름>/ 의 fits·NN_3·NN_6·cmp·axes·lv, <이름>_via.json) 으로 번호마다 자동 판정한다.
 # 수정요청 = user_diffs/요청차이.md 의 "## 날짜 <조립도 이름> N번·M번~K번 — ..." 제목에 든 번호 + user_diffs/수정저장차이.md 의 "조립도 · N번 · 부품" 줄(사용자가 ❄ 자세를 고친 것).
 # 점수 = (수정 없는 번호 + 3) / (쓴 번호 + 4) × 100  (표본이 적으면 75 점 쪽으로 당긴다). 수정요청 기록은 일부 조립도·번호만 있어서 "기록된 범위 안의" 점수다.
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, os, re, json, glob, collections
 sys.stdout.reconfigure(encoding="utf-8")
 HERE = os.path.dirname(os.path.abspath(__file__))

@@ -1,4 +1,5 @@
 # 롤(기울기)이 큰 책 그림용: 위쪽이 위인 조건 없이 PnP(fov·주점 격자) — 점 목록 json: {"obj":[[x,y,z]..],"img":[[px,py]..]}  python _freepnp.py <이름> <번호> <json>
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, json, math, numpy as np, cv2
 sys.stdout.reconfigure(encoding="utf-8")
 name, N = sys.argv[1], int(sys.argv[2]); a = json.load(open(sys.argv[3], encoding="utf-8")); obj = np.array(a["obj"], float); img = np.array(a["img"], float)

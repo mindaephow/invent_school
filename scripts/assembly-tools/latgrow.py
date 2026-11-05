@@ -4,6 +4,7 @@
 #     출력: refs/<이름>/fits/NN_lat.json  {"pts": {"i,j": [x, y]}, "n": 개수, "mean_err": px}
 #   이 점들에 모델 칸·줄을 붙이는 법(PnP 로 거울·열 오프셋을 가리는 법)은 큐보/조립도/2권/viking/진행기록.md 18·19번 절.
 #   ※ 칸·줄 이름 대응이 거울이면 카메라가 판 아래로 풀린다 — 위에서 내려다보는 해(0.4~0.8px)만 쓴다. 열 오프셋은 평행이동이라 PnP 오차로는 안 갈리니 판 위의 다른 부품(막대·블록) 투영으로 가린다.
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, os, json
 import numpy as np, cv2
 sys.stdout.reconfigure(encoding="utf-8")

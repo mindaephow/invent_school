@@ -6,6 +6,7 @@
 #   2) ✓ 번호의 새 부품마다 돌기↔구멍 맞물림(asmlib._mate)을 전부 찾아 "결합 경우"(돌기 부품.돌기 id → 구멍 부품)로 센다 — 구멍 축 위 중심 어긋남·축 어긋남도 모은다.
 #   3) 볼트·너트·리벳은 지나는 판 묶음을 재서 머리·끝·너트 머리의 위치를 센 값으로 모은다(stepchecks.bolt_nut_fit 과 같은 기준).
 #   4) 경우마다 가장 흔한 값(최빈값)과 벗어난 번호를 적는다 — 벗어난 번호가 틀린 결합 후보다.
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, os, json, runpy, collections, glob
 import numpy as np
 sys.stdout.reconfigure(encoding="utf-8")
@@ -86,7 +87,7 @@ def scan(A, k, dims, rows, fast):
 
 def main():
     want = sys.argv[1:]
-    names = want or sorted(os.path.basename(p)[:-3] for p in glob.glob("*.py") if not os.path.basename(p).startswith(("scratch", "new_assembly")) and any(l.startswith("A = Asm(") for l in open(p, encoding="utf-8")))
+    names = want or sorted(os.path.basename(p)[:-3] for p in [asmpath.ap(_n, ".py") for _n in asmpath.names()] if not os.path.basename(p).startswith(("scratch", "new_assembly")) and any(l.startswith("A = Asm(") for l in open(p, encoding="utf-8")))
     dims = stepchecks._dims(); rows = []; fast = []; used = {}
     for nm in names:
         try:

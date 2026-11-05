@@ -4,6 +4,7 @@
 #   ① 방향: 돌기 방향 = 구멍 들어가는 방향(관통 구멍은 반대도 허용)  ② 축 어긋남 ≤ 1.2mm  ③ 깊이: 돌기 끝이 구멍 안으로 ≥1mm, 돌기 뿌리가 구멍 끝을 넘지 않음
 # 이 도구는 번호의 marks 마다 그 자리의 구멍(또는 받는 쪽이면 돌기 끝)을 찾아, 새 부품의 모든 돌기를 위 세 조건에 대 보고 어느 조건에서 걸리는지 말한다.
 # 읽은 좌표는 스크립트 마지막(모든 이동이 끝난 뒤) 위치다 — 그 번호 시점과 다를 수 있는 번호(옮겨 붙는 부품)는 참고만 한다.
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import os, runpy, sys
 import numpy as np
 sys.stdout.reconfigure(encoding="utf-8")
@@ -25,6 +26,12 @@ def test(pg, h):
     if base > half - 0.5 + 1.0: why.append("돌기 뿌리가 구멍 밖(%.1fmm 떨어짐)" % (base - (half + 0.5)))
     return (not why), why, a, lat
 
+# 옆자리(창고 2)에서 따로 조립하는 부품(extra["side"], k < until)은 안내점(marks)도 옆자리 좌표라서 같은 자세로 읽는다 (stepchecks.py 와 같은 규칙, 2026-11-06 토끼 13번 오탐)
+from asmlib import euler_to_R
+for q in A.parts:
+    sd = q.extra.get("side")
+    if sd and k < sd.get("until", 0):
+        q.p = np.array(sd["p"], float); q.R = np.array(euler_to_R(sd["r"]), float)
 parts = [q for q in A.parts if q.step.index == k]
 if not parts: sys.exit("❌ %s %d번에 부품이 없다" % (name, k))
 print("═══ %s %d번 안내점 맞물림 진단 ═══" % (name, k))

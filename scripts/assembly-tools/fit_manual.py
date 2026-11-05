@@ -2,6 +2,7 @@
 # (holefit 가 비스듬한 면에서 미달할 때 — 배틀로봇 4번 등, 2026-10-17. 격자 pts 는 환산값이라 fits name 에 적는다.)
 #   python fit_manual.py <이름> <번호> <cx> <cy> <cz> <칸수> <줄수> <칸방향 +X|-X> <줄방향 +Y|-Y> [판 앞면 z 오프셋=2.5]
 #     판 가운데 (cx,cy,cz), 칸 c(화면 왼쪽이 1) → 칸방향 쪽으로 (c−(칸수+1)/2)×10, 줄도 같다.
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import json, math, sys
 import numpy as np, cv2
 sys.stdout.reconfigure(encoding="utf-8")

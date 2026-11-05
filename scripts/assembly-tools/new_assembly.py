@@ -8,6 +8,7 @@
 #   <이름>_def.json    조립도 메모(listNote 등)
 #   <이름>_rules.json  눈으로 확인한 단계 기록 {"count": [], "view": [], "camera": []}
 # 그다음: 스크립트에 1단계부터 순서대로 적고(오토건 autogun.py 참고) python build.py <이름> 으로 검사한다.
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, os, json, re, urllib.request
 
 def mcp_sql(url, sql):
@@ -67,7 +68,7 @@ if __name__ == "__main__":
 
 def main():
     a = sys.argv[1:]
-    out_dir = os.path.dirname(os.path.abspath(__file__))
+    out_dir = None   # 기본: 큐보/조립도/<N>권/<이름>/
     if "--dir" in a:
         i = a.index("--dir"); out_dir = a[i + 1]; del a[i:i + 2]
     listing = None
@@ -77,6 +78,8 @@ def main():
         print(__doc__); sys.exit(1)
     name, title = a[0], a[1]
     volume = int(a[2]) if len(a) > 2 else 1
+    if out_dir is None:
+        out_dir = os.path.join(asmpath.BASE, '%d권' % volume, name)
     if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", name):
         print("이름은 영문자로 시작하는 영문·숫자·밑줄만 쓸 수 있어요(예: airplane)."); sys.exit(1)
     if listing is None:
@@ -101,6 +104,7 @@ def main():
         else:
             open(path, "w", encoding="utf-8").write(content)
             print(f"만듦: {fn}")
+    asmpath.refresh()
     print(f"\n교재 LIST {len(listing)}종 · 총 {sum(listing.values())}개")
     print(f"\n다음: {name}.py 에 1단계부터 순서대로 적고  python build.py {name}  으로 검사한다.")
 

@@ -8,6 +8,7 @@
 #     --방향    구멍 번호가 늘어나는 쪽의 판 좌표 단위 방향(예: 구멍 1 이 +Z 끝이면 0,0,-1).
 #   통과 기준(규칙 점검과 같다, infer_grid 앵커와 같은 값): 읽은 구멍 6개 이상 · 평균 ≤2.5px · 최대 ≤4.5px · 기준 격자 err ≤2.5px. 미달이면 fits 를 쓰지 않는다 — 읽기를 다시 한다(점을 빼서 맞추지 않는다).
 #   출력: fits/NN_<라벨>.json(tool "line-fit", evidence 에 카메라 근거·읽은 수·오차·푼 위치) — rulecheck 는 ⚠ "사용자 확인 권장"으로 본다(진행은 막지 않음).
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, os, json, math
 import numpy as np, cv2
 from scipy.optimize import least_squares

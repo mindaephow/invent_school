@@ -3,6 +3,7 @@
 #   3) check_local.js 의 모든 검사(단계별 정밀·겹침·검증 절차·LIST·안내 화살표) → 문제가 있으면 종료 코드 1
 #   4) --write 이면 문제 0건일 때만 public/design-assemblies.js 에 넣는다(emit.py)
 # 실수를 발견하면 lessons.py 의 LESSONS 에 규칙을 적고 가능하면 asmlib/검사로 옮긴다 — 이 스크립트가 마지막에 그 목록을 보여 준다.
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import re, subprocess, sys, os, json
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 name = sys.argv[1]; write = "--write" in sys.argv
@@ -17,7 +18,7 @@ def run(cmd, show=True):
     if show and out.strip(): print(out.rstrip())
     return p.returncode, out
 run([sys.executable, "partlib.py"], show=False)
-rc, out0 = run([sys.executable, name + ".py"])
+rc, out0 = run([sys.executable, asmpath.ap(name, ".py")])
 if rc: sys.exit("스크립트 실행 실패")
 import userdone
 _m0 = re.search(r'id: "(cubo-\d+-[A-Za-z0-9_]+)"', open(name + "_entry.js", encoding="utf-8").read())
@@ -26,7 +27,7 @@ _USER_DONE = userdone.user_done(_aid)   # 사용자가 화면에서 직접 누�
 print("사용자 ✓ 완료 단계(DB):", sorted(_USER_DONE) if _USER_DONE else "없음")
 files = [name + "_asm.json"]
 list_f, def_f = name + "_list.json", name + "_def.json"
-args = ["node", "check_local.js", files[0]] + ([list_f] + ([def_f] if os.path.exists(def_f) else []) if os.path.exists(list_f) else [])
+args = ["node", "check_local.js", asmpath.resolve(files[0])] + ([asmpath.resolve(list_f)] + ([asmpath.resolve(def_f)] if os.path.exists(def_f) else []) if os.path.exists(list_f) else [])
 rc, out = run(args)
 try: _MATE_MARKS = bool(json.load(open(name + "_rules.json", encoding="utf-8")).get("mate_marks"))
 except Exception: _MATE_MARKS = False
@@ -73,7 +74,7 @@ for _k, _st in enumerate(_asm0, 1):
     _cnt = {}
     for _pt in _st.get("parts", []): _cnt[_pt.get("n")] = _cnt.get(_pt.get("n"), 0) + 1
     cur_contract[str(_k)] = {"parts": _cnt, "noPart": bool(_st.get("noPart"))}
-# 작업 공간(창고) 규칙: 창고 칸(slot)을 쓰는 조립도는 모든 단계에 slot 이 있어야 하고, 앞 단계와 자리가 바뀌면 history(불러온 곳·보관한 곳 글자)가 있어야 한다(안내서 6-5).
+# 작업 공간(창고) 규칙: 창고 칸(slot)을 쓰는 조립도는 모든 단계에 slot 이 있어야 하고, 앞 단계와 자리가 바뀌면 history(불러온 곳·보관한 곳 글자)가 있어야 한다(규칙 파일 A3·A3a).
 _slots = [_st.get("slot") for _st in _asm0]
 _bad_slot = []
 if any(v is not None for v in _slots):
@@ -165,7 +166,7 @@ for _k, _st in enumerate(asm, 1):
     if not ok: _nogrid.append(_k)
 print("책 이미지 작업(방향 표시·격자) 단계별 그림:", (f"{len([1 for k, st in enumerate(asm, 1) if st.get('parts')]) - len(_nogrid)}단계 있음" + (f" — ❌ 격자가 없는 단계 {_nogrid}" if _nogrid else "")))
 if write and _nogrid:
-    sys.exit("❌ 책 이미지 작업(방향에 맞춰 돌린 그림 위의 격자 1차·2차)이 없는 단계가 있어 --write 를 하지 않는다: " + str(_nogrid) + "\n   안내서 '★★★ 최우선 규칙'대로 그 단계의 격자를 먼저 만든다(refs_make → refs_rect). 이 검사는 건너뛸 수 없다.")
+    sys.exit("❌ 책 이미지 작업(방향에 맞춰 돌린 그림 위의 격자 1차·2차)이 없는 단계가 있어 --write 를 하지 않는다: " + str(_nogrid) + "\n   큐보 부품결합규칙.md 규칙(1번 규칙·D 절)대로 그 단계의 격자를 먼저 만든다(refs_make → refs_rect). 이 검사는 건너뛸 수 없다.")
 
 # ───── 철칙 순서 게이트(관리자 지시 2026-10-08, 우회 불가): 부품이 있는 번호마다 refs/<이름>/NN_lv.json(잘라내기→방향 표시→회전)이 있어야 한다 — 원본 위에서 격자를 먼저 맞춘 번호는 막는다(옛 조립도·--sync 이전 번호는 면제 목록 IRON_EXEMPT).
 IRON_EXEMPT = {"dog": {}}   # 철칙 이전에 만든 번호를 새 순서로 다시 만들 때까지 예외로 둘 목록(이름 → {번호}). 비워 두면 전 번호 필수

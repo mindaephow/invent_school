@@ -1,3 +1,4 @@
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import numpy as np, cv2, math
 def fit(obj,img,W,H,fov_deg,cx=None,cy=None):   # cx,cy = 주점(책 그림이 잘려 있으면 한가운데가 아니다, 2026-10-19 _regcam.py)
     f=(H/2)/math.tan(math.radians(fov_deg)/2)

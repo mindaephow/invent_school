@@ -8,6 +8,7 @@
 #      이 카메라로 순방향 투영해 책 픽셀과 비교(px)해 가장 맞는 밀림을 고른다(역투영 아님 — 사용자 지시). 2등과의 비를 같이 출력한다.
 #   ⑤ 출력: 고른 밀림, 판 점 잔차(px), 검증 점별 차이(mm), infer_grid 에 줄 `--anchor` 문자열(파일로도 저장). --쓰기 라벨 을 주면 infer_grid 와 같은 형식의 fits 를 바로 쓰지 않고 명령만 알려 준다(저장은 infer_grid 가 기준 검사 후).
 # 한계: 판이 평면이라는 가정(윗면 y 5) — 판에서 튀어나온 부품 위 특징점은 RANSAC 이 걸러낸다. 칸 밀림 검증 점이 없으면 후보가 하나로 안 갈릴 수 있으니 반드시 준다.
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, os, json, math
 import numpy as np, cv2
 sys.stdout.reconfigure(encoding="utf-8")

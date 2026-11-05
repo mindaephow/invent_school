@@ -1,5 +1,6 @@
 # 판의 구멍으로 비쳐 보이는 흰 조각(blob)의 중심으로 홀라인 격자를 맞춘다 — DoG 점이 구멍 가장자리에 앉는 holefit 의 약점 대신(오토타깃 5번, 2026-10-18). 같은 평면의 두 판(막대·검은 판)을 한 호모그래피로 맞추고 잔차(px)를 낸다.
 #   python _blobfit.py <이름> <번호> "<막대 윤곽 x,y;x,y;x,y;x,y>" <칸> <줄> ["<다른 판 윤곽>"]
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, json, numpy as np, cv2
 sys.stdout.reconfigure(encoding="utf-8")
 name, N, poly, cols, rows = sys.argv[1], int(sys.argv[2]), sys.argv[3], int(sys.argv[4]), int(sys.argv[5])

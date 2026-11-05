@@ -2,6 +2,7 @@
 #   python track.py <이름> <번호> --views 앞,뒤,좌,우,위,아래 --next "54번 책: 메인보드·LED 위치" [--note "..."]
 #   python track.py --report            → 조립도별 6방향·다음 번호 비교 기록률 (feature_score.py 가 같이 보여 준다)
 # 기록 파일: usage_log.json  {"<이름>": {"<번호>": {"views": [...], "next": "...", "note": "...", "at": "날짜"}}}
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, os, json, datetime
 sys.stdout.reconfigure(encoding="utf-8")
 HERE = os.path.dirname(os.path.abspath(__file__)); F = os.path.join(HERE, "usage_log.json")

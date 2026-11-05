@@ -4,6 +4,7 @@
 #   · --fix : 자동으로 채울 수 있는 것(홀라인 그림 NN_1·NN_2 다시 만들기, 작업 점검 블록 다시 계산)은 채우고, 사람이 판단해야 하는 것은 목록으로 남긴다.
 #   점검 항목: 작업 점검 블록 · 읽기 표 7칸 · 읽기 표 부품 = 모델 부품 · 축 파일(_axes.json)과 fit 오차(2px 초과·옮겨 쓴 값 표시) · 그림 3장(NN·NN_1·NN_2) ·
 #            비교 증거(cmp/NN.png) · 카메라 camSrc · 확인 필요(review) 표시 · 추정 표시. 결과는 refs/<이름>/final_audit.md 로도 저장한다.
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, os, json, subprocess
 sys.stdout.reconfigure(encoding="utf-8")
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -61,7 +62,7 @@ def main():
             r = subprocess.run([sys.executable, "refs_rect.py", name, str(n)], cwd=HERE, capture_output=True, text=True, encoding="utf-8", env=dict(os.environ, PYTHONIOENCODING="utf-8"))
             did.append("%d번 홀라인 그림 다시 만듦(%s)" % (n, "성공" if r.returncode == 0 else "실패"))
         if fixable["note"]:
-            r = subprocess.run([sys.executable, name + ".py"], cwd=HERE, capture_output=True, text=True, encoding="utf-8", env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+            r = subprocess.run([sys.executable, asmpath.ap(name, ".py")], cwd=HERE, capture_output=True, text=True, encoding="utf-8", env=dict(os.environ, PYTHONIOENCODING="utf-8"))
             did.append("작업 점검 블록 다시 계산(%s)" % ("성공" if r.returncode == 0 else "실패"))
         print("── 자동으로 채운 것 ──"); print("\n".join("  " + d for d in did) or "  (채울 것 없음)")
         print("  ※ 채운 뒤 `python build.py %s --write` 로 저장하고 이 점검을 다시 돌려 확인한다." % name)

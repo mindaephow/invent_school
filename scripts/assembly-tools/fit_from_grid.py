@@ -3,6 +3,7 @@
 #   python fit_from_grid.py <이름> <번호> <라벨> <cx> <cy> <cz> <칸방향 +X|−X…> <줄방향> [판 앞면 z 오프셋=2.5]
 #     판 가운데 (cx,cy,cz), 칸 c → 칸방향 쪽으로 (c−(칸수+1)/2)×10, 줄 r → 줄방향 쪽으로 (r−(줄수+1)/2)×10, 앞면 = 판 가운데에서 법선 쪽 오프셋(서 있는 판은 z).
 #   출력: 오차(px)·fov·theta·phi, fits 에 xyz3d·xyz3d_img·fov, <번호>_axes.json. 판 한 장(한 평면)이라 방향각만 믿는다(⚠).
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import json, math, sys
 import numpy as np, cv2
 sys.stdout.reconfigure(encoding="utf-8")

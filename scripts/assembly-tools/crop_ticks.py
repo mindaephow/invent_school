@@ -3,6 +3,7 @@
 #   python crop_ticks.py <이름> <번호> corners x1 y1 x2 y2 x3 y3 x4 y4 [반폭=35]  → 네 점 주변 반폭×2 정사각형 4장을 한 장(2×2)으로 — 모서리 읽기 확인용
 # 읽은 좌표는 원본 그림(refs/<이름>/NN.jpg) 좌표다(눈금 숫자 그대로). 한 번에 보이는 범위를 작게(≤ 100×100px) 잡을수록 ±2px 로 읽힌다.
 # 함정: 결과는 짧은 임시 폴더(%TEMP%/cubo_crops)에 쓴다 — 프로젝트 안 긴 경로나 한글 경로에 cv2.imwrite 하면 윈도우에서 조용히 실패한다.
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, os, tempfile
 import numpy as np, cv2
 sys.stdout.reconfigure(encoding="utf-8")

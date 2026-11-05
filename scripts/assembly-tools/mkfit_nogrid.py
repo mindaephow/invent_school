@@ -2,6 +2,7 @@
 #   python mkfit_nogrid.py <번호> <fov> [판 z(기본 17.5 = 머리 뒤판 바깥면) [칸1 의 x 부호(기본 +1: 뒤에서 볼 때 화면 왼쪽이 +x, 앞에서 볼 땐 −1)]]
 #   fits 에 fov 를 고정으로 적고, <번호>_axes.json(축선 방향·theta·phi·오차)과 격자 표시용 pts(머리 뒤판 9×5 칸·줄을 이 카메라로 투영한 환산값)를 쓴다.
 #   격자 pts 는 책에서 읽은 점이 아니라 환산값이다(fits name 에 적는다). 다음에 python refs_rect.py <이름> <번호>, python overlay_check.py <이름> <번호>.
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import json, math, sys
 import numpy as np, cv2
 from pnp import fit, cam_from, angles

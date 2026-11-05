@@ -2,6 +2,7 @@
 # build.py 가 <이름>_rules.json 에 "placecheck": true 가 있을 때 부른다. 그룹으로 옮겨 붙이는 부품(move.at 가 같은 것)은 한 덩어리(강체)로 움직여야 한다:
 #   부품 쌍마다 "옮기기 전 상대 자세"와 "옮긴 뒤 상대 자세"가 같아야 한다(거울 복사·부품별 따로 놓기로 모양이 깨지는 것을 잡는다 — 강아지로봇 36번에서 170mm 어긋났다).
 #   예외: 부품 extra 에 "nonRigid": true (일부러 관절처럼 돌아가는 부품).
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import numpy as np
 from asmlib import euler_to_R
 

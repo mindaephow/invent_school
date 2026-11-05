@@ -73,7 +73,7 @@
       const hosts = new Set()
       mine.forEach((a) => {
         const pt = a.ref
-        const eff = pt.side || pt.move || pt.explode ? null : pt.dir // 옆자리·옮기기 단계는 방향 검사 제외
+        const eff = pt.side || pt.move || pt.explode || (pt.poseAt && pt.poseAt[si]) ? null : pt.dir // 옆자리·옮기기 단계는 방향 검사 제외 / poseAt 자세(몸을 세워 조립하는 단계)는 기본 자세와 띄우는 방향이 달라 제외(오토타깃 15번 2026-10-19)
         const myPegs = res.mated.filter((m) => m.part === a.key)
         const myHoles = res.mated.filter((m) => m.into === a.key)
         // 1) 방향 확인: dir 은 부품을 띄워 두는 방향이라 돌기는 그 반대(−dir)로 향해야 한다 / 받는 쪽(recv)이면 고정된 돌기가 +dir 쪽을 향해야 한다
@@ -128,6 +128,7 @@
         const lack = arriving.filter((a) => {
           const q = a.ref
           if (q.noGuide) return false // 우연히 맞닿아 보일 뿐 결합이 아닌 부품(안내 화살표 없음)
+          if (q.n === 'T축' && q.side && q.side.until === si) return false // 합치는 번호의 T축은 끝이 구멍에 그냥 들어갈 뿐 결합이 아니다(큐보 부품결합규칙, 사용자 2026-11-04)
           if (!res.mated.some((m) => (m.part === a.key && outside(m.into)) || (m.into === a.key && outside(m.part)))) return false
           const got = mvIs(q, si) ? ((mvAt(q, si) || {}).marks || []) : q.side && q.side.until === si ? (q.settleMarks || []) : (q.marks || [])
           return !got.length
@@ -200,7 +201,7 @@
     if (opt.list) {
       const diffs = []
       const names = new Set([...Object.keys(opt.list), ...Object.keys(counts)])
-      names.forEach((n) => { const a = counts[n] || 0, b = opt.list[n] || 0; if (a !== b) diffs.push(`${n}: 조립도 ${a}개 / 교재 ${b}개`) })
+      names.forEach((n) => { if (n === '리모컨') return; /* 리모컨은 조립도에 넣지 않는다(사용자 지시 2026-10-14) */ const a = counts[n] || 0, b = opt.list[n] || 0; if (a !== b) diffs.push(`${n}: 조립도 ${a}개 / 교재 ${b}개`) })
       const mult = def.listNote ? ` (${def.listNote})` : ''
       report.push(diffs.length ? `교재 부품 LIST 대조: 불일치 ${diffs.length}종${mult} — ${diffs.join(', ')}` : '교재 부품 LIST 대조: 전부 일치')
       if (diffs.length && !def.listNote) issues.push(`교재 부품 LIST 와 개수 불일치 ${diffs.length}종: ${diffs.join(', ')} (의도적이면 def.listNote 에 이유를 적을 것)`)

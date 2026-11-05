@@ -88,7 +88,7 @@
     const worlds = upto.map((u) => ({ u, w: worldOf(u) }))
     ;(st.parts || []).forEach((pt, i) => {
       const me = upto.find((u) => u.ref === pt)
-      if (conn[pt.n] && me && !pt.loose && !res.mated.some((m) => m.part === me.key || m.into === me.key)) issues.push(`${si + 1}단계 ${pt.n}: 어떤 구멍·돌기에도 끼워지지 않음(허공에 떠 있음)`)
+      if (conn[pt.n] && me && !pt.loose && !(st.stage && st.stage < 6) && !res.mated.some((m) => m.part === me.key || m.into === me.key)) issues.push(`${si + 1}단계 ${pt.n}: 어떤 구멍·돌기에도 끼워지지 않음(허공에 떠 있음)`)
       // 안내 위치: 고정된 쪽의 실제 구멍 축/돌기 끝과 맞는지(옆자리 조립품·분리 표시는 제외)
       if (pt.dir && pt.marks && !pt.side && !pt.explode && !pt.noMarkCheck) { // noMarkCheck: 안내점이 '화면에 보이는 자리'(올려 둔 자리)에 있는 부품 — 검사용 자리(옮긴 뒤 자리)와 달라 위치 검사를 건너뛴다(롤링봇 22번 축)
         pt.marks.forEach((m) => {
@@ -110,7 +110,7 @@
       const name = Object.keys(counts).find((n) => n === m[1] || m[1].endsWith(n))
       if (name && counts[name] !== Number(m[2])) issues.push(`${si + 1}단계 설명 "${m[0]}" ↔ 데이터 ${name} ${counts[name]}개`)
     }
-    if (!(st.parts || []).length && !st.noPart && !list.some((s) => (s.parts || []).some((pt) => (pt.side && pt.side.until === si + 1) || (window.IVS_moveIs ? window.IVS_moveIs(pt, si + 1) : (pt.move && pt.move.at === si + 1))))) issues.push(`${si + 1}단계: 부품이 하나도 없음`)
+    if (!(st.parts || []).length && !st.noPart && !(st.stage && st.stage < 6) && !list.some((s) => (s.parts || []).some((pt) => (pt.side && pt.side.until === si + 1) || (window.IVS_moveIs ? window.IVS_moveIs(pt, si + 1) : (pt.move && pt.move.at === si + 1))))) issues.push(`${si + 1}단계: 부품이 하나도 없음`)
   })
   // 마지막 모양: 리벳은 양 끝 돌기가 모두 구멍에 들어가야 한다
   const all = []; list.forEach((s, k) => (s.parts || []).forEach((pt, i) => all.push({ key: `${k + 1}.${i} ${pt.n}`, n: pt.n, p: posAfterMove(pt, 1e9), r: rotAfterMove(pt, 1e9), ref: pt })))

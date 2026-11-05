@@ -4,6 +4,7 @@
 #     라벨 = fits/NN_<라벨>.json (한 판의 격자 점, 원본 그림 좌표). 판이 눕혀 있으면(홀면 위) 칸·줄이 X·Z, 서 있으면 칸은 X 또는 Z 이고 줄은 ±Y 다. 책 그림에서 판이 서 있는지 눕는지를 먼저 읽고 정한다.
 #     칸방향·줄방향 = +X -X +Y -Y +Z -Z 중 하나(칸이 늘어나는 쪽이 세계 어느 쪽인지). 두 방향은 서로 다른 축이어야 한다(칸 +X 면 줄은 ±Z — 눕힌 판, 또는 ±Y — 서 있는 판).
 #   출력: 맞춘 오차(px)·theta·phi·화면에서 +X +Y +Z 가 가리키는 방향. 오차 2px 넘으면 칸·줄 방향이 거울이거나 점이 틀린 것이니 쓰지 않는다.
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, os, json, math
 import numpy as np, cv2
 sys.stdout.reconfigure(encoding="utf-8")
@@ -22,10 +23,18 @@ def main():
     for c, r, x, y in f["pts"]:
         u, v = (c - 1) - (cols - 1) / 2.0, (r - 1) - (rows - 1) / 2.0
         obj.append(list(pitch * (u * cvec + v * rvec))); img.append([x, y])
+    if f.get("xyz"):   # xyz: 점마다 3D 세계 좌표를 직접 준다(꺾인 프레임 구멍처럼 격자가 아닌 점 — 칸·줄 방향은 쓰지 않는다). 가운데로 옮겨서 카메라 각도만 구한다.
+        obj = [list(q) for q in f["xyz"]]; img = [[x, y] for c, r, x, y in f["pts"]]
+        obj = np.array(obj, float); obj = (obj - obj.mean(axis=0)).tolist()
     obj = np.array(obj, np.float32); img = np.array(img, np.float32)
     im = cv2.imread(os.path.join(D, "%02d.jpg" % step)); H, W = im.shape[:2]
     best = None; cands = []
     for fov in (20, 25, 30, 35, 40, 45, 50):
+        if f.get("xyz"):   # 한 평면 위의 점(xyz): 위에서 보는 해와 아래에서 보는 거울 해를 IPPE 로 둘 다 구해 후보에 넣는다(아래 _ok 가 위에서 보고 위쪽이 위인 해를 고른다)
+            fl = (H / 2) / math.tan(math.radians(fov) / 2); K_ = np.array([[fl, 0, W / 2], [0, fl, H / 2], [0, 0, 1]], float)
+            _n, rvs_, tvs_, errs_ = cv2.solvePnPGeneric(obj.astype(np.float64), img.astype(np.float64), K_, None, flags=cv2.SOLVEPNP_IPPE)
+            for rv_, tv_, e_ in zip(rvs_, tvs_, errs_): cands.append(((float(np.ravel(e_)[0]), rv_, tv_, K_), fov))
+            continue
         r = fit(obj, img, W, H, fov)
         if r: cands.append((r, fov))
     # 평면 위 점(판 구멍)만으로 푸는 PnP 는 위에서 내려다보는 해와 아래에서 올려다보는 거울 해가 거의 같은 오차로 나온다(드롭체커 27번: 0.88 vs 0.90px).
@@ -45,7 +54,7 @@ def main():
     for k, v in (("X", [pitch, 0, 0]), ("Y", [0, pitch, 0]), ("Z", [0, 0, pitch])):
         w = P(v) - o; s = 55.0 / max(abs(w[0]), abs(w[1]), 1e-6) if k != "Y" else 55.0 / max(abs(w[1]), 1e-6)
         d[k] = [round(float(w[0] * s), 1), round(float(w[1] * s), 1)]
-    out = {"global": d, "replace_lines": True, "fit": {"from": "%02d_%s.json" % (step, label), "err_px": round(float(e), 2), "points": len(obj), "theta": round(math.radians(az), 2), "phi": round(math.radians(90 - el), 2), "cols": cd, "rows": rd}}
+    out = {"global": d, "fit": {"from": "%02d_%s.json" % (step, label), "err_px": round(float(e), 2), "points": len(obj), "theta": round(math.radians(az), 2), "phi": round(math.radians(90 - el), 2), "cols": cd, "rows": rd}}
     json.dump(out, open(os.path.join(D, "%02d_axes.json" % step), "w", encoding="utf-8"), ensure_ascii=False)
     _roll = math.degrees(math.asin(max(-1, min(1, float(right[1])))))   # 화면 가로축이 수평에서 기운 정도 — 뷰어 카메라는 기울이지(roll) 못하니 0 에 가까워야 한다
     print("카메라 roll %.1f°(0 에 가까워야 뷰어 카메라로 같은 그림이 나온다)" % _roll)

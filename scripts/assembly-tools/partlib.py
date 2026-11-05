@@ -1,6 +1,7 @@
 # 부품 연결점 라이브러리 — 조립 프로그램(asmlib.py)과 로컬 검사(check_local.js)가 같이 쓴다.
 # 부품의 크기·돌기·구멍은 부품 DB 의 상세내역(ivs_part_catalog 의 data.detail)이 원본이다(사용자 지시 2026-11-04).
 # build_all() 이 DB 상세내역을 읽어 conn.json·dims.json 을 만든다. 부품 값을 이 파일에 따로 적지 않는다(프레임 규칙·OTHER 삭제).
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import json, re, os, urllib.request
 
 _DIR = {"+x": [1, 0, 0], "-x": [-1, 0, 0], "+y": [0, 1, 0], "-y": [0, -1, 0], "+z": [0, 0, 1], "-z": [0, 0, -1]}

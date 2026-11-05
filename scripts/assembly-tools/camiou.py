@@ -1,5 +1,6 @@
 # 풀린 카메라(fits/NN_P.json 의 xyz3d·fov)로 모델 부품 상자를 투영해 책 그림 몸통 윤곽과의 겹침(IoU)을 잰다 — 후보 카메라(띄움 가정이 다른 해 등)를 비교할 때(2026-10-23).
 #   python camiou.py <이름> <번호> [fits 파일(기본 fits/NN_P.json)]
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, os, json, numpy as np, cv2, runpy
 sys.stdout.reconfigure(encoding="utf-8")
 HERE = os.path.dirname(os.path.abspath(__file__)); os.chdir(HERE)

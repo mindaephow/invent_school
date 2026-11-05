@@ -1,3 +1,4 @@
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import json, sys, runpy, numpy as np, cv2
 sys.path.insert(0,'.')
 from pnp import fit

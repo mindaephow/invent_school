@@ -15,10 +15,13 @@ function quat(r) { const m = M.matFromEuler(r); const t = m[0][0] + m[1][1] + m[
   else { const s = Math.sqrt(1 + m[2][2] - m[0][0] - m[1][1]) * 2; w = (m[1][0] - m[0][1]) / s; x = (m[0][2] + m[2][0]) / s; y = (m[1][2] + m[2][1]) / s; z = s / 4; }
   return { x, y, z, w }; }
 const out = {};
-for (const f of fs.readdirSync(__dirname).filter((n) => /_asm\.json$/.test(n))) {
-  const name = f.replace('_asm.json', '');
-  let id; try { id = fs.readFileSync(path.join(__dirname, name + '_entry.js'), 'utf8').match(/id:\s*"([^"]+)"/)[1]; } catch (e) { continue; }
-  const asm = JSON.parse(fs.readFileSync(path.join(__dirname, f), 'utf8'));
+const base = path.join(__dirname, '큐보', '조립도');
+const found = [];
+for (const v of fs.readdirSync(base)) { const vp = path.join(base, v); if (!fs.statSync(vp).isDirectory()) continue;
+  for (const n of fs.readdirSync(vp)) { const d = path.join(vp, n); if (fs.existsSync(path.join(d, n + '_asm.json'))) found.push([n, d]); } }
+for (const [name, dir] of found) {
+  let id; try { id = fs.readFileSync(path.join(dir, name + '_entry.js'), 'utf8').match(/id:\s*"([^"]+)"/)[1]; } catch (e) { continue; }
+  const asm = JSON.parse(fs.readFileSync(path.join(dir, name + '_asm.json'), 'utf8'));
   const placed = []; const res = {};
   asm.steps.forEach((s, k) => {
     const slot = s.slot == null ? 1 : s.slot;

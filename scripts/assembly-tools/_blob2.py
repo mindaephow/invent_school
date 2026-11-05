@@ -4,6 +4,7 @@
 #   그 어긋남은 판 윗면에 있는 초록 링(리벳 바닥 표시)이 정수 칸이 되도록 칸 좌표를 평행이동해 보정한다(링 칸은 책에서 센 값).
 #   python _blob2.py <이름> <번호> <라벨> "<판 윤곽 4점 x,y;…(칸1줄1, 칸N줄1, 칸N줄M, 칸1줄M)>" <칸> <줄> "<링 픽셀 x,y→칸,줄;…>"
 #   예: python _blob2.py autotarget 20 P "330,585;700,415;860,590;465,800" 5 3 "385,585>1,1;468,708>1,3;750,500>5,2"
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, os, json, numpy as np, cv2
 sys.stdout.reconfigure(encoding="utf-8")
 name, N, label, poly, cols, rows, rings = sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4], int(sys.argv[5]), int(sys.argv[6]), sys.argv[7]

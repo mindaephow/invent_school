@@ -6,6 +6,7 @@
 #       판정이 "다르다" 이면 기록은 남지만 check 가 막는다 — 방향·대칭을 다시 정해 고친 뒤 다시 add 한다(같은 지점·종류는 덮어쓴다).
 #   python observe.py check <이름> <번호>    → 빠진 것을 보여 준다. record_check.py 가 이것을 통과해야 비교 증거를 기록한다.
 #   필요한 것: 결합 ≥ 2곳 · 6방향 ≥ 1장 · (같은 조립이 둘 이상이거나 앞 번호 부품을 옮기는 번호면) 그룹비교 ≥ 1 · (앞 번호 부품을 옮기는 번호면) 뒤번호 ≥ 1 · 모든 판정 "같다".
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, os, json, time
 import numpy as np, cv2
 sys.stdout.reconfigure(encoding="utf-8")

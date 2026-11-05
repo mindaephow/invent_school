@@ -1,5 +1,6 @@
 # 번호의 새 부품·옮긴 부품마다 돌기(peg)↔구멍(hole) 대응표를 뽑는다: 가까운 구멍까지 옆 거리·깊이, 짝 없는 돌기 목록 (2026-10-18 — 번호마다 돌기↔구멍을 확인하라는 사용자 지시)
 #   python _mates_table.py <이름> <번호> [<번호>…]   ※ 스크립트 끝 최종 자세로 잰다(옮겨진 번호는 옮긴 뒤 자세)
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, numpy as np
 sys.stdout.reconfigure(encoding="utf-8")
 name = sys.argv[1]; steps = [int(a) for a in sys.argv[2:]]

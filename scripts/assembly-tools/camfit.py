@@ -1,4 +1,5 @@
 # 교재 그림의 판 모서리 점(3D↔화면 픽셀)으로 카메라를 맞춘다. 사용: from camfit import fitcam; fitcam(obj,img,W,H)
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import numpy as np, math, cv2
 from pnp import fit, cam_from, angles
 def fitcam(obj,img,W,H,target=(60,20,0),fovs=(20,25,30,35,40,45,50)):

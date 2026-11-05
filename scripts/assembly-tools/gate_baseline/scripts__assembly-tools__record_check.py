@@ -3,6 +3,7 @@
 # 하는 일: 화면 캡처와 책 그림(refs/<이름>/NN.jpg)을 나란히 붙인 refs/<이름>/cmp/NN.png 를 만들고, 그 번호의 지금 내용 지문·비교 결과·시각을 <이름>_evidence.json 에 적는다.
 # build.py 의 번호별 점검은 이 증거(지문이 지금 내용과 같은 것)가 있어야 그 번호의 눈으로 하는 확인 3개(화면 확대·칸 수 대조·카메라 대조)를 통과시킨다.
 # 번호 내용이 바뀌면 지문이 달라져 증거가 무효가 되므로 다시 비교해야 한다. 사용자는 나중에 cmp 이미지를 열어 검토한다.
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, os, json, time
 try:
     from PIL import Image
@@ -26,6 +27,10 @@ def main():
     if len(sys.argv) != 5: sys.exit(__doc__)
     name, step, shot, note = sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4].strip()
     here = os.path.dirname(os.path.abspath(__file__))
+    if step >= 16 or os.environ.get("OBS_REQUIRED") == "1":   # 관찰 증거(observe.py) — 결합 지점·그룹·뒤 번호를 눈으로 본 기록이 없으면 비교 증거를 안 받는다(2026-10-27 배틀바이크 17번). 기존 번호(1~15)는 그대로.
+        import observe
+        _miss = observe.check(name, step)
+        if _miss: sys.exit("❌ 관찰 증거가 모자라 비교 증거를 기록하지 않는다 — `python observe.py add …` 로 책 확대와 화면을 나란히 본 기록을 먼저 남긴다(큐보 부품결합규칙.md H 절):\n   - " + "\n   - ".join(_miss))
     if not os.path.isfile(shot): sys.exit("❌ 화면 캡처 파일이 없다: " + shot)
     if time.time() - os.path.getmtime(shot) > 45 * 60: sys.exit("❌ 화면 캡처가 45분보다 오래됐다 — 지금 화면을 새로 찍어 쓴다")
     im = Image.open(shot).convert("RGB")
@@ -34,7 +39,7 @@ def main():
     book = os.path.join(here, "refs", name, "%02d.jpg" % step)
     if not os.path.isfile(book): sys.exit("❌ 책 그림이 없다: " + book)
     asm = json.load(open(os.path.join(here, name + "_asm.json"), encoding="utf-8"))["steps"]
-    if step < 1 or step > len(asm) or not (asm[step - 1].get("parts") or asm[step - 1].get("moveMade")): sys.exit("❌ 부품이 있거나 앞 번호 부품을 옮기는(합치는) 번호가 아니다")
+    if step < 1 or step > len(asm) or not (asm[step - 1].get("parts") or asm[step - 1].get("moveMade") or asm[step - 1].get("madeNoPart")): sys.exit("❌ 부품이 있거나 앞 번호 부품을 옮기는(합치는) 번호가 아니다(부품 없는 번호는 kw madeNoPart 로 표시 — 어보이더 28·30번)")
     fp = stepfp.fp(asm[step - 1])
     b = Image.open(book).convert("RGB"); h = 760
     a = b.resize((int(b.width * h / b.height), h)); c = im.resize((int(im.width * h / im.height), h))
@@ -43,7 +48,7 @@ def main():
     out = os.path.join(out_dir, "%02d.png" % step); side.save(out)
     ef = os.path.join(here, name + "_evidence.json")
     ev = json.load(open(ef, encoding="utf-8")) if os.path.exists(ef) else {}
-    ev[str(step)] = {"fp": fp, "note": note, "time": time.strftime("%Y-%m-%d %H:%M:%S"), "cmp": "refs/%s/cmp/%02d.png" % (name, step)}
+    ev[str(step)] = {"fp": fp, "shape": stepfp.shape_fp(asm[step - 1], stepfp.anchor(asm)), "note": note, "time": time.strftime("%Y-%m-%d %H:%M:%S"), "cmp": "refs/%s/cmp/%02d.png" % (name, step)}
     json.dump(ev, open(ef, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     print("✅ %d번 비교 증거 기록: %s" % (step, out)); print("   지문", fp, "| 결과:", note)
 

@@ -1,5 +1,6 @@
 # 이름으로 쓴 결합(attach/recv)이 id·좌표로 쓴 결합과 같은 결과를 내는지, 앞뒤를 거꾸로 쓰면 경고가 나는지 확인한다.
 # 오토건의 교재 15번(조립도 16단계) 결합을 그대로 가져다 이름 버전으로 다시 만든다.   python test_names.py
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import os, sys
 import numpy as np
 os.chdir(os.path.dirname(os.path.abspath(__file__)))

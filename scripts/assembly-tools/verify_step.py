@@ -11,6 +11,7 @@
 # (옛 기준, 17번까지) 넘어가는 기준: 홀라인 ✅ + 번호 대조 그림 ✅ 이면 그 번호는 '통과'(번호판 파랑). 카메라·돌기↔구멍·읽기 표·증거는 참고 항목으로 ⚠·❌ 를 보고하되 막지 않는다.
 # 마지막에 번호별 요약 표. 홀라인·번호 대조 ❌ 가 있으면 종료 코드 1. 결과는 <이름>_verify.json 에 번호별로 저장(상태·항목·그때의 내용 지문) —
 #   python verify_step.py <이름> --표   → 통과 / 주의 / 실패 / 낡음(점검 뒤 내용이 바뀜) / 미검증 으로 55개 번호를 나눠 보여 준다.
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, os, re, json, subprocess
 sys.stdout.reconfigure(encoding="utf-8")
 here = os.path.dirname(os.path.abspath(__file__))

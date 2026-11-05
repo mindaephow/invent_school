@@ -1,6 +1,7 @@
 # 누운 판 한 장의 fits(xyz3d·xyz3d_img·fov)로 카메라를 풀고, 축선(X=칸 방향·Y=위·Z=줄 방향, 이름 바꾸지 않음)을 '칸1 줄1 구멍'에서 계산해 NN_axes.json 에 쓴다
 #   판의 긴 쪽(칸) 홀라인 = X선, 줄 방향 = Z선(사용자 2026-10-18). fit_from_grid.py 를 먼저 같은 방향으로 돌린다.
 #   python _axes_origin.py <이름> <번호> <cx> <cy> <cz> [오프셋 2.5] [--칸 -X] [--줄 -Z]   (기본 +X, +Z)
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import json, sys, numpy as np, cv2
 sys.stdout.reconfigure(encoding="utf-8")
 from pnp import fit

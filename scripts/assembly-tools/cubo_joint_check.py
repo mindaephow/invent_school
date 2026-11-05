@@ -1,4 +1,4 @@
-# 큐보 부품 결합규칙 점검기 — 사용자가 정한 규칙(부품결합규칙/큐보/11_사용자_확정규칙.txt)을 조립도 번호마다 잰다. 큐보 조립도(cubo-*) 전용.
+# 큐보 부품 결합규칙 점검기 — 사용자가 정한 규칙(큐보/규칙/큐보 부품결합규칙.md)을 조립도 번호마다 잰다. 큐보 조립도(cubo-*) 전용.
 #   python cubo_joint_check.py <이름|all> [번호 …]
 #   규칙 2·8  리벳으로 이은 두 부품(프레임·블록·브라켓·기어…) 사이 틈 0 (틈 >0.3, 겹침 >1.0 이면 위반)
 #   규칙 3    프레임끼리는 겹치지 않는다(돌기 부분을 뺀 판 두께 침투 >0.5mm)
@@ -8,6 +8,7 @@
 #   규칙 14·15 8볼트=프레임 2장(두께 합 10), 12볼트=프레임 3장(15)이 틈 없이 딱 붙어야 함
 #   규칙 9    볼트·너트: 머리·너트가 판에서 떠 있거나(틈) 볼트 끝이 판 밖으로 나오면 위반
 # 앞 번호 부품이 같은 자리에 겹쳐 잡히는 중복(새 부품과 같은 이름·같은 자세)은 지우고 잰다.
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, os, glob, runpy
 import numpy as np
 sys.stdout.reconfigure(encoding="utf-8")
@@ -178,7 +179,7 @@ def load_asm(nm):
 
 def main():
     want = sys.argv[1:]; name = want[0] if want else "all"; steps = [int(a) for a in want[1:]]
-    names = [os.path.basename(p)[:-3] for p in sorted(glob.glob("*.py")) if not os.path.basename(p).startswith(("scratch", "new_assembly", "_")) and any(l.startswith("A = Asm(\"cubo-") for l in open(p, encoding="utf-8", errors="ignore"))] + stored_ids() if name == "all" else [name]
+    names = [os.path.basename(p)[:-3] for p in sorted([asmpath.ap(_n, ".py") for _n in asmpath.names()]) if not os.path.basename(p).startswith(("scratch", "new_assembly", "_")) and any(l.startswith("A = Asm(\"cubo-") for l in open(p, encoding="utf-8", errors="ignore"))] + stored_ids() if name == "all" else [name]
     total = 0
     for nm in names:
         try: A = load_asm(nm)

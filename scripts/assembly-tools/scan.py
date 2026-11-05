@@ -7,6 +7,7 @@
 #     어긋난 거리 구간과 어느 쪽에 무슨 부품이 더 있는지/높이가 얼마나 다른지 적는다. (symcheck.py 는 부품 위치만 쌍으로 비교한다.)
 #   --번호 N 이면 1~N번까지 만든 부품만 본다(모델 좌표는 마지막 자세라서 마지막으로 만든 번호만 정확하다).
 #   부품은 dims.json 크기의 상자로 본다(구멍·돌기 모양은 보지 않는다).
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import json, os, runpy, sys
 import numpy as np
 sys.stdout.reconfigure(encoding="utf-8")

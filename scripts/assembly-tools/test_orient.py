@@ -1,4 +1,5 @@
 # orient(면 → 방향)로 만든 자세가 오토건에서 손으로 쓴 자세(R_LIE, R_FLAT …)와 같은지, 모순 조건은 오류가 나는지 확인한다.   python test_orient.py
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import io, os, sys, contextlib
 import numpy as np
 os.chdir(os.path.dirname(os.path.abspath(__file__)))

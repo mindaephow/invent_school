@@ -1,6 +1,7 @@
 # 확실한 3D 점(링·돌기·구멍)과 책 픽셀 짝으로 카메라를 풀어 fits/NN_P.json 에 쓴다 — 판 격자가 없거나 가려진 번호(2026-10-23 트레일러 6번).
 #   python ringfit.py <이름> <번호> 점파일.json [--fov a,b] [--dry]   점파일 = [{"xyz":[x,y,z],"px":[u,v]}, …] (모델 좌표 — 띄운 부품 링은 띄움까지 더한 값)
 #   fov 를 a~b 에서 찾는다(기본 15,60). 출력: 평균 오차·fov·theta·phi, 점별 오차. 통과 기준 오차 2px — 넘으면 ⚠(쓸 수는 있다).
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, os, json, numpy as np, cv2
 sys.stdout.reconfigure(encoding="utf-8")
 HERE = os.path.dirname(os.path.abspath(__file__)); os.chdir(HERE)

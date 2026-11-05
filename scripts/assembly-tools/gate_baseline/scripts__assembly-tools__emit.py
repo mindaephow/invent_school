@@ -1,5 +1,6 @@
 # 조립 프로그램이 만든 항목(예: soccer_entry.js)을 public/design-assemblies.js 에 넣는다. 같은 id 가 이미 있으면 그 항목만 바꾼다.
 # 사용: python emit.py soccer_entry.js cubo-1-soccer
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import re, sys
 entry_file, aid = sys.argv[1], sys.argv[2]
 path = "../../public/design-assemblies.js"

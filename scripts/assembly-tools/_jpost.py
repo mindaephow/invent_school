@@ -1,4 +1,5 @@
 # 배틀로봇 관절 등록(2026-10-17): ivs_assembly_joints / ivs_assembly_joint_groups 에 서비스 키로 한 번 넣는다(이미 있으면 건너뜀)
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import json,urllib.request,sys
 sys.stdout.reconfigure(encoding="utf-8")
 import _jq

@@ -2,6 +2,7 @@
 #   python _regcam.py <이름> <앞번호> <번호> [평면y=37] [fov고정]      → refs/<이름>/anchors/<번호>.json (obj=판 평면 격자 점, img=이 그림으로 옮긴 점, fov 고정)을 쓰고 잔차를 출력한다
 #   이어서 python _anchor_fit.py <이름> <번호> refs/<이름>/anchors/<번호>.json  (fits·axes 작성)
 # 가정: 같은 위 판(평면 하나)이 두 그림에 보이고 책 그림 크기가 같으며 fov 가 같다(앞 번호 풀이 fov 고정). 앞 번호 앵커 풀이의 오차가 그대로 따라온다(⚠).
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, json, math, numpy as np, cv2
 sys.stdout.reconfigure(encoding="utf-8")
 from pnp import fit

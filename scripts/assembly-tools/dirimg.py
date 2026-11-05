@@ -3,6 +3,7 @@
 #   좌표는 모두 원본 00.jpg 의 픽셀(화살표 끝점). 방향은 눈으로 읽으므로 사용자에게 보여 주고 확인받는다(앞·뒤·위는 완성 3D 화면의 기준 부품 위치로도 확인).
 #   읽는 법: 앞 = 눈·센서·머리가 향한 쪽 / 위 = 몸이 바닥에서 올라간 쪽 / 왼쪽 = 로봇이 앞을 보고 섰을 때 왼손 쪽(카메라를 마주 보는 로봇이면 화면 오른쪽).
 #   축 표시: 앞 +Z · 뒤 −Z · 위 +Y · 왼쪽 +X · 오른쪽 −X (완성품 기준).
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, os, json, math
 from PIL import Image, ImageDraw, ImageFont
 sys.stdout.reconfigure(encoding="utf-8")

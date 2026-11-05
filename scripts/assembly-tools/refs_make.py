@@ -4,6 +4,7 @@
 # ※ 이 스크립트를 다시 돌리면 refs/<이름>/ 의 격자 그림(NN_2.jpg, refs_grid.py 로 그린 것)과 index.json 의 그 줄이 사라진다 — 다시 돌린 뒤 refs_grid.py 로 격자를 다시 그린다.
 # 조립도를 만들 때 앞뒤·정면·뒷면이 헷갈리면 먼저 00.jpg(완성품)와 그 단계 그림을 다시 본다(관리자 지시 2026-10-06).
 # 같은 그림을 화면(조립 순서 목록, 관리자 전용)에 올리는 것은 refs_upload.js 설명 참고 — 표 ivs_assembly_refs(supabase/assembly_refs.sql).
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, os, json, tempfile, urllib.request
 import cv2, numpy as np
 

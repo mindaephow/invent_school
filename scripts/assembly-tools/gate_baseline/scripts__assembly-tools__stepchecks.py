@@ -3,13 +3,14 @@
 #   - 번호마다 점검 항목을 계산해 그 번호 설명(note) 끝에 "━ 작업 점검 ━" 블록으로 붙인다(빌드할 때마다 새로 계산).
 #   - 막는 항목(blocking)은 <이름>_checks.json 에 적고, build.py 가 --write 때 막는다: 격자 그림 없음, 읽기 표 빈칸, 읽기 표 부품 ≠ 모델 부품, 쓴 부품 합계가 LIST 를 넘음.
 #   - 사람이 눈으로 하는 항목(화면 확인·책과 나란히 비교·카메라)은 <이름>_rules.json 의 view/count/camera 목록에 번호가 있으면 ☑.
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import json, os, re, collections
 import numpy as np
-import userdone, stepfp
+import userdone, stepfp, obb
 MARK = "\n━ 작업 점검 ━"
 
 def _counts(parts):
-    c = collections.Counter(p.n for p in parts); return c
+    c = collections.Counter(p.n for p in parts if "copyOf" not in p.extra); return c   # copyOf: 복사해서 다른 창고에 보관한 부품(asmlib copy_to_slot)은 읽기 표 부품 수에 넣지 않는다
 
 def _parse(txt):   # "315프레임 1, 3단블록 1" → Counter (이름에 숫자가 있어도 마지막 숫자가 개수)
     c = collections.Counter()
@@ -48,9 +49,135 @@ def bush_wrong(A, k):
         if hw and not hn: bad.append(i)
     return bad
 
+def fastener_protrusion(A, k):
+    """k번에서 새로 꽂은 볼트·너트의 가장 큰 부분(머리·너트 몸)이 프레임 면 밖으로 나온 만큼(mm)을 돌려준다 — 기본 규칙(사용자 지시 2026-10-24):
+    볼트·너트의 가장 큰 부분은 프레임 구멍(홀라인) 안으로 들어가 프레임 외곽선 밖으로 안 나온다. 반환: [(부품, 받는 프레임, 나온 mm)] — 0.3 넘은 것만."""
+    from asmlib import euler_to_R
+    dims = _dims(); bad = []
+    hide = A.steps[k - 1].kw.get("hideMade") or {}
+    def pose_k(q):
+        key = "%d:%d" % (q.step.index, q.step.parts.index(q))
+        for j in range(k, 0, -1):
+            e = (A.steps[j - 1].kw.get("moveMade") or {}).get(key)
+            if e: return np.array(e["p"], float), np.array(euler_to_R(e["r"]), float)
+        return _pose(q, k)
+    pool = [(q, *pose_k(q)) for k2, st2 in enumerate(A.steps, 1) if k2 <= k and str(k2) not in hide for q in st2.parts if q.n in dims and "프레임" in q.n]
+    for b in A.steps[k - 1].parts:
+        if b.n not in ("8볼트", "12볼트", "너트", "서보고정볼트") or not b.conn["pegs"]: continue
+        bp, bR = pose_k(b); c = b.conn["pegs"][0]
+        ld = np.array(c["dir"], float); dw = bR @ ld; ax = int(np.argmax(np.abs(ld))); half = np.array(dims[b.n], float)[ax] / 2
+        base = bp + bR @ (np.array(c["pos"], float) - ld * c["len"] / 2)    # 돌기 밑동(구멍 입구 쪽 끝)
+        back_t = float(np.dot(bp, dw) + (-half))                              # 부품 상자의 바깥쪽 끝(돌기 방향의 반대쪽) 좌표
+        for q, p, R in pool:
+            d = np.array(dims[q.n]) / 2
+            if obb.contains(base + dw * 1.0, p, R, d, 0.3):   # 밑동에서 구멍 쪽으로 1 들어간 점이 든 프레임 = 받는 프레임(회전한 상자로 판정)
+                face_t = obb.span(obb.corners(p, R, d), dw)[0]   # 돌기가 들어가는 입구 면(돌기 방향 쪽으로 가장 안쪽이 아닌 바깥 면)
+                prot = face_t - back_t
+                if prot > 0.3: bad.append((b.n, q.n, round(prot, 1)))
+                break
+    return bad
+
+def bolt_nut_fit(A, k):
+    """k번에서 너트로 조이는 볼트(8·12볼트)의 물리 결합을 센 값으로 점검한다 — 사용자 기본 규칙(2026-11-03, 해머배틀 20·21번에서 볼트가 프레임을 지나쳐 5mm 깊이 놓였음):
+    ① 볼트 머리는 맨 위 판(축을 지나는 판들 중 머리 쪽 첫 판)의 홀 테두리 안에 묻혀 그 면과 같다(±0.5) ② 볼트 끝은 마지막 판의 반대쪽 면을 지나치지 않고(+0.3) 그 면에서 3.3 안쪽에서 끝난다(너트 목이 판 구멍 안으로 들어가 있어 그 안에 끝이 든다)
+    ③ 너트는 목이 판 구멍 안에 있고 너트 머리(넓은 쪽 1mm)가 마지막 판의 홀 테두리 안에 들어가 그 면과 같다(목 밑동이 면에서 1.0 안쪽, ±0.5). 반환: 어긋난 것의 설명 문장 목록."""
+    from asmlib import euler_to_R
+    dims = _dims(); bad = []
+    hide = A.steps[k - 1].kw.get("hideMade") or {}
+    def pose_k(q):
+        key = "%d:%d" % (q.step.index, q.step.parts.index(q))
+        for j in range(k, 0, -1):
+            e = (A.steps[j - 1].kw.get("moveMade") or {}).get(key)
+            if e: return np.array(e["p"], float), np.array(euler_to_R(e["r"]), float)
+        return _pose(q, k)
+    pool = [(q, *pose_k(q)) for k2, st2 in enumerate(A.steps, 1) if k2 <= k and str(k2) not in hide for q in st2.parts if q.n in dims and ("프레임" in q.n or "블록" in q.n or q.n == "서보혼")]
+    st = A.steps[k - 1]
+    if not any(p.n == "너트" for p in st.parts): return bad
+    def stack_along(pt0, dw, length):   # 축 위 점들이 든 판들의 (가까운 면, 먼 면) 좌표 목록(dw 방향 좌표)
+        faces = []
+        for q, p, R in pool:
+            d = np.array(dims[q.n], float) / 2.0
+            if any(obb.contains(pt0 + dw * s, p, R, d, 0.01) for s in np.arange(0.25, length, 0.5)):
+                sp = obb.span(obb.corners(p, R, d), dw); faces.append((float(sp[0]), float(sp[1]), q.n))
+        return faces
+    for b in st.parts:
+        if b.n not in ("8볼트", "12볼트") or not b.conn["pegs"]: continue
+        bp, bR = pose_k(b); c = b.conn["pegs"][0]; ld = np.array(c["dir"], float); dw = bR @ ld; ax = int(np.argmax(np.abs(ld)))
+        base = bp + bR @ (np.array(c["pos"], float) - ld * c["len"] / 2); tip = base + dw * c["len"]
+        head = float(np.dot(np.array(c["pos"], float) - ld * c["len"] / 2, ld) + np.array(dims[b.n], float)[ax] / 2)   # 밑동에서 머리 윗면까지
+        fr = stack_along(base - dw * head, dw, c["len"] + head)
+        if not fr: continue
+        top = min(f[0] for f in fr); bot = max(f[1] for f in fr); hd = float(np.dot(base - dw * head, dw)); tp = float(np.dot(tip, dw))
+        if abs(hd - top) > 0.5: bad.append("%s 머리가 맨 위 판 면에서 %+.1fmm(머리는 판 면과 같아야 함)" % (b.n, hd - top))
+        if tp - bot > 0.3: bad.append("%s 끝이 마지막 판 반대 면을 %.1fmm 지나침(판 두께 합 %.1f)" % (b.n, tp - bot, bot - top))
+        if bot - tp > 3.3: bad.append("%s 끝이 마지막 판 면에서 %.1fmm 모자람(너트 목에 안 닿음)" % (b.n, bot - tp))
+    for n in st.parts:
+        if n.n != "너트" or not n.conn["pegs"]: continue
+        np_, nR = pose_k(n); c = n.conn["pegs"][0]; ld = np.array(c["dir"], float); dn = nR @ ld
+        nb = np_ + nR @ (np.array(c["pos"], float) - ld * c["len"] / 2)   # 너트 목 밑동(머리 안쪽 면)
+        fr = stack_along(nb, dn, c["len"])
+        if not fr: bad.append("너트 목이 어느 판 구멍에도 안 들어 있음"); continue
+        face = min(f[0] for f in fr)   # 너트가 들어가는 쪽에서 닿는 판 면(dn 방향 가장 가까운 면)
+        if abs(float(np.dot(nb, dn)) - (face + 1.0)) > 0.5: bad.append("너트 머리가 판 홀 테두리 안(면에서 1.0mm 안쪽)에서 %+.1fmm 어긋남(너트 머리는 테두리 안에 들어가 판 면과 같아야 함)" % (float(np.dot(nb, dn)) - (face + 1.0)))
+    return bad
+
+def rivet_gaps(A, k):
+    """k번에서 새로 꽂은 리벳마다, 리벳이 잇는 두 프레임(양끝이 든 부품) 사이의 틈(mm, +는 떠 있음, −는 겹침)을 돌려준다 — 기본 규칙(사용자 지시 2026-10-24):
+    리벳으로 프레임과 프레임을 이으면 두 프레임은 딱 붙는다(틈 0, 겹침 0). 두 부품을 못 찾으면(한쪽만 꽂힌 결합 전 모습 등) 건너뛴다.
+    반환: [(리벳 이름, 부품1 이름, 부품2 이름, 틈)] — 틈이 0.3 넘게 떠 있거나(6 이하) 1.0 넘게 겹친 것만."""
+    from asmlib import euler_to_R
+    dims = _dims(); bad = []
+    hide = A.steps[k - 1].kw.get("hideMade") or {}
+    def pose_k(q):   # k번 시점 자세: k번까지 옮겨진(moveMade) 마지막 자세, 없으면 놓은 자세
+        key = "%d:%d" % (q.step.index, q.step.parts.index(q))
+        for j in range(k, 0, -1):
+            e = (A.steps[j - 1].kw.get("moveMade") or {}).get(key)
+            if e: return np.array(e["p"], float), np.array(euler_to_R(e["r"]), float)
+        return _pose(q, k)
+    pool = [(q, *pose_k(q)) for k2, st2 in enumerate(A.steps, 1) if k2 <= k and str(k2) not in hide for q in st2.parts if q.n in dims and q.n != "리벳"]
+    def host(pt, skip=None):   # 점이 든 부품 — 부품 자기 좌표 상자(obb)로 재다(기울어진 부품도 맞게, 2026-11-01)
+        for q, p, R in pool:
+            if q is skip: continue
+            if obb.contains(pt, p, R, np.array(dims[q.n]) / 2.0, 0.01): return q, p, R
+        return None
+    for r in A.steps[k - 1].parts:
+        if r.n != "리벳" or r.extra.get("copyOf"): continue   # 복사본(둘째 벌)은 원본 번호에서 이미 점검했다 — 복사 번호에서는 건너뜀
+        rp, rR = pose_k(r)
+        loc = {c["id"]: np.array(c["pos"], float) for c in r.conn["pegs"]}
+        if "p1" not in loc or "p2" not in loc: continue
+        t1, t2 = rp + rR @ loc["p1"], rp + rR @ loc["p2"]; ax = (t2 - t1) / np.linalg.norm(t2 - t1)
+        h1 = host(t1 - ax * 1.0)
+        if not h1: continue
+        h2 = host(t2 + ax * 1.0, h1[0])
+        if not h2 or any(x[0].n in ("1열브라켓", "2열브라켓") for x in (h1, h2)): continue   # 브라켓은 L 자 모양이라 상자로는 면 위치를 못 잰다 — 건너뜀
+        def span(h):
+            return obb.span(obb.corners(h[1], h[2], np.array(dims[h[0].n]) / 2.0), ax)
+        a, b = span(h1), span(h2); gap = max(b[0] - a[1], a[0] - b[1])
+        if 0.3 < gap <= 6.0 or gap < -1.0: bad.append((r.n, h1[0].n, h2[0].n, round(gap, 1)))
+    return bad
+
+
+_AX = {"+X": (1, 0, 0), "-X": (-1, 0, 0), "+Y": (0, 1, 0), "-Y": (0, -1, 0), "+Z": (0, 0, 1), "-Z": (0, 0, -1)}
+def mainboard_dir(A, k, txt):
+    """메인보드 방향 검사(사용자 지시 2026-10-26, 볼링머신 36번 거꾸로 결합 재발): 모델에서 버튼 쪽(모델 +z)이 월드 어느 쪽인지 계산해,
+    읽기 표 '부품방향' 에 적은 "버튼쪽=±X/Y/Z"(책 사진에서 읽은 쪽)와 다르면, 또는 안 적었으면 막는다. 돌려주는 값 = 문제 문구 목록."""
+    import re
+    bad = []
+    bd = [b for b in A.steps[k - 1].parts if b.n == "메인보드"]
+    if not bd: return bad
+    m = re.search(r"버튼\s*쪽\s*=\s*([+\-−])\s*([XYZxyz])", txt or "")
+    if not m: return ["읽기 표 '부품방향'에 책에서 읽은 \"버튼쪽=±X(또는 Y·Z)\" 가 없다(책 사진의 노란 버튼이 월드 어느 쪽인지 먼저 적는다)"]
+    want = ("-" if m.group(1) in "-−" else "+") + m.group(2).upper()
+    for i, b in enumerate(bd):
+        p, R = _pose(b, k); u = R @ np.array([0, 0, 1.0])
+        got = max(_AX, key=lambda a: float(np.dot(u, _AX[a])))
+        if got != want: bad.append("메인보드 %d번째: 모델 버튼 쪽(+z)이 %s 인데 책에서 읽은 버튼쪽은 %s" % (i + 1, got, want))
+    return bad
+
 def apply(A, name):
     here = os.path.dirname(os.path.abspath(__file__))
     lst = json.load(open(os.path.join(here, name + "_list.json"), encoding="utf-8")) if os.path.exists(os.path.join(here, name + "_list.json")) else {}
+    lst.pop("리모컨", None)   # 리모컨은 조립도에 넣지 않는다(사용자 지시 2026-10-14) — LIST 대조에서 뺀다
     rd = json.load(open(os.path.join(here, name + "_read.json"), encoding="utf-8")) if os.path.exists(os.path.join(here, name + "_read.json")) else {}
     rl = json.load(open(os.path.join(here, name + "_rules.json"), encoding="utf-8")) if os.path.exists(os.path.join(here, name + "_rules.json")) else {}
     ip = os.path.join(here, "refs", name, "index.json")
@@ -59,10 +186,10 @@ def apply(A, name):
     for r in idx: have[r["step"]][r["idx"]] = r.get("note", "")
     cum = collections.Counter(); blocking = []; rows = {}
     _done = userdone.user_done(A.id)   # 사용자가 화면에서 직접 누른 ✓ 완료 단계(DB) — 눈으로 하는 확인(화면 확대·책과 나란히 비교·카메라)의 유일한 근거(2026-10-11: rules.json 에 Claude 가 적어서 푸는 길 삭제)
-    _last_built = max([i for i, st2 in enumerate(A.steps, 1) if st2.parts] or [0])
+    _last_built = max([i for i, st2 in enumerate(A.steps, 1) if st2.parts or st2.kw.get("moveMade") or st2.kw.get("madeNoPart")] or [0])   # 새 부품 없이 앞 번호 부품을 옮겨 합치는 번호(오토타깃 32번)도 '가장 마지막에 만든 번호'다(사용자 승인 2026-10-20)
     _evf = os.path.join(here, name + "_evidence.json"); _evid = json.load(open(_evf, encoding="utf-8")) if os.path.exists(_evf) else {}
     for k, st in enumerate(A.steps, 1):
-        if not st.parts:
+        if not st.parts and not st.kw.get("moveMade") and not st.kw.get("madeNoPart"):   # 새 부품이 없어도 앞 번호 부품을 옮겨 합치는 번호(18번 등)는 작업 점검을 붙인다(사용자 지시 2026-10-17: "18번에 작업점검은 어디 갔어?")
             continue
         cnt = _counts(st.parts); cum.update(cnt)
         items = []   # (필수 여부, 통과, 문구)
@@ -73,6 +200,8 @@ def apply(A, name):
         grid_ok = (1 in h and 2 in h) and _has_fit
         items.append((True, grid_ok, ("책 그림 격자(수평선·회전·격자 점) 만듦" if _has_fit else "책 그림 격자 점이 없음(이미지만 있음)") if 2 in h else "책 그림 원본 확인(판이 없는 번호)"))
         r = rd.get(str(k)) or {}
+        try: _stg = int(r.get("단계") or 9)   # 번호 하나 순서의 지금 단계(큐보 부품결합규칙.md 0절 1~9). 비어 있으면 9(끝까지) — 이미 만든 번호는 그대로
+        except Exception: _stg = 9
         items.append((True, all(str(r.get(f, "")).strip() for f in ("면", "링", "부품")), "읽기 표(면·링·부품) 적음"))
         rp = _parse(r.get("부품", "")) if r.get("부품") else None
         same = rp is not None and dict(rp) == dict(cnt)
@@ -84,6 +213,18 @@ def apply(A, name):
         _ori = str(r.get("부품방향", "")).strip()   # 부품 방향·제자리 판정(관리자 지시 2026-10-09): 새 부품의 위·바깥 면, 칸1 끝, 줄 방향, 부품 사이 좌우 관계, 그룹이 들어오는 방향·앉는 자세를 책 격자에서 읽어 적는다
         _oex = k in rl.get("orient_exempt", [])   # 면제 번호는 새 순서로 다시 점검할 때까지 통과로 친다(rules 의 orient_exempt 에서 지우면 점검 대상)
         items.append((bool(rl.get("orient_check")) and not _oex, (len(_ori) >= 20 and not _ori.startswith("미")) or _oex or not rl.get("orient_check"), "부품 방향·제자리 판정(읽기 표 '부품방향')" + (" — 면제(재점검 대기)" if _oex and rl.get("orient_check") else "")))
+        if any(p.n == "리벳" for p in st.parts):   # 리벳으로 프레임과 프레임을 이으면 딱 붙는다(기본 규칙, 사용자 2026-10-24): 틈 0.3 초과(떠 있음)·겹침 1.0 초과면 막는다
+            _rg = rivet_gaps(A, k)
+            items.append((k not in _done, not _rg, "리벳 결합 프레임이 딱 붙음(틈 0)" + ("" if not _rg else " — 틈 %s" % ", ".join("%s(%s↔%s) %.1fmm" % x for x in _rg[:3]))))
+        if any(p.n in ("8볼트", "12볼트", "너트", "서보고정볼트") for p in st.parts):   # 볼트·너트의 가장 큰 부분은 프레임 구멍 안에 묻혀 프레임 면 밖으로 안 나온다(기본 규칙, 사용자 2026-10-24)
+            _fp = fastener_protrusion(A, k)
+            items.append((k not in _done, not _fp, "볼트·너트 머리·몸이 프레임 면 밖으로 안 나옴" + ("" if not _fp else " — 나옴 %s" % ", ".join("%s(%s) %.1fmm" % x for x in _fp[:3]))))
+        if rl.get("bolt_nut_check") and any(p.n == "너트" for p in st.parts) and any(p.n in ("8볼트", "12볼트") for p in st.parts):   # 볼트·너트 물리 결합(조립도별 켬: _rules.json "bolt_nut_check": true)(사용자 2026-11-03): 볼트가 프레임을 지나쳐 깊이 놓이면 막는다
+            _bn = bolt_nut_fit(A, k)
+            items.append((k not in _done, not _bn, "볼트 머리는 맨 위 판 면·끝은 마지막 판 안·너트 머리는 판 홀 테두리에 닿음" + ("" if not _bn else " — %s" % "; ".join(_bn[:3]))))
+        if rl.get("mainboard_check") and any(p.n == "메인보드" for p in st.parts):   # 메인보드 방향 검사(조립도별 켬: _rules.json "mainboard_check": true). 사용자 ✓ 번호는 막지 않는다
+            _mb = mainboard_dir(A, k, str(r.get("부품방향", "")))
+            items.append((k not in _done, not _mb, "메인보드 방향: 책 버튼 쪽 = 모델 버튼 쪽(+z)" + ("" if not _mb else " — " + "; ".join(_mb))))
         if any(p.n == "부시" for p in st.parts):   # 부시 방향 규칙(관리자 확정 2026-10-11): 넓은 쪽(모델 −y)이 바깥, 좁은 쪽(모델 +y)이 닿은 판 쪽. 사용자 ✓ 번호는 막지 않는다(내용을 못 바꾸므로)
             _bw = bush_wrong(A, k)
             items.append((k not in _done, not _bw, "부시 방향: 좁은 쪽(모델 +y)이 판 쪽" + ("" if not _bw else " — 넓은 쪽이 판에 닿은 부시 %s번째" % ", ".join(str(i + 1) for i in _bw))))
@@ -95,12 +236,20 @@ def apply(A, name):
         _ud = (k in _done) or _evok; _cur = (k == _last_built)
         _eye = [("화면 확대 확인", True), ("책 그림과 나란히 비교(칸 수 대조)", True), ("카메라 책과 대조", True), ("카메라가 짐작(guess)이 아님 — 책 그림에서 가까운 쪽·오른쪽·위를 읽고 정한 값(camSrc eye)", str(getattr(st, "camSrc", "guess")) != "guess")]
         for _txt, _okc in _eye:
-            items.append((not _cur, _ud, _txt + (" (사용자 ✓ 완료)" if k in _done else (" (비교 증거 있음)" if _evok else ""))))
+            items.append((not _cur, _ud and _okc, _txt + (" (사용자 ✓ 완료)" if k in _done else (" (비교 증거 있음)" if _evok else ""))))
+        # 단계별 점검(사용자 지시 2026-11-02 "순서가 바뀌었으면 점검도 바뀌어야"): 읽기 표 '단계' 가 N 이면 N 단계 이하에 속한 점검만 필수이고 그 뒤 단계 점검은 표시만 한다. 9 에 닿아야 다음 번호가 시작된다(number_start).
+        _STG = (("책 그림 격자", 3), ("책 그림 원본", 3), ("카메라 방향 파악", 4), ("읽기 표(면", 5), ("부품 방향", 6), ("읽기 표의 부품", 7), ("쓴 부품 합계", 7), ("리벳 결합", 7), ("볼트·너트", 7), ("메인보드", 7), ("부시 방향", 7), ("앞·뒤 번호", 8), ("화면 확대", 8), ("책 그림과 나란히", 8), ("카메라 책과 대조", 8), ("카메라가 짐작", 8))
+        _at = lambda t: next((v for pre, v in _STG if t.startswith(pre)), 9)
+        items = [(need and _stg >= _at(txt), ok, txt + ("" if _stg >= _at(txt) else " — %d단계에서" % _at(txt))) for need, ok, txt in items]
         rows[k] = items
         for need, ok, txt in items:
             if need and not ok: blocking.append("%d번: %s" % (k, txt))
-        block = MARK + "\n" + "\n".join(("☑ " if ok else ("☐ " if not need else "☐ ")) + txt + ("" if need else " (눈으로)") for need, ok, txt in items)
+        block = MARK + ("" if _stg >= 9 else "\n🛠 작업 중 — 번호 하나 순서 %d/9단계(큐보 부품결합규칙.md 0절). 9단계까지 끝내야 다음 번호를 시작한다." % _stg) + "\n" + "\n".join(("☑ " if ok else ("☐ " if not need else "☐ ")) + txt + ("" if need else " (눈으로)") for need, ok, txt in items)
         st.note = st.note.split(MARK)[0] + block
+    # 완성 번호(마지막 단계)에는 final_audit.py 가 만든 "완성 마무리 점검"을 작업 점검 블록처럼 뒤에 붙인다(관리자만 보임, 2026-10-16)
+    _fa = os.path.join(here, "refs", name, "final_audit.md")
+    if os.path.exists(_fa) and A.steps:
+        _ls = A.steps[-1]; _ls.note = _ls.note.split(MARK)[0].split("\n━ 완성 마무리 점검")[0] + "\n" + MARK + " 전체\n" + open(_fa, encoding="utf-8").read()
     left = {n: lst[n] - cum[n] for n in lst if lst[n] - cum[n] != 0 and n in cum or (n in lst and cum[n] == 0 and False)}
     json.dump({"blocking": blocking, "cum": dict(cum), "list_left": {n: lst[n] - cum.get(n, 0) for n in lst}}, open(os.path.join(here, name + "_checks.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     return blocking

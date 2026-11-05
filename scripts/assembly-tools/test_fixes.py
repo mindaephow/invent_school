@@ -1,5 +1,6 @@
 # 앞 단계를 고치면 뒤 단계가 따라오는지(수정 지시 fixes + 상대 위치) 작은 조립도로 시험한다.   python test_fixes.py
 #   1단계: 315프레임(뿌리)   2단계: 3단블록이 315프레임 끝에 걸쳐 꽂힘   3단계: 35프레임을 그 블록 돌기에 맞춰 놓음(place_by)   4단계: 2단블록이 35프레임에 꽂힘
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import io, os, sys, contextlib
 import numpy as np
 os.chdir(os.path.dirname(os.path.abspath(__file__)))

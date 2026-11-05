@@ -1,5 +1,6 @@
 # 트레일러 번호 하나를 끝낼 때 반복하는 일을 묶는다(2026-10-23): overlay_check(NN_3) → _cellcmp(NN_6) → index.json 에 6번 줄 → 그림을 public/_refs_tmp/trailer 로 복사(화면 업로드용).
 #   python tr_done.py <번호> [<_cellcmp 모델 부품 번호들 콤마>]   (_cellcmp 인자를 안 주면 6번 그림은 건너뛴다)
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, os, json, shutil, subprocess
 HERE = os.path.dirname(os.path.abspath(__file__)); os.chdir(HERE)
 N = int(sys.argv[1]); cc = sys.argv[2] if len(sys.argv) > 2 else None

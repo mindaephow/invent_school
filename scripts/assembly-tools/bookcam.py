@@ -6,6 +6,7 @@
 #    --dry: 파일을 쓰지 않고 결과만 본다.
 # 출력: theta·phi·fov·주점·평균오차, refs/<이름>/fits/NN_P.json(xyz3d·xyz3d_img·fov·cx·cy), NN_axes.json, NN_lv.json. overlay_check.py 가 cx·cy 를 읽는다.
 # (camfit.py 는 오토건의 다른 도구라 이름을 bookcam 으로 했다.)
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, os, math, json, numpy as np, cv2
 from scipy.optimize import differential_evolution
 from scipy.spatial import cKDTree

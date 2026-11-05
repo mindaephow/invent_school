@@ -1,6 +1,7 @@
 # 번호의 앵커 풀이 카메라로 3D 점을 책 그림 픽셀로 투영한다 / 픽셀을 한 평면에 되투영한다 (2026-10-19)
 #   python _proj.py <이름> <번호> "x,y,z;x,y,z"            → 픽셀
 #   python _proj.py <이름> <번호> --평면 y "px,py;px,py"   → 그 높이 평면(y=값) 위 3D 좌표
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, json, numpy as np, cv2
 sys.stdout.reconfigure(encoding="utf-8")
 from pnp import fit, cam_from

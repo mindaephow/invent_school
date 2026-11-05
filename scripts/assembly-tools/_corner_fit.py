@@ -1,5 +1,6 @@
 # 판 바깥 윤곽 모서리 4곳(TL·TR·BR·BL, holefit 와 같은 순서)의 호모그래피로 구멍 자리를 환산해 fits/NN_P.json 에 쓴다 — holefit(DoG)가 미달(2.0px 초과)인 번호용 대체(⚠ 환산값, fits name·tool 에 기록).
 #   python _corner_fit.py <이름> <번호> <칸> <줄> x1 y1 x2 y2 x3 y3 x4 y4
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import json, sys, numpy as np, cv2
 sys.stdout.reconfigure(encoding="utf-8")
 name, N, cols, rows = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4]); C = np.float32([float(v) for v in sys.argv[5:13]]).reshape(4, 2)

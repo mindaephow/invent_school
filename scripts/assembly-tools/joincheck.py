@@ -4,6 +4,7 @@
 #   ① 리벳 틈: stepchecks.rivet_gaps (build.py 의 '리벳 결합 프레임이 딱 붙음' 점검과 같은 계산) — 틈 0.3 넘게 떠 있거나 1.0 넘게 겹침
 #   ② 돌기 충돌: 그 번호 자세(k번까지 옮긴 자세)에서 돌기 끝이 구멍 없는 부품 안에 박히거나 한 구멍에 돌기가 둘 들어간 것(합치는 번호에서 몸통↔조립이 파고드는 것을 잡는다).
 #      브라켓(L 자)·상자가 크게 속이 빈 부품은 상자로 못 재서 뺀다. 숨긴(hideMade) 앞 번호는 뺀다.
+import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, os, runpy, itertools
 import numpy as np
 sys.stdout.reconfigure(encoding="utf-8")
