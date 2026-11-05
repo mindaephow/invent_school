@@ -13,33 +13,33 @@
 ## 어디에 뭐가 있나 (상황별)
 | 상황 | 볼 곳 |
 |---|---|
-| 조립도 규칙이 뭔지 | **`scripts/assembly-tools/process/큐보 부품결합규칙.md`** — 규칙의 유일한 원본. 새 교정은 여기 해당 문장을 덮어쓴다(기억 파일에만 적지 않는다) |
+| 조립도 규칙이 뭔지 | **`scripts/assembly-tools/큐보/규칙/큐보 부품결합규칙.md`** — 규칙의 유일한 원본. 새 교정은 여기 해당 문장을 덮어쓴다(기억 파일에만 적지 않는다) |
 | 번호 하나를 시작 | `큐보 부품결합규칙.md` 맨 위 "0. 번호 하나 체크리스트" → `python number_start.py <이름> <번호>` |
-| 조립도를 처음 시작 | `큐보 부품결합규칙.md` "00. 조립도를 시작할 때" → `process/01~04_*.md` |
-| 코드 쓰는 법·도구 사용법 | `process/05_조립.md`, 화면 조작 코드는 `process/viewer_snippets.md` |
-| 이 조립도가 어디까지 됐나 | `process/인수인계_진행기록_<이름>.md` |
+| 조립도를 처음 시작 | `큐보 부품결합규칙.md` "00. 조립도를 시작할 때" → 같은 파일 제1부 P 절(과정 0~4 실행 절차) |
+| 코드 쓰는 법·도구 사용법 | `큐보/규칙/05_조립.md`, 화면 조작 코드는 `큐보/규칙/viewer_snippets.md` |
+| 이 조립도가 어디까지 됐나 | `큐보/조립도/<권>권/<이름>/진행기록.md` |
 | 사용자가 바로잡은 기록 | `scripts/assembly-tools/user_diffs/요청차이.md`, `수정저장차이.md` |
-| 대칭 조립·n족 로봇 | `process/ref_대칭조립.md`(모범 = 드롭체커), `process/ref_n족로봇.md`, `python symcheck.py <이름>` |
+| 대칭 조립·n족 로봇 | 규칙 파일 F 절(F9·F10, 모범 = 드롭체커), `python symcheck.py <이름>` |
 | 부품 면·구멍·돌기 사실 | 규칙 파일 K3·K4, 부품 DB 상세내역(`data.detail`), MCP `get_part_connectors` |
 | 3D 부품 만들기·등록 | 아래 "3D 부품" 절 |
-| 어떤 내용을 어느 문서에 적나 | `process/문서지도.md` (문서를 고치기 전에 먼저 본다) |
+| 어떤 내용을 어느 문서에 적나 | `큐보/규칙/문서지도.md` (문서를 고치기 전에 먼저 본다) |
 
 `.claude/skills/cubo-assembly/SKILL.md` 는 설명·입구일 뿐 규칙을 담지 않는다(옛 안내서 `cubo-assembly-guide.js` 는 2026-11-06 삭제 — MCP `get_assembly_guide` 는 규칙 파일·부품 DB 위치만 알려 준다). 어긋나면 `큐보 부품결합규칙.md` 가 우선이다(`.claude/` 는 ignore 라 없으면 `git show HEAD:.claude/skills/cubo-assembly/SKILL.md`).
 
 ## 세션을 시작할 때 (새 PC·새 세션)
-1. `cd scripts/assembly-tools && PYTHONIOENCODING=utf-8 python session_start.py --아이디 <내 계정>` — 최신 커밋을 받고(깨끗하면 fast-forward) 현재 커밋과 조립도별 "마지막 작업"을 보여 준다. **사용자에게 이렇게 정리해 보고하고 시작한다: "마지막 작업은 <PC>·<아이디>가 <날짜>에 <어디까지> 했고, 지금 <이 PC>·<내 아이디>가 이어받아 시작합니다. 다음 할 일은 <다음>."** 작업할 조립도가 정해지면 `python handoff.py <이름> --아이디 <내 계정> --시작` 으로 이어받음을 기록한다. 새 PC 면 이어서 `python setup_new_pc.py`(라이브러리·node_modules·launch.json·.env.local 점검, FAIL 은 사용자에게 한 줄로 요청). 푸시 원격 이름은 `newrepo`(`git remote -v`).
+1. `cd scripts/assembly-tools && PYTHONIOENCODING=utf-8 python session_start.py --아이디 <내 계정>` — 최신 커밋을 받고(깨끗하면 fast-forward) 현재 커밋과 조립도별 "마지막 작업"을 보여 준다. **사용자에게 이렇게 정리해 보고하고 시작한다: "마지막 작업은 <PC>·<아이디>가 <날짜>에 <어디까지> 했고, 지금 <이 PC>·<내 아이디>가 이어받아 시작합니다. 다음 할 일은 <다음>."** 작업할 조립도가 정해지면 `python handoff.py <작업 이름> --아이디 <내 계정> --시작` 으로 이어받음을 기록한다. 새 PC 면 이어서 `python setup_new_pc.py`(라이브러리·node_modules·launch.json·.env.local 점검, FAIL 은 사용자에게 한 줄로 요청). 푸시 원격 이름은 `newrepo`(`git remote -v`).
 2. **개발 서버**: `http://localhost:3178/design.html?subject=robot` 하나만 쓴다. 응답하면 그대로 쓰고, 없으면 `preview_start invent-school-dev`(없는 PC 는 `scripts/assembly-tools/README.md` 새 PC 절 3번).
 3. **로그인**: 설계 화면에 선생님 로그인이 보이면 사용자에게 요청한다(비밀번호는 대신 입력하지 않는다). 로그인 전에는 화면 비교·❄/📷 확인을 하지 않는다.
-4. **현재 상태**: `인수인계_진행기록_<이름>.md`·`user_diffs/요청차이.md` → `git log`/`git status` → `number_start.py` 맨 위 "세션 시작 체크"(서버·키·사용자 ✓). ❌ 는 먼저 해결하거나 한 줄로 요청한다.
-5. **`process/큐보 부품결합규칙.md` 를 처음부터 읽고** 첫 보고에 "이번 번호에서 지킬 규칙 3개"를 적은 뒤 시작한다.
+4. **현재 상태**: `큐보/인수인계.md`(마지막 작업)·`큐보/조립도/<권>권/<이름>/진행기록.md`·`user_diffs/요청차이.md` → `git log`/`git status` → `number_start.py` 맨 위 "세션 시작 체크"(서버·키·사용자 ✓). ❌ 는 먼저 해결하거나 한 줄로 요청한다.
+5. **`큐보/규칙/큐보 부품결합규칙.md` 를 처음부터 읽고** 첫 보고에 "이번 번호에서 지킬 규칙 3개"를 적은 뒤 시작한다.
 6. 막힘·시간 압박이 와도 규칙을 우회하지 않는다 — 막히면 `05_조립.md` 0-1절 순서(holefit → plate_match → infer_grid)로 푼다.
-7. 작업을 끝내거나 멈추기 전에 `python handoff.py <이름> --아이디 <계정> --어디까지 "…" --다음 "…"` 로 어느 PC·어느 아이디가 어디까지 했는지 `인수인계_진행기록_<이름>.md` 맨 위에 적는다. 푸시는 사용자가 "업로드"라고 할 때만 한다(`큐보 부품결합규칙.md` I2).
+7. 작업을 끝내거나 멈추기 전에 `python handoff.py <작업 이름> --아이디 <계정> --어디까지 "…" --다음 "…"` 로 어느 PC·어느 아이디가 어디까지 했는지 `큐보/인수인계.md`(큐보 작업 인수인계는 이 파일 하나뿐)에 적는다. 푸시는 사용자가 "업로드"라고 할 때만 한다(`큐보 부품결합규칙.md` I2).
 
 ## 3D 부품을 만들거나 등록·고칠 때 (조립도와 별개)
 큐보 → 에이스랩·로보타미주니어 → 프로보 커넥트 순으로 같은 흐름이다.
 1. `.claude/skills/part-3d/SKILL.md` 를 읽는다(없으면 `git show HEAD:.claude/skills/part-3d/SKILL.md`).
 2. `node scripts/part-start.mjs <부품이름>` — 서버·키·DB·브랜드별 현황·그 부품의 DB 행·생성기 목록·체크리스트를 한 번에 본다.
-3. `process/06_3D부품_만들기_등록.md` 가 순서·금지·확인의 입구이고, 규격 숫자의 원본은 `get_part_standard`(`app/lib/cubo-part-maker.js`)다. 규격 메모는 `process/부품규격/`.
+3. `큐보/규칙/06_3D부품_만들기_등록.md` 가 순서·금지·확인의 입구이고, 규격 숫자의 원본은 `get_part_standard`(`app/lib/cubo-part-maker.js`)다. 규격 메모는 `큐보/규칙/부품규격/`.
 4. 보여 주는 곳은 **부품 관리 화면**(부품 수리실이 아니다). 모델 → 숫자 검증 → 등록 → 3D 썸네일 → 연결점까지 끝나야 끝이다.
 
 **로버트론 부품(에이스랩·로보타미주니어) 3D 모델 규칙**
@@ -53,6 +53,6 @@
 - 교재 PDF 는 조립도 작업에 필요 없다 — 단계별 책 그림은 `scripts/assembly-tools/refs/<이름>/NN.jpg` 에 이미 잘려 있다.
 
 ## 지킬 것
-- **책 대조는 등록된 교재 PDF 로 한다(사용자 지시 2026-10-27):** "원본 PDF 가 없어서 못 한다"고 말하지 않는다. PDF 위치·받는 법은 `process/01_새조립도_시작_번호등록.md` 11·16행(`ivs_textbooks` → `data.files[0].url`). 조립도뿐 아니라 부품·수량·차시를 등록하거나 고칠 때도 먼저 읽고 대조한다.
+- **책 대조는 등록된 교재 PDF 로 한다(사용자 지시 2026-10-27):** "원본 PDF 가 없어서 못 한다"고 말하지 않는다. PDF 위치·받는 법은 `큐보 부품결합규칙.md` P1(2. 쪽 이미지)(`ivs_textbooks` → `data.files[0].url`). 조립도뿐 아니라 부품·수량·차시를 등록하거나 고칠 때도 먼저 읽고 대조한다.
 - 나머지 조립도 규칙은 전부 `큐보 부품결합규칙.md` 에 있다 — 여기에 다시 적지 않는다. `[도구]` 표시가 붙은 규칙은 도구가 막는다.
 - Windows 콘솔은 cp949 → 파이썬 실행 시 `PYTHONIOENCODING=utf-8`.

@@ -39,20 +39,13 @@ _, last = git("log", "-1", "--format=%h %s")
 print("[git] 현재:", last)
 
 # 다른 PC·아이디가 남긴 "마지막 작업"(handoff.py) — 어느 조립도가 어디까지 됐는지 한눈에
-import glob
 _rows = []
-for _f in glob.glob(os.path.join(HERE, "process", "인수인계_진행기록_*.md")):
-    _L = open(_f, encoding="utf-8").read().split("\n")
-    _i = next((i for i, l in enumerate(_L[:6]) if l.startswith("## ★ 마지막 작업")), None)
-    if _i is None: continue
-    _blk = []
-    for l in _L[_i + 1:]:
-        if l.startswith("## "): break
-        _blk.append(l)
-    _pick = lambda key: next((l.split(":", 1)[1].strip() if key != "- 마지막" else l for l in _blk if l.startswith(key)), "")
-    _first = next((l for l in _blk if l.startswith("- 20")), "")
-    if not _first: continue
-    _rows.append((_first, os.path.basename(_f)[len("인수인계_진행기록_"):-3], _pick("- 어디까지"), _pick("- 다음"), _pick("- 이어받음")))
+_hf = os.path.join(HERE, "큐보", "인수인계.md")
+_b = [l for l in open(_hf, encoding="utf-8").read().splitlines() if l.startswith("- ")] if os.path.exists(_hf) else []
+_pick = lambda key: next((l.split(":", 1)[1].strip() for l in _b if l.startswith(key)), "")
+_first = next((l for l in _b if l.startswith("- 20")), "")
+if _first:
+    _rows.append((_first, _pick("- 작업"), _pick("- 어디까지"), _pick("- 다음"), _pick("- 이어받음")))
 if _rows:
     print()
     print("[마지막 작업] 최근 순 (PC·아이디는 handoff.py 가 적은 것)")
@@ -65,5 +58,5 @@ if _rows:
         if _rcv: print("    (직전 이어받음: %s)" % _rcv)
         print("    → 이어받음: 지금 PC %s · 아이디 %s" % (socket.gethostname(), _me))
 print()
-print("다음: process/큐보 부품결합규칙.md 를 처음부터 읽고, 첫 보고에 '이번 번호에서 지킬 규칙 3개'를 적는다.")
+print("다음: 큐보/규칙/큐보 부품결합규칙.md 를 처음부터 읽고, 첫 보고에 '이번 번호에서 지킬 규칙 3개'를 적는다.")
 sys.exit(0)

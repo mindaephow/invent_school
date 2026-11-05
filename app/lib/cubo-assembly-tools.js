@@ -203,7 +203,7 @@ export function registerCuboAssemblyTools(server, getSupabase) {
         inputSchema: {},
       },
       async () => text([
-        '큐보 조립도 규칙의 유일한 원본: 저장소 mindaephow/invent_school 의 scripts/assembly-tools/process/큐보 부품결합규칙.md (get_github_file 로 읽는다). 공통편 + 제1부 교재검사 + 제2부 조립검사로 나뉘어 있다.',
+        '큐보 조립도 규칙의 유일한 원본: 저장소 mindaephow/invent_school 의 scripts/assembly-tools/큐보/규칙/큐보 부품결합규칙.md (get_github_file 로 읽는다). 공통편 + 제1부 교재검사 + 제2부 조립검사로 나뉘어 있다.',
         '부품 사실(크기·돌기·구멍·방향·면): 부품 DB — get_part_connectors / 부품 상세내역 data.detail(run_sql 로 읽기). 연결점 확인 순서는 규칙 파일 K3.',
         '조립 단계 데이터: get_assembly / validate_assembly. 작업 기록: get_assembly_notes. 새 조립도 시작: check_chapter_parts.',
         '※ 옛 안내서(get_assembly_guide 본문)와 get_assembly_reference 는 삭제했다. 규칙과 어긋나는 글이 두 곳에 있던 것을 없애기 위해서다.',

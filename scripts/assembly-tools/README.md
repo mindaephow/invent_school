@@ -2,7 +2,7 @@
 
 1. `python partlib.py` → `conn.json`·`dims.json`(부품 연결점·크기). 프레임은 규칙대로 만들고 나머지는 부품 DB 값을 적어 둔 것이다.
 2. 교재 쪽을 PyMuPDF로 330dpi 이미지로 뽑아 단계 패널을 자른다(안내서 6-2절).
-3. `pnp.py`·`camfit.py`: 판 모서리 점(3D↔화면 픽셀)으로 카메라를 맞춘다(solvePnP). 지금 번호 작업에서 축·카메라는 `axes_fit.py` 가 한다(`process/05_조립.md`).
+3. `pnp.py`·`camfit.py`: 판 모서리 점(3D↔화면 픽셀)으로 카메라를 맞춘다(solvePnP). 지금 번호 작업에서 축·카메라는 `axes_fit.py` 가 한다(`큐보/규칙/05_조립.md`).
 4. `asmlib.py`(조립 프로그램): 설명서 번호를 코드(`<이름>.py`)로 옮기면 위치·회전·안내점이 계산된다. `emit.py` 가 그 결과를 `public/design-assemblies.js` 에 넣는다.
 5. `check_local.js`: `public/design-mates.js`·`design-collision.js` 로 로컬 검사(`node check_local.js asm.json`, 작업 폴더에 `conn.json`·`dims.json` 필요).
 6. 미리보기: 설계 화면의 조립 보기(개발 서버 주소는 `CLAUDE.md` 1번).

@@ -1,6 +1,6 @@
 # 사용자가 화면에서 고쳐 저장한 것(❄ 모습 기록·📷 카메라)과 내 코드 값의 차이를 모아 user_diffs/수정저장차이.md 로 쓴다(DB 는 읽기만 한다).
 #   python collect_diffs.py
-# 목적: 내가 반복해서 틀리는 부품·번호를 찾아 검사·규칙으로 옮긴다(00_개선규칙 5번). 몸 뒤집기(xform)는 회전을 보정하고, 옆자리·noFreeze 부품은 뺀다.
+# 목적: 내가 반복해서 틀리는 부품·번호를 찾아 검사·규칙으로 옮긴다(규칙 파일 B3·E8). 몸 뒤집기(xform)는 회전을 보정하고, 옆자리·noFreeze 부품은 뺀다.
 import json, math, os, subprocess, sys, urllib.request
 from collections import Counter, defaultdict
 import numpy as np

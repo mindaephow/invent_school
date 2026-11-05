@@ -24,9 +24,19 @@ pj = cv2.projectPoints(np.float32(obj), rv, tv, K, None)[0].reshape(-1, 2); er =
 tgt = spec.get("axes_target")
 g = spec["grid"]; o = np.array(g["origin"], float); dc = np.array(g["col"], float); dr = np.array(g["row"], float)
 if tgt is None: tgt = (o + dc * (cols - 1) / 2 + dr * (rows - 1) / 2).tolist()
-C, fwd, up, right = cam_from(rv, tv); az, el, rad = angles(C, tgt); th, ph = math.radians(az), math.radians(90 - el)
 MIRROR = False
-if ph > 1.55 and all(abs(q[1] - obj[0][1]) < 3 for q in obj):   # 한 평면의 점들은 판 반대쪽 거울 해가 같이 맞는다 — 카메라가 판 아래(φ>1.55)로 나오면 판 위쪽 해(φ→π−φ, 같은 θ)로 바꾼다
+MIRROR = False
+C, fwd, up, right = cam_from(rv, tv)
+LYING = "--눕힌좌표" in sys.argv   # 입력 3D 점이 눕힌 좌표(위 = −z, 서 있는 y = 20 − z, 서 있는 z = y)면 카메라 각도는 뷰어의 서 있는 좌표로 바꿔 계산한다(양팔저울 19~22번, 2026-11-05: 안 바꾸면 theta·phi 가 엉뚱한 값이 나온다)
+if LYING:
+    _cv = lambda p: np.array([p[0], 20 - p[2], p[1]], float)
+    az, el, rad = angles(_cv(C), _cv(tgt))
+else:
+    az, el, rad = angles(C, tgt)
+th, ph = math.radians(az), math.radians(90 - el)
+if LYING and ph > 1.55 and all(abs(q[2] - obj[0][2]) < 3 for q in obj):   # 한 평면(z 일정)의 점은 평면 반대쪽 거울 해가 같이 맞는다 — 카메라가 판 아래(φ>π/2)로 나오면 위쪽 해로 바꾼다
+    ph = math.pi - ph; MIRROR = True
+if ph > 1.55 and not LYING and all(abs(q[1] - obj[0][1]) < 3 for q in obj):   # 한 평면의 점들은 판 반대쪽 거울 해가 같이 맞는다 — 카메라가 판 아래(φ>1.55)로 나오면 판 위쪽 해(φ→π−φ, 같은 θ)로 바꾼다
     ph = math.pi - ph; MIRROR = True
 print("fov %d 평균 %.2f 최대 %.2f px 점별 %s | theta %.2f phi %.2f roll %.1f°" % (fv, er.mean(), er.max(), [round(float(v), 1) for v in er], th, ph, math.degrees(math.asin(max(-1, min(1, float(right[1])))))))
 LOOSE = float(sys.argv[sys.argv.index("--허용") + 1]) if "--허용" in sys.argv else 3.0   # 평균 오차 허용치(px) — 올리면 근거 글에 "거친 값"을 적는다

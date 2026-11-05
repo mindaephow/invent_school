@@ -56,7 +56,7 @@ def _session_check():
     print("  %s .env.local(SUPABASE 키): %s" % ("✅" if keys else "❌", "있음" if keys else "없음 → 사용자에게 달라고 한다(CLAUDE.md)"))
     print("  %s DB 읽기(사용자 ✓): %s" % ("✅" if db is not None else "❌", ("읽음 — ✓ 번호 %s" % db) if db is not None else "못 읽음 → ✓ 확인은 통과시키지 않는다(키를 한 줄로 요청하고, 키 없이 되는 작업은 계속한다 — 큐보 부품결합규칙.md B6)"))
     print("  ⚠ 로그인: 스크립트가 확인할 수 없다. 화면 비교(05 5-5)·❄/📷 확인에는 선생님 계정 로그인이 필요하므로 **새로 시작하거나 새 세션이면 사용자에게 먼저 요청한다**(비밀번호는 대신 입력하지 않는다). 브라우저 pane 에서 로그인 화면이 보이면 아직이다.")
-    print("  ⚠ 읽을 것: process/큐보 부품결합규칙.md 처음부터(맨 위 0번 체크리스트) → process/05_조립.md 실행 순서 → 인수인계_진행기록_<이름>.md → user_diffs/요청차이.md (이번 번호에서 지킬 규칙 3개를 첫 보고 한 줄에)")
+    print("  ⚠ 읽을 것: 큐보/규칙/큐보 부품결합규칙.md 처음부터(맨 위 0번 체크리스트) → 큐보/규칙/05_조립.md 실행 순서 → 큐보/조립도/<권>권/<이름>/진행기록.md → user_diffs/요청차이.md (이번 번호에서 지킬 규칙 3개를 첫 보고 한 줄에)")
     return up
 _SERVER = _session_check()
 _warn()
@@ -90,7 +90,7 @@ def _remind():
         _pf = os.path.join(here, "refs", name, "fits", "%02d_P.json" % (k - 1))
         if os.path.exists(_pf):   # 29번에서 배운 것: 판이 가려져 holefit 가 안 되면 앞 번호 책 그림과 판 무늬를 맞춘다(눈으로 안 된다고 건너뛰지 말고 도구를 먼저 돌린다)
             print('  ⑥ 판이 이번 번호에서 가려졌으면(앞 번호 %d 판 격자 있음): holefit → python plate_match.py %s %d %d P --검증 "c,r,h,x,y;…" (앞 번호에서 놓아 3D 가 확정된 리벳 끝·블록 돌기·판 모서리 5개 이상의 칸·높이·픽셀) → infer_grid --anchor. 05_조립.md 0-2 절. 유추 격자는 규칙 점검이 사용자 ✓ 를 요구한다.' % (k - 1, name, k - 1, k))
-        print("  ⑦ 진행 상태 문서: process/인수인계_진행기록_%s.md (앞 번호 절) — 번호 하나로 안 풀리면 05_조립.md 0-1 절." % name)
+        print("  ⑦ 진행 상태 문서: 큐보/조립도/%s/진행기록.md (앞 번호 절) — 번호 하나로 안 풀리면 05_조립.md 0-1 절." % name)
     except Exception as ex_:
         print("  (리마인드를 읽지 못했다: %s — 번호 시작은 계속한다)" % ex_)
 _remind()
@@ -111,7 +111,7 @@ _R0 = os.path.join(here, "refs", name)
 _miss_img = [i for i in range(0, len(asm) + 1) if i and not os.path.exists(os.path.join(_R0, "%02d.jpg" % i))]
 if not os.path.exists(os.path.join(_R0, "00.jpg")): _miss_img.insert(0, 0)
 if _miss_img: _gate.append(("02 이미지 자르기", "책 그림이 없는 번호: %s" % _miss_img[:12], "refs_make.py 로 만든다(02)"))
-if not os.path.exists(os.path.join(_R0, "00_1.jpg")): _gate.append(("02 완성품 방향선 그림", "완성 사진과 한 세트인 방향선 그림(refs/%s/00_1.jpg)이 없다" % name, "02_이미지_자르기.md 3-2 로 만들어 올린다(앞 +Z · 뒤 −Z · 위 +Y · 왼쪽 +X · 오른쪽 −X, 사용자 확인) — 00_개선규칙 9번"))
+if not os.path.exists(os.path.join(_R0, "00_1.jpg")): _gate.append(("02 완성품 방향선 그림", "완성 사진과 한 세트인 방향선 그림(refs/%s/00_1.jpg)이 없다" % name, "규칙 파일 P2 3-2 로 만들어 올린다(앞 +Z · 뒤 −Z · 위 +Y · 왼쪽 +X · 오른쪽 −X, 사용자 확인) — 규칙 파일 A10"))
 _miss_used = [i for i, s in enumerate(asm, 1) if "▣ 사용 부품:" not in (s.get("note") or "")]
 if _miss_used: _gate.append(("03 부품 체크", "▣ 사용 부품이 없는 번호: %s" % _miss_used[:15], "번호별 사용 부품을 적고 LIST 와 대조한다(03 B)"))
 # 03 부품 정리 합계 점검(큐보 부품결합규칙.md A2, 2026-11-02): 번호별 ▣ 사용 부품 합계가 교재 LIST 와 부품별로 같아야 번호를 시작한다. 이미 만든 조립도가 갑자기 막히지 않게 <이름>_rules.json 에 "parts_sum": true 를 켠 조립도만 막는다.
@@ -208,7 +208,7 @@ state = [
     ("방향(_axes.json, fit 포함)", bool(ax and ax.get("fit")), "python axes_fit.py %s %d <라벨> <칸수> <줄수> <칸방향> <줄방향>" % (name, k)),
     ("격자 그림(NN_2)", os.path.exists(os.path.join(R, NN + "_2.jpg")), "python refs_rect.py %s %d" % (name, k)),
 ]
-print("═══ %s %d번 시작 ═══   (process/큐보 부품결합규칙.md 를 처음부터 다시 읽고, 이번 번호에서 지킬 규칙 3개를 첫 보고에 적는다)" % (name, k))
+print("═══ %s %d번 시작 ═══   (큐보/규칙/큐보 부품결합규칙.md 를 처음부터 다시 읽고, 이번 번호에서 지킬 규칙 3개를 첫 보고에 적는다)" % (name, k))
 print("교재:", note.split("\n")[0][:80]); print("사용 부품(03):", used or "(적혀 있지 않음 — 03 을 먼저 한다)")
 print("읽기 표 %d번 칸: %s" % (k, made)); print("스크립트에 stepchecks.apply:", "있음" if has_sc else "❌ 없음 — 넣지 않으면 --write 가 거부된다")
 slot = st.get("slot"); pslot = asm[k - 2].get("slot") if k > 1 else None

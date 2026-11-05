@@ -224,7 +224,7 @@ try:
     _rot = sorted({_n for _st in asm for _p in _st.get("parts", []) for _n in [_p.get("n", "")] if _n in ("축", "T축", "중간바퀴", "작은바퀴", "큰기어", "작은기어", "서보혼", "스프라켓")})
     _aid = re.search(r'id: "(cubo-[^"]+)"', open(name + "_entry.js", encoding="utf-8").read())
     if _rot and _aid and not _jqq.get("ivs_assembly_joints", "assembly_id=eq.%s&select=joint_id&limit=1" % _aid.group(1)):
-        print("[경고] 도는 부품(%s)이 있는데 관절이 0개 — 번호를 만들 때 바로 관절·움직이는 묶음을 등록한다(process/05_조립.md, CLAUDE.md '회전하는 곳은 항상 관절')" % ", ".join(_rot))
+        print("[경고] 도는 부품(%s)이 있는데 관절이 0개 — 번호를 만들 때 바로 관절·움직이는 묶음을 등록한다(큐보/규칙/05_조립.md, CLAUDE.md '회전하는 곳은 항상 관절')" % ", ".join(_rot))
 except Exception as _e_:
     print("관절 점검을 실행하지 못함:", str(_e_)[:100])
 # 화면 "부품정리·창고정리" 표시(관리자 지시 2026-11-02): 평소 미완, 1차(모든 번호 기록)가 끝났을 때만 완료. 손으로 완료로 적지 않는다. parts_sum 을 켠 조립도만 표시한다.
