@@ -5,7 +5,7 @@
 // 조립 규칙·단계 데이터·겹침 검사 코드는 배포된 public/design-assemblies.js·design-collision.js 를 읽어 온다 —
 // 화면과 같은 파일이 원본이라 둘이 어긋나지 않는다. (선택 환경변수 SITE_ORIGIN, 기본 https://invent-school-sigma.vercel.app)
 import { z } from 'zod'
-import { buildGuide, buildGuideParts, buildReferenceParts, buildReference, dimsMap } from './cubo-assembly-guide.js'
+import { dimsMap } from './cubo-part-dims.js'
 import { autoAssemble, autoCamera } from './cubo-auto-assemble.js'
 import { stlFromDataUrl, measureModel, formatMeasure } from './cubo-part-measure.js'
 import { stepContext } from './cubo-step-context.js'
@@ -199,23 +199,15 @@ export function registerCuboAssemblyTools(server, getSupabase) {
       'get_assembly_guide',
       {
         title: '큐보 스튜디오 안내서 읽기',
-        description: '사용자가 "큐보 스튜디오"(교재를 보고 조립도를 만들고·고치고·검토하는 곳)를 말하거나 큐보 조립도(설계 화면 "조립 보기") 작업을 시작하기 전에 가장 먼저 읽을 것 - 만들기·수정·검토 절차가 맨 앞에 있다. 조립 규칙, 좌표계·단위, 3D 모델로 측정한 부품 사실(돌기 위치·방향), 작업 흐름을 돌려준다. 수정·검토 절차, 새 PC 준비, 부품 DB 기록, 화면 기능 같은 참고 자료는 get_assembly_reference 에 따로 있다.',
+        description: '큐보 조립도(설계 화면 "조립 보기") 작업을 시작하기 전에 읽을 것. 안내서 본문은 없앴고 규칙·부품 사실이 어디에 있는지만 알려 준다(교통정리: 규칙은 규칙 파일 하나, 부품 사실은 부품 DB).',
         inputSchema: {},
       },
-      async () => {
-        try { const site = await loadSite(); return text(buildGuide(site.IVS_ASSEMBLY_RULES)) }
-        catch (e) { return text(buildGuide(null) + `\n\n(화면 파일을 못 읽어 규칙은 생략: ${e.message})`) }
-      }
-    )
-
-    server.registerTool(
-      'get_assembly_reference',
-      {
-        title: '큐보 스튜디오 참고 문서 읽기',
-        description: '조립할 때는 안 봐도 되는 참고 자료(get_assembly_guide 에서 분리): 조립도 수정·검토 절차, 새 PC 준비, 옛 작업 절차, 로봇팽이 사례, 자동 조립(auto_assemble), 부품 DB 연결점 기록 방법(7장), 부품 측정 계획과 안 쓰는 부품 메모, 화면·코드 위치, 화면 기능, 지난 조립도(토끼~비행기) 기록. 규칙이 아니라 필요할 때만 읽는 자료다.',
-        inputSchema: { part: z.string().optional().describe('생략하면 머리글과 절 메뉴만. 필요한 절은 메뉴 번호 또는 절 제목 앞부분("5-3", "B·C")으로 읽는다. "all" = 전체') },
-      },
-      async ({ part }) => text(buildReferenceParts(part))
+      async () => text([
+        '큐보 조립도 규칙의 유일한 원본: 저장소 mindaephow/invent_school 의 scripts/assembly-tools/process/큐보 부품결합규칙.md (get_github_file 로 읽는다). 공통편 + 제1부 교재검사 + 제2부 조립검사로 나뉘어 있다.',
+        '부품 사실(크기·돌기·구멍·방향·면): 부품 DB — get_part_connectors / 부품 상세내역 data.detail(run_sql 로 읽기). 연결점 확인 순서는 규칙 파일 K3.',
+        '조립 단계 데이터: get_assembly / validate_assembly. 작업 기록: get_assembly_notes. 새 조립도 시작: check_chapter_parts.',
+        '※ 옛 안내서(get_assembly_guide 본문)와 get_assembly_reference 는 삭제했다. 규칙과 어긋나는 글이 두 곳에 있던 것을 없애기 위해서다.',
+      ].join('\n'))
     )
 
     server.registerTool(
@@ -252,7 +244,7 @@ export function registerCuboAssemblyTools(server, getSupabase) {
       'get_assembly',
       {
         title: '조립 단계 데이터 조회',
-        description: '한 차시의 조립 단계 데이터(JSON)를 돌려준다: 단계별 설명 note·카메라 각도 view, 부품 이름, 위치 p, 회전 r, 끼우는 방향 dir, 안내 위치 marks(recv 부품은 고정된 돌기 끝), 구멍 받는 쪽 recv, 옆자리 조립 side·settleDir, 결합 전 표시 explode, 결합 순서 joinOrder, 띄우는 거리 hover 등(필드 설명은 get_assembly_guide). 수정은 저장소의 public/design-assemblies.js 를 고쳐서 올리고, 고친 뒤 validate_assembly 로 문제 0건을 확인한다.',
+        description: '한 차시의 조립 단계 데이터(JSON)를 돌려준다: 단계별 설명 note·카메라 각도 view, 부품 이름, 위치 p, 회전 r, 끼우는 방향 dir, 안내 위치 marks(recv 부품은 고정된 돌기 끝), 구멍 받는 쪽 recv, 옆자리 조립 side·settleDir, 결합 전 표시 explode, 결합 순서 joinOrder, 띄우는 거리 hover 등(필드 설명은 규칙 파일 큐보 부품결합규칙.md). 수정은 저장소의 public/design-assemblies.js 를 고쳐서 올리고, 고친 뒤 validate_assembly 로 문제 0건을 확인한다.',
         inputSchema: { assemblyId: z.string().describe('list_assemblies 의 id. 예: cubo-1-rabbit') },
       },
       async ({ assemblyId }) => {
@@ -657,7 +649,7 @@ export function registerCuboAssemblyTools(server, getSupabase) {
       'check_chapter_parts',
       {
         title: '새 조립도 시작 점검(교재 부품 목록 ↔ 부품 DB)',
-        description: '새 조립도를 시작할 때 맨 먼저 부른다. 권(volume)과 차시 제목(chapter)을 주면 교재관리(ivs_textbooks)의 그 차시 부품 목록(LIST)을 읽어 부품마다 ① 부품 DB 에 있는지 ② 3D 모델이 있는지 ③ 돌기·구멍 연결점이 있는지·신뢰도(checked/auto) ④ 면 이름이 확정된 부품인지를 한 번에 보여 주고, 이미 만든 조립도가 있는지, 앞으로 등록·확인해야 할 부품 목록을 정리해 준다. 없는 부품은 멈추지 말고 교재를 보고 직접 등록한 뒤 진행한다(get_assembly_guide 의 "첫 30분").',
+        description: '새 조립도를 시작할 때 맨 먼저 부른다. 권(volume)과 차시 제목(chapter)을 주면 교재관리(ivs_textbooks)의 그 차시 부품 목록(LIST)을 읽어 부품마다 ① 부품 DB 에 있는지 ② 3D 모델이 있는지 ③ 돌기·구멍 연결점이 있는지·신뢰도(checked/auto) ④ 면 이름이 확정된 부품인지를 한 번에 보여 주고, 이미 만든 조립도가 있는지, 앞으로 등록·확인해야 할 부품 목록을 정리해 준다. 없는 부품은 멈추지 말고 교재를 보고 직접 등록한 뒤 진행한다(규칙 파일 큐보 부품결합규칙.md "00. 조립도를 시작할 때").',
         inputSchema: {
           chapter: z.string().describe('차시 제목. 예: 조종형비행기 (띄어쓰기는 무시하고 찾는다)'),
           volume: z.number().int().optional().describe('권. 기본 1'),
@@ -716,9 +708,9 @@ export function registerCuboAssemblyTools(server, getSupabase) {
           lines.push('── 해야 할 일 ──')
           lines.push(needRegister.length ? '1) DB 에 없는 부품 ' + needRegister.length + '종: 교재 그림·치수를 보고 직접 등록(get_part_standard → make_part_stl → apply_part_to_db → set_part_connectors)' : '1) 부품 등록: 필요 없음')
           lines.push(needConnectors.length ? '2) 연결점 없음/자동탐지 부품: ' + [...new Set(needConnectors)].join(', ') + ' — 3D 뷰어(?subject=robot → 큐보 부품 전체 리스트)에서 구멍·돌기 개수와 위치를 세어 확인하고 필요하면 set_part_connectors' : '2) 연결점 확인: 모두 checked')
-          lines.push(needConfirm.length ? '3) 면 이름 미확정 부품: ' + [...new Set(needConfirm)].join(', ') + ' — get_assembly_guide 4-1절 "확정 메모"가 있으면 따르고, 없으면 모양을 보고 앞뒤를 정해 기록' : '3) 면 이름: 모두 확정')
+          lines.push(needConfirm.length ? '3) 면 이름 미확정 부품: ' + [...new Set(needConfirm)].join(', ') + ' — 부품 DB 상세내역(data.detail)을 보고, 없으면 부품 리스트(설계 화면 0차시 "큐보 부품 전체 리스트")에서 모양을 보고 앞뒤를 정해 기록(규칙 파일 K3)' : '3) 면 이름: 모두 확정')
           if (noModel.length) lines.push('4) 3D 모델 없는 부품(조립도에서 제외 대상): ' + [...new Set(noModel)].join(', '))
-          lines.push('다음: get_assembly_guide 의 "큐보 스튜디오 A" 절 3번(스크립트 작성)부터.')
+          lines.push('다음: 규칙 파일 큐보 부품결합규칙.md 의 "00. 조립도를 시작할 때"부터.')
           return text(lines.join('\n'))
         } catch (e) { return fail(e.message) }
       }
@@ -755,7 +747,7 @@ export function registerCuboAssemblyTools(server, getSupabase) {
       'set_part_connectors',
       {
         title: '부품 돌기·구멍 연결점 기록(이 부품을 쓰는 조립도 영향 검사 포함)',
-        description: '로봇 부품의 돌기(pegs)·구멍(holes) 연결점을 ivs_part_catalog.data.connectors 에 기록한다(다른 필드는 그대로). 좌표는 3D 모델 bbox 가운데를 원점으로 한 모델 로컬 좌표(y 위). 형식은 get_assembly_reference 7장 참고.',
+        description: '로봇 부품의 돌기(pegs)·구멍(holes) 연결점을 ivs_part_catalog.data.connectors 에 기록한다(다른 필드는 그대로). 좌표는 3D 모델 bbox 가운데를 원점으로 한 모델 로컬 좌표(y 위). 형식은 get_part_connectors 로 읽은 기존 값을 따른다.',
         inputSchema: {
           partId: z.string().describe('ivs_part_catalog 행 id'),
           connectors: z.object({

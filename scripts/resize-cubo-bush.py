@@ -65,6 +65,6 @@ d['connectors']['size'] = [BIG * 2, t, BIG * 2]
 det = d.setdefault('detail', {})
 det.setdefault('크기_mm', {}).update({'가로(x)': BIG * 2, '세로(z)': BIG * 2, '큰 쪽 지름': BIG * 2, '작은 쪽 지름': SMALL * 2})
 det.setdefault('대가리_몸통', {}).update({'대가리 지름_mm': BIG * 2, '몸통 지름_mm': SMALL * 2})
-# partlib.py(dims.json)와 안내서 부품 표(app/lib/cubo-assembly-guide.js 의 '| 부시 |' 줄)는 따로 고친다
+# partlib.py(dims.json)와 부품 DB 상세내역(data.detail 의 크기_mm)은 따로 고친다
 req = urllib.request.Request(URL, data=json.dumps({'data': d}).encode(), method='PATCH', headers={**H, 'Prefer': 'return=minimal'})
 print('등록', urllib.request.urlopen(req).status)

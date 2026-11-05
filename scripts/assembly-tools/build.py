@@ -241,9 +241,9 @@ try:
             for _pp in _txt.split(","):
                 _mm = re.match(r"\s*(.+?)\s+(\d+)\s*$", _pp)
                 if _mm: _tot[_mm.group(1).strip()] += int(_mm.group(2))
-        _parts_ok = bool(_all_used and all(_tot.get(_n, 0) == _c for _n, _c in _lst.items() if _n != "리모컨") and all(_n in _lst for _n in _tot))   # 1차 완료 = 모든 번호에 ▣ 사용 부품이 있고 합계 = LIST (00_규칙.md A2a)
+        _parts_ok = bool(_all_used and all(_tot.get(_n, 0) == _c for _n, _c in _lst.items() if _n != "리모컨") and all(_n in _lst for _n in _tot))   # 1차 완료 = 모든 번호에 ▣ 사용 부품이 있고 합계 = LIST (큐보 부품결합규칙.md A2a)
         if not _parts_ok: print("   부품정리: 미완 — ▣ 사용 부품이 없는 번호가 있거나 합계가 LIST 와 다름")
-        _slots_ok = any(v is not None for v in _slots) and not _bad_slot   # 1차 완료 = 모든 번호에 slot, 창고가 바뀌는 번호마다 history (00_규칙.md A3a)
+        _slots_ok = any(v is not None for v in _slots) and not _bad_slot   # 1차 완료 = 모든 번호에 slot, 창고가 바뀌는 번호마다 history (큐보 부품결합규칙.md A3a)
         if not _slots_ok: print("   창고정리: 미완 — slot 이 없는 번호나 history 가 없는 번호가 있음")
         _es = _es.replace("      steps: [", "      prepDone: %s,\n      steps: [" % json.dumps({"parts": bool(_parts_ok), "slots": bool(_slots_ok)}), 1)
         print("부품정리 %s · 창고정리 %s (화면 표시)" % ("완료" if _parts_ok else "미완", "완료" if _slots_ok else "미완"))

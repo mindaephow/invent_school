@@ -199,7 +199,7 @@ def apply(A, name):
         grid_ok = (1 in h and 2 in h) and _has_fit
         items.append((True, grid_ok, ("책 그림 격자(수평선·회전·격자 점) 만듦" if _has_fit else "책 그림 격자 점이 없음(이미지만 있음)") if 2 in h else "책 그림 원본 확인(판이 없는 번호)"))
         r = rd.get(str(k)) or {}
-        try: _stg = int(r.get("단계") or 9)   # 번호 하나 순서의 지금 단계(00_규칙.md 0절 1~9). 비어 있으면 9(끝까지) — 이미 만든 번호는 그대로
+        try: _stg = int(r.get("단계") or 9)   # 번호 하나 순서의 지금 단계(큐보 부품결합규칙.md 0절 1~9). 비어 있으면 9(끝까지) — 이미 만든 번호는 그대로
         except Exception: _stg = 9
         items.append((True, all(str(r.get(f, "")).strip() for f in ("면", "링", "부품")), "읽기 표(면·링·부품) 적음"))
         rp = _parse(r.get("부품", "")) if r.get("부품") else None
@@ -243,7 +243,7 @@ def apply(A, name):
         rows[k] = items
         for need, ok, txt in items:
             if need and not ok: blocking.append("%d번: %s" % (k, txt))
-        block = MARK + ("" if _stg >= 9 else "\n🛠 작업 중 — 번호 하나 순서 %d/9단계(00_규칙.md 0절). 9단계까지 끝내야 다음 번호를 시작한다." % _stg) + "\n" + "\n".join(("☑ " if ok else ("☐ " if not need else "☐ ")) + txt + ("" if need else " (눈으로)") for need, ok, txt in items)
+        block = MARK + ("" if _stg >= 9 else "\n🛠 작업 중 — 번호 하나 순서 %d/9단계(큐보 부품결합규칙.md 0절). 9단계까지 끝내야 다음 번호를 시작한다." % _stg) + "\n" + "\n".join(("☑ " if ok else ("☐ " if not need else "☐ ")) + txt + ("" if need else " (눈으로)") for need, ok, txt in items)
         st.note = st.note.split(MARK)[0] + block
     # 완성 번호(마지막 단계)에는 final_audit.py 가 만든 "완성 마무리 점검"을 작업 점검 블록처럼 뒤에 붙인다(관리자만 보임, 2026-10-16)
     _fa = os.path.join(here, "refs", name, "final_audit.md")

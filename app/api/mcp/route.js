@@ -17,7 +17,7 @@
 //   - run_sql           : SQL 직접 실행 (위험 DDL 자동 차단, run_sql_query RPC 필요)
 //   - list_github_files : GitHub 저장소(mindaephow/invent_school) 경로별 파일 목록 조회
 //   - get_github_file   : GitHub 저장소 특정 파일 내용 조회
-// + 큐보 조립 도구(app/lib/cubo-assembly-tools.js): get_assembly_guide / get_assembly_reference / list_assemblies / get_assembly /
+// + 큐보 조립 도구(app/lib/cubo-assembly-tools.js): get_assembly_guide / list_assemblies / get_assembly /
 //   validate_assembly / get_part_connectors / set_part_connectors — 설계 화면 "조립 보기" 작업용(조립 규칙·겹침 검사·돌기/구멍 연결점)
 //
 // 필요한 환경변수 (Vercel 프로젝트 설정 > Environment Variables, 메인 사이트와 같은 프로젝트):
@@ -273,7 +273,7 @@ const baseHandler = createMcpHandler(
       'ivs_teachers/courses/students/records/curriculum/projects 테이블, 내용은 data jsonb에 있고 권한용 소유자 컬럼이 붙어 있음). ' +
       'ivs_part_catalog의 spec만 바꿀 땐 upsert_row(전체 교체) 대신 update_part_spec(부분 수정, 이미지 유지)을 쓸 것. ' +
       'GitHub 저장소(' + GITHUB_REPO + ') 파일 확인 도구(list_github_files/get_github_file)를 제공한다. ' +
-      '설계 화면의 교재 단계별 3D 조립도("조립 보기") 작업을 할 때는 먼저 get_assembly_guide 를 읽을 것 — 조립 규칙·좌표계·부품 측정 사실·작업 절차가 들어 있고, get_assembly/validate_assembly/get_part_connectors/set_part_connectors 로 단계 데이터 조회·겹침 검사·부품 돌기/구멍 연결점을 다루고, auto_assemble 은 부품 자세·카메라를 공간→판단→검사→수정 반복으로 자동 확정한다. ' +
+      '설계 화면의 교재 단계별 3D 조립도("조립 보기") 작업을 할 때는 먼저 get_assembly_guide 를 읽을 것 — 규칙 파일(큐보 부품결합규칙.md)과 부품 DB 위치를 알려 주고, get_assembly/validate_assembly/get_part_connectors/set_part_connectors 로 단계 데이터 조회·겹침 검사·부품 돌기/구멍 연결점을 다루고, auto_assemble 은 부품 자세·카메라를 공간→판단→검사→수정 반복으로 자동 확정한다. ' +
       '큐보 부품을 설계 화면에 자유롭게 배치(3D 디자인)하려면 먼저 get_design_guide 를 읽을 것 — compute_attach(돌기↔구멍 끼우기 위치·회전 계산)·validate_design(검사)·save_design(저장)·list_designs/get_design/list_teachers 가 있다. ' +
       '선생님/수업/학생/출석기록/커리큘럼 데이터를 조회·수정하거나 index.html·design.html 코드를 확인할 때 이 서버의 도구를 사용한다.',
   },

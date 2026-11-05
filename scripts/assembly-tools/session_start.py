@@ -65,5 +65,5 @@ if _rows:
         if _rcv: print("    (직전 이어받음: %s)" % _rcv)
         print("    → 이어받음: 지금 PC %s · 아이디 %s" % (socket.gethostname(), _me))
 print()
-print("다음: process/00_규칙.md 를 처음부터 읽고, 첫 보고에 '이번 번호에서 지킬 규칙 3개'를 적는다.")
+print("다음: process/큐보 부품결합규칙.md 를 처음부터 읽고, 첫 보고에 '이번 번호에서 지킬 규칙 3개'를 적는다.")
 sys.exit(0)

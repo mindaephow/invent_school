@@ -6,7 +6,7 @@
 // (방향·위치·구멍을 손으로 짐작해서 틀리던 문제를 없앤다). 배치 형식은 조립 데이터와 같다: { n: 부품 이름, p: [x,y,z], r: [rx,ry,rz](도) }.
 // 검사·좌표 코드는 배포된 public/design-mates.js·design-collision.js 를 읽어 쓴다(화면과 같은 코드).
 import { z } from 'zod'
-import { detailDims, dimsMap } from './cubo-assembly-guide.js'
+import { detailDims, dimsMap } from './cubo-part-dims.js'
 import { loadSite, quatFromEulerZYX, checkOverlaps, resolveConnectorName } from './cubo-assembly-tools.js'
 import { CUBO_FRAME_STD, CUBO_BLOCK_STD, PART_STANDARD_TEXT } from './cubo-part-maker.js'
 import { frameTriangles } from './cubo-frame-mesh.js'
@@ -85,7 +85,7 @@ const DESIGN_GUIDE = `# 큐보 3D 디자인 도구 안내
 
 ## 무엇을 하나
 설계 화면(design.html, 큐보 1권 등)의 스케치북에 놓을 **부품 배치**를 만들고 검사하고 저장한다. 저장한 디자인은 선생님 계정의 "불러오기"에서 열린다.
-조립 보기(교재 단계 재생)와는 다르다 — 조립 데이터는 get_assembly_guide / get_assembly 를 쓴다. 이 도구는 자유 디자인용이다.
+조립 보기(교재 단계 재생)와는 다르다 — 조립 데이터는 get_assembly 를 쓴다(규칙은 큐보 부품결합규칙.md). 이 도구는 자유 디자인용이다.
 
 ## 배치 형식(조립 데이터와 같음)
 { n: 부품 이름(부품 관리에 등록된 이름 그대로), p: [x,y,z](mm, 부품 **가운데** 위치), r: [rx,ry,rz](도, 오일러 ZYX — 화면과 같음) }
@@ -93,7 +93,7 @@ const DESIGN_GUIDE = `# 큐보 3D 디자인 도구 안내
 - 바닥에 그냥 놓은 프레임은 두께 5 → 가운데 y=2.5. (조립 보기 배치는 다리 높이 때문에 y 가 15 더 높다 — 자유 디자인은 바닥 기준으로 잡는다.)
 
 ## 작업 순서(실수 방지)
-1. **get_assembly_guide** 를 먼저 읽는다(규칙: 돌기↔구멍, 겹침 금지, 리벳·브라켓·T축 사실, 실수 체크리스트). 이 안내서는 자유 디자인에도 그대로 적용된다.
+1. **규칙 파일(큐보 부품결합규칙.md, get_github_file)** 을 먼저 읽는다(규칙: 돌기↔구멍, 겹침 금지, 리벳·브라켓·T축 사실). 이 규칙은 자유 디자인에도 그대로 적용된다.
 2. **list_design_parts** 로 쓸 부품과 돌기·구멍 수, 크기를 본다.
 3. 첫 부품(보통 바닥 프레임)은 직접 놓는다: 예) 35프레임 p=[0,2.5,0] r=[0,0,0].
 4. 나머지는 **compute_attach** 로 놓는다: "고정된 부품의 구멍 h3 에 새 부품의 돌기 p2 를 꽂기"를 계산해서 p·r 을 돌려준다. 손으로 위치·회전을 짐작하지 않는다. roll 로 돌기 축 둘레 회전(0/90/180/270)을 고른다(프레임 모양·방향 때문에).
@@ -105,7 +105,7 @@ const DESIGN_GUIDE = `# 큐보 3D 디자인 도구 안내
 배치가 아니라 부품 자체의 3D 모양을 새로 만들 땐 **get_part_standard** 를 먼저 읽는다(규격 숫자, STL 만드는 방법).
 
 ## 주의
-- 부품 방향이 헷갈리면(눈블록 원판 바깥, T축 머리 위, 브라켓 세로 판 밖) get_assembly_guide 4장을 본다. compute_attach 는 돌기가 구멍으로 들어가는 방향을 맞춰 주지만, 모양(접시 머리 위 등)은 roll 과 guide 로 직접 확인한다.
+- 부품 방향이 헷갈리면(눈블록 원판 바깥, T축 머리 위, 브라켓 세로 판 밖) 부품 DB 상세내역(get_part_connectors)을 본다. compute_attach 는 돌기가 구멍으로 들어가는 방향을 맞춰 주지만, 모양(접시 머리 위 등)은 roll 과 guide 로 직접 확인한다.
 - 통과 구멍(through)은 양쪽에서 끼울 수 있다: compute_attach 의 side 로 고른다.
 - 검사는 몸통 상자 근사라 돌기가 솔리드를 지나가는 것은 못 잡는다. 화면에서 확인한다.
 `
@@ -115,7 +115,7 @@ export function registerCuboDesignTools(server, getSupabase) {
     'get_design_guide',
     {
       title: '큐보 3D 디자인 안내서',
-      description: '큐보 부품 배치(3D 디자인) 작업을 시작하기 전에 읽을 것. 배치 형식·좌표·작업 순서(compute_attach 로 놓고 validate_design 으로 검사한 뒤 save_design)를 알려 준다. 조립 규칙 자체는 get_assembly_guide 를 함께 읽는다.',
+      description: '큐보 부품 배치(3D 디자인) 작업을 시작하기 전에 읽을 것. 배치 형식·좌표·작업 순서(compute_attach 로 놓고 validate_design 으로 검사한 뒤 save_design)를 알려 준다. 조립 규칙 자체는 규칙 파일(큐보 부품결합규칙.md)을 함께 읽는다.',
       inputSchema: {},
     },
     async () => text(DESIGN_GUIDE)

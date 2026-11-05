@@ -1,6 +1,6 @@
 // 큐보 부품 돌기·구멍 "연결점" 생성 도구 — 3D 모델(부품 수리실 spec)에서 돌기와 구멍 위치를 찾아 부품 DB(ivs_part_catalog.data.connectors)에 기록한다.
 // 브라우저(design.html, 로그인한 선생님 계정)에서 실행: 이 파일을 불러온 뒤 __buildAllConnectors() → __writeAllConnectors().
-// 좌표는 3D 모델 bbox 가운데를 원점으로 한 모델 로컬 좌표(y 위). 기록 형식은 get_assembly_guide(큐보 조립 MCP) 7장.
+// 좌표는 3D 모델 bbox 가운데를 원점으로 한 모델 로컬 좌표(y 위). 기록 형식은 get_part_connectors 로 읽은 기존 값을 따른다.
 //   - 구멍: 원통 벽 삼각형의 법선이 중심을 향하는 것을 이용한 허프 투표(프레임 12종으로 검증: 구멍 수가 이름의 칸 수와 모두 일치)
 //   - 돌기: 몸통 상자(design-collision.js coreBoxes) 밖으로 튀어나온 부분을 묶고, 십자 홈으로 갈라진 조각은 4.5mm 안에서 합침(블록·눈블록)
 //   - 브라켓·기어·바퀴·모터·메인보드·분리기는 자동 탐지 결과라 confidence:'auto'(확인 필요), 프레임·블록·눈블록·리벳은 'checked'

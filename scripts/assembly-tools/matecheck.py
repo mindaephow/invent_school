@@ -25,6 +25,12 @@ def test(pg, h):
     if base > half - 0.5 + 1.0: why.append("돌기 뿌리가 구멍 밖(%.1fmm 떨어짐)" % (base - (half + 0.5)))
     return (not why), why, a, lat
 
+# 옆자리(창고 2)에서 따로 조립하는 부품(extra["side"], k < until)은 안내점(marks)도 옆자리 좌표라서 같은 자세로 읽는다 (stepchecks.py 와 같은 규칙, 2026-11-06 토끼 13번 오탐)
+from asmlib import euler_to_R
+for q in A.parts:
+    sd = q.extra.get("side")
+    if sd and k < sd.get("until", 0):
+        q.p = np.array(sd["p"], float); q.R = np.array(euler_to_R(sd["r"]), float)
 parts = [q for q in A.parts if q.step.index == k]
 if not parts: sys.exit("❌ %s %d번에 부품이 없다" % (name, k))
 print("═══ %s %d번 안내점 맞물림 진단 ═══" % (name, k))
