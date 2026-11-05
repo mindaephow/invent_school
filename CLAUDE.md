@@ -20,7 +20,7 @@
 | 이 조립도가 어디까지 됐나 | `process/인수인계_진행기록_<이름>.md` |
 | 사용자가 바로잡은 기록 | `scripts/assembly-tools/user_diffs/요청차이.md`, `수정저장차이.md` |
 | 대칭 조립·n족 로봇 | `process/ref_대칭조립.md`(모범 = 드롭체커), `process/ref_n족로봇.md`, `python symcheck.py <이름>` |
-| 부품 면·구멍·돌기 사실 | MCP `get_assembly_guide` 3-1·4·4-1절, `get_part_connectors` |
+| 부품 면·구멍·돌기 사실 | 규칙 파일 K3·K4, 부품 DB 상세내역(`data.detail`), MCP `get_part_connectors` |
 | 3D 부품 만들기·등록 | 아래 "3D 부품" 절 |
 | 어떤 내용을 어느 문서에 적나 | `process/문서지도.md` (문서를 고치기 전에 먼저 본다) |
 

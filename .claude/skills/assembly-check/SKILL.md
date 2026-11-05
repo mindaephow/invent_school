@@ -9,6 +9,8 @@ description: 조립검사 — "조립검사", "조립검사 해줘", "겹침 틈
 
 사용: `조립검사 <조립도이름> [번호…]` — 이름은 스크립트 이름(`balance` 등). 이름이 없으면 한 줄로 묻는다. 번호를 안 주면 전체.
 
+**시작 전(시험·실전 똑같이, 건너뛰지 않는다):** ① `cd scripts/assembly-tools && PYTHONIOENCODING=utf-8 python session_start.py --아이디 <내 계정>` 으로 GitHub 최신본을 받고 로컬이 최신인지 본다(조립도 `.py` 가 최신본이어야 한다) ② `process/큐보 부품결합규칙.md` 를 처음부터 읽고 첫 보고에 '이번에 지킬 규칙 3개'를 적는다 ③ 그 뒤에 아래 점검을 돌린다.
+
 `scripts/assembly-tools` 에서 `PYTHONIOENCODING=utf-8` 로 아래를 돌린다(둘 다 읽기만 한다).
 1. `python cubo_joint_check.py <이름> [번호…]` — K1 규칙 2·3·5~10·13~15(리벳 틈, 프레임 겹침, 돌기 한 장, 방향 있는 부품, 볼트·너트).
 2. `python joincheck.py <이름> [번호…]` — 리벳 틈, 볼트·너트가 구멍에 묻힘, 돌기 충돌.
