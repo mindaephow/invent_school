@@ -25,7 +25,7 @@ def main():
     name = sys.argv[1]; only = {int(v) for v in sys.argv[2:]}
     idx = json.load(open(os.path.join(HERE, "refs", name, "index.json"), encoding="utf-8"))
     import re   # 조립도 id 는 <이름>.py 의 Asm("cubo-3-hammerbattle", ...) 첫 인자
-    m = re.search(r'Asm\(\s*"([^"]+)"', open(os.path.join(HERE, name + ".py"), encoding="utf-8").read())
+    m = re.search(r'''Asm\(\s*["']([^"']+)["']''', open(os.path.join(HERE, name + ".py"), encoding="utf-8").read())
     aid = m.group(1) if m else None
     if not aid: sys.exit("❌ %s.py 에서 Asm(\"조립도id\", ...) 를 찾지 못했다" % name)
     db = {(r["step"], r["idx"]): r["note"] for r in db_rows(aid)}

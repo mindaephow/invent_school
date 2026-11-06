@@ -1,6 +1,6 @@
 # 완성품 방향선 그림 만들기(규칙 파일 A10, 규칙 P2 3-2 — 2026-10-15): 완성 사진(00.jpg)에 6×6 모눈(A~F·1~6)과 앞·뒤·위·왼쪽·오른쪽 화살표를 얹어 refs/<이름>/00_1.jpg 로 저장하고 index.json 에 넣는다.
 #   python dirimg.py <이름> --원점 x y --앞 x y --뒤 x y --위 x y --왼쪽 x y --오른쪽 x y [--메모 "추가 안내"]
-#   좌표는 모두 원본 00.jpg 의 픽셀(화살표 끝점). 방향은 눈으로 읽으므로 사용자에게 보여 주고 확인받는다(앞·뒤·위는 완성 3D 화면의 기준 부품 위치로도 확인).
+#   좌표는 모두 원본 00.jpg 의 픽셀(화살표 끝점). 방향은 눈으로 읽으므로 "추정"으로 두고 멈추지 않는다(앞·뒤·위는 완성 3D 화면의 기준 부품 위치로도 확인, 사용자 확인은 마지막 보고).
 #   읽는 법: 앞 = 눈·센서·머리가 향한 쪽 / 위 = 몸이 바닥에서 올라간 쪽 / 왼쪽 = 로봇이 앞을 보고 섰을 때 왼손 쪽(카메라를 마주 보는 로봇이면 화면 오른쪽).
 #   축 표시: 앞 +Z · 뒤 −Z · 위 +Y · 왼쪽 +X · 오른쪽 −X (완성품 기준).
 import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
@@ -65,5 +65,5 @@ def main():
     idx = [r for r in idx if not (int(r.get("step", -1)) == 0 and int(r.get("idx", -1)) == 1)] + [row]
     idx.sort(key=lambda r: (int(r["step"]), int(r["idx"])))
     json.dump(idx, open(ip, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-    print("저장:", out, "| index.json 에 step 0 idx 1 추가"); print("→ 사용자에게 보여 주고 확인받는다. 그다음 02 3-2 ④ 로 DB 에 올린다(__ivsRefsUpload).")
+    print("저장:", out, "| index.json 에 step 0 idx 1 추가"); print("→ 추정으로 표시하고 멈추지 않는다(확인은 마지막 보고). 바로 02 3-2 ④ 로 DB 에 올린다(__ivsRefsUpload).")
 main()

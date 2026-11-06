@@ -267,6 +267,17 @@ BOOKS = {
         },
         "extra": [],
     },
+    "windmill": {   # 1권 2차시 풍차 27~31쪽 — 27쪽은 위에 완성품·LIST, 그림 2칸(1~2)은 맨 아랫줄. 28~30쪽 6칸씩(3~20), 31쪽 21~25 + 완성
+        "volume": 1,
+        "pages": {
+            27: [(0, (330, 465, 940, 1290), "교재 27쪽 맨 앞 완성품 사진 — 풍차: 십자 날개·가운데 큰 기어·아래 DC모터와 메인보드·바닥판 방향은 여기서 확인"), (1, box("L", 3), ""), (2, box("R", 3), "")],
+            28: [(3 + i, box(*g), "") for i, g in enumerate(GRID)],
+            29: [(9 + i, box(*g), "") for i, g in enumerate(GRID)],
+            30: [(15 + i, box(*g), "") for i, g in enumerate(GRID)],
+            31: [(21 + i, box(*g), "") for i, g in enumerate(GRID[:5])] + [(99, box("R", 3), "완성")],
+        },
+        "extra": [],
+    },
 }
 
 def page_image(volume, page):

@@ -15,7 +15,7 @@ sys.stdout.reconfigure(encoding="utf-8")
 here = os.path.dirname(os.path.abspath(__file__))
 
 FIX = {
-    "격자": "python holefit.py <이름> <번호> <라벨> <칸> <줄> <모서리 8개> [어두운판] 로 규칙대로 다시 만든다(옵션 추가·손으로 만든 격자 금지). 기준 미달(판이 가려 구멍이 일부만 보임)이면 멈추지 말고 python infer_grid.py <이름> <번호> <라벨> <칸> <줄> 모서리8개 --판 <앞번호>:<라벨> --거울 <대칭번호> 줄 --링 'x,y;…' 로 앞·뒤 번호·대칭·링 정보를 모아 유추한다(05_조립 0-1). 유추로도 가설이 하나로 안 갈릴 때만 멈추고 시도·수치·필요한 추가 근거를 보고한다.",
+    "격자": "python holefit.py <이름> <번호> <라벨> <칸> <줄> <모서리 8개> [어두운판] 로 규칙대로 다시 만든다(옵션 추가·손으로 만든 격자 금지). 기준 미달(판이 가려 구멍이 일부만 보임)이면 멈추지 말고 python infer_grid.py <이름> <번호> <라벨> <칸> <줄> 모서리8개 --판 <앞번호>:<라벨> --거울 <대칭번호> 줄 --링 'x,y;…' 로 앞·뒤 번호·대칭·링 정보를 모아 유추한다(05_조립 0-1). 유추로도 가설이 하나로 안 갈리면 멈추지 말고 시도·수치를 읽기 표 판단과정에 ⚠ 로 적고 다음 번호로 간다(마지막 보고에서 모아 알린다).",
     "카메라": "python axes_fit.py <이름> <번호> <라벨> <칸> <줄> <칸방향> <줄방향> 로 그 번호 격자에서 계산한다(오차 ≤2px, 점 4개 이상). 격자가 ❌ 면 격자부터 해결한다.",
     "증거": "화면에서 책과 나란히 비교한 뒤 python record_check.py <이름> <번호> <캡처.png> \"<비교 결과>\" 로 증거를 남긴다(내용이 바뀌었으면 다시).",
     "증명": "python overlay_check.py <이름> <번호> 로 모델을 책 그림 위에 같은 카메라로 겹쳐 NN_3.jpg 를 만들고(점 오차 px), 부품 상자가 책 부품 위에 올라갔는지 눈으로 본 뒤 읽기 표 판단과정에 한 줄 적고 DB 에 올린다.",
@@ -38,6 +38,15 @@ def check(name, only=None):
     asm = load(os.path.join(here, name + "_asm.json"), {"steps": []})["steps"]
     rules = load(os.path.join(here, name + "_rules.json"), {})
     strict = True
+    _dbmiss = {}   # 번호 → 안 올린 그림 목록(None = 점검 실패). img_db 를 켠 조립도만 본다.
+    if rules.get("img_db"):
+        import subprocess, re
+        _p = subprocess.run([sys.executable, os.path.join(here, "dbimgcheck.py"), name], capture_output=True, text=True, encoding="utf-8", env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+        if not _p.stdout.startswith("조립도"): _dbmiss = None
+        else:
+            for _l in _p.stdout.splitlines():
+                if _l.startswith("❌ 안 올림") and "없음" not in _l:
+                    for _m in re.findall(r"(\d+)_(\d+)", _l.split(":", 1)[1]): _dbmiss.setdefault(int(_m[0]), set()).add("%s_%s" % _m)
     approvals = load(os.path.join(here, name + "_approvals.json"), {})
     evid = load(os.path.join(here, name + "_evidence.json"), {})
     read = load(os.path.join(here, name + "_read.json"), {})
@@ -136,6 +145,10 @@ def check(name, only=None):
         # R 읽기 표 ───────────────
         r = read.get(str(k), {}); miss = [f for f in ("면", "링", "부품") if not str(r.get(f, "")).strip()]
         items.append(("✅", "읽기 표", "채워짐") if not miss else (bad, "읽기 표", "빈 칸: " + ", ".join(miss)))
+        if rules.get("img_db"):   # I 그림 DB — 만든 그림은 만든 자리에서 올린다(큐보 부품결합규칙.md I1). 점검이 실패하면 ✅ 로 두지 않는다.
+            if _dbmiss is None: items.append(("⚠", "그림DB", "DB 그림 비교를 못 했다(dbimgcheck 실패) — python dbimgcheck.py %s 로 직접 본다" % name))
+            elif k in _dbmiss: items.append((bad, "그림DB", "로컬 그림이 DB 에 없음: %s — 올리고(viewer_snippets.md 3) 화면을 새로 불러와 🖼 장수를 확인한다" % ", ".join(sorted(_dbmiss[k]))))
+            else: items.append(("✅", "그림DB", "로컬 그림이 모두 DB 에 있음"))
         if rules.get("overlay_proof"):   # P 증명 — 책 그림 위 겹침 그림(NN_3.jpg)
             items.append(("✅", "증명", "겹침 그림 있음(NN_3.jpg)") if os.path.exists(os.path.join(R, "%02d_3.jpg" % k)) else (bad, "증명", "책 그림 위 겹침 그림(NN_3.jpg)이 없음 — overlay_check.py 로 만든다"))
         if k in done:   # 사용자가 화면에서 직접 ✓ 한 번호는 사용자 승인으로 본다(❌ → ⚠)

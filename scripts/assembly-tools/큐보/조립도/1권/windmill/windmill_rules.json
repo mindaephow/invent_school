@@ -1,4 +1,8 @@
 {
  "parts_sum": true,
- "mate_marks": true
+ "mate_marks": true,
+ "strict": true,
+ "orient_check": true,
+ "placecheck": true,
+ "img_db": true
 }
