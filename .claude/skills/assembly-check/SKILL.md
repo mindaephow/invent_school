@@ -16,7 +16,7 @@ description: 조립검사 — "조립검사", "조립검사 해줘", "겹침 틈
 2. `python joincheck.py <이름> [번호…]` — 리벳 틈, 볼트·너트가 구멍에 묻힘, 돌기 충돌.
 3. **화살표(G1·G12):** 번호마다 `python matecheck.py <이름> <번호>` 를 전 번호(번호를 줬으면 그 번호) 돌려 끝줄 "맞물리지 않는 안내점 N개"를 모은다. 0개가 아니면 그 번호의 어긋난 안내점을 적는다. 부품이 없는 번호(`❌ …번에 부품이 없다`)는 건너뜀이 아니라 "부품 없음"으로 적는다. 결합 전 모습 규칙(리벳·T축·부시·볼트·너트는 띄워서 화살표, `seated` 금지, 화살표 수 = 돌기 수)도 이 단계에서 본다.
 4. **부품 방향:** `runpy.run_path("<이름>.py", run_name="probe")` 로 읽은 뒤 `asmlib.orient_report(A)` — 단계의 부품마다 구멍 면·돌기 면이 세계 어느 쪽을 보는지 표로 나온다(`python <이름>.py --orient` 는 `_asm.json` 을 덮어쓰니 쓰지 않는다). 이 표를 책과 나란히 맞추는 것은 교재검사 몫이므로 방향 값만 보고한다.
-5. **연결점(K3):** 부품마다 `check_chapter_parts(권, 차시)` 로 `confidence` 가 `checked` 인지(`auto`·없음은 확인 필요), 필요하면 `get_part_connectors` 와 `conn.json` 의 구멍·돌기 id 가 같은지 본다. 권·차시를 모르면 한 줄로 묻는다.
+5. **연결점(K3):** 부품마다 `check_chapter_parts(권, 차시)` 로 `confidence` 가 `checked` 인지(`auto`·없음은 확인 필요), `auto`·없음·면 이름 미확정이 하나라도 나오면 **묻지 말고 바로 그 부품을 부품 DB 에서 조회한다** — `get_part_connectors`(구멍·돌기·note)와 `run_sql` 의 `data->'detail'`, 면 이름은 `design-faces.js` 의 `CONFIRMED` 목록에 있는지 — 그리고 `conn.json` 의 구멍·돌기 id 가 같은지 본 뒤 "값이 어디서 왔는지(관리자 기록/자동탐지/추정)"까지 보고한다. 권·차시를 모르면 한 줄로 묻는다.
 6. 기울어진 결합만 `python tiltjoin.py <이름> <번호>`.
 
 보고할 때 지킬 것

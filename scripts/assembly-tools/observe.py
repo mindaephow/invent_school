@@ -48,11 +48,25 @@ def check(name, step):
         if o["verdict"] != "같다": miss.append("판정 '다르다' — %s %s: %s" % (o["kind"], o["point"], o["note"]))
     return miss
 
+def _plausible(b, s):
+    """두 크롭이 '같은 부분'일 가능성의 최소 검증: 크기·가로세로 비율·내용 유무(밝기 배치 상관은 렌더 색이 달라 오탐이 많아 뺐다)."""
+    bad = []
+    (bh, bw), (sh, sw) = b.shape[:2], s.shape[:2]
+    if min(bh, bw) < 80: bad.append("책 크롭이 너무 작다(%dx%d, 80px 이상)" % (bw, bh))
+    if min(sh, sw) < 60: bad.append("화면 크롭이 너무 작다(%dx%d, 60px 이상)" % (sw, sh))
+    ar = (bw / bh) / (sw / sh)
+    if not 0.6 <= ar <= 1.67: bad.append("가로세로 비율이 많이 다르다(책/화면 %.2f배)" % ar)
+    gb = cv2.cvtColor(b, cv2.COLOR_BGR2GRAY); gs = cv2.cvtColor(s, cv2.COLOR_BGR2GRAY)
+    if gb.std() < 12 or gs.std() < 12: bad.append("한쪽 크롭이 거의 빈 배경이다(밝기 변화 없음)")
+    return bad
+
 def add(name, step, kind, point, bookp, screenp, verdict, note):
     if kind not in KINDS: sys.exit("❌ 종류는 %s 중 하나" % "·".join(KINDS))
     if verdict not in ("같다", "다르다"): sys.exit("❌ 판정은 같다/다르다")
     if len(note.strip()) < 20: sys.exit("❌ 한 줄은 20자 이상 — 책과 화면에서 무엇을 어떻게 비교했는지(어느 면·리벳·돌기가 어느 쪽인지)를 쓴다")
     b = _imread(bookp); s = _imread(screenp); h = 520
+    bad = _plausible(b, s)   # 책 크롭과 화면 크롭이 같은 부분인지 기본 검증(사용자 승인 2026-11-06)
+    if bad: sys.exit("❌ 두 크롭이 같은 부분으로 안 보인다 — " + " / ".join(bad) + " — 같은 지점을 같은 범위로 다시 자른다(너무 작거나 비어 있거나 가로세로 비율이 다르면 막는다).")
     b = cv2.resize(b, (int(b.shape[1] * h / b.shape[0]), h)); s = cv2.resize(s, (int(s.shape[1] * h / s.shape[0]), h))
     for im, t in ((b, "책"), (s, "화면")): cv2.putText(im, t, (8, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
     side = np.full((h, b.shape[1] + s.shape[1] + 8, 3), 255, np.uint8); side[:, :b.shape[1]] = b; side[:, b.shape[1] + 8:] = s
