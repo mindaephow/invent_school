@@ -677,7 +677,7 @@ export function registerCuboAssemblyTools(server, getSupabase) {
           if (!parts.length) { lines.push('⚠ 이 차시에는 부품 목록(LIST)이 등록돼 있지 않아요 — 교재 그림에서 부품을 읽어 교재관리에 먼저 적어야 해요.') }
           const ids = parts.map((q) => q.partId)
           const { data: rows, error: e2 } = ids.length
-            ? await sb.from('ivs_part_catalog').select('id, name:data->>name, shape:data->spec->shapes->0->>type, connectors:data->connectors').in('id', ids)
+            ? await sb.from('ivs_part_catalog').select('id, name:data->>name, shape:data->spec->shapes->0->>type, connectors:data->connectors, detail:data->detail').in('id', ids)
             : { data: [], error: null }
           if (e2) return fail(e2.message)
           const byId = new Map((rows || []).map((r) => [r.id, r]))
@@ -693,7 +693,10 @@ export function registerCuboAssemblyTools(server, getSupabase) {
             const np = c ? (c.pegs || []).length : 0, nh = c ? (c.holes || []).length : 0
             const hasModel = !!r.shape
             const conf = c ? (c.confidence || '기록됨') : '연결점 없음'
-            const confirmed = CONF ? CONF.test(r.name) : false
+            // 면 이름 확정: 규칙 K4 — DB 상세내역의 '면이름_확정' 항목을 읽는다(코드 이름 목록 CONFIRMED 는 옛 확정 부품만 남은 보조)
+            let _det = r.detail
+            if (typeof _det === 'string') { try { _det = JSON.parse(_det) } catch (e) { _det = null } }
+            const confirmed = !!(_det && _det['면이름_확정']) || (CONF ? CONF.test(r.name) : false)
             const flags = []
             if (!hasModel) { flags.push('3D 모델 없음'); noModel.push(r.name) }
             if (!c) { flags.push('연결점 없음'); if (hasModel) needConnectors.push(r.name) }
