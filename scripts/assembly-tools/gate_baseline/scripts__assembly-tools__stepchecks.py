@@ -34,6 +34,17 @@ def _pose(pt, k):   # k번에서의 자세: 옆자리에서 만드는 중이면 
     b = getattr(pt, "_base", None)
     return (np.array(b[0], float), np.array(b[1], float)) if b else (np.array(pt.p, float), np.array(pt.R, float))
 
+def pose_at(A, q, k):
+    """k번 시점의 부품 q 자세 — 앞 번호 부품을 k번 이전에 옮긴 것(moveMade·move)만 반영하고, k번 뒤에 옮긴 것은 되돌려 읽는다."""
+    from asmlib import euler_to_R
+    key = "%d:%d" % (q.step.index, q.step.parts.index(q))
+    for j in range(k, 0, -1):
+        e = (A.steps[j - 1].kw.get("moveMade") or {}).get(key)
+        if e: return np.array(e["p"], float), np.array(euler_to_R(e["r"]), float)
+    mv = q.extra.get("move")   # 옛 방식(extra["move"]): 그 번호부터 옮긴 자리·자세
+    if mv and mv.get("at", 10 ** 6) <= k: return np.array(mv["p"], float), np.array(euler_to_R(mv["r"]), float)
+    return _pose(q, k)
+
 def bush_wrong(A, k):
     """k번의 부시 중 넓은 쪽(모델 −y)이 닿은 판 쪽을 향한 것(규칙: 좁은 쪽 +y 가 판 쪽)의 번호(0부터)를 돌려준다.
     판정 못 하는 것(닿는 부품 없음·양쪽 다 닿음)은 통과로 친다 — 틀린 것만 막는다."""

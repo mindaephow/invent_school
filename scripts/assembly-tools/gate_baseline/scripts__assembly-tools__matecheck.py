@@ -3,7 +3,7 @@
 # 배경: 뷰어(design-assembly.js mateGuides)는 "완성(제자리) 자세에서 돌기가 구멍에 들어간 쌍"에만 화살표를 그린다. 맞물림 조건(design-mates.js check)은 세 가지다.
 #   ① 방향: 돌기 방향 = 구멍 들어가는 방향(관통 구멍은 반대도 허용)  ② 축 어긋남 ≤ 1.2mm  ③ 깊이: 돌기 끝이 구멍 안으로 ≥1mm, 돌기 뿌리가 구멍 끝을 넘지 않음
 # 이 도구는 번호의 marks 마다 그 자리의 구멍(또는 받는 쪽이면 돌기 끝)을 찾아, 새 부품의 모든 돌기를 위 세 조건에 대 보고 어느 조건에서 걸리는지 말한다.
-# 읽은 좌표는 스크립트 마지막(모든 이동이 끝난 뒤) 위치다 — 그 번호 시점과 다를 수 있는 번호(옮겨 붙는 부품)는 참고만 한다.
+# 읽는 좌표는 그 번호(k번) 시점의 자세다(stepchecks.pose_at) — 뒤 번호에서 옮긴 것은 되돌려 읽는다.
 import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import os, runpy, sys
 import numpy as np
@@ -20,18 +20,19 @@ def test(pg, h):
     if not (al > 0.98 or (h.get("through") and al < -0.98)): why.append("방향 불일치(aligned %.2f)" % al)
     ax = np.array(h["dir"]) if al > 0 else -np.array(h["dir"])
     rel = pg["pos"] - h["pos"]; a = float(np.dot(rel, ax)); lat = float(np.linalg.norm(rel - ax * a))
-    half = h["len"] / 2; tip = a + pg["len"] / 2; base = a - pg["len"] / 2
     if lat > 1.2: why.append("축 어긋남 %.1fmm > 1.2" % lat)
+    if h.get("len") is None:   # 구멍 깊이를 모르는 부품(연결점에 len 없음) — 깊이 조건은 건너뛴다
+        return (not why), why, a, lat
+    half = h["len"] / 2; tip = a + pg["len"] / 2; base = a - pg["len"] / 2
     if tip < -half + 1.0: why.append("돌기 끝이 구멍에 안 들어감(깊이 %.1f — 이만큼 더 가야 한다)" % (tip - (-half + 1.0)))
     if base > half - 0.5 + 1.0: why.append("돌기 뿌리가 구멍 밖(%.1fmm 떨어짐)" % (base - (half + 0.5)))
     return (not why), why, a, lat
 
-# 옆자리(창고 2)에서 따로 조립하는 부품(extra["side"], k < until)은 안내점(marks)도 옆자리 좌표라서 같은 자세로 읽는다 (stepchecks.py 와 같은 규칙, 2026-11-06 토끼 13번 오탐)
-from asmlib import euler_to_R
+# 모든 부품을 k번 시점 자세로 놓고 읽는다(stepchecks.pose_at): 옆자리(창고 2) 부품은 옆자리 자세, 뒤 번호에서 조립품 전체를 옮기거나 세운 것은 그 전 자세.
+# 안내점(marks)은 그 번호 시점 좌표라서 스크립트 끝 위치로 읽으면 어긋나 보인다 (2026-11-06 토끼 13번 옆자리 오탐, 양팔저울 1번 3번-뒤 이동 오탐)
+import stepchecks
 for q in A.parts:
-    sd = q.extra.get("side")
-    if sd and k < sd.get("until", 0):
-        q.p = np.array(sd["p"], float); q.R = np.array(euler_to_R(sd["r"]), float)
+    if q.step.index <= k: q.p, q.R = stepchecks.pose_at(A, q, k)
 parts = [q for q in A.parts if q.step.index == k]
 if not parts: sys.exit("❌ %s %d번에 부품이 없다" % (name, k))
 print("═══ %s %d번 안내점 맞물림 진단 ═══" % (name, k))
@@ -47,17 +48,19 @@ for q in parts:
             if recv:   # 구멍을 받는 부품: 안내점은 고정된 돌기 끝 — 그 돌기가 q 의 구멍에 들어가는지
                 for c in o.conn["pegs"]:
                     pg = o.world("peg", c)
-                    if np.linalg.norm(pg["pos"] + pg["dir"] * pg["len"] / 2 - m) > 3: continue
+                    _dv = np.array(q.extra.get("dir") or pg["dir"], float)   # 안내점은 끼우는 쪽(dir)에서 먼저 닿는 돌기 끝(asmlib.recv, G21)
+                    _end = pg["pos"] + pg["dir"] * pg["len"] / 2 * (1 if float(np.dot(_dv, pg["dir"])) >= 0 else -1)
+                    if np.linalg.norm(_end - m) > 3: continue
                     found = True
-                    best = min(((test(pg, q.world("hole", hc)), hc["id"]) for hc in q.conn["holes"]), key=lambda t: t[0][3])
+                    best = min(((test(pg, q.world("hole", hc)), hc["id"]) for hc in q.conn["holes"]), key=lambda t: (not t[0][0], t[0][3]))   # 맞물리는 구멍이 있으면 그것이 먼저(축 어긋남이 같을 때 안 끼워진 것이 이기지 않게)
                     (ok, why, a, lat), hid = best
                     print("  %s%s 안내점 %s ← %s %s 돌기 ↔ 이 부품 %s 구멍: %s" % (q.n, "", rnd(m), o.n, c["id"], hid, "✅ 맞물림" if ok else "❌ " + "; ".join(why))); n_bad += (not ok)
             else:      # 돌기를 끼우는 부품: 안내점은 받는 구멍 — q 의 돌기 중 그 구멍에 가장 가까운 것
                 for hc in o.conn["holes"]:
                     h = o.world("hole", hc); rel = m - h["pos"]; al = float(np.dot(rel, h["dir"]))
-                    if np.linalg.norm(rel - np.array(h["dir"]) * al) > 1.8 or abs(al) > h["len"] / 2 + 3: continue
+                    if np.linalg.norm(rel - np.array(h["dir"]) * al) > 1.8 or abs(al) > (h.get("len") or 0) / 2 + 3: continue
                     found = True
-                    res = sorted(((test(q.world("peg", pc), h), pc["id"]) for pc in q.conn["pegs"]), key=lambda t: t[0][3])[:3]
+                    res = sorted(((test(q.world("peg", pc), h), pc["id"]) for pc in q.conn["pegs"]), key=lambda t: (not t[0][0], t[0][3]))[:3]   # 맞물리는 돌기가 먼저(축 어긋남이 같을 때 안 끼워진 돌기가 이기지 않게)
                     for (ok, why, a, lat), pid in res:
                         print("  %s 안내점 %s → %s %s 구멍 ↔ 이 부품 돌기 %s: %s (깊이 %.1f, 축 어긋남 %.1f)" % (q.n, rnd(m), o.n, hc["id"], pid, "✅ 맞물림" if ok else "❌ " + "; ".join(why), a, lat))
                     n_bad += (not res[0][0][0])

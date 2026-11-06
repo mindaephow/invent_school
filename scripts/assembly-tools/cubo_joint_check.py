@@ -19,6 +19,8 @@ import coupling_catalog as cc, stepchecks, obb
 from asmlib import _mate
 dims = stepchecks._dims()
 _orig = cc.view
+PEGGED = ("DC모터", "서보모터", "메인보드", "IR센서", "LED센서", "터치센서")   # 프레임에 돌기로 바로 꽂는 부품 — 돌기·깊이가 블록과 같아 블록 규칙(4·5~7·13)을 따른다(센서는 사용자 2026-11-06)
+
 def view(A, k):
     vs = _orig(A, k)
     return [o for o in vs if not any(q is not o and q.new and not o.new and q.n == o.n and np.allclose(q.p, o.p, atol=0.01) and np.allclose(q.R, o.R, atol=1e-3) for q in vs)]
@@ -113,7 +115,7 @@ def check(A, k):
             d_ = min(float(np.linalg.norm(x - y)) for x in ha for y in hb)
             if abs(d_ - 10.0) > 0.3: out.append("규칙16 옆 프레임 %s↔%s 맞닿은 구멍 피치 %.1fmm (10 이어야 함)" % (a.n, b.n, d_))
     # 규칙 5~7
-    for b in [o for o in vs if o.new and (("블록" in o.n) or o.n in ("DC모터", "서보모터", "메인보드", "리벳"))]:
+    for b in [o for o in vs if o.new and (("블록" in o.n) or o.n in PEGGED or o.n == "리벳")]:
         for pg in pf[id(b)]:
             fr = sorted({a.n for a in vs if a is not b and "프레임" in a.n and any(inside(pg, ho) for ho in hf[id(a)])})
             if len(fr) >= 2: out.append("규칙5~7 %s %s 돌기가 프레임 두 장에: %s" % (b.n, pg["id"], "+".join(fr)))
@@ -123,7 +125,7 @@ def check(A, k):
         if len(fr) >= 2 and not (c_.n == "리벳" or "블록" in c_.n or c_.n in ("8볼트", "12볼트", "너트")):
             out.append("규칙1 %s 가 프레임 %d장을 이음(프레임끼리는 리벳·블록으로 잇는다)" % (c_.n, len(fr)))
     # 규칙 4 (블록·모터 돌기는 프레임에 끼워질 때 프레임의 먼 쪽 면 밖으로 나가지 않는다 — 돌기 끝이 구멍 반대편 면을 0.5mm 넘으면 위반)
-    for b_ in [o for o in vs if o.new and (("블록" in o.n) or o.n in ("DC모터", "서보모터", "메인보드"))]:
+    for b_ in [o for o in vs if o.new and (("블록" in o.n) or o.n in PEGGED)]:
         for pg in pf[id(b_)]:
             for a in vs:
                 if a is b_ or "프레임" not in a.n: continue
@@ -150,7 +152,7 @@ def check(A, k):
         d = float(w @ (ref.p - o.p)); toward = d > 0
         if toward != (dec["relation"] == "toward"): out.append("규칙10 %s %s 이 책(%s)과 다름: 책 %s %s 쪽 / 모델 %s" % (o.n, what, dec.get("evidence", "근거 없음"), dec["ref"], dec["relation"] == "toward" and "을 향함" or "반대쪽", toward and "향함" or "반대쪽"))
     # 규칙 13 (돌기로 프레임에 바로 꽂는 부품 — 블록·모터·메인보드·센서: 몸체와 프레임 면 사이 틈 0)
-    for P in [o for o in vs if o.new and o.conn["pegs"] and o.n in dims and (("블록" in o.n) or o.n in ("DC모터", "서보모터", "메인보드", "IR센서", "LED센서"))]:
+    for P in [o for o in vs if o.new and o.conn["pegs"] and o.n in dims and (("블록" in o.n) or o.n in PEGGED)]:
         done = set()
         for pg in pf[id(P)]:
             for F in vs:
