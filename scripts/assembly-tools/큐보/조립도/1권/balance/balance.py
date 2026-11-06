@@ -41,9 +41,7 @@ _FX = np.diag([1.0, -1.0, -1.0])
 _g2 = A.group('2번 조립(창고 2)', [v2_0, v2_1, v2_2, v2_3])
 _pv2 = np.array([0.0, 3.5, 0.0])
 _new = {id(q): (_FX @ (np.array(q.p, float) - _pv2) + _pv2 + np.array([0.0, 34.0, 0.0])) for q in _g2.parts}
-_mk3 = {id(v2_0): [rnd([b.p[0], 35.0, b.p[2]]) for b in (v1_1, v1_2, v1_3, v1_4)],
-        id(v2_1): [rnd([_new[id(v2_1)][0], 5.0, _new[id(v2_1)][2]])], id(v2_2): [rnd([_new[id(v2_2)][0], 5.0, _new[id(v2_2)][2]])]}
-s3.move_made(_g2, _FX, pivot=_pv2, shift=(0.0, 34.0, 0.0), dir=[0, 1, 0], hover=60, group='2번 조립', marks=_mk3)
+s3.move_made(_g2, _FX, pivot=_pv2, shift=(0.0, 34.0, 0.0), dir=[0, 1, 0], hover=60, group='2번 조립', marks="auto")
 A.meta["xform"] = {"at": 3, "m": _RS.tolist(), "t": [0.0, 20.0, 0.0]}
 A.meta["lift"] = {**(A.meta.get("lift") or {}), **{str(_k_): 16.0 for _k_ in (12, 13, *range(18, 22), *range(23, 34))}}   # 12번부터 축 끝·부시가 판 아래로 나와 바닥(y 0) 아래로 내려가 화면 전체를 16mm 띄운다(교재 바닥 기준)
 A.meta["lift"]["12"] = 36.0   # 12번: 부시를 판 아래로 30mm 띄워(책 12번) 바닥 아래로 내려가지 않게 화면 전체를 올린다
@@ -104,9 +102,8 @@ _h29 = v8_0.hole('h29')['pos']   # 판 칸10 줄2 구멍 위치(결합 계산)
 _pz12 = float(_h29[2]); _plate_bot12 = _pz12 + _T('315프레임') / 2   # 판 아랫면 z(위 = −z)
 _ax_len = float(_DIM['축'][1])
 # 축 끝이 판 아래로 부시 두께만큼 나온다(책 12번 옆 그림) → 축 가운데 z = 판 아랫면 + 부시 두께 − 축 길이/2 (쌓기 계산)
-v12_1 = s12.place('축', euler_to_R([-90, 0, 0]), (float(_h29[0]), float(_h29[1]), _plate_bot12 + _T('부시') - _ax_len / 2), dir=[0, 0, -1], hover=50, pegDepth=5, marks=[[float(_h29[0]), float(_h29[1]), _pz12 - _T('315프레임') / 2]])
+v12_1 = s12.place('축', euler_to_R([-90, 0, 0]), (float(_h29[0]), float(_h29[1]), _plate_bot12 + _T('부시') - _ax_len / 2), dir=[0, 0, -1], hover=50, pegDepth=5, enter=(v8_0, 'h29'))
 v12_2 = s12.recv('부시', euler_to_R([-90, 0, 0]), {'h1': (v12_1, 'p1')}, dir=[0, 0, 1], hover=30)   # 판 아래에서 올라와 축 끝을 문다 — 위치는 축 돌기 끝에서 자동 계산(손 z 오프셋 삭제)
-_b12 = v12_1.peg('p1'); v12_2.extra['marks'] = [[round(float(v), 3) for v in (_b12['pos'] - _b12['dir'] * _b12['len'] / 2)]]   # 안내점 = 부시가 무는 축 끝(돌기 뿌리 쪽, 축 돌기에서 계산)
 A.steps[11].cam = (-0.48, 0.80, False, None, None, None); A.steps[11].camSrc = 'eye'   # 12번 카메라 = 12_P(315프레임 칸9~13·줄1~3, 15점) axes_fit 오차 0.41px(roll 5.8°)
 
 s13 = A.step('[교재 13] 큰 기어를 위에서 내려 축 위쪽 끝에 끼워요(큰기어 가운데 구멍 h3 = 축).')
@@ -118,7 +115,7 @@ _g19 = A.find('3단블록 2번').peg('p8'); _d19 = np.array(_g19['dir'], float)
 _z19 = float((np.array(_g19['pos'], float) - _d19 * _g19['len'] / 2 + _d19 * _T('315프레임') / 2)[2])   # 19번 판 가운데 z(블록 돌기에 앉는 자리)
 _gear_top13 = _z19 + _T('315프레임') / 2 + _T('27프레임') + _T('17프레임') + _T('27프레임')
 _gear_z13 = _gear_top13 + _T('큰기어') / 2
-v13_1 = s13.recv('큰기어', euler_to_R([90, 0, 0]), {'h3': (v12_1, 'p1')}, p=(float(_tip13[0]), float(_tip13[1]), _gear_z13), dir=[0, 0, -1], hover=abs(float(_tip13[2]) - _gear_z13) + _T('큰기어') / 2 + 20)
+v13_1 = s13.place_hang('큰기어', euler_to_R([90, 0, 0]), 'h3', v12_1, 'p1', _gear_top13, (0, 0, 1), dir=[0, 0, -1], hover=abs(float(_tip13[2]) - _gear_z13) + _T('큰기어') / 2 + 20, recv=True)   # 기어 윗면 = 뒤 번호 3겹 아래 면(면과 면 체인), 기어는 축을 따라 그 면에 닿는다(G21)
 A.steps[12].cam = (-0.39, 0.67, False, None, None, None); A.steps[12].camSrc = 'eye'   # 13번 카메라 = 13_P(315프레임 칸9~13·줄1~3, 15점) axes_fit 오차 0.19px
 
 s14 = A.step('[교재 14] (새 작업 공간) 검정 27프레임의 칸4 줄2 구멍에 리벳을 꽂고, 빨간 17프레임을 그 리벳 위로 내려 끝 구멍에 끼워요.')
@@ -163,11 +160,7 @@ _hl18 = np.array(v14_0.hole('h7')['pos'], float)
 _tg18 = np.array([float(v12_1.p[0]), float(v12_1.p[1]), float(v13_1.p[2]) - 4.5 - 2.5], float)
 _R18 = euler_to_R([0, 0, 90]); _sh18 = _tg18 - _hl18
 def _moved18(pos): return _R18 @ (np.array(pos, float) - _hl18) + _hl18 + _sh18
-_mk18 = {}
-for _q in (v14_1, v17_3):   # 축이 지나는 위쪽 부품(17프레임·위 27프레임): 옮긴 뒤 축 선(x,y)에 가장 가까운 구멍 자리 = 안내점
-    _best = min(((_moved18(_hh['pos']), _hh['id']) for _hh in (_q.hole(_i['id']) for _i in __import__('json').load(open('conn.json', encoding='utf-8'))[_q.n]['holes'])), key=lambda t: float(np.hypot(t[0][0] - _tg18[0], t[0][1] - _tg18[1])))
-    _mk18[id(_q)] = [[float(_v) for _v in _best[0]]]
-s18.move_made(_g18, _R18, pivot=_hl18, shift=tuple(float(v) for v in _sh18), dir=[0, 0, -1], hover=abs(float(_tip13[2]) - float(_gear_top13)) + 20, group='17번 조립', marks=_mk18)   # 결합 전: 17번 조립 바닥이 축 끝 위로 완전히 뜨게(축이 기어 윗면 위로 튀어나온 길이 + 여유 20)
+s18.move_made(_g18, _R18, pivot=_hl18, shift=tuple(float(v) for v in _sh18), dir=[0, 0, -1], hover=abs(float(_tip13[2]) - float(_gear_top13)) + 20, group='17번 조립', marks="auto")   # 결합 전: 17번 조립 바닥이 축 끝 위로 완전히 뜨게(축이 기어 윗면 위로 튀어나온 길이 + 여유 20)
 A.steps[17].cam = (-1.51, 0.52, False, None, None, None); A.steps[17].camSrc = 'eye'   # 18번: 위 27프레임 구멍 14개(2줄×7칸, 책을 2배 확대해 읽은 ±3px) PnP(평균 1.60px, 한 평면이라 거친 값) — 어두운 판이라 holefit 는 쓰지 못했다
 
 s19 = A.step('[교재 19] 검정 315프레임을 위에서 내려 상자 위로 나온 돌기·축 끝 6곳에 끼워요(왼쪽 끝 = 블록 2 의 돌기 셋, 가운데 = 블록 5·8 의 돌기 둘, 오른쪽 = 축 끝).')
@@ -179,9 +172,8 @@ A.steps[18].cam = (-0.56, 0.75, False, None, None, None); A.steps[18].camSrc = '
 
 s20 = A.step('[교재 20] 판 구멍으로 나온 축 끝에 작은기어를 위에서 끼우고 그 위에 빨간 부시를 끼워요(작은기어·부시 구멍 = 축).')
 # 책 20번: 19번 315프레임 판 위로 축 끝이 나와 있고 초록 화살표 하나가 부시→작은기어→축 끝으로 내려간다. 작은기어는 판 윗면에 앉고 부시는 그 위(좁은 쪽이 아래 = 기어 쪽, 규칙 부시 방향).
-_ax20 = v12_1.peg('p1'); _top20 = v19_0.p[2] - _T('315프레임') / 2   # 판 윗면 z(위 = −z)
-v20_0 = s20.recv('작은기어', euler_to_R([90, 0, 0]), {'h1': (v12_1, 'p1')}, p=(float(v12_1.p[0]), float(v12_1.p[1]), float(_top20) - _T('작은기어') / 2), dir=[0, 0, -1], hover=40)
-v20_1 = s20.recv('부시', euler_to_R([90, 0, 0]), {'h1': (v12_1, 'p1')}, p=(float(v12_1.p[0]), float(v12_1.p[1]), float(_top20) - _T('작은기어') - _T('부시') / 2), dir=[0, 0, -1], hover=80)
+v20_0 = s20.place_rest('작은기어', euler_to_R([90, 0, 0]), 'h1', v19_0, 'h41', (0, 0, -1), dir=[0, 0, -1], hover=40, recv=True, via=(v12_1, 'p1'))
+v20_1 = s20.place_rest('부시', euler_to_R([90, 0, 0]), 'h1', v20_0, 'h1', (0, 0, -1), dir=[0, 0, -1], hover=80, recv=True, via=(v12_1, 'p1'))
 A.steps[19].cam = (-0.48, 0.61, False, None, None, None); A.steps[19].camSrc = 'eye'   # 20번: 판 윗면 구멍 12개 책 구멍 비침 중심 PnP(눕힌 좌표 변환, 평균 1.85px, 한 평면이라 거친 값)
 
 s21 = A.step('[교재 21] 상자 왼쪽 끝으로 나온 돌기 네 개(블록 6·7 의 줄1·줄3 돌기)에 검정 39프레임을 −x 쪽에서 끼워요(칸3·칸5 줄1·줄3 구멍).')
@@ -212,10 +204,9 @@ _hl23 = {h: np.array(v21_0.hole(h)['pos'], float) for h in ('h1', 'h3', 'h5')}
 _sh23 = np.array(_riv22[0].peg('p1')['pos'], float) - _R23 @ _hl23['h1']
 _sh23 = np.array([round(float(v), 3) for v in _sh23])
 _g23 = A.group('기둥 조립(1~21번)', [q for q in A.parts if q.step.index <= 21])
-_mk23 = {id(v21_0): [[float(_v) for _v in (_R23 @ np.array(v21_0.hole(_h)['pos'], float) + _sh23)] for _h in ('h1', 'h3', 'h5', 'h23', 'h25', 'h27')]}   # 안내점 = 리벳 끝이 들어가는 39프레임 구멍 6곳(옮긴 뒤 위치)
-s23.move_made(_g23, _R23, pivot=np.zeros(3), shift=tuple(_sh23), dir=[0, 0, -1], hover=40, group='기둥 조립', marks=_mk23)
 _g23r = A.group('오른쪽 판 조립(22번)', [v22_1] + _riv22[3:])
 s23.move_made(_g23r, np.eye(3), pivot=np.zeros(3), shift=(35.0, 0.0, 0.0), dir=[0, 0, -1], hover=0.01, group='오른쪽 판 조립')
+s23.move_made(_g23, _R23, pivot=np.zeros(3), shift=tuple(_sh23), dir=[0, 0, -1], hover=40, group='기둥 조립', marks="auto")
 A.steps[22].cam = (3.07, 0.65, False, None, None, None); A.steps[22].camSrc = 'eye'   # 23번: 책 흰 판 위 리벳 6개(색 분리 중심) 한 평면 PnP(눕힌 좌표 변환, 평균 0.63px, 한 평면이라 거친 값)
 
 s24 = A.step('[교재 24] 새 창고에서 흰 59프레임 한 장의 윗줄(칸1·칸5·칸9)과 앞줄(칸1·칸9) 구멍 5곳에 블록 5개를 세워 꽂아요: 2단블록 4개(모서리 4곳)와 3단블록 1개(윗줄 가운데 칸5).')
@@ -272,8 +263,7 @@ _dax30 = np.array(v29_r1.peg('p1')['pos'], float) - np.array(v29_0.hole('h9')['p
 _sh30 = np.array(v30_r1.peg('p1')['pos'], float) - _dax30 - np.array(v29_0.hole('h1')['pos'], float)
 _sh30 = np.array([round(float(_v), 3) for _v in _sh30])
 _g30 = A.group('바구니(24~29번)', [q for q in A.parts if 24 <= q.step.index <= 29])
-_mk30 = {id(v29_0): [[float(_v) for _v in (np.array(v29_0.hole(_h)['pos'], float) + _sh30)] for _h in ('h1', 'h7')]}
-s30.move_made(_g30, np.eye(3), pivot=np.zeros(3), shift=tuple(_sh30), dir=[0, 1, 0], hover=40, group='바구니 조립', marks=_mk30)
+s30.move_made(_g30, np.eye(3), pivot=np.zeros(3), shift=tuple(_sh30), dir=[0, 1, 0], hover=40, group='바구니 조립', marks="auto")
 A.steps[29].cam = (0.2, 0.93, False, None, None, None); A.steps[29].camSrc = 'eye'   # 30번: 바구니 뒷벽 검정 39프레임 구멍 15점·15프레임 돌기 머리 3점 = 18점 PnP(눕힌 좌표 변환, 평균 1.06px, 책 그림 roll −16°·바구니는 hover 위치)
 A.steps[29].kw["hideMade"] = {}
 
@@ -296,8 +286,7 @@ _dax32 = np.array(v31_r1.peg('p1')['pos'], float) - np.array(v31_0.hole('h1')['p
 _sh32 = np.array(v32_r1.peg('p1')['pos'], float) - _dax32 - np.array(v31_0.hole('h3')['pos'], float)
 _sh32 = np.array([round(float(_v), 3) for _v in _sh32])
 _g32 = A.group('둘째 바구니(31번)', [q for q in A.parts if q.step.index == 31])
-_mk32 = {id(v31_0): [[float(_v) for _v in (np.array(v31_0.hole(_h)['pos'], float) + _sh32)] for _h in ('h3', 'h9')]}
-s32.move_made(_g32, np.eye(3), pivot=np.zeros(3), shift=tuple(_sh32), dir=[0, 1, 0], hover=40, group='둘째 바구니 조립', marks=_mk32)
+s32.move_made(_g32, np.eye(3), pivot=np.zeros(3), shift=tuple(_sh32), dir=[0, 1, 0], hover=40, group='둘째 바구니 조립', marks="auto")
 A.steps[31].cam = (-0.13, 0.87, False, None, None, None); A.steps[31].camSrc = 'eye'   # 32번: 둘째 바구니 뒷벽 검정 39프레임 구멍·15프레임 돌기 머리 = 19점 PnP(눕힌 좌표 변환, 평균 1.24px, 책 그림 roll 12°·바구니는 hover 위치)
 A.steps[31].kw["hideMade"] = {}
 
