@@ -522,11 +522,9 @@ class Step:
         f = s.A.fix_of("shift", s.A.next_name(n))
         if f: p = p + np.array(f["delta"], float)
         return s._add(Part(n, R, p, s, extra))
-    def place_rest(s, n, R, mine, host, hole, toward, **extra):
-        """부품을 **앞 부품 구멍의 끝면에 몸통이 닿게** 놓는다(물리법칙: 겹치지 않고 떠 있지도 않다). toward = 이 부품이 놓이는 쪽(세계 방향, 예: (0, 1, 0) 은 host 구멍 위쪽).
-        끝면 = host 구멍 가운데에서 toward 로 구멍 길이의 절반(홀 테두리 끝면 포함), 몸통 두께 = 부품 크기(dims.json)를 자세 R 로 돌린 toward 방향 폭.
-        구멍 길이(place_next)가 아니라 몸통 크기로 재므로 몸통이 구멍보다 길어도 파고들지 않는다. 옆으로는 내 구멍(mine)이 host 구멍(hole) 위에 오게 맞춘다."""
-        R = np.array(R, float); tmp = Part(n, R, (0, 0, 0), s); t = np.array(toward, float); t = t / np.linalg.norm(t)
+    def _rest_pos(s, n, R, mine, host, hole, toward):
+        """place_rest 의 위치 계산(몸통 면이 host 구멍 끝면에 닿는 자리) → (부품 원점 위치, toward 방향 몸통 반폭)."""
+        tmp = Part(n, R, (0, 0, 0), s); t = np.array(toward, float); t = t / np.linalg.norm(t)
         hp = _host(s.A, host); mid = _item(tmp, mine, "홀")[0]; hid = _item(hp, hole, "홀")[0]; h = hp.hole(hid)
         size = np.array(tmp.conn.get("size") or partlib.get(n)["size"], float)
         half = float(np.dot(np.abs(t), np.abs(R) @ (size / 2)))   # toward 방향으로 몸통 반폭(상자, 몸통 중심 = 부품 원점)
@@ -535,6 +533,16 @@ class Step:
         face_t = max(float(np.dot(face, t)), float(np.dot(np.array(hp.p, float), t)) + float(np.dot(np.abs(t), np.abs(np.array(hp.R, float)) @ (hsize / 2))))
         lateral = (h["pos"] - tmp.hole(mid)["pos"]); lateral = lateral - np.dot(lateral, t) * t
         p = lateral + face_t * t + t * half
+        return p, half
+    def rest_shift(s, part, mine, host, hole, toward):
+        """합치는 이동량: 이미 놓은 부품 part 가 host 구멍 끝면에 몸통이 닿도록(place_rest 와 같은 규칙) 옮길 벡터."""
+        p, _half = s._rest_pos(part.n, np.array(part.R, float), mine, host, hole, toward)
+        return p - np.array(part.p, float)
+    def place_rest(s, n, R, mine, host, hole, toward, **extra):
+        """부품을 **앞 부품 구멍의 끝면에 몸통이 닿게** 놓는다(물리법칙: 겹치지 않고 떠 있지도 않다). toward = 이 부품이 놓이는 쪽(세계 방향, 예: (0, 1, 0) 은 host 구멍 위쪽).
+        끝면 = host 구멍 가운데에서 toward 로 구멍 길이의 절반(홀 테두리 끝면 포함), 몸통 두께 = 부품 크기(dims.json)를 자세 R 로 돌린 toward 방향 폭.
+        구멍 길이(place_next)가 아니라 몸통 크기로 재므로 몸통이 구멍보다 길어도 파고들지 않는다. 옆으로는 내 구멍(mine)이 host 구멍(hole) 위에 오게 맞춘다."""
+        R = np.array(R, float); p, half = s._rest_pos(n, R, mine, host, hole, toward)
         f = s.A.fix_of("shift", s.A.next_name(n))
         if f: p = p + np.array(f["delta"], float)
         if extra.get("recv") and "thick" not in extra: extra["thick"] = round(2 * half, 3)   # 받는 판 두께 = 몸통 두께(dims)
@@ -686,10 +694,10 @@ class Step:
             pid2, fc = (None, None) if pid is None else _item(tmp, pid, "홀")
             gid2, _ = _item(hp, gid, "돌기")
             pairs.append((pid2, (hp, gid2))); _faces.append((pid2, hp, fc, pid, gid2))
-        _keep = [i for i, (pid, (host, gid)) in enumerate(pairs) if not _peg_occupied_by(s.A, host, gid, None)]   # 규칙 7: 돌기 하나는 프레임 한 장에만 든다 — 이미 다른 프레임 구멍에 든 돌기는 이 부품에 잇지 않는다(안내점도 안 낸다, 토끼 22번 2026-11-04)
+        _keep = [i for i, (pid, (host, gid)) in enumerate(pairs) if not _peg_occupied_by(s.A, host, gid, None, s)]   # 규칙 7: 돌기 하나는 프레임 한 장에만 든다 — 이미 다른 프레임 구멍에 든 돌기는 이 부품에 잇지 않는다(안내점도 안 낸다, 토끼 22번 2026-11-04)
         if keep_dropped_check and 0 < len(_keep) < len(pairs):
             for i, (pid, (host, gid)) in enumerate(pairs):
-                if i not in _keep: s.A.note(f"{s.index}단계 {n}: 돌기 {host.n}.{gid} 는 이미 {_peg_occupied_by(s.A, host, gid, None)} 구멍에 들어 있어 결합에서 뺐다(규칙 7)")
+                if i not in _keep: s.A.note(f"{s.index}단계 {n}: 돌기 {host.n}.{gid} 는 이미 {_peg_occupied_by(s.A, host, gid, None, s)} 구멍에 들어 있어 결합에서 뺐다(규칙 7)")
             pairs = [pairs[i] for i in _keep]; _faces = [_faces[i] for i in _keep]
         _hand = None
         if p is not None and not MAGNET_OFF and ("프레임" in n or "블록" in n) and HAND_LOG is None:
@@ -717,7 +725,7 @@ class Step:
                 if p is None: p = hole_center - myh["pos"]   # myh 는 이미 세계 방향으로 돌린 값(tmp 의 p=0)
             if d0 is None: d0 = d
             _dv = d if dir is None else np.array(dir, float)   # 안내점 = 끼우는 쪽(dir)에서 먼저 닿는 돌기 끝: dir 이 돌기 방향과 반대면 뿌리 쪽 끝(축 아래에서 부시를 끼우는 경우, G21)
-            marks.append(rnd(tip if float(np.dot(_dv, d)) >= 0 else g["pos"] - d * g["len"] / 2))
+            marks.append(rnd(tip if (host.n != "축" or float(np.dot(_dv, d)) >= 0) else g["pos"] - d * g["len"] / 2))   # 축(양 끝을 쓰는 통과 부품, G21)만 끼우는 쪽 끝, 나머지는 돌기 끝(tip)
         if not calc:
             p = s._anchored(n, R, p)
             s._resolve_lazy(n, R, p, extra)
@@ -744,18 +752,18 @@ class Step:
         if isinstance(_ex, dict) and "offset" not in _ex and hover: _ex["offset"] = [round(float(x) * hover, 3) for x in vec(part.extra["dir"])]   # 결합 전에 띄운 모습 = 끼우는 방향으로 hover 만큼(손 offset 금지)
         return s._add(part)
 
-def _peg_occupied_by(A, host, gid, skip):
+def _peg_occupied_by(A, host, gid, skip, step=None):
     """host 의 돌기 gid 가 이미 들어가 있는 다른 부품(구멍 하나라도 축 어긋남 ≤1.2mm·돌기와 구멍 구간이 1mm 이상 겹침)의 이름, 없으면 None."""
     if host.n in ("T축", "8볼트", "12볼트", "너트", "서보고정볼트") or host.n.endswith("축"): return None   # 축·볼트는 여러 판을 지나는 부품(규칙 7 은 리벳·블록·서보·모터 돌기)
-    g = host.peg(gid); d = g["dir"]
+    g = host.peg(gid); d = g["dir"]; hide = (step.kw.get("hideMade") or {}) if step is not None else {}   # 이 번호에서 숨긴 앞 부품(다른 창고)은 같은 자리여도 보지 않는다(A3)
     for o in A.parts:
-        if o is host or o is skip or not o.conn: continue
+        if o is host or o is skip or not o.conn or str(o.step.index) in hide: continue
         for c in o.conn["holes"]:
             h = o.world("hole", c)
             if abs(float(np.dot(h["dir"], d))) < 0.98: continue
             rel = g["pos"] - h["pos"]; a = float(np.dot(rel, h["dir"])); lat = float(np.linalg.norm(rel - h["dir"] * a))
             if lat > 1.2: continue
-            ov = min(a + g["len"] / 2, h["len"] / 2) - max(a - g["len"] / 2, -h["len"] / 2)
+            ov = min(a + (g["len"] or 0) / 2, (h["len"] or 0) / 2) - max(a - (g["len"] or 0) / 2, -(h["len"] or 0) / 2)   # 깊이 없는 구멍(큰기어 등)은 0 으로
             if ov >= 1.0: return f"{o.n}.{h['id']}"
     return None
 
@@ -880,6 +888,18 @@ def settle_marks(part, hosts, down=None):
             if lat < 1.2 and abs(along) < 3.5: out.append(rnd(hh["pos"] - g["dir"] * hh["len"] / 2)); break
     return out
 
+def recv_shift(part, hole, host, peg):
+    """합치는 이동량(받는 쪽): part 의 구멍(hole)이 host 의 돌기(peg)를 받도록 — recv 와 같은 규칙으로 구멍 가운데가 놓일 자리 — 옮길 벡터."""
+    h = part.hole(hole); g = host.peg(peg); d = g["dir"]; base = g["pos"] - d * g["len"] / 2
+    hc = base + d * h["len"] / 2 if g["len"] >= h["len"] else g["pos"] + d * (h["len"] - g["len"]) / 2
+    return hc - h["pos"]
+
+def merge_shift(part, peg, host, hole):
+    """합치는 이동량: part 의 돌기(peg)가 host 의 구멍(hole)에 들어가도록 — 돌기 밑동이 구멍 입구 면에 닿게(attach 와 같은 규칙) — 옮길 벡터."""
+    hp = host if hasattr(host, "hole") else None
+    g = part.peg(peg); h = hp.hole(hole); d = g["dir"]; surf = h["pos"] - d * (h["len"] / 2)
+    return (surf + d * g["len"] / 2) - g["pos"]
+
 def join_marks(part, hosts):
     """옮겨진 부품 part 가 고정 부품 hosts 와 합쳐질 때의 안내점: part 의 돌기가 들어가는 hosts 구멍 입구(돌기 방향 반대쪽 면)와, part 의 구멍으로 들어오는 hosts 돌기의 끝."""
     out = []
@@ -904,7 +924,43 @@ def join_marks(part, hosts):
                 if lat < 1.2 and abs(a) <= g["len"] / 2 + hp_["len"] / 2: out.append(rnd(tip)); break   # 구멍이 돌기(축처럼 긴 것 포함) 구간 안에 있으면 안내점 = 돌기 끝(G21)
     return out
 
-def to_side(part, Rs, Cf, Cs, until, settle_dir, hosts=()):
+PITCH = 10.0   # 큐보 구멍 간격(mm) — 옆자리 작업 위치를 벌리는 기본 여유(큐보 공통 상수)
+
+def _corners(q):
+    size = np.array(q.conn.get("size") or partlib.get(q.n)["size"], float)
+    return [np.array(q.p, float) + np.array(q.R, float) @ (np.array([sx, sy, sz]) * size / 2) for sx in (-1, 1) for sy in (-1, 1) for sz in (-1, 1)]
+
+def side_row(groups, anchor, Rs, lift, row, gap=PITCH, refs=None, floor=False):
+    """옆자리 작업 위치(새 창고)를 규칙으로 정한다: 완성된 쪽(anchor 부품들) 위로 묶음 크기 + 여유(gap)만큼 lift 방향으로 띄우고,
+    묶음이 여럿이면 폭 + 여유 간격으로 row 방향에 나란히 늘어놓는다(서로 겹치지 않게). groups = [[부품…], …], Rs = to_side 의 회전, refs = 각 묶음의 기준 부품(기본: 첫 부품).
+    돌려주는 값 = 묶음마다 to_side 에 줄 Cs(기준 부품의 최종 자리 Cf 가 옮겨 갈 곳)."""
+    Rs = np.array(Rs, float); lift = np.array(lift, float); lift = lift / np.linalg.norm(lift); row = np.array(row, float); row = row / np.linalg.norm(row)
+    refs = refs or [g[0] for g in groups]
+    ac = np.array([c for q in anchor for c in _corners(q)]); amin, amax = ac.min(axis=0), ac.max(axis=0); acen = (amin + amax) / 2
+    info = []
+    for g, ref in zip(groups, refs):
+        Cf = np.array(ref.p, float)
+        pts = np.array([Rs @ (c - Cf) for q in g for c in _corners(q)]); mn, mx = pts.min(axis=0), pts.max(axis=0)
+        info.append(((mn + mx) / 2, mx - mn))   # 변환 뒤 묶음 가운데(Cs 기준 상대)·크기
+    lift_dist = float(np.dot(np.abs(lift), amax - amin)) / 2 + max(float(np.dot(np.abs(lift), e)) for _c, e in info) / 2 + gap
+    widths = [float(np.dot(np.abs(row), e)) for _c, e in info]; total = sum(widths) + gap * (len(groups) - 1); pos = -total / 2
+    out = []
+    for (cen, _e), w in zip(info, widths):
+        target = acen + lift * lift_dist + row * (pos + w / 2); pos += w + gap
+        out.append(target - cen)
+    if floor:   # 바닥(y=0) 아래로 내려가면 그 묶음만 바닥 위로 올린다(G15) — floor_check 와 같게 부품마다 옆자리 자세 + 띄운 자리(dir × hover)까지 잰다
+        for j, (g, ref) in enumerate(zip(groups, refs)):
+            Cf = np.array(ref.p, float); low = 0.0
+            for q in g:
+                size = np.array(q.conn.get("size") or partlib.get(q.n)["size"], float) / 2; Rq = Rs @ np.array(q.R, float)
+                cen = float((Rs @ (np.array(q.p, float) - Cf))[1]) + float(out[j][1])
+                dv = q.extra.get("dir"); hv = q.extra.get("hover") or (20 if q.extra.get("recv") else 22)
+                off = float((Rs @ np.array(dv, float))[1]) * hv if dv is not None else 0.0
+                low = min(low, cen + off - float(np.abs(Rq[1]) @ size) + 0.5)
+            if low < 0: out[j] = out[j] + np.array([0.0, -low, 0.0])
+    return out
+
+def to_side(part, Rs, Cf, Cs, until, settle_dir, hosts=(), keep_settle=False):
     """부품 하나를 옆자리(옆에서 따로 조립) 자세로 보낸다: 지금까지 계산한 자리(마지막 모양)를 final 로 두고,
     같은 강체 변환(Rs: 마지막→옆자리 회전, Cf→Cs)으로 옆자리 자세·안내(dir/marks)를 만든다. 합쳐지는 단계의 안내는 settleDir/settleMarks."""
     Rs = np.array(Rs, float); Cf = np.array(Cf, float); Cs = np.array(Cs, float)
@@ -912,10 +968,10 @@ def to_side(part, Rs, Cf, Cs, until, settle_dir, hosts=()):
     ex = part.extra
     side = {"p": rnd(P(part.p)), "r": R_to_euler(Rs @ part.R), "until": until}
     if "marks" in ex:
-        ex["settleMarks"] = settle_marks(part, hosts) if hosts else []
+        if not (keep_settle and ex.get("settleMarks")): ex["settleMarks"] = settle_marks(part, hosts) if hosts else []   # keep_settle=True: recv 가 이미 낸 받는 쪽 안내점(settleMarks)은 지우지 않는다(풍차). 기본은 옛 동작(토끼 저장본 유지)
         ex["marks"] = [rnd(P(m)) for m in ex["marks"]]
     if "dir" in ex: ex["dir"] = rnd(Rs @ np.array(ex["dir"], float))
-    ex["settleDir"] = list(settle_dir)
+    if settle_dir: ex["settleDir"] = list(settle_dir)   # 합쳐지는 방향이 없는 부품(받는 쪽 안내가 없는 블록 등)은 settleDir 를 새로 만들지 않는다
     if "settleMarks" in ex and not ex["settleMarks"]: del ex["settleMarks"]
     if not hosts and "marks" not in ex: pass
     ex["side"] = side

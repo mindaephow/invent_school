@@ -33,6 +33,7 @@ def test(pg, h):
 import stepchecks
 for q in A.parts:
     if q.step.index <= k: q.p, q.R = stepchecks.pose_at(A, q, k)
+hide = A.steps[k - 1].kw.get("hideMade") or {}
 parts = [q for q in A.parts if q.step.index == k]
 if not parts: sys.exit("❌ %s %d번에 부품이 없다" % (name, k))
 print("═══ %s %d번 안내점 맞물림 진단 ═══" % (name, k))
@@ -44,13 +45,12 @@ for q in parts:
     for m in marks:
         m = np.array(m, float); found = False
         for o in A.parts:
-            if o is q or o.step.index > k or not o.conn: continue
+            if o is q or o.step.index > k or not o.conn or str(o.step.index) in hide: continue   # 이 번호에서 숨긴 앞 부품(다른 창고)은 같은 자리여도 보지 않는다(A3)
             if recv:   # 구멍을 받는 부품: 안내점은 고정된 돌기 끝 — 그 돌기가 q 의 구멍에 들어가는지
                 for c in o.conn["pegs"]:
                     pg = o.world("peg", c)
-                    _dv = np.array(q.extra.get("dir") or pg["dir"], float)   # 안내점은 끼우는 쪽(dir)에서 먼저 닿는 돌기 끝(asmlib.recv, G21)
-                    _end = pg["pos"] + pg["dir"] * pg["len"] / 2 * (1 if float(np.dot(_dv, pg["dir"])) >= 0 else -1)
-                    if np.linalg.norm(_end - m) > 3: continue
+                    _ends = [pg["pos"] + pg["dir"] * pg["len"] / 2 * s_ for s_ in (1, -1)]   # 돌기 양쪽 끝 모두 인정(축은 끼우는 쪽 끝, 나머지는 돌기 끝 — asmlib.recv, G21)
+                    if min(float(np.linalg.norm(e_ - m)) for e_ in _ends) > 3: continue
                     found = True
                     best = min(((test(pg, q.world("hole", hc)), hc["id"]) for hc in q.conn["holes"]), key=lambda t: (not t[0][0], t[0][3]))   # 맞물리는 구멍이 있으면 그것이 먼저(축 어긋남이 같을 때 안 끼워진 것이 이기지 않게)
                     (ok, why, a, lat), hid = best

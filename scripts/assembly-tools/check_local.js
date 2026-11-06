@@ -132,7 +132,7 @@ if (process.argv[3]) {
         let hit = false;
         worlds.forEach(({ u, w }) => {
           if (!w || u === me) return;
-          if (pt.recv || pt.pegTarget) w.pegs.forEach((pg) => { const tip = [0, 1, 2].map((a) => pg.pos[a] + pg.dir[a] * pg.len / 2); if (Math.hypot(...sub3(tip, m)) <= 3 && res.mated.some((x) => x.part === u.key && x.peg === pg.id && x.into === me.key)) hit = true; });
+          if (pt.recv || pt.pegTarget) w.pegs.forEach((pg) => { const ends = [1, -1].map((sg) => [0, 1, 2].map((a) => pg.pos[a] + pg.dir[a] * pg.len / 2 * sg));   /* 돌기 양쪽 끝 모두 인정: 끼우는 쪽에 따라 돌기 끝 또는 뿌리 쪽 끝(축 등, 규칙 G21) */ ends.forEach((tip) => { if (Math.hypot(...sub3(tip, m)) <= 3 && res.mated.some((x) => x.part === u.key && x.peg === pg.id && x.into === me.key)) hit = true; }); });
           else w.holes.forEach((h) => { const rel = sub3(m, h.pos), al = dot3(rel, h.dir), lat = Math.hypot(...sub3(rel, h.dir.map((x) => x * al))); if (lat <= 1.8 && Math.abs(al) <= h.len / 2 + 3 && res.mated.some((x) => x.part === me.key && x.into === u.key && x.hole === h.id)) hit = true; });
         });
         if (!hit) bad.push(`${step}단계 ${pt.n}: 안내점 [${m}] 에서 돌기·구멍이 제자리 자세로 맞물려 있지 않음 → 화살표가 안 나옴(제자리 p 를 돌기-구멍 거리 0.0 으로 맞추고, 떨어진 모습은 dir·hover 로)`);
