@@ -1,5 +1,7 @@
 # 큐보 부품 결합규칙 점검기 — 사용자가 정한 규칙(큐보/규칙/큐보 부품결합규칙.md)을 조립도 번호마다 잰다. 큐보 조립도(cubo-*) 전용.
 #   python cubo_joint_check.py <이름|all> [번호 …]
+#   규칙 1    프레임과 프레임을 잇는 부품은 리벳·블록(볼트·너트는 규칙 14·15)뿐
+#   규칙 4    블록·모터 돌기 끝이 프레임 먼 쪽 면 밖으로 0.5mm 넘게 나가면 위반
 #   규칙 2·8  리벳으로 이은 두 부품(프레임·블록·브라켓·기어…) 사이 틈 0 (틈 >0.3, 겹침 >1.0 이면 위반)
 #   규칙 3    프레임끼리는 겹치지 않는다(돌기 부분을 뺀 판 두께 침투 >0.5mm)
 #   규칙 5~7  돌기 하나는 프레임 한 장의 구멍에만 든다(구멍 안에 완전히 든 구멍이 서로 다른 프레임 둘 이상이면 위반)
@@ -115,6 +117,23 @@ def check(A, k):
         for pg in pf[id(b)]:
             fr = sorted({a.n for a in vs if a is not b and "프레임" in a.n and any(inside(pg, ho) for ho in hf[id(a)])})
             if len(fr) >= 2: out.append("규칙5~7 %s %s 돌기가 프레임 두 장에: %s" % (b.n, pg["id"], "+".join(fr)))
+    # 규칙 1 (프레임과 프레임을 잇는 부품은 리벳·블록 — 볼트·너트는 규칙 14·15): 새 부품의 돌기가 서로 다른 프레임 둘 이상의 구멍에 들어가 있으면 그 부품이 잇는 것
+    for c_ in [o for o in vs if o.new and pf[id(o)] and "프레임" not in o.n]:
+        fr = sorted({a.n + "#" + str(id(a)) for a in vs if a is not c_ and "프레임" in a.n and any(inside(pg, ho) for pg in pf[id(c_)] for ho in hf[id(a)])})
+        if len(fr) >= 2 and not (c_.n == "리벳" or "블록" in c_.n or c_.n in ("8볼트", "12볼트", "너트")):
+            out.append("규칙1 %s 가 프레임 %d장을 이음(프레임끼리는 리벳·블록으로 잇는다)" % (c_.n, len(fr)))
+    # 규칙 4 (블록·모터 돌기는 프레임에 끼워질 때 프레임의 먼 쪽 면 밖으로 나가지 않는다 — 돌기 끝이 구멍 반대편 면을 0.5mm 넘으면 위반)
+    for b_ in [o for o in vs if o.new and (("블록" in o.n) or o.n in ("DC모터", "서보모터", "메인보드"))]:
+        for pg in pf[id(b_)]:
+            for a in vs:
+                if a is b_ or "프레임" not in a.n: continue
+                for ho in hf[id(a)]:
+                    if not inside(pg, ho): continue
+                    tip = pg["pos"] + pg["dir"] * (pg.get("len", 5) or 5) / 2; tal = float((tip - ho["pos"]) @ ho["dir"])
+                    hl = (ho.get("len", 5) or 5) / 2
+                    for s_ in (1.0, -1.0):   # 돌기가 어느 쪽으로 꽂혔든 끝이 그쪽 면을 넘는지
+                        if float(pg["dir"] @ ho["dir"]) * s_ > 0.9 and s_ * tal > hl + 0.5:
+                            out.append("규칙4 %s %s 돌기 끝이 %s 면 밖으로 %.1fmm" % (b_.n, pg["id"], a.n, s_ * tal - hl))
     # 규칙 10 (방향 있는 부품: 책 그림의 부품 모양·특징 방향과 같아야 한다 — 기준은 월드 X·Y·Z 가 아니라 같은 로봇 안의 다른 부품과의 상대 관계)
     od = _orient(A.id)
     for o in [o for o in vs if o.new and o.n in DIRECTIONAL]:
