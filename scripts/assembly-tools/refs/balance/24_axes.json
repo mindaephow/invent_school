@@ -1,1 +1,1 @@
-{"global": {"X": [55.0, -0.1], "Y": [0.2, 55.0], "Z": [-0.4, 55.0]}, "fit": {"from": "24_판.json", "err_px": 3.97, "points": 39, "theta": -0.01, "phi": 0.56, "origin_world": [0.0, 0.0, 17.5]}, "no_rotate": true}
+{"global": {"X": [55.0, -0.3], "Y": [0.1, 55.0], "Z": [0.7, 55.0]}, "fit": {"from": "24_판.json", "err_px": 1.49, "points": 28, "theta": 0.01, "phi": 0.59, "origin_world": [0.0, 0.0, 17.5]}, "no_rotate": true}

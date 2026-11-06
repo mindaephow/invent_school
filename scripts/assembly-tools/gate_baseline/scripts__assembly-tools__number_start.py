@@ -49,7 +49,7 @@ def _session_check():
     db = None
     if keys:
         try:
-            import userdone; _m = re.search(r'Asm\("([^"]+)"', open(os.path.join(here, name + ".py"), encoding="utf-8").read())
+            import userdone; _m = re.search(r'''Asm\(["']([^"']+)["']''', open(os.path.join(here, name + ".py"), encoding="utf-8").read())
             db = sorted(userdone.user_done(_m.group(1)) or ())
         except (SystemExit, Exception): db = None
     print("═══ 세션 시작 체크 (번호 작업 전에 읽는다) ═══")
@@ -162,7 +162,7 @@ if k > 1:   # 앞 번호: 사용자 ✓ 또는 지금 내용과 같은 지문의
         except Exception: pass
         if not _ok:
             try:
-                import userdone; _mid0 = re.search(r'Asm\("([^"]+)"', open(os.path.join(here, name + ".py"), encoding="utf-8").read())
+                import userdone; _mid0 = re.search(r'''Asm\(["']([^"']+)["']''', open(os.path.join(here, name + ".py"), encoding="utf-8").read())
                 _ok = k - 1 in (userdone.user_done(_mid0.group(1)) or ())
             except (SystemExit, Exception): pass
         if not _ok: _gate.append(("앞 번호 %d" % (k - 1), "사용자 ✓ 도, 지금 내용과 같은 비교 증거(record_check)도 없음", "화면에서 책과 나란히 비교하고 record_check.py 로 증거를 남긴다(05 5-5)"))
@@ -214,7 +214,7 @@ print("교재:", note.split("\n")[0][:80]); print("사용 부품(03):", used or 
 print("읽기 표 %d번 칸: %s" % (k, made)); print("스크립트에 stepchecks.apply:", "있음" if has_sc else "❌ 없음 — 넣지 않으면 --write 가 거부된다")
 slot = st.get("slot"); pslot = asm[k - 2].get("slot") if k > 1 else None
 print("창고: " + ("아직 정하지 않음 — 04 로 먼저 정한다" if slot is None else "이번 %s / 앞 번호 %s" % (slot, pslot) + ("  → 창고가 바뀌므로 history 글이 필요하다(04)" if k > 1 and slot != pslot else "")))
-mid = re.search(r'Asm\("([^"]+)"', open(script, encoding="utf-8").read()) if os.path.exists(script) else None
+mid = re.search(r'''Asm\(["']([^"']+)["']''', open(script, encoding="utf-8").read()) if os.path.exists(script) else None
 try:
     import userdone; done = userdone.user_done(mid.group(1)) if mid else None
 except SystemExit as e: done = None; print("(사용자 ✓ 목록을 읽지 못함 — 이 번호가 ✓ 인지 화면에서 먼저 본다)")
