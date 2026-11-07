@@ -124,10 +124,10 @@ def euler_p(po): return po["p"]
 
 FLOOR_TOL = 0.5   # 바닥 아래로 내려가도 되는 한계(mm) — floor_check 와 side_row 가 같은 값을 쓴다
 ROUND_UNIT = 0.001   # rnd() 반올림 단위 — side_row 가 한계에 정확히 맞추면 반올림 오차로 floor_check 에 걸리므로 이만큼 위에 둔다
-def floor_check(A, tol=FLOOR_TOL):
+def floor_check(A, tol=FLOOR_TOL, keys=False):
     """바닥 아래로 내려가는 부품 검사(관리자 기본 규칙 2026-10-05: 조립도는 바닥 아래로 내려가지 않게).
     부품마다 ① 제자리(앞으로 옮겨지는 단계가 있으면 건너뜀) ② 새로 놓일 때 띄운 자리(옆자리면 옆자리 자세, dir·hover 만큼) ③ 옆자리에서 합쳐질 때 띄운 자리의 가장 낮은 점이 y 0 보다 tol 넘게 낮으면 모은다.
-    반환: [(단계, 부품 이름, 가장 낮은 y, 어느 자리)]"""
+    반환: [(단계, 부품 이름, 가장 낮은 y, 어느 자리)] (keys=True 면 끝에 화면 키 "만든번호:부품순서" 를 더한다)"""
     out = []
     xf = A.meta.get("xform")
     def low(pt, p, R, off=(0, 0, 0), lift=0.0, stp=None):   # stp: 그 자세가 화면에 나오는 단계(xform 은 단계 기준으로 걸린다 — 부품이 놓인 단계가 아니라)
@@ -166,8 +166,24 @@ def floor_check(A, tol=FLOOR_TOL):
                 checks.append(("%s단계 자세" % _stp, _po["p"], euler_to_R(_po["r"]), (0, 0, 0), float(((A.meta.get("lift") or {}).get(str(_stp))) or 0), int(_stp)))   # def.lift 가 있는 단계는 띄운 값까지 더해서 잰다
             for where, p, R, o, *_lfx in checks:
                 y = low(pt, p, R, o, _lfx[0] if _lfx else 0.0, _lfx[1] if len(_lfx) > 1 else None)
-                if y is not None and y < -tol: out.append((st.index, pt.name, round(y, 1), where))
+                if y is not None and y < -tol: out.append((st.index, pt.name, round(y, 1), where) + ((("%d:%d" % (pt.step.index, pt.step.parts.index(pt))),) if keys else ()))
+    for st in A.steps:   # 앞 번호 묶음을 옮기는 번호(moveMade): 옮기는 동안 띄운 자리와 옮긴 뒤 자리도 바닥 아래로 가면 안 된다(풍차 12번, 사용자 지적 2026-11-08 — 이 자리는 부품 데이터에 안 적혀 위 검사가 못 봤다)
+        for key, e in (st.kw.get("moveMade") or {}).items():
+            si, pi = (int(x) for x in key.split(":")); pt = A.steps[si - 1].parts[pi]
+            _lf = float(((A.meta.get("lift") or {}).get(str(st.index))) or 0); u = np.array(e["dir"], float); u = u / (np.linalg.norm(u) or 1.0)
+            for where, off in (("옮기는 번호 띄운 자리", u * float(e.get("hover") or 22)), ("옮긴 뒤 제자리", (0, 0, 0))):
+                y = low(pt, e["p"], euler_to_R(e["r"]), off, _lf, st.index)
+                if y is not None and y < -tol: out.append((st.index, pt.name, round(y, 1), where) + ((("%d:%d" % (pt.step.index, pt.step.parts.index(pt))),) if keys else ()))
     return out
+
+def floor_lift(A, k):
+    """k번에서 바닥 아래로 내려가는 만큼을 계산해 그 번호의 화면 전체 띄움(A.meta["lift"][k])으로 적는다 — 손으로 숫자를 적지 않는다(사용자 지시 2026-11-07·08).
+    부품을 띄운 자리(moveMade·dir×hover)가 바닥 아래면 그만큼(올림) 화면 전체를 올려 보여 준다. 필요 없으면 아무것도 안 한다. 반환: 올린 mm(0 이면 안 올림)."""
+    lift = dict(A.meta.get("lift") or {}); lift.pop(str(k), None); A.meta["lift"] = lift
+    ys = [y for (st, _n, y, _w) in floor_check(A, tol=0.0) if st == k]
+    if not ys: return 0
+    amt = float(np.ceil(-min(ys) - 1e-9)); A.meta["lift"] = {**lift, str(k): amt}
+    return amt
 
 class Group:
     """끝낸 조립품을 한 부품처럼 움직이게 묶는다 (사용자 지시 2026-10-04: 1번 완성품은 부품이 아니라 그룹이 하나처럼 움직인다).
@@ -437,10 +453,11 @@ class Step:
             pt.p = pt.p + sh
             pt.extra["move"] = {"at": s.index, "p": rnd(pt.p), "r": R_to_euler(pt.R)}
         return g
-    def move_made(s, g, R, pivot=None, shift=(0, 0, 0), dir=None, hover=60, group=None, marks=None):
+    def move_made(s, g, R, pivot=None, shift=(0, 0, 0), dir=None, hover=60, group=None, marks=None, recv=()):
         """이미 ✓ 한 앞 번호에서 만든 부품 묶음을 이번 번호에서 옮긴다(투석기 17번). move_group 은 앞 번호 부품 데이터에 move 를 써서 ✓ 단계 지문이 바뀌어 빌드가 막히므로,
         이동은 이번 단계 데이터(kw["moveMade"] = {"만든번호:부품순서": {p, r, dir, hover, moveGroup, marks}})에만 적는다. 화면·도구는 design-assemblies.js 끝의 합치기 코드로 part.move 를 본다.
-        marks 는 {부품: [안내점…]} (부품 하나당 한 번). 부품마다 한 번만 옮길 수 있다(여러 번 옮기려면 poseAt)."""
+        marks 는 {부품: [안내점…]} (부품 하나당 한 번). 부품마다 한 번만 옮길 수 있다(여러 번 옮기려면 poseAt).
+        recv=(부품…): 구멍을 받는 쪽으로 움직이는 부품(프레임) — 초록 링을 그 부품의 구멍 중심에 붙이고 화살표는 고정된 돌기 끝에서 시작한다(G23). 안 주면 링이 고정된 돌기 끝에 찍힌다."""
         if hover == 0: print("[경고] %s단계 move_made hover=0 — 0 은 화면 코드의 `hover || HOVER` 에서 기본 띄움이 되어 옮기는 묶음만 위로 뜬다. 띄움이 필요 없으면 hover=0.01 을 쓴다(큐보 부품결합규칙.md C6)" % getattr(s, "index", "?"))
         R = np.array(R, float); pv = g.center() if pivot is None else np.array(pivot, float); sh = np.array(shift, float)
         mm = s.kw.setdefault("moveMade", {})
@@ -456,6 +473,9 @@ class Step:
             for pt in g.parts:
                 mk = join_marks(pt, hosts)
                 if mk: mm["%d:%d" % (pt.step.index, pt.step.parts.index(pt))]["marks"] = mk
+        for pt in recv:
+            k_ = "%d:%d" % (pt.step.index, pt.step.parts.index(pt))
+            if k_ in mm: mm[k_]["recv"] = True
         return g
     def place(s, n, R, p, **extra):
         """위치가 정해진 부품(구멍에 끼우는 안내가 필요 없는 부품: 바닥판 등). 수정 파일에 shift 가 있으면 그만큼 옮긴다."""

@@ -251,6 +251,13 @@ try:
     open(_ef, "w", encoding="utf-8").write(_es)
 except Exception as _e_:
     print("부품정리·창고정리 표시를 만들지 못함:", str(_e_)[:100])
+# 규칙 위반 화면 표시(사용자 지시 2026-11-08): 번호별 위반을 모아 항목 파일에 def.violations 로 넣는다 — 화면이 종류마다 다른 색·기호로 칠한다(violations.py). 번호 지문(✓ 보호)에는 들어가지 않는다.
+try:
+    import violations as _vi
+    _n_, _ts_, _ = _vi.write_entry(name)
+    print("규칙 위반 표시: %d번 (%s)" % (_n_, ", ".join(_ts_) or "없음"))
+except Exception as _e_:
+    print("규칙 위반 표시를 만들지 못함:", str(_e_)[:120])
 if write:  # (규칙 확인은 위에서 이미 검사)
     _m = re.search(r'id: "(cubo-\d+-[A-Za-z0-9_]+)"', open(name + "_entry.js", encoding="utf-8").read())   # 항목 파일의 id(2권은 cubo-2-...). 없으면 1권 규칙
     rc, out = run([sys.executable, "emit.py", name + "_entry.js", _m.group(1) if _m else "cubo-1-" + name]); print(out.strip())

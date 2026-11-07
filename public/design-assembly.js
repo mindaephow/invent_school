@@ -561,7 +561,7 @@
           // 받는 부품(호스트)이 이 점 근처인지: 끼우는 방향 축 위로 14 이내이고, 축에서 옆으로 4 이내(옆 구멍의 돌기를 잘못 잡지 않게)
           const near = (f, m) => { const d = [f[0] - m[0], f[1] - m[1], f[2] - m[2]]; const u = dirH || [0, 1, 0]; const ul = Math.hypot(u[0], u[1], u[2]) || 1; const al = (d[0] * u[0] + d[1] * u[1] + d[2] * u[2]) / ul; return Math.abs(al) < 14 && Math.hypot(d[0] - al * u[0] / ul, d[1] - al * u[1] / ul, d[2] - al * u[2] / ul) < 4; };
           const hostShift = pt.guideShift ? () => pt.guideShift : (m) => { const h = list.find((q) => q.isNew && q.final && (q.order || 1) < myOrder && near(q.final, m)); return h ? [h.pos[0] - h.final[0], h.pos[1] - h.final[1], h.pos[2] - h.final[2]] : null; };
-          if (pt.recv && !pt.pegTarget) { // pegTarget: 구멍 받는 부품이 움직여도 교재처럼 화살표가 고정된 돌기 끝을 향하게 그린다(marks = 고정된 돌기 끝)
+          if ((moving ? mvSrc.recv : pt.recv) && !pt.pegTarget) { // pegTarget: 구멍 받는 부품이 움직여도 교재처럼 화살표가 고정된 돌기 끝을 향하게 그린다(marks = 고정된 돌기 끝)
             // 구멍을 받는 부품(프레임 등)이 움직일 때: 원은 떠 있는 부품의 구멍에, 화살표는 고정된 돌기 끝에서 그 구멍 쪽으로
             // faceMarks: 돌기 끝이 판 바깥 면과 같은 높이가 아닐 때, 제자리에 끼운 뒤 판 바깥 면의 구멍 자리
             const faces = !settling && pt.faceMarks ? pt.faceMarks : targets;
@@ -588,7 +588,7 @@
       });
       guides.forEach((g) => { g.from = T(g.from); g.to = T(g.to); g.dir = mvec(xf.m, g.dir); });
     }
-    { const lf = def.lift && Number(def.lift[target]); if (lf) list.forEach((d) => { d.pos = [d.pos[0], d.pos[1] + lf, d.pos[2]]; if (d.final) d.final = [d.final[0], d.final[1] + lf, d.final[2]]; }); } // lift: 단계 번호 → 그 단계에서만 화면 전체를 y 로 띄운다(바닥 아래에서 올라와야 하는 새 부품이 있는 단계, 꼬마기사 23번)
+    { const lf = def.lift && Number(def.lift[target]); if (lf) list.forEach((d) => { d.pos = [d.pos[0], d.pos[1] + lf, d.pos[2]]; if (d.final) d.final = [d.final[0], d.final[1] + lf, d.final[2]]; }); if (lf && def.guideMode !== 'mates') guides.forEach((g) => { g.from = [g.from[0], g.from[1] + lf, g.from[2]]; g.to = [g.to[0], g.to[1] + lf, g.to[2]]; }); } // lift: 단계 번호 → 그 단계에서만 화면 전체(부품·안내 화살표·초록 점)를 y 로 띄운다 — 안내도 같이 올려야 점이 부품에서 안 뜬다(G23, 풍차 12번 2026-11-08)(바닥 아래에서 올라와야 하는 새 부품이 있는 단계, 꼬마기사 23번)
     const guidesOut = def.guideMode === 'mates' ? mateGuides(list, target) : guides;
     return { list, guides: guidesOut, missing, stored, storedThumb, storedSlot: storedEff ? slotOfStep(storedEff) : 1, viewEff, storedSlots: Object.fromEntries(Object.keys(storedEffBy).map((k) => [k, storedSlotOvr[k] !== undefined ? storedSlotOvr[k] : slotOfStep(storedEffBy[k])])), storedThumbBy, storedTypes, targets: list.map((d) => d.final || null), orders: list.map((d) => d.order || 1) };
   }
@@ -791,6 +791,8 @@
   // 자동 검사 경고(관리자 전용): public/design-warnings.js(scripts/assembly-tools/insertion_check.js 가 만듦)의 경고를 단계 번호 옆 ⚠로 보이고, 오른쪽 아래 카드에서 관리자가 "문제없음"/"해결요청"을 고른다. 고른 결과는 ivs_assembly_checks 에 저장.
   let checkVerdicts = {}; // '단계|경고키' → 'ok' | 'fix'
   const warnsOf = (i) => (def && window.IVS_ASM_WARNINGS && window.IVS_ASM_WARNINGS[def.id] && window.IVS_ASM_WARNINGS[def.id][i]) || [];
+  const VIOL_ICON = { floor: '▼', overlap: '✕', gap: '↔', link: '◎', orient: '↻' };
+  function violMark(i) { const V = (def.violations && def.violations[i]) || []; return V.length ? ' ' + [...new Set(V.map((v) => VIOL_ICON[v.type] || '!'))].join('') : ''; }   // 위반이 있는 번호 버튼에 종류 기호를 붙인다
   function warnMark(i) {
     const w = warnsOf(i); if (!w.length) return '';
     const v = w.map((x) => checkVerdicts[i + '|' + x.key]);
@@ -950,7 +952,7 @@
     const adm = isAdm();
     [$('asmSteps'), $('asmStageSteps')].forEach((box) => { if (!box) return;
       box.querySelectorAll('button[data-step]').forEach((b) => { const i = Number(b.dataset.step), st = adm ? stepStatus[i] : null, tag = i === last() ? '완성' : stepTag(i);
-        b.textContent = tag + (st === 'done' ? ' ✓' : st === 'edit' ? ' 🛠' : '') + (adm ? warnMark(i) : '');
+        b.textContent = tag + (st === 'done' ? ' ✓' : st === 'edit' ? ' 🛠' : '') + (adm ? warnMark(i) + violMark(i) : '');
         // 작업 진행 표시(관리자만): 일부 번호만 만든 조립도에서 마무리하고 넘어간 번호는 파랑, 확인 필요(review)는 주황 — 안 만든 번호는 그대로 둔다
         const made = i !== last() && stepMade(def.steps[i - 1]);
         const review = !!(def.steps[i - 1] && def.steps[i - 1].review) && st !== 'done' && !verifyDone(i);   // 관리자가 ✅ 완료를 누르면 주황 → 파랑   // review: 만들었지만 마무리 안 됨(근거 약함·확인 필요) → 주황
@@ -1446,6 +1448,7 @@
     pushSlotThumbs();
     if (b.setViewSlot) b.setViewSlot(viewSlot !== null && viewSlot !== slotOfStep(step) ? viewSlot : null, viewLabel, viewThumb);
     b.show(list.map(({ isNew, name, final, order, ...d }) => d), targets, orders, def.guideMode === 'mates' ? mateComponents(list).concat(ghostComps) : []);
+    if (b.setViolations) { const V = (def.violations && def.violations[step]) || []; b.setViolations(V.map((v) => ({ type: v.type, msg: v.msg, idx: (v.keys || []).map((k) => list.findIndex((x) => x.key === k)).filter((i) => i >= 0) }))); }   // 규칙 위반: 종류별 색·기호로 칠한다(build.py 가 def.violations 를 만든다)
     // 지금 단계에 보이는 부품(끼우기 직전 위치 포함)에 카메라를 맞춘다 — 처음부터 너무 멀리서 보이지 않게
     // 이번 단계에 끼우는 부품과 그 끼워지는 자리를 화면 가운데에 크게 보여준다(나머지 부품은 배경)
     const focus = list.filter((d) => d.isNew).map((d) => d.pos).concat(guides.filter((g) => g.to).map((g) => g.to)); // 맞물림 방식 안내는 좌표가 없다(연결점이 부품에 붙어 있다)

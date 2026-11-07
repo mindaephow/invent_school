@@ -23,6 +23,17 @@ HOVER, HOVER_RECV, DEPTH = 22.0, 20.0, 5.0   # design-assembly.js 상수 — 바
 
 def unit(v): v = np.array(v, float); return v / (np.linalg.norm(v) or 1.0)
 
+def receives_by_hole(q, m, u, hv, thick=None):
+    """안내점 m 이 그 부품 '자기 구멍 중심'에 링으로 붙는가(= 구멍으로 받는 부품, recv 표시 필요). 뷰어 공식: 링 = m + 방향×띄움 − 방향×두께/2 가 띄운 구멍 중심."""
+    ring = np.array(m, float) + u * hv - u * float(thick or q.extra.get("thick") or 5) / 2
+    return any(float(np.linalg.norm(np.array(q.world("hole", c)["pos"]) + u * hv - ring)) <= 1.5 for c in q.conn["holes"])
+
+def tail_on_own_peg(q, m, u, hv, dep):
+    """안내점 m 에서 시작하는 돌기 쪽 화살표 꼬리가 그 부품 자기 돌기 끝에 닿는가(= 돌기로 꽂는 부품, recv 불필요)."""
+    frm = np.array(m, float) + u * (hv - dep)
+    tips = [np.array(w["pos"]) + u * hv - u * w["len"] / 2 for w in (q.world("peg", c) for c in q.conn["pegs"]) if abs(float(np.dot(w["dir"], u))) > 0.9]
+    return any(float(np.linalg.norm(frm - t)) <= 3 for t in tips)
+
 def run(name, only=None):
     g = runpy.run_path(name + ".py", run_name="probe")
     A = next(v for v in g.values() if hasattr(v, "steps") and hasattr(v, "parts") and hasattr(v, "meta"))
@@ -37,7 +48,16 @@ def run(name, only=None):
             sd = q.extra.get('side'); pa = (q.extra.get('poseAt') or {}).get(str(k))
             if pa and q.step.index <= k: q.p, q.R = np.array(pa['p'], float), euler_to_R(pa['r'])
             elif sd and q.step.index <= k < sd['until']: q.p, q.R = np.array(sd['p'], float), euler_to_R(sd['r'])
-        if A.steps[k - 1].kw.get("moveMade"): skipped.append((k, "앞 번호 부품을 옮기는 번호(moveMade)"))
+        for key_, e_ in (A.steps[k - 1].kw.get("moveMade") or {}).items():   # 옮기는 번호: 안내점이 있는 부품은 화면 공식대로 링이 "움직이는 부품 자기 구멍"에 있어야 한다(G23)
+            if not e_.get("marks"): continue
+            s_, i_ = map(int, key_.split(":")); q = A.steps[s_ - 1].parts[i_]; u = unit(e_["dir"]); hv = float(e_.get("hover") or HOVER); n += len(e_["marks"])
+            for m in e_["marks"]:
+                m = np.array(m, float)
+                if e_.get("recv"): ring = m + u * hv - u * float(q.extra.get("thick") or 5) / 2   # 뷰어: 받는 쪽 링 = 화살표 끝 − 방향×두께/2
+                else: ring = m                                                                  # 뷰어: 돌기 쪽 링은 고정된 구멍 입구(m)
+                own = min(float(np.linalg.norm(np.array(q.world("hole", c)["pos"]) + u * hv - ring)) for c in q.conn["holes"]) if e_.get("recv") else 0.0
+                if e_.get("recv") and own > 1.5: bad.append((k, "%s(옮김) 링 %s 가 자기 구멍 중심에서 %.1fmm 떨어짐(≤1.5)" % (q.n, np.round(ring, 1).tolist(), own)))
+                if not e_.get("recv") and receives_by_hole(q, m, u, hv) and not tail_on_own_peg(q, m, u, hv, float(q.extra.get("pegDepth") or DEPTH)): bad.append((k, "%s(옮김) 구멍으로 받는 부품(안내점이 자기 구멍 중심)인데 recv 표시가 없어 링이 고정된 돌기 끝 %s 에 찍힌다(G23a)" % (q.n, np.round(m, 1).tolist())))
         for q in A.parts:   # 안내점 자리(⑥): marks·settleMarks 가 받는 구멍 축(끼우는 쪽) 또는 고정된 돌기 끝(받는 쪽, recv)에서 1.5mm 안인지
             e2 = q.extra; sets = []
             if q.step.index == k and e2.get("marks") and not e2.get("noGuide") and not e2.get("seated"): sets.append(e2["marks"])
@@ -92,6 +112,7 @@ def run(name, only=None):
                     frm = m + u * (hv - dep); to = m + (sh if sh is not None else 0)
                     tips = [np.array(w["pos"]) + u * hv - u * w["len"] / 2 for w in (q.world("peg", c) for c in q.conn["pegs"]) if abs(float(np.dot(w["dir"], u))) > 0.9]   # 끼울 때 앞서 들어가는 끝 = 돌기 중심 − 띄움방향×길이/2 (리벳 p1·긴 축 모두)
                     dist = [(float(abs((frm - t) @ u)), float(np.linalg.norm((frm - t) - u * ((frm - t) @ u)))) for t in tips]
+                    if (not tips or min(a + b for a, b in dist) > 3) and receives_by_hole(q, m, u, hv): bad.append((k, "%s 구멍으로 받는 부품(안내점이 자기 구멍 중심)인데 recv 표시가 없다(G23a)" % q.n))
                     if not tips or min(a + b for a, b in dist) > 3: bad.append((k, "%s 화살표 꼬리 %s 가 떠 있는 돌기 끝에서 %s 떨어짐(≤3, %s)" % (q.n, np.round(frm, 1).tolist(), ("%.1fmm" % min(a + b for a, b in dist)) if tips else "받는 쪽을 향한 돌기 없음", kind)))
                     if sh is None:
                         ok = False

@@ -2197,6 +2197,47 @@
   floorGrid.material.opacity = 0.7;
   scene.add(floorGrid);
 
+  // 조립 보기: 보이는 부품이 바닥(y=0)보다 내려가 있으면 바닥면을 빨갛게 칠한다(사용자 지시 2026-11-08, 풍차 12번 — 옮기는 묶음이 띄운 자리에서 바닥 아래 −45)
+  const floorAlert = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_HALF * 2, ROOM_HALF * 2), new THREE.MeshBasicMaterial({ color: 0xff2d2d, transparent: true, opacity: 0.38, side: THREE.DoubleSide, depthWrite: false }));
+  floorAlert.rotation.x = -Math.PI / 2; floorAlert.position.y = FLOOR_Y + 0.3; floorAlert.visible = false; floorAlert.renderOrder = 2;
+  scene.add(floorAlert);
+  let floorAlertTick = 0; const FLOOR_ALERT_TOL = 0.5; const _fb = new THREE.Box3();
+  function updateFloorAlert() {
+    if (++floorAlertTick % 8) return;
+    let low = Infinity, lowName = '';   // 부품 본체만 잰다(붙어 있는 초록 점·화살표는 뺀다)
+    if (assemblyGuideGroup && assemblyListParts.length) assemblyListParts.forEach((p, i) => { if (!p || !p.mesh || p.mesh.visible === false) return; p.mesh.updateWorldMatrix(true, true); p.mesh.traverse((c) => { if (!c.isMesh || !c.geometry || (c.userData && (c.userData.dot || c.userData.guide))) return; if (!c.geometry.boundingBox) c.geometry.computeBoundingBox(); _fb.copy(c.geometry.boundingBox).applyMatrix4(c.matrixWorld); if (!_fb.isEmpty() && _fb.min.y < low) { low = _fb.min.y; lowName = i + ':' + (p.type || ''); } }); });
+    window.__ivsFloorLow = { low, lowPart: lowName };   // 화면이 잰 가장 낮은 높이(도구로 읽어 숫자로 확인한다, G24)
+    floorAlert.visible = low < FLOOR_Y - FLOOR_ALERT_TOL;
+  }
+
+  const VIOL_KINDS = {   // 종류 → [기호, 이름, 색]
+    floor:   ['▼', '바닥 아래', 0xff2d2d], overlap: ['✕', '겹침', 0xff8a00], gap: ['↔', '틈', 0xa855f7],
+    link:    ['◎', '연결점(recv·떠 있음)', 0xffd400], orient: ['↻', '방향이 책과 다름', 0x2f80ff]
+  };
+  let violTinted = [];
+  function applyViolations(arr) {
+    violTinted.forEach(t => { if (t.mesh) t.mesh.material = t.orig; (t.clones || []).forEach(m => m.dispose && m.dispose()); }); violTinted = [];
+    arr.forEach(v => {
+      const k = VIOL_KINDS[v.type]; if (!k || v.type === 'floor') return;   // 바닥은 바닥면 빨강이 따로 보여 준다
+      const col = new THREE.Color(k[2]);
+      (v.idx || []).forEach(i => { const p = assemblyListParts[i]; if (!p || !p.mesh) return;
+        p.mesh.traverse(ch => { if (!ch.isMesh || !ch.material) return;
+          const orig = ch.material, one = (m) => { const c = m.clone(); if (c.color) c.color.copy(col); if (c.emissive) { c.emissive.copy(col); c.emissiveIntensity = 0.55; } if (c.map) c.map = null; return c; };
+          const clones = Array.isArray(orig) ? orig.map(one) : [one(orig)];
+          ch.material = Array.isArray(orig) ? clones : clones[0]; violTinted.push({ mesh: ch, orig, clones });
+        });
+      });
+    });
+    let box = document.getElementById('asmViolBox');
+    if (!arr.length) { if (box) box.hidden = true; return; }
+    if (!box) { box = document.createElement('div'); box.id = 'asmViolBox';
+      box.style.cssText = 'position:fixed;left:16px;bottom:16px;z-index:55;max-width:340px;background:#fff;border:2px solid #ef4444;border-radius:12px;padding:8px 12px;box-shadow:0 6px 20px rgba(0,0,0,.22);font:13px/1.5 sans-serif;color:#222';
+      document.body.appendChild(box); }
+    const by = {}; arr.forEach(v => { (by[v.type] = by[v.type] || []).push(v); });
+    box.innerHTML = '<b style="color:#b91c1c">규칙 위반 ' + arr.length + '건</b>' + Object.keys(by).map(t => { const k = VIOL_KINDS[t] || ['!', t, 0x888888]; const hex = '#' + k[2].toString(16).padStart(6, '0');
+      return '<div><span style="display:inline-block;min-width:18px;color:' + hex + ';font-weight:700">' + k[0] + '</span>' + k[1] + ' ' + by[t].length + '건 <span style="color:#666;font-size:12px">' + (by[t][0].msg || '').replace(/</g, '&lt;').slice(0, 70) + '</span></div>'; }).join('');
+    box.hidden = false;
+  }
   const roomGeo = new THREE.BoxGeometry(ROOM_HALF * 2, CEIL_Y, ROOM_HALF * 2);
   const roomEdges = new THREE.EdgesGeometry(roomGeo);
   const roomLine = new THREE.LineSegments(roomEdges, new THREE.LineBasicMaterial({ color: gridColor, transparent: true, opacity: 0.35 }));
@@ -5043,6 +5084,7 @@
       b.mesh.quaternion.copy(b.body.quaternion);
     });
     if (assemblyGuideGroup) assemblyGuideGroup.children.forEach(c => { if (c.userData.update) c.userData.update(); }); // 조립 안내 화살표가 부품을 따라가게
+    updateFloorAlert();
     updateGoalFlag();
     updateCamera();
     updateViewCube();
@@ -5463,6 +5505,8 @@
     quat(rot){ const q = quatFromRot({ x: rot[0], y: rot[1], z: rot[2] }); return [q.x, q.y, q.z, q.w].map(round5); },
     listParts(categoryId){ return robotPartsCache.filter(x => (!categoryId || x.category === categoryId) && PART_DEFS['robot:' + x.id]).map(x => { const m = robotModelCache.get(x.id), bb = m && m.bbox; return { name: x.name, type: 'robot:' + x.id, size: bb ? [bb.max[0] - bb.min[0], bb.max[1] - bb.min[1], bb.max[2] - bb.min[2]] : null }; }); }, // 큐보 부품 전체 리스트용: 이 카테고리의 3D 모델이 있는 부품과 실제 모델 크기(w,h,d)
     preload(names, categoryId){ return Promise.all(names.map(n => { const t = this.resolve(n, categoryId); return t ? ensureRobotModel(t.slice(6)) : null; })); },
+    // 규칙 위반 표시(사용자 지시 2026-11-08): 종류마다 색·기호가 다르다. 데이터는 build.py 가 def.violations[번호] 로 준다.
+    setViolations(arr){ applyViolations(arr || []); },
     show(list, targets, orders, comps){ assemblyTargets = targets || []; assemblyOrders = orders || []; restoreParts(list, {}, true); applyAssemblyGroups(comps); },
     // 아직 제자리로 안 들어간 부품들의 결합 순서 번호(작은 것부터) — 재생이 순서대로 하나씩 결합시킨다
     pendingOrders(){ return [...new Set(assemblyTargets.map((t, i) => (t ? (assemblyOrders[i] || 1) : null)).filter(Boolean))].sort((a, b) => a - b); },
