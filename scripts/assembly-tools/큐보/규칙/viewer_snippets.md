@@ -65,3 +65,17 @@ for p in a['parts']: print(p.get('n') or p.get('name'), 'hover',p.get('hover'), 
 EOF
 ```
 `marks` 의 수 = 그 부품이 그리는 안내 화살표 수(띄운 부품만 화면에 나온다. 꽂힌 채(seated) 둔 부품은 화살표가 없다).
+
+## 6. 연결점(초록 점)이 부품에서 떠 있는지 화면 장면에서 숫자로 잰다 (G23)
+번호 버튼을 하나씩 눌러(번호마다 2초 기다린 뒤) 초록 점(`userData.dot`) 마다 가장 가까운 부품(`userData.partRef` 메시) 꼭짓점까지 거리를 잰다. 4mm 넘으면 떠 있는 점이다. `javascript_tool` 로 한 번에 12번호 안쪽(45초 제한)씩 돌린다 — 화면을 새로 불러온 직후엔 장면을 먼저 잡는다(`THREE` 는 r128 전역 `window.THREE`, 모듈 `three` 가 아니다).
+```js
+const T=window.THREE, o=T.Object3D.prototype.updateMatrixWorld;
+T.Object3D.prototype.updateMatrixWorld=function(f){let r=this;while(r.parent)r=r.parent;if(r.isScene||r.type==='Scene')window.__sc=r;return o.apply(this,arguments)};
+window.__measure=function(){const sc=window.__sc;sc.updateMatrixWorld(true);const dots=[],parts=[];sc.traverse(o=>{if(!o.isMesh||!o.visible)return;if(o.userData.dot)dots.push(o);else if(o.userData.partRef)parts.push(o)});
+ const V=new T.Vector3(),pts=[];parts.forEach(m=>{const p=m.geometry.attributes.position;if(!p)return;for(let i=0;i<p.count;i++){V.fromBufferAttribute(p,i).applyMatrix4(m.matrixWorld);pts.push(V.x,V.y,V.z)}});
+ const far=[];dots.forEach(d=>{const w=new T.Vector3();d.getWorldPosition(w);let b=1e9;for(let j=0;j<pts.length;j+=3){const dx=pts[j]-w.x,dy=pts[j+1]-w.y,dz=pts[j+2]-w.z;b=Math.min(b,dx*dx+dy*dy+dz*dz)}b=Math.sqrt(b);if(b>4)far.push([w.x,w.y,w.z].map(v=>+v.toFixed(0)).concat(+b.toFixed(1)))});return {n:dots.length,far}};
+window.__go=async function(ks){const bt=[...document.querySelectorAll('button')].filter(b=>/^\d+$/.test(b.textContent.trim()));const out={};for(const k of ks){bt.find(x=>x.textContent.trim()==String(k)).click();await new Promise(r=>setTimeout(r,2000));const m=window.__measure();out[k]=m.n+' dots, far '+m.far.length+(m.far.length?' '+JSON.stringify(m.far[0]):'')}return out};
+// 사용: JSON.stringify(await window.__go([1,2,3,4,5,6,7,8,9,10,11,12]))
+```
+원인 찾는 법: 점이 부품 가장자리에서 떨어져 있으면 `guide` 공식(design-assembly.js 536~575줄)의 받는 쪽(recv) `to = faceMarks(없으면 marks) + dir×hover` 가 떠 있는 부품 구멍과 같은지 본다. 옆자리(`side`)에서 새로 놓이는 묶음(풍차 11·16·17번)은 `hover`·`joinOrder`(보통 모드)가 쓰이고 `settleHover`·`settleOrder` 는 합치는 번호(side.until)에서만 쓰인다.
+

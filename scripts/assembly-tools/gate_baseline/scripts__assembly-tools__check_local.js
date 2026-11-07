@@ -63,7 +63,12 @@ if (process.argv[3]) {
       if (mode === 'settle' && pt.n === 'T축') return; // T축은 묶음(기어·프레임)과 같이 합쳐지고, 끝이 아래 구멍에 그냥 들어가 있어도 결합이 아니다(사용자 2026-11-04 토끼 15번) — 안내는 구멍을 받는 부품이 맡는다
       if (pt.n === '리벳' || pt.noGuide) return; // noGuide = 우연히 맞닿아 보일 뿐 결합이 아닌 부품(안내 화살표 없음). 리벳은 교재도 화살표 없이 꽂힌 채로 그린다(같이 도착하는 묶음 안의 결합도 제외)
       const outside = (k) => prior.has(k) && !arrSet.has(k); // 같이 합쳐지는 묶음 안의 결합은 빼고, 이미 있던 부품과의 결합만 본다
-      const hasPrior = res.mated.some(m => (m.part === key && outside(m.into)) || (m.into === key && outside(m.part)));
+      // 창고(slot) 구분: 다른 창고 부품과의 맞닿음은 같은 좌표에서 우연히 겹친 것이라 결합이 아니다(design-verify.js 와 같은 기준, 규칙 A4·사용자 2026-11-07)
+      const slotOf = (n) => { const s = stepsAll[n - 1]; return s && s.slot !== undefined && s.slot !== null ? s.slot : 1; };
+      const effSlot = (u) => { const q = u.ref; let e = u.step; if (q.side && q.side.until <= step && q.side.until > e) e = q.side.until; const mm = window.IVS_moveAt(q, step); if (mm && mm.at > e && mm.at <= step) e = mm.at; return slotOf(e); };
+      const uBy = (kk) => upto.find(u => u.key === kk);
+      const sameSlot = (ka, kb) => { const x = uBy(ka), y = uBy(kb); return !x || !y || effSlot(x) === effSlot(y); };
+      const hasPrior = res.mated.some(m => ((m.part === key && outside(m.into)) || (m.into === key && outside(m.part))) && sameSlot(m.part, m.into));
       if (!hasPrior) return;
       const ok = mode === 'move' ? (window.IVS_moveAt(pt, step).marks || []).length : mode === 'settle' ? (pt.settleMarks || []).length : (pt.marks || []).length;
       if (!ok) miss.push(`${step}단계 ${pt.n}(${key}): 앞 부품과 결합하는데 안내점(${mode === 'move' ? 'move.marks' : mode === 'settle' ? 'settleMarks' : 'marks'})이 없음 → 화살표가 안 나옴`);

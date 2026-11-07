@@ -143,6 +143,20 @@ def check(name, only=None):
         elif ev: items.append((bad, "증거", "비교 뒤 내용이 바뀜 — 다시 비교한다"))
         else: items.append((bad, "증거", "비교 증거도 사용자 ✓ 도 없음"))
         # R 읽기 표 ───────────────
+        try:   # H 결합 전 높이 — 리벳이 받는 판보다 가까이 떠야 한다(G12). 저장된 hover 수치로 계산한다(hovercheck.py)
+            import hovercheck; _hb, _hp, _hs = hovercheck.check_steps(asm, {k})
+            if _hb: items.append((bad, "결합전 높이", "; ".join(m for _, m in _hb)))
+            elif _hp: items.append(("✅", "결합전 높이", "리벳↔판 %d쌍 hover 순서 맞음" % _hp))
+            elif _hs: items.append(("⚠", "결합전 높이", "점검 안 됨 — " + _hs[0][1] + "(화면에서 직접 본다)"))
+        except Exception as _e: items.append(("⚠", "결합전 높이", "점검 실패: %s" % _e))
+        try:   # G 화살표 끝점 — 화면이 그리는 화살표 꼬리·끝이 부품 끝·구멍에 닿는지(guidecheck.py, 뷰어 공식 그대로)
+            if "_gc" not in globals() or _gc[0] != name:
+                import guidecheck; globals()["_gc"] = (name, guidecheck.run(name))
+            _gb, _gn, _gs = _gc[1]; _mine = [m for kk, m in _gb if kk == k]
+            if _mine: items.append((bad, "화살표 끝점", "; ".join(_mine[:3])))
+            elif any(kk == k for kk, _ in _gs): items.append(("⚠", "화살표 끝점", "점검 안 됨 — " + next(w for kk, w in _gs if kk == k) + "(화면에서 직접 본다)"))
+            else: items.append(("✅", "화살표 끝점", "뷰어 공식으로 계산해 맞음"))
+        except Exception as _e: items.append(("⚠", "화살표 끝점", "점검 실패: %s" % _e))
         r = read.get(str(k), {}); miss = [f for f in ("면", "링", "부품") if not str(r.get(f, "")).strip()]
         items.append(("✅", "읽기 표", "채워짐") if not miss else (bad, "읽기 표", "빈 칸: " + ", ".join(miss)))
         if rules.get("img_db"):   # I 그림 DB — 만든 그림은 만든 자리에서 올린다(큐보 부품결합규칙.md I1). 점검이 실패하면 ✅ 로 두지 않는다.

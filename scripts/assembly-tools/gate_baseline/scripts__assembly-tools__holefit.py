@@ -58,7 +58,7 @@ def fit_grid(P, robust, mode="DoG"):
             pr = nodes(H); e = {cr: float(np.hypot(*(P[k] - pr[cr]))) for cr, k in sel.items()}
             if not e: break
             lim = max(2.5, 2.0 * float(np.median(list(e.values())))); bad = [cr for cr, v in e.items() if v > lim]
-            if not bad or len(sel) - len(bad) < (20 if mode == "DoG" else max(10, int(0.5 * cols * rows))): break
+            if not bad or len(sel) - len(bad) < min((20 if mode == "DoG" else 10), max(5, int(0.5 * cols * rows))): break   # 남겨야 할 점 수는 칸 수의 절반을 넘지 않는다 — 칸이 10개뿐인 판(25프레임 2×5)은 이상한 구멍을 하나도 못 버려 풍차 14번이 7px 로 미달했다(2026-11-07)
             for cr in bad: del sel[cr]
             Hn, _ = cv2.findHomography(np.array([[c - 0.5, r - 0.5] for (c, r) in sel], np.float32), np.array([P[k] for k in sel.values()], np.float32), 0)
             if Hn is None: break

@@ -124,12 +124,16 @@
         const arriving = all.filter((a) => { const q = a.ref; return (a.step === si && !q.side) || (q.side && q.side.until === si) || mvIs(q, si) })
         const arrSet = new Set(arriving.map((a) => a.key))
         const prior = new Set(all.filter((a) => a.step < si).map((a) => a.key))
+        // 창고(slot) 구분: 다른 창고에 있는 부품과의 맞닿음은 같은 좌표계에서 우연히 겹친 것이라 결합으로 보지 않는다(새 창고는 원점에서 만든다, 규칙 A4 — 풍차 7·18·19번, 사용자 지시 2026-11-07)
+        const slotOfStep = (n) => { const s = steps[n - 1]; return s && s.slot !== undefined && s.slot !== null ? s.slot : 1 }
+        const effSlot = (a) => { const q = a.ref; let e = a.step; if (q.side && q.side.until <= si && q.side.until > e) e = q.side.until; const m = mvAt(q, si); if (m && m.at > e && m.at <= si) e = m.at; return slotOfStep(e) }
+        const sameSlot = (ka, kb) => { const x = byKey.get(ka), y = byKey.get(kb); return !x || !y || effSlot(x) === effSlot(y) }
         const outside = (k) => prior.has(k) && !arrSet.has(k) // 같이 합쳐지는 묶음 안의 결합은 뺀다
         const lack = arriving.filter((a) => {
           const q = a.ref
           if (q.noGuide) return false // 우연히 맞닿아 보일 뿐 결합이 아닌 부품(안내 화살표 없음)
           if (q.n === 'T축' && q.side && q.side.until === si) return false // 합치는 번호의 T축은 끝이 구멍에 그냥 들어갈 뿐 결합이 아니다(큐보 부품결합규칙, 사용자 2026-11-04)
-          if (!res.mated.some((m) => (m.part === a.key && outside(m.into)) || (m.into === a.key && outside(m.part)))) return false
+          if (!res.mated.some((m) => ((m.part === a.key && outside(m.into)) || (m.into === a.key && outside(m.part))) && sameSlot(m.part, m.into))) return false
           const got = mvIs(q, si) ? ((mvAt(q, si) || {}).marks || []) : q.side && q.side.until === si ? (q.settleMarks || []) : (q.marks || [])
           return !got.length
         })

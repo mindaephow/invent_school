@@ -122,7 +122,9 @@ def orient_report(A, steps=None):
 
 def euler_p(po): return po["p"]
 
-def floor_check(A, tol=0.5):
+FLOOR_TOL = 0.5   # 바닥 아래로 내려가도 되는 한계(mm) — floor_check 와 side_row 가 같은 값을 쓴다
+ROUND_UNIT = 0.001   # rnd() 반올림 단위 — side_row 가 한계에 정확히 맞추면 반올림 오차로 floor_check 에 걸리므로 이만큼 위에 둔다
+def floor_check(A, tol=FLOOR_TOL):
     """바닥 아래로 내려가는 부품 검사(관리자 기본 규칙 2026-10-05: 조립도는 바닥 아래로 내려가지 않게).
     부품마다 ① 제자리(앞으로 옮겨지는 단계가 있으면 건너뜀) ② 새로 놓일 때 띄운 자리(옆자리면 옆자리 자세, dir·hover 만큼) ③ 옆자리에서 합쳐질 때 띄운 자리의 가장 낮은 점이 y 0 보다 tol 넘게 낮으면 모은다.
     반환: [(단계, 부품 이름, 가장 낮은 y, 어느 자리)]"""
@@ -956,7 +958,7 @@ def side_row(groups, anchor, Rs, lift, row, gap=PITCH, refs=None, floor=False):
                 cen = float((Rs @ (np.array(q.p, float) - Cf))[1]) + float(out[j][1])
                 dv = q.extra.get("dir"); hv = q.extra.get("hover") or (20 if q.extra.get("recv") else 22)
                 off = float((Rs @ np.array(dv, float))[1]) * hv if dv is not None else 0.0
-                low = min(low, cen + off - float(np.abs(Rq[1]) @ size) + 0.5)
+                low = min(low, cen + off - float(np.abs(Rq[1]) @ size) + FLOOR_TOL - ROUND_UNIT)
             if low < 0: out[j] = out[j] + np.array([0.0, -low, 0.0])
     return out
 

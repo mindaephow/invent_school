@@ -13,6 +13,14 @@ def load(p, default):
     return json.load(open(p, encoding="utf-8")) if os.path.exists(p) else default
 def save(p, d): json.dump(d, open(p, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 
+# ── 가 한 장 흐름: 규칙 파일(큐보 부품결합규칙.md)의 <!-- 가-흐름 --> 블록을 그대로 보여 준다(규칙 원본은 그 파일 한 곳 — 여기에 다시 적지 않는다, 2026-11-07)
+def _flow():
+    try:
+        rp = os.path.join(here, "큐보", "규칙", "큐보 부품결합규칙.md")
+        t = open(rp, encoding="utf-8").read(); a = t.index("<!-- 가-흐름 -->") + len("<!-- 가-흐름 -->"); b = t.index("<!-- /가-흐름 -->")
+        print("═══ 가 한 장 흐름 (규칙 파일 가 절 맨 위 — 막히면 보고하지 말고 이 사슬의 다음 칸으로) ═══"); print(t[a:b].strip())
+    except Exception as e_: print("⚠ 가 한 장 흐름을 못 읽음:", e_)
+_flow()
 # ── 이번 번호에서 조심할 것(사용자 지시 2026-10-14 "정보를 모르는 게 아니라 사용을 안 한다") — mistake_types.json(요청차이 분석)의 반복 실수 유형과, 이 번호의 부품·위치에 맞는 경고를 맨 앞에 보여 준다.
 def _warn():
     try:
