@@ -39,7 +39,9 @@ def run(name, only=None):
     A = next(v for v in g.values() if hasattr(v, "steps") and hasattr(v, "parts") and hasattr(v, "meta"))
     import stepchecks
     bad, skipped, n = [], [], 0
+    _orig = {id(q_): (np.array(q_.p, float), np.array(q_.R, float)) for q_ in A.parts}   # 번호마다 처음 자세에서 시작한다 — 앞 번호의 옆자리 자세가 남아 합치는 번호를 틀리게 재던 오탐을 막는다(토끼 15번, 2026-11-08)
     for k in range(1, len(A.steps) + 1):
+        for q_ in A.parts: q_.p, q_.R = _orig[id(q_)][0].copy(), _orig[id(q_)][1].copy()
         if only and k not in only: continue
         for q in A.parts:
             if q.step.index <= k: q.p, q.R = stepchecks.pose_at(A, q, k)
@@ -102,7 +104,7 @@ def run(name, only=None):
                 for h, (hu, hhv, hord, _r, _m, _k) in cand:
                     if h is q or hord >= order: continue
                     d = np.array(h.p, float) - m; al = float(d @ u)
-                    if abs(al) < 14 and np.linalg.norm(d - u * al) < 4: return hu * hhv, h
+                    if abs(al) < 14 and np.linalg.norm(d - u * al) < 4 and any(min(float(np.linalg.norm(np.array(w_["pos"]) + np.array(w_["dir"]) * w_["len"] / 2 * sg_ - m)) for sg_ in (1, -1, 0)) < 3 for w_ in (h.world("peg", c_) for c_ in h.conn["pegs"])): return hu * hhv, h   # 호스트는 그 안내점에 자기 돌기가 있는 부품만(구멍뿐인 프레임은 호스트가 아니다)
                 return None, None
             fm_ = ex.get('faceMarks') or []
             for i_, m in enumerate(m_):
@@ -134,6 +136,8 @@ def run(name, only=None):
                     for hc in q.conn["holes"]:
                         h = q.world("hole", hc); r = to - (np.array(h["pos"]) + u * hv); al = float(r @ unit(h["dir"]))
                         if np.linalg.norm(r - unit(h["dir"]) * al) <= 1.5 and abs(al) <= (h.get("len") or 10) / 2 + 3: ok = True
+                    _ring = to - u * float(ex.get("thick") or 5) / 2; _own = min(float(np.linalg.norm(_ring - (np.array(q.world("hole", hc2)["pos"]) + u * hv))) for hc2 in q.conn["holes"])   # 링 = 화살표 끝 − 방향×두께/2 가 자기 구멍 중심에 1.5mm 안이어야 한다(옮김 점검과 같은 기준, 허용 5.6mm 는 토끼 14번 부시의 4.3mm 어긋남을 놓쳤다)
+                    if ok and _own > 1.5: bad.append((k, "%s 링 %s 가 자기 구멍 중심에서 %.1fmm 떨어짐(≤1.5, %s)" % (q.n, np.round(_ring, 1).tolist(), _own, kind))); ok = True
                     if not ok: bad.append((k, "%s 화살표 끝 %s 가 떠 있는 자기 구멍 축 위에 없음(%s)" % (q.n, np.round(to, 1).tolist(), kind)))
     return bad, n, skipped
 

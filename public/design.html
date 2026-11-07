@@ -113,6 +113,9 @@
   .mission summary .lesson-title{margin:0; font-size:18px; font-weight:800; color:var(--ink);}
   .mission .lesson-tag{display:inline-block; font-size:12px; font-weight:700; color:#fff; background:var(--blueprint); border-radius:999px; padding:2px 10px; margin-bottom:6px;}
   .mission .lesson-title{font-size:18px; font-weight:800; color:var(--ink); margin:0 0 2px;}
+  .mission .lesson-done{display:inline-block; margin-left:6px; font-size:11px; font-weight:700; color:#fff; background:#16a34a; border-radius:999px; padding:2px 8px; vertical-align:2px; white-space:nowrap;}
+  .mission .lesson-done[hidden]{display:none;}
+  .mission summary .lesson-tag{white-space:nowrap;}
   .mission .lesson-sub{font-size:13px; color:var(--blueprint); font-weight:600; margin:0 0 8px;}
   .mission h3{font-size:14px; font-weight:700; color:var(--blueprint); margin:12px 0 4px;}
   .mission .lesson-steps-head{display:flex; align-items:center; justify-content:space-between; gap:8px;}
@@ -475,7 +478,7 @@
       <div class="side-head"><b>부품</b><button id="foldSide" class="ghost" type="button" aria-label="부품 목록 접기" title="부품 목록 접기">«</button></div>
       <section class="mission">
         <details data-key="lesson" open id="lessonCard">
-          <summary><span class="lesson-tag"></span><span class="lesson-title"></span></summary>
+          <summary><span class="lesson-tag"></span><span class="lesson-title"></span><span class="lesson-done" hidden>✔ 완료</span></summary>
           <p class="lesson-sub"></p>
           <p class="lesson-concept"></p>
           <h3 id="lessonMissionHead">미션</h3>
@@ -886,6 +889,7 @@
       const chapter = findTextbookChapter(cat.id, volume, session);
       card.querySelector('.lesson-tag').textContent = cat.name + ' ' + volSel.value + '권';
       card.querySelector('.lesson-title').textContent = session + '차시' + (chapter && chapter.title ? (' · ' + chapter.title) : ' · 아직 등록된 실습이 없어요');
+      if (window.__ivsAsmPaintDone) window.__ivsAsmPaintDone();   // 제목 오른쪽 '완료' 표시는 조립도의 모든 번호가 ✓ 완료일 때 조립 보기 쪽이 켠다
       if (window.__ivsAssembly) window.__ivsAssembly.onLessonChange(cat, volume, chapter && chapter.title, session);
       if (window.__renderVolumeParts) window.__renderVolumeParts(cat.id, volume);
       if (window.__refreshRequiredList) window.__refreshRequiredList(cat.id, volume, session);
@@ -964,6 +968,7 @@
       window.__designRobot = { title: r.title + ' ' + label.replace(/ 부품$/, ''), categoryId: r.key, kind, volume };
       card.querySelector('.lesson-tag').textContent = '로봇';
       card.querySelector('.lesson-title').textContent = r.title;
+      card.querySelector('.lesson-done').hidden = true;
       if (window.__renderVolumeParts) window.__renderVolumeParts(null, null);
       if (window.__refreshRequiredList) window.__refreshRequiredList(null, null, null);
     }
@@ -2213,6 +2218,8 @@
   const VIOL_KINDS = {   // 종류 → [기호, 이름, 색]
     floor:   ['▼', '바닥 아래', 0xff2d2d], overlap: ['✕', '겹침', 0xff8a00], gap: ['↔', '틈', 0xa855f7],
     store:   ['▣', '다른 창고 부품이 보임', 0xe11d48],
+    mark:    ['⌖', '안내점이 부품 연결점에 안 맞음', 0x14b8a6],
+    hand:    ['✋', '연결점이 아닌 값을 씀', 0xec4899],
     link:    ['◎', '연결점(recv·떠 있음)', 0xffd400], orient: ['↻', '방향이 책과 다름', 0x2f80ff]
   };
   let violTinted = [];

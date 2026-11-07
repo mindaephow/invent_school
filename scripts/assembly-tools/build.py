@@ -258,6 +258,13 @@ try:
     print("규칙 위반 표시: %d번 (%s)" % (_n_, ", ".join(_ts_) or "없음"))
 except Exception as _e_:
     print("규칙 위반 표시를 만들지 못함:", str(_e_)[:120])
+# ✓ 완료(잠금)한 번호에 규칙 위반이 있으면 사용자가 원해도 막는다(사용자 지시 2026-11-08: 위반이 있는 조립도는 잠글 수 없다). ✓ 를 풀고 위반을 고쳐야 한다.
+try:
+    _lockbad = {int(_k): len(_v) for _k, _v in _vi.collect(name).items() if int(_k) in _USER_DONE}
+except Exception as _e_:
+    _lockbad = {}; print("완료 번호의 위반 검사를 못 했다:", str(_e_)[:100])
+if _lockbad:
+    sys.exit("❌ ✓ 완료로 잠긴 번호에 규칙 위반이 있다(번호: 건수) " + str(_lockbad) + " — 위반이 있으면 잠글 수 없다. 사용자에게 ✓ 를 풀어도 되는지 묻고, 풀고 고친 뒤 위반 0 을 확인하고 다시 잠근다.")
 if write:  # (규칙 확인은 위에서 이미 검사)
     _m = re.search(r'id: "(cubo-\d+-[A-Za-z0-9_]+)"', open(name + "_entry.js", encoding="utf-8").read())   # 항목 파일의 id(2권은 cubo-2-...). 없으면 1권 규칙
     rc, out = run([sys.executable, "emit.py", name + "_entry.js", _m.group(1) if _m else "cubo-1-" + name]); print(out.strip())

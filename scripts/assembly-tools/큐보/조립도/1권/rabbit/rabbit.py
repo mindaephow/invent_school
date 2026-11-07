@@ -7,7 +7,7 @@ import json
 import numpy as np
 from asmlib import *
 
-A = Asm("cubo-1-rabbit", '토끼', '교재 13~16쪽 · 토끼·양떼저울', camera={'target': [8, 34, 0], 'radius': 240, 'theta': 1.05, 'phi': 1.1})
+A = Asm("cubo-1-rabbit", '토끼', '교재 13~16쪽 · 토끼·양떼저울', camera={'target': [8, 34, 0], 'radius': 240, 'theta': 1.05, 'phi': 1.1}, centerAll=True)
 
 s1 = A.step('35프레임 2개를 나란히 놓고, 3단블록 2개의 돌기를 프레임 구멍에 꽂아 이어요.', cam=(-2.81, 0.39, False, None, None, None), camSrc='eye')   # 1번 카메라 = 1_P 격자 axes_fit(오차 0.47px, 칸 −Z·줄 −X, roll −0.2°). 책 그림의 3단블록 돌기 위치(왼쪽 판 1개·오른쪽 판 2개)와 모델이 같은 해
 v1_0 = s1.place('35프레임', euler_to_R([0, -90, 0]), (-15, 17.5, 0))   # 1번은 원점 중심(A4): 두 프레임 + 블록 범위 x −30~30 이 가운데
@@ -64,17 +64,19 @@ _R14 = euler_to_R([0, -90, 0])
 v14_0 = s14.recv('15프레임', _R14, {'h2': (v2_0, 'p5'), 'h4': (v2_1, 'p5')}, dir=[0, -1, 0], hover=44, explode={'step': 14, 'order': 1})
 _tips14 = v14_0.extra['marks']; v14_0.extra['marks'] = []   # 15번에서 합칠 때의 안내점 = 2단블록 돌기 끝(결합에서 계산)
 _Rb = euler_to_R([0, 0, 0])
-v14_1 = s14.place_rest('부시', _Rb, 'h1', v14_0, 'h3', (0, -1, 0), dir=[0, -1, 0], hover=66, joinOrder=2, recv=True)   # 책 14번 PnP(fits/14_N 7점 1.56px) 투영: 부시 윗면 가운데가 책 초록 링 중심(512,760)에 오는 hover = 66.1(실루엣 윗가장자리로는 66.6). 면과 면은 자석처럼 붙는다 — 부시 몸통 윗면이 프레임 홀 테두리 아래 끝면에 닿는다(겹침·틈 없음)
 _Rg = euler_to_R([0, 0, 0])
 v13_0 = s13.place_rest('작은기어', _Rg, 'h1', v14_0, 'h3', (0, 1, 0))   # 기어 몸통 아랫면이 프레임 홀 테두리 윗면에 닿는다
 v13_1 = s13.attach('T축', euler_to_R([180, 0, 0]), {'p1': (v13_0, 'h1')}, dir=[0, 1, 0], hover=45)   # 몸통이 기어·프레임 구멍을 지난다
+v14_1 = s14.place_rest('부시', _Rb, 'h1', v14_0, 'h3', (0, -1, 0), dir=[0, -1, 0], hover=66, joinOrder=2, recv=True, via=(v13_1, 'p1'))   # 부시 몸통 윗면이 프레임 홀 테두리 아래 끝면에 닿는다. 안내점(꼬리)=T축 돌기 끝(via), 화살표 머리=부시 자기 구멍 연결점(아래 faceMarks) — 손으로 쓴 hover·좌표 없음(2026-11-08)
 _Cf = np.array(v14_0.p, float)
 def _low(q):   # 옆자리에서 끼우기 직전까지 띄웠을 때 부품 맨 아래(몸통 반높이까지)가 바닥(y=0) 아래로 내려가지 않게 올릴 높이
     sz = np.array(partlib.get(q.n)["size"], float); hy = float((np.abs(q.R) @ (sz / 2))[1])
     return float(q.extra.get("hover", 0)) - float(q.p[1]) + hy
 _lift = max(_low(q) for q in (v13_0, v13_1, v14_0, v14_1))
 _Cs = np.array([0.0, _Cf[1] + _lift, 0.0])   # 새 창고(2)는 화면 가운데(원점, A4) — 본체는 hideMade 로 숨어 있어 옆으로 띄울 필요가 없다. 높이만 바닥 아래로 안 내려가게 _lift   # 옆자리(창고 2): 높이는 띄운 부품이 바닥 아래로 안 가는 최소값(계산), 옆으로 70 = 창고 2 간격
+_fm14 = v14_1.hole('h1')['pos'] + np.array(v14_1.extra['dir'], float) * v14_1.extra['thick'] / 2   # 화살표 머리 = 부시 자기 구멍(h1) 연결점에서 계산한 받는 면 가운데(손 숫자 없음). 꼬리는 위 via 로 T축 돌기 끝
 for _q in (v13_0, v13_1, v14_0, v14_1): to_side(_q, np.eye(3), _Cf, _Cs, 15, (0, 1, 0))
+v14_1.extra['faceMarks'] = [[round(float(_x), 3) for _x in (_fm14 - _Cf + _Cs)]]   # 옆자리(to_side 와 같은 이동)로 보낸다
 v14_0.extra['settleMarks'] = [list(m) for m in _tips14]
 
 s15 = A.step('13·14단계에서 만든 것을 2단블록 위 돌기 2개(덮개 옆 맨 끝 열)에 끼워요.', cam=(2.21, 0.80, False, None, None, None), camSrc='eye')   # 15_axes.json: mkfit3d 6점(빨간 귀 구멍 4·2단블록 돌기 링 2, 읽기 ±4px 안에서 조정)

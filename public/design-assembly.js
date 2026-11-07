@@ -25,6 +25,10 @@
   function bridge() { return window.__ivsAssemblyBridge; }
   function total() { return def ? def.steps.length : 0; }
   function last() { return total() + 1; } // "완성" 단계 번호
+  // 제목 오른쪽 '완료' 표시 — 이 조립도의 모든 번호(1~끝)가 ✓ 완료(DB ivs_assembly_status)일 때만 켠다(사용자 지시 2026-11-08). ✓ 가 있는 번호는 빌드가 못 고치게 막는다(build.py).  
+  function paintDone() { const el = document.querySelector('.lesson-done'); if (!el) return; el.hidden = true; const d0 = def, b0 = bridge(); if (!d0 || !b0 || !b0.statusStore) return;
+    b0.statusStore.load(d0.id).then((m) => { if (def !== d0) return; const n = total(); let ok = n > 0; for (let i = 1; i <= n; i++) if (!m || m[i] !== 'done' || ((d0.violations && d0.violations[i]) || []).length) { ok = false; break; } el.hidden = !ok; }); }   // 위반이 있는 번호가 하나라도 있으면 완료 뱃지를 안 단다
+  window.__ivsAsmPaintDone = paintDone;
   const add = (p, d, k) => [p[0] + d[0] * k, p[1] + d[1] * k, p[2] + d[2] * k];
   // 회전 행렬 ↔ 오일러각(도, ZYX) — def.xform(몸체를 세우는 것처럼 어느 단계부터 전체를 통째로 돌리고 옮기는 변환)에 쓴다
   const DEG = Math.PI / 180;
@@ -555,7 +559,7 @@
           const hv = moving ? (mvSrc.hover || HOVER) : settling ? (pt.settleHover || HOVER) : (pt.hover || (pt.recv ? HOVER_RECV : HOVER)); // 합쳐지는 묶음은 모두 같은 거리로 띄워야 모양이 흐트러지지 않는다
           const depth = pt.pegDepth || PEG_DEPTH;
           pos = add(base, dirH, hv); // 끼우기 직전: 제자리에서 끼우는 방향으로 띄운다
-          const targets = moving ? (mvSrc.marks || []) : settling ? (pt.settleMarks || []) : (pt.marks && pt.marks.length ? pt.marks : [base]);
+          const targets = moving ? (mvSrc.marks || []) : settling ? (pt.settleMarks || []) : (pt.marks && pt.marks.length ? pt.marks : (pt.recv ? [] : [base]));   // 안내점(연결점)이 없는 recv 는 부품 중심으로 대신 그리지 않는다 — 중심은 연결점이 아니다(2026-11-08)
           // 화살표는 띄워 놓은 부품의 돌기 끝(구멍에 들어갈 깊이만큼 아래)에서 시작해 구멍 위 원으로 들어간다
           const myOrder = settling ? (pt.settleOrder || 1) : (pt.joinOrder || 1); // settleOrder: 합쳐지는 묶음이 같은 단계의 다른 부품(리벳)보다 나중에 내려올 때 2
           // 받는 부품(호스트)이 이 점 근처인지: 끼우는 방향 축 위로 14 이내이고, 축에서 옆으로 4 이내(옆 구멍의 돌기를 잘못 잡지 않게)
@@ -791,7 +795,7 @@
   // 자동 검사 경고(관리자 전용): public/design-warnings.js(scripts/assembly-tools/insertion_check.js 가 만듦)의 경고를 단계 번호 옆 ⚠로 보이고, 오른쪽 아래 카드에서 관리자가 "문제없음"/"해결요청"을 고른다. 고른 결과는 ivs_assembly_checks 에 저장.
   let checkVerdicts = {}; // '단계|경고키' → 'ok' | 'fix'
   const warnsOf = (i) => (def && window.IVS_ASM_WARNINGS && window.IVS_ASM_WARNINGS[def.id] && window.IVS_ASM_WARNINGS[def.id][i]) || [];
-  const VIOL_ICON = { floor: '▼', overlap: '✕', gap: '↔', link: '◎', orient: '↻' };
+  const VIOL_ICON = { floor: '▼', overlap: '✕', gap: '↔', link: '◎', orient: '↻', hand: '✋' };
   function violMark(i) { const V = (def.violations && def.violations[i]) || []; return V.length ? ' ' + [...new Set(V.map((v) => VIOL_ICON[v.type] || '!'))].join('') : ''; }   // 위반이 있는 번호 버튼에 종류 기호를 붙인다
   function warnMark(i) {
     const w = warnsOf(i); if (!w.length) return '';
@@ -1253,7 +1257,9 @@
     sb.addEventListener('click', async () => {
       const b2 = bridge(); if (!b2 || !b2.statusStore || !def) return;
       const cur = stepStatus[step], next = !cur ? 'edit' : cur === 'edit' ? 'done' : null, mine = step;
-      try { await b2.statusStore.set(def.id, mine, next); if (next) stepStatus[mine] = next; else delete stepStatus[mine]; paintStatus(); notice(mine + '단계를 "' + (next === 'done' ? '완료' : next === 'edit' ? '수정중' : '상태 없음') + '"(으)로 저장했습니다.' + (next === 'done' ? ' 이제 이 단계는 확인이 끝난 단계로 보호돼요.' : '')); }
+      { const vio = ((def.violations && def.violations[mine]) || []);
+       if (next === 'done' && vio.length) { notice(mine + '단계에 규칙 위반이 ' + vio.length + '건 있어서 완료로 잠글 수 없어요. 화면의 빨간 표시를 먼저 고쳐 주세요.'); return; } }   // 규칙 위반이 있으면 완료(잠금)로 못 넘어간다(사용자 지시 2026-11-08)
+      try { await b2.statusStore.set(def.id, mine, next); if (next) stepStatus[mine] = next; else delete stepStatus[mine]; paintStatus(); paintDone(); notice(mine + '단계를 "' + (next === 'done' ? '완료' : next === 'edit' ? '수정중' : '상태 없음') + '"(으)로 저장했습니다.' + (next === 'done' ? ' 이제 이 단계는 확인이 끝난 단계로 보호돼요.' : '')); }
       catch (e) { b2.status('상태 저장 실패: ' + e.message + ' (supabase/assembly_status.sql 을 실행했는지 확인)', 'error'); notice('상태 저장에 실패했습니다: ' + e.message); }
     });
   }
@@ -1459,6 +1465,7 @@
     const camFocus = !viewActive && stc && Array.isArray(stc.focus) && stc.focus.length ? stc.focus : null; // cam.focus: 부품이 없는 단계 등에서 이 점들을 화면 가운데에 크게(조립 프로그램이 지정)
     const axPt = stc && Array.isArray(stc.axes) ? stc.axes : [0, 0, 0]; // 바닥 기준선(방향선) 자리 — 카메라가 보는 범위에 항상 같이 들어오게 한다
     if (camFocus) b.frame(camFocus.concat([axPt]), camFocus.concat([axPt]));
+    else if (def.centerAll && !viewActive && list.length) { const all = list.map((d) => d.pos); b.frame(all, all); }   // def.centerAll: 지금까지 조립한 부품 전체를 화면 가운데에(규칙 E11 ①, 사용자 지시 2026-11-08)
     else {
       const f0 = focus.length ? focus : list.map((d) => d.pos);
       b.frame(f0.concat(stc && stc.tight && !viewActive ? [axPt] : []), stc && stc.tight && !viewActive ? f0.concat([axPt]) : list.map((d) => d.pos));
@@ -1896,7 +1903,7 @@
       const title = String(chapterTitle || '').trim();
       const found = (window.IVS_ASSEMBLIES || []).find((a) => a.category === cat.name && Number(a.volume) === Number(volume) && a.chapter === title) || null;
       if (viewing && found !== def) close();
-      def = found;
+      def = found; paintDone();
       window.__asmQtyOverride = (found && found.qtyOverride) || null; // 조립도 쪽 부품 개수가 책과 다를 때 {부품 이름: 개수}(design.html 의 필요 부품·사용 부품이 이 개수를 기준으로 하고 책 개수는 괄호로만 알린다)
       catId = found ? cat.id : null;
       catAny = cat;

@@ -1,6 +1,6 @@
 # 규칙 위반을 번호별로 모아 화면이 종류마다 다른 색·기호로 칠하게 한다(사용자 지시 2026-11-08). 읽기만 한다.
 #   python violations.py <이름>      번호별 위반 목록을 보여 준다(build.py 는 collect() 로 def.violations 를 만든다)
-# 종류: floor ▼ 바닥 아래(asmlib.floor_check) · link ◎ 연결점(guidecheck: recv 누락·링이 자기 자리 아님·꼬리가 돌기 끝에서 뜸)
+# 종류: floor ▼ 바닥 아래(asmlib.floor_check) · mark ⌖ 안내점이 부품 자기 연결점에 안 맞음(guidecheck: recv 누락·링이 자기 구멍 아님·화살표 끝/꼬리가 구멍·돌기 끝에서 뜸) · link ◎ 그 밖의 안내 문제(안내점·방향 없음 등)
 #       store ▣ 다른 창고에 있는 부품이 이 번호 화면에 보임(hidecheck.stray_loc) · overlap ✕ 겹침 · gap ↔ 틈 · orient ↻ 방향(cubo_joint_check 가 메시지와 함께 부품 키 LAST 를 내준다).
 # 항목: {"type", "keys": ["만든번호:부품순서"…], "msg"} — 키는 화면 부품 키와 같다(moveMade 키와 같은 모양).
 import asmpath
@@ -39,7 +39,8 @@ def collect(name):
                 if A.steps[si - 1].parts[pi].n == nm.group(1) and mm[key].get("marks"): keys.append(key)
             if not keys:
                 keys = ["%d:%d" % (k, i) for i, p in enumerate(A.steps[k - 1].parts) if p.n == nm.group(1)]
-        add(k, "link", keys, msg)
+        _mark = re.search(r"자기 구멍|자기 자리가 아니다|구멍 축 위에 없|돌기 끝에서 .{0,12}떨어|recv 표시가 없|돌기 끝에 찍힌", msg)   # 안내점·링·화살표 끝이 부품 자기 연결점(구멍·돌기)에 안 맞는 것은 따로 칠한다(2026-11-08)
+        add(k, "mark" if _mark else "link", keys, msg)
     try:   # 겹침·틈·방향: cubo_joint_check 가 메시지와 함께 화면 부품 키를 내준다(LAST) — 틈·피치는 ↔, 방향은 ↻, 나머지(겹침·구조)는 ✕
         import cubo_joint_check as cj
         for k in range(1, len(A.steps) + 1):
@@ -48,6 +49,20 @@ def collect(name):
                 add(k, t, cj.LAST.get(msg, []), msg)
     except Exception as e_:
         print("violations: 겹침·틈·방향 점검을 못 붙임 —", str(e_)[:100], file=sys.stderr)
+    try:   # 손값 경고(사용자 지시 2026-11-08): 조립도 .py 에 손으로 적은 hover=숫자·marks=[[…]]·offset=[…] 는 부품 자리에서 계산된 값이 아니다 → 그 번호·부품을 ✋ 로 경고한다(막지는 않는다)
+        _src = open(str(asmpath.resolve(name + ".py")), encoding="utf-8").read()
+        for ln in _src.splitlines():
+            m_ = re.match(r"\s*(v\d+_\d+)\s*=\s*s(\d+)\.\w+\(\s*'([^']+)'", ln)
+            if not m_: continue
+            code = ln.split("   #")[0]
+            hv = []; mk = re.search(r"\b(marks|settleMarks|faceMarks|offset)=\[\[?-?[0-9]", code)   # 연결점(부품 리스트)이 아닌 숫자는 전부 경고
+            if not (hv or mk): continue
+            k = int(m_.group(2)); keys = ["%d:%d" % (k, i) for i, p in enumerate(A.steps[k - 1].parts) if p.n == m_.group(3)]
+            what = ", ".join(["%s=%s" % h for h in hv] + (["%s 숫자 직접 입력" % mk.group(1)] if mk else []))
+            if any(x["type"] == "hand" and x["msg"].startswith(m_.group(3)) for x in out.get(str(k), [])): continue   # 같은 번호에 같은 부품 이름이 여러 줄이면 한 번만
+            add(k, "hand", keys, "%s 연결점이 아닌 숫자를 씀(%s) — 부품 리스트의 구멍·돌기 연결점에서 계산해야 한다" % (m_.group(3), what))
+    except Exception as e_:
+        print("violations: 손값 점검을 못 붙임 —", str(e_)[:100], file=sys.stderr)
     return out
 
 def write_entry(name):
