@@ -2240,9 +2240,17 @@
     if (!arr.length) { if (box) box.hidden = true; return; }
     if (!box) { box = document.createElement('div'); box.id = 'asmViolBox';
       box.style.cssText = 'position:fixed;left:16px;bottom:16px;z-index:55;max-width:340px;background:#fff;border:2px solid #ef4444;border-radius:12px;padding:8px 12px;box-shadow:0 6px 20px rgba(0,0,0,.22);font:13px/1.5 sans-serif;color:#222';
+      try { const sp = JSON.parse(localStorage.getItem('ivs-asm-viol-pos') || 'null'); if (sp && isFinite(sp.left) && isFinite(sp.top)) { box.style.left = Math.max(0, Math.min(window.innerWidth - 120, sp.left)) + 'px'; box.style.top = Math.max(0, Math.min(window.innerHeight - 40, sp.top)) + 'px'; box.style.bottom = 'auto'; } } catch (e) { /* 저장된 자리가 없으면 왼쪽 아래 */ }
+      box.addEventListener('pointerdown', (ev) => {   // 제목 줄(⠿)을 잡고 끌면 상자를 옮긴다(사용자 지시 2026-11-08). 본문 글자는 그대로 드래그 선택된다
+        if (!(ev.target.closest && ev.target.closest('[data-drag]'))) return;
+        const r = box.getBoundingClientRect(), dx = ev.clientX - r.left, dy = ev.clientY - r.top;
+        const mv = (e) => { box.style.left = Math.max(0, Math.min(window.innerWidth - box.offsetWidth, e.clientX - dx)) + 'px'; box.style.top = Math.max(0, Math.min(window.innerHeight - 40, e.clientY - dy)) + 'px'; box.style.bottom = 'auto'; };
+        const up = () => { document.removeEventListener('pointermove', mv); document.removeEventListener('pointerup', up); try { localStorage.setItem('ivs-asm-viol-pos', JSON.stringify({ left: parseFloat(box.style.left), top: parseFloat(box.style.top) })); } catch (e) { /* */ } };
+        document.addEventListener('pointermove', mv); document.addEventListener('pointerup', up); ev.preventDefault();
+      });
       document.body.appendChild(box); }
     const by = {}; arr.forEach(v => { (by[v.type] = by[v.type] || []).push(v); });
-    box.innerHTML = '<b style="color:#b91c1c">규칙 위반 ' + arr.length + '건</b>' + Object.keys(by).map(t => { const k = VIOL_KINDS[t] || ['!', t, 0x888888]; const hex = '#' + k[2].toString(16).padStart(6, '0');
+    box.innerHTML = '<div data-drag title="끌어서 옮기기" style="cursor:move;user-select:none;touch-action:none"><span style="color:#9ca3af">⠿</span> <b style="color:#b91c1c">규칙 위반 ' + arr.length + '건</b></div>' + Object.keys(by).map(t => { const k = VIOL_KINDS[t] || ['!', t, 0x888888]; const hex = '#' + k[2].toString(16).padStart(6, '0');
       return '<div><span style="display:inline-block;min-width:18px;color:' + hex + ';font-weight:700">' + k[0] + '</span>' + k[1] + ' ' + by[t].length + '건 <span style="color:#666;font-size:12px">' + (by[t][0].msg || '').replace(/</g, '&lt;').slice(0, 70) + '</span></div>'; }).join('');
     box.hidden = false;
   }

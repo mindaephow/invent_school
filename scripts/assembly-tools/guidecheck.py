@@ -104,7 +104,7 @@ def run(name, only=None):
                 for h, (hu, hhv, hord, _r, _m, _k) in cand:
                     if h is q or hord >= order: continue
                     d = np.array(h.p, float) - m; al = float(d @ u)
-                    if abs(al) < 14 and np.linalg.norm(d - u * al) < 4 and any(min(float(np.linalg.norm(np.array(w_["pos"]) + np.array(w_["dir"]) * w_["len"] / 2 * sg_ - m)) for sg_ in (1, -1, 0)) < 3 for w_ in (h.world("peg", c_) for c_ in h.conn["pegs"])): return hu * hhv, h   # 호스트는 그 안내점에 자기 돌기가 있는 부품만(구멍뿐인 프레임은 호스트가 아니다)
+                    if (abs(al) < 14 and np.linalg.norm(d - u * al) < 4 or any(abs(float((np.array(mk_, float) - m) @ u)) < 14 and np.linalg.norm((np.array(mk_, float) - m) - u * float((np.array(mk_, float) - m) @ u)) < 4 for mk_ in (h.extra.get("marks") or []))) and any(min(float(np.linalg.norm(np.array(w_["pos"]) + np.array(w_["dir"]) * w_["len"] / 2 * sg_ - m)) for sg_ in (1, -1, 0)) < 3 for w_ in (h.world("peg", c_) for c_ in h.conn["pegs"])): return hu * hhv, h   # 호스트는 그 안내점에 자기 돌기가 있는 부품만(구멍뿐인 프레임은 호스트가 아니다)
                 return None, None
             fm_ = ex.get('faceMarks') or []
             for i_, m in enumerate(m_):
@@ -127,7 +127,7 @@ def run(name, only=None):
                 else:
                     frm = m + (sh if sh is not None else 0); to = (np.array(fm_[i_], float) if i_ < len(fm_) else m) + u * hv   # 화면: 받는 부품 화살표 끝 = faceMarks(있으면) + 방향×띄움
                     if sh is not None:
-                        tips = [np.array(w["pos"]) + sh + np.array(w["dir"]) * w["len"] / 2 for w in (host.world("peg", c) for c in host.conn["pegs"]) if float(np.dot(w["dir"], u)) > 0.9]
+                        tips = [np.array(w["pos"]) + sh + np.array(w["dir"]) * w["len"] / 2 * sg for w in (host.world("peg", c) for c in host.conn["pegs"]) for sg in ((1, -1) if host.n.endswith("축") else (1,)) if float(np.dot(w["dir"], u)) * sg > 0.9 or (host.n.endswith("축") and abs(float(np.dot(w["dir"], u))) > 0.9)]   # 축(양 끝을 쓰는 통과 부품, G21)은 어느 끝이든 화살표 꼬리가 될 수 있다 — 부시는 축에 결합만 하고 얼마나 들어가는지는 모른다(사용자 2026-11-08)
                         if not tips or min(float(np.linalg.norm(frm - t)) for t in tips) > 3: bad.append((k, "%s 화살표 꼬리 %s 가 호스트(%s)의 떠 있는 위쪽 돌기 끝에서 3mm 넘게 떨어짐(%s)" % (q.n, np.round(frm, 1).tolist(), host.n, kind)))
                     else:
                         floating = [h for h, (hu, hhv, hord, hr, _m, _k) in cand if h is not q and not hr and h.conn and any(min(float(np.linalg.norm(np.array(w["pos"]) + np.array(w["dir"]) * w["len"] / 2 * sg - m)) for sg in (1, -1)) < 3 for w in (h.world("peg", c) for c in h.conn["pegs"]))]
