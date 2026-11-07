@@ -12,7 +12,7 @@ _T = lambda n: float(_DIM[n][1])   # 부품 두께(모델 y)
 import partlib as _pl, hovercheck as _hc
 _PLATE_HOVER = _hc.HOVER + float(_pl.get('리벳')['size'][1]) + _hc.MIN_GAP   # G12: 판은 리벳(화면 기본 띄움)보다 리벳 길이(부품 목록) + 10mm(규칙) 더 멀리 — 손으로 적은 숫자 없음
 
-A = Asm('cubo-1-windmill', '풍차', '교재 27~31쪽 · 풍차 (1~25단계)', camera={'target': [60, 40, 60], 'radius': 430, 'theta': 3.4, 'phi': 1.2})   # 완성 화면 카메라(2026-11-08): 책 완성 그림처럼 풍차 날개가 정면으로 보이고 메인보드가 탑 오른쪽 뒤에 오는 시점 — 날개 네 개 색 배치·메인보드 버튼 위치를 화면과 맞춰 정함
+A = Asm('cubo-1-windmill', '풍차', '교재 27~31쪽 · 풍차 (1~25단계)', camera={'target': [60, 40, 60], 'radius': 430, 'theta': 3.4, 'phi': 1.2}, centerAll=True)   # 완성 화면 카메라(2026-11-08): 책 완성 그림처럼 풍차 날개가 정면으로 보이고 메인보드가 탑 오른쪽 뒤에 오는 시점 — 날개 네 개 색 배치·메인보드 버튼 위치를 화면과 맞춰 정함
 
 s1 = A.step('[교재 1] 315프레임에 DC모터를 꽂아요: 모터 옆면 돌기 2개가 판 가운데 줄의 2번째·4번째 구멍(왼쪽 끝에서 센 번호)에 들어가고, 모터 케이블 쪽이 오른쪽(판 가운데)을 봐요.')
 v1_0 = s1.place('315프레임', euler_to_R([0, 0, 0]), (0, 2.5, 0))
@@ -217,10 +217,10 @@ A.steps[20].kw["hideMade"] = {str(_i): "1~12번 조립(몸체·받침, 창고 1)
 
 s22 = A.step('[교재 22] 반대로 뒤집어서, 축 끝에 빨간 부시를 끼워 고정해요.')
 A.steps[21].kw["hideMade"] = {str(_i): "1~12번 조립(몸체·받침, 창고 1)" for _i in range(1, 13)}
-v22_0 = s22.place_rest('부시', euler_to_R([90, 0, 0]), 'h1', v13_0, 'h3', (0, 0, -1), dir=[0, 0, -1], hover=_hc.HOVER, recv=True, via=(v20_0, 'p1'))   # 허브 큰기어 아랫면에 닿게, 안내점은 끼우는 쪽(아래) 축 끝(G21). hover 42.75 = 축 끝에서 22 + 끝에서 제자리까지 20.75 — 부시가 축 끝에서 22 떨어진 자리에 떠서 화살표 끝 점이 부시 구멍에 붙는다(점이 부품에서 떨어지지 않게)
+v22_0 = s22.place_rest('부시', euler_to_R([-90, 0, 0]), 'h1', v13_0, 'h3', (0, 0, -1), dir=[0, 0, -1], hover=_hc.HOVER, recv=True, via=(v20_0, 'p1'))   # 허브 큰기어 아랫면에 닿게, 안내점은 끼우는 쪽(아래) 축 끝(G21). hover 42.75 = 축 끝에서 22 + 끝에서 제자리까지 20.75 — 부시가 축 끝에서 22 떨어진 자리에 떠서 화살표 끝 점이 부시 구멍에 붙는다(점이 부품에서 떨어지지 않게)
 _u22 = np.array(v22_0.extra['dir'], float); _u22 /= np.linalg.norm(_u22)
 v22_0.extra['hover'] = _hc.HOVER + abs(float((np.array(v22_0.extra['marks'][0], float) - np.array(v22_0.p, float)) @ _u22))   # 축 끝에서 기본 띄움만큼 떨어진 자리에 부시가 뜨도록: 기본 띄움 + 끝에서 제자리까지 거리(계산)
-v22_0.extra['faceMarks'] = [rnd(v22_0.p)]   # 부시 구멍 자리(제자리) — 화살표 끝 점·원이 뜬 부시 구멍(제자리+hover)에 붙고, 꼬리 점은 marks(축 끝)에 둔다(연결점이 부품에서 떨어지지 않게)
+v22_0.extra['faceMarks'] = [rnd(np.array(v22_0.hole('h1')['pos'], float) + np.array(v22_0.extra['dir'], float) * float(v22_0.extra.get('thick') or 5) / 2)]   # 화살표 머리 = 부시 자기 구멍(h1) 연결점에서 계산한 받는 면(구멍 중심 + 방향×두께/2, 손 숫자 없음 G26). 꼬리는 marks(축 끝 via)
 
 s23 = A.step('[교재 23] 12(몸체)와 22(풍차 날개)를 합쳐요: 허브를 몸체 쪽으로 밀어서 축 끝이 앞 프레임의 모터 쪽 구멍에 끼워지게 해요.')
 _gm23 = A.group('23번에서 옮기는 묶음', [v13_0, v13_1, v13_2, v13_3, v14_0, v14_1, v14_2, v14_3, v15_0, v15_1, v15_2, v15_3, v15_4, v15_5, v15_6, v15_7, v16_0, v16_1, v16_2, v16_3, v16_4, v16_5, v16_6, v17_0, v17_1, v17_2, v17_3, v17_4, v17_5, v17_6, v17_7, v17_8, v17_9, v17_10, v17_11, v17_12, v17_13, v17_14, v17_15, v17_16, v17_17, v17_18, v17_19, v17_20, v20_0, v20_1, v20_2, v20_3, v22_0])
@@ -232,7 +232,6 @@ v24_0 = s24.attach('메인보드', euler_to_R([180.0, 0.0, -90.0]), {'p1': (v11_
 
 s25 = A.step('[교재 25] 메인보드 오른쪽 단자에 DC모터 선을 연결하면 풍차 완성!')
 
-import stepchecks; stepchecks.apply(A, "windmill")
 
 # ── 작업 공간(창고) 정리(04, 1차) — 교재 27~31쪽을 1→25번 순서로 보며 정했다(2026-11-06).
 #   번호표로 확인: 7번 "05 + 06" · 8번 "04 + 07" · 12번 "10 + 11" · 21번 "19 + 20" · 23번 "12 + 22". 나머지는 그림 모양으로 판단(추정).
@@ -327,6 +326,7 @@ for q in _flat:
         sp, sR = _st(_sd["p"], euler_to_R(_sd["r"]), m)
         _sd["p"], _sd["r"] = rnd(sp), R_to_euler(sR)
 v22_0.extra["noMarkCheck"] = True   # 22번 부시는 뒤집힌 자세로 저장하고 축(13~21번 부품)은 22번에서만 poseAt 로 뒤집는다 — 안내점 검사는 기본 자세 기준이라 어긋나 보인다(speedbike·battlerobot 과 같은 방식, 화면으로 확인)
+import stepchecks; stepchecks.apply(A, "windmill")
 A.save_links()
 A.check_fixes()
 A.report = lambda: [print("경고:", w) for w in A.warn]

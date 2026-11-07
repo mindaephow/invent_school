@@ -57,7 +57,7 @@ def check(name, only=None):
     try:
         import userdone, re as _re
         src = open(os.path.join(here, name + ".py"), encoding="utf-8").read()
-        m = _re.search(r'Asm\("([^"]+)"', src); done = set(userdone.user_done(m.group(1))) if m else set()
+        m = _re.search(r'''Asm\(\s*["']([^"']+)["']''', src); done = set(userdone.user_done(m.group(1))) if m else set()
     except (SystemExit, Exception): pass
     R = os.path.join(here, "refs", name); out = {}
     bad = "❌" if strict else "⚠"
