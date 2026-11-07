@@ -1,7 +1,7 @@
 # 규칙 위반을 번호별로 모아 화면이 종류마다 다른 색·기호로 칠하게 한다(사용자 지시 2026-11-08). 읽기만 한다.
 #   python violations.py <이름>      번호별 위반 목록을 보여 준다(build.py 는 collect() 로 def.violations 를 만든다)
 # 종류: floor ▼ 바닥 아래(asmlib.floor_check) · link ◎ 연결점(guidecheck: recv 누락·링이 자기 자리 아님·꼬리가 돌기 끝에서 뜸)
-#       overlap ✕ 겹침 · gap ↔ 틈 · orient ↻ 방향 — 이 셋은 해당 점검기가 부품 키를 내주면 같은 자리에 붙인다(화면은 이미 칠할 줄 안다).
+#       store ▣ 다른 창고에 있는 부품이 이 번호 화면에 보임(hidecheck.stray_loc) · overlap ✕ 겹침 · gap ↔ 틈 · orient ↻ 방향(cubo_joint_check 가 메시지와 함께 부품 키 LAST 를 내준다).
 # 항목: {"type", "keys": ["만든번호:부품순서"…], "msg"} — 키는 화면 부품 키와 같다(moveMade 키와 같은 모양).
 import asmpath
 import sys, os, re, runpy
@@ -22,6 +22,12 @@ def collect(name):
     for k, nm, y, where, key in asmlib.floor_check(A, keys=True): fl.setdefault((k, where), []).append((nm, y, key))
     for (k, where), v in fl.items():
         add(k, "floor", [x[2] for x in v], "%s %d개 가장 낮은 y %.1f (%s)" % ("·".join(sorted({x[0].rsplit(" ", 1)[0] for x in v})), len(v), min(x[1] for x in v), where))
+    try:   # 창고: 다른 창고에 있는 부품이 이 번호 화면에 보이면 그 부품을 붉게 칠한다(2026-11-08 풍차 18번 날개 4개 사고)
+        import hidecheck, json as _j
+        for k, m, pis in hidecheck.stray_loc(_j.load(open(asmpath.resolve(name + "_asm.json"), encoding="utf-8"))["steps"]):
+            add(k, "store", ["%d:%d" % (m, pi) for pi in pis], "%d번의 부품 %d개가 다른 창고에 있는데 보임(hideMade 에 없음)" % (m, len(pis)))
+    except Exception as e_:
+        print("violations: 창고 점검을 못 붙임 —", str(e_)[:100], file=sys.stderr)
     bad, _n, _sk = guidecheck.run(name)
     for k, msg in bad:
         nm = re.match(r"(\S+?)(?:\(옮김\))?\s", msg + " ")
@@ -34,6 +40,14 @@ def collect(name):
             if not keys:
                 keys = ["%d:%d" % (k, i) for i, p in enumerate(A.steps[k - 1].parts) if p.n == nm.group(1)]
         add(k, "link", keys, msg)
+    try:   # 겹침·틈·방향: cubo_joint_check 가 메시지와 함께 화면 부품 키를 내준다(LAST) — 틈·피치는 ↔, 방향은 ↻, 나머지(겹침·구조)는 ✕
+        import cubo_joint_check as cj
+        for k in range(1, len(A.steps) + 1):
+            for msg in cj.check(A, k):
+                t = "orient" if msg.startswith("규칙10") else "gap" if re.search(r"틈|피치", msg) else "overlap"
+                add(k, t, cj.LAST.get(msg, []), msg)
+    except Exception as e_:
+        print("violations: 겹침·틈·방향 점검을 못 붙임 —", str(e_)[:100], file=sys.stderr)
     return out
 
 def write_entry(name):

@@ -66,6 +66,11 @@ def _pen(pa, Ra, ha, pb, Rb, hb):   # 두 회전 상자(OBB)의 침투 깊이(�
         best = min(best, ov)
     return best
 
+LAST = {}   # 메시지 → 화면 부품 키["만든번호:부품순서"…] — violations.py 가 화면에 칠할 때 쓴다(사용자 지시 2026-11-08)
+def _ky(*os_): return ["%d:%d" % (o.src.step.index, o.src.step.parts.index(o.src)) for o in os_ if getattr(o, "src", None) is not None]
+def _em(out, msg, *os_):
+    out.append(msg); LAST[msg] = _ky(*os_)
+
 def check(A, k):
     out = []; vs = view(A, k); pf = {id(o): cc.feats(o, "pegs") for o in vs}; hf = {id(o): cc.feats(o, "holes") for o in vs}
     # 규칙 2·8
@@ -86,7 +91,7 @@ def check(A, k):
                 return obb.span(obb.corners(Aq.p, Aq.R, np.array(dims[Aq.n], float) / 2), c)
             s1 = _sp(A1, "p1"); s2 = _sp(A2, "p2")
             g = float(max(s2[0] - s1[1], s1[0] - s2[1]))
-            if g > 0.3 or g < -1.0: out.append("규칙8 리벳 틈: %s↔%s %+.1fmm" % (A1.n, A2.n, g))
+            if g > 0.3 or g < -1.0: _em(out, "규칙8 리벳 틈: %s↔%s %+.1fmm" % (A1.n, A2.n, g), A1, A2)
     # 규칙 3 (프레임은 물리적으로 겹칠 수 없다 — 판 높이가 겹치는 나란한 두 프레임의 구멍 중심이 피치(10mm)보다 훨씬 가까우면 위반. 구부러진 프레임도 구멍 기준이라 상자 크기에 속지 않는다)
     _sl = A.steps[k - 1].kw.get("slot", 1); _k0 = k
     while _k0 > 1 and A.steps[_k0 - 2].kw.get("slot", 1) == _sl: _k0 -= 1
@@ -100,7 +105,7 @@ def check(A, k):
             ha = [h["pos"] for h in hf[id(a)]]; hb = [h["pos"] for h in hf[id(b)]]
             if not ha or not hb: continue
             d_ = min(float(np.linalg.norm(x - y)) for x in ha for y in hb)
-            if d_ < 9.0: out.append("규칙3 %s↔%s 겹침: 구멍 중심 간격 %.1fmm (프레임은 겹칠 수 없음 — 이어지면 10)" % (a.n, b.n, d_))
+            if d_ < 9.0: _em(out, "규칙3 %s↔%s 겹침: 구멍 중심 간격 %.1fmm (프레임은 겹칠 수 없음 — 이어지면 10)" % (a.n, b.n, d_), a, b)
     # 규칙 16 (프레임과 프레임이 옆에 같은 판 높이로 이어질 때는 방향이 어떻든 맞닿은 구멍 사이 피치가 10mm — 사용자 확정 2026-11-03)
     for a in [o for o in frs if o.new]:
         for b in frs:
@@ -113,17 +118,17 @@ def check(A, k):
             if not any(c is not a and c is not b and any(inside(pg, ho) for pg in pf[id(c)] for ho in hf[id(a)]) and any(inside(pg, ho) for pg in pf[id(c)] for ho in hf[id(b)]) for c in vs):
                 continue   # 같은 부품(블록·리벳·볼트·모터)의 돌기가 두 프레임 구멍에 다 들어가야 이어진 것 — 따로 걸려 모서리만 닿는 프레임(홀수 줄·짝수 줄이 같은 중심선에 놓인 경우 등)은 줄이 반 칸 어긋나는 게 정상(사용자 2026-11-03)
             d_ = min(float(np.linalg.norm(x - y)) for x in ha for y in hb)
-            if abs(d_ - 10.0) > 0.3: out.append("규칙16 옆 프레임 %s↔%s 맞닿은 구멍 피치 %.1fmm (10 이어야 함)" % (a.n, b.n, d_))
+            if abs(d_ - 10.0) > 0.3: _em(out, "규칙16 옆 프레임 %s↔%s 맞닿은 구멍 피치 %.1fmm (10 이어야 함)" % (a.n, b.n, d_), a, b)
     # 규칙 5~7
     for b in [o for o in vs if o.new and (("블록" in o.n) or o.n in PEGGED or o.n == "리벳")]:
         for pg in pf[id(b)]:
             fr = sorted({a.n for a in vs if a is not b and "프레임" in a.n and any(inside(pg, ho) for ho in hf[id(a)])})
-            if len(fr) >= 2: out.append("규칙5~7 %s %s 돌기가 프레임 두 장에: %s" % (b.n, pg["id"], "+".join(fr)))
+            if len(fr) >= 2: _em(out, "규칙5~7 %s %s 돌기가 프레임 두 장에: %s" % (b.n, pg["id"], "+".join(fr)), b)
     # 규칙 1 (프레임과 프레임을 잇는 부품은 리벳·블록 — 볼트·너트는 규칙 14·15): 새 부품의 돌기가 서로 다른 프레임 둘 이상의 구멍에 들어가 있으면 그 부품이 잇는 것
     for c_ in [o for o in vs if o.new and pf[id(o)] and "프레임" not in o.n]:
         fr = sorted({a.n + "#" + str(id(a)) for a in vs if a is not c_ and "프레임" in a.n and any(inside(pg, ho) for pg in pf[id(c_)] for ho in hf[id(a)])})
         if len(fr) >= 2 and not (c_.n == "리벳" or "블록" in c_.n or c_.n in ("8볼트", "12볼트", "너트")):
-            out.append("규칙1 %s 가 프레임 %d장을 이음(프레임끼리는 리벳·블록으로 잇는다)" % (c_.n, len(fr)))
+            _em(out, "규칙1 %s 가 프레임 %d장을 이음(프레임끼리는 리벳·블록으로 잇는다)" % (c_.n, len(fr)), c_)
     # 규칙 4 (블록·모터 돌기는 프레임에 끼워질 때 프레임의 먼 쪽 면 밖으로 나가지 않는다 — 돌기 끝이 구멍 반대편 면을 0.5mm 넘으면 위반)
     for b_ in [o for o in vs if o.new and (("블록" in o.n) or o.n in PEGGED)]:
         for pg in pf[id(b_)]:
@@ -135,13 +140,13 @@ def check(A, k):
                     hl = (ho.get("len", 5) or 5) / 2
                     for s_ in (1.0, -1.0):   # 돌기가 어느 쪽으로 꽂혔든 끝이 그쪽 면을 넘는지
                         if float(pg["dir"] @ ho["dir"]) * s_ > 0.9 and s_ * tal > hl + 0.5:
-                            out.append("규칙4 %s %s 돌기 끝이 %s 면 밖으로 %.1fmm" % (b_.n, pg["id"], a.n, s_ * tal - hl))
+                            _em(out, "규칙4 %s %s 돌기 끝이 %s 면 밖으로 %.1fmm" % (b_.n, pg["id"], a.n, s_ * tal - hl), b_, a)
     # 규칙 10 (방향 있는 부품: 책 그림의 부품 모양·특징 방향과 같아야 한다 — 기준은 월드 X·Y·Z 가 아니라 같은 로봇 안의 다른 부품과의 상대 관계)
     od = _orient(A.id)
     for o in [o for o in vs if o.new and o.n in DIRECTIONAL]:
         loc, what = DIRECTIONAL[o.n]; dec = (od.get(str(k)) or {}).get(o.n)
         w = o.R @ np.array(loc, float)
-        if not dec: out.append("규칙10 %s 방향 미기록 — 책에서 %s 이 어느 부품 쪽인지/반대쪽인지 읽어 %s_orient.json 에 적을 것" % (o.n, what, A.id.split("-")[-1])); continue
+        if not dec: _em(out, "규칙10 %s 방향 미기록 — 책에서 %s 이 어느 부품 쪽인지/반대쪽인지 읽어 %s_orient.json 에 적을 것" % (o.n, what, A.id.split("-")[-1]), o); continue
         if "face" in dec:   # 로봇 기준 방향: 앞/뒤 = 버튼 줄(+z)이 로봇 뒤쪽 기준 부품(robot.back_ref)에서 먼/가까운 쪽, 위/아래 = 윗면(+y)이 로봇 바닥 기준 부품(robot.bottom_ref)에서 먼/가까운 쪽
             rb = od.get("robot") or {}; fa = dec["face"]; key = "back" if fa in ("앞", "뒤") else "bottom"
             if key + "_ref" not in rb: out.append("규칙10 %s_orient.json 에 robot.%s_ref (로봇 %s 기준 부품)가 없음" % (A.id.split("-")[-1], key, "뒤쪽" if key == "back" else "바닥")); continue
@@ -150,7 +155,7 @@ def check(A, k):
         ref = _find_part(A, vs, dec["ref"], dec.get("ref_no"))
         if ref is None: out.append("규칙10 %s 기준 부품 %s %s번을 이 번호에서 못 찾음" % (o.n, dec["ref"], dec.get("ref_no"))); continue
         d = float(w @ (ref.p - o.p)); toward = d > 0
-        if toward != (dec["relation"] == "toward"): out.append("규칙10 %s %s 이 책(%s)과 다름: 책 %s %s 쪽 / 모델 %s" % (o.n, what, dec.get("evidence", "근거 없음"), dec["ref"], dec["relation"] == "toward" and "을 향함" or "반대쪽", toward and "향함" or "반대쪽"))
+        if toward != (dec["relation"] == "toward"): _em(out, "규칙10 %s %s 이 책(%s)과 다름: 책 %s %s 쪽 / 모델 %s" % (o.n, what, dec.get("evidence", "근거 없음"), dec["ref"], dec["relation"] == "toward" and "을 향함" or "반대쪽", toward and "향함" or "반대쪽"), o)
     # 규칙 13 (돌기로 프레임에 바로 꽂는 부품 — 블록·모터·메인보드·센서: 몸체와 프레임 면 사이 틈 0)
     for P in [o for o in vs if o.new and o.conn["pegs"] and o.n in dims and (("블록" in o.n) or o.n in PEGGED)]:
         done = set()
@@ -162,8 +167,8 @@ def check(A, k):
                         done.add(id(F)); ax = ho["dir"]
                         s1 = obb.span(obb.corners(P.p, P.R, np.array(dims[P.n], float) / 2), ax); s2 = obb.span(obb.corners(F.p, F.R, np.array(dims[F.n], float) / 2), ax)
                         g = float(max(s2[0] - s1[1], s1[0] - s2[1])) + float(pg.get("len", 5) or 5)   # 상자에 돌기 길이가 들어 있어서 딱 붙으면 −돌기길이 → 보정
-                        if g > 0.3: out.append("규칙13 %s↔%s 직접 결합 틈 %+.1fmm" % (P.n, F.n, g))
-                        elif g < -1.0: out.append("규칙13 %s↔%s 겹침 %+.1fmm" % (P.n, F.n, g))
+                        if g > 0.3: _em(out, "규칙13 %s↔%s 직접 결합 틈 %+.1fmm" % (P.n, F.n, g), P, F)
+                        elif g < -1.0: _em(out, "규칙13 %s↔%s 겹침 %+.1fmm" % (P.n, F.n, g), P, F)
                         break
     # 규칙 9 (볼트·너트)
     rows = []; fast = []; cc.scan(A, k, dims, rows, fast)
