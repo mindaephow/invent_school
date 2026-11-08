@@ -1,0 +1,1 @@
+{"global": {"X": [55.0, -13.1], "Y": [-10.4, -55.0], "Z": [23.0, 55.0]}, "fit": {"from": "02_P.json", "err_px": 1.76, "points": 11, "theta": -0.11, "phi": 1.02, "cols": "+X", "rows": "+Y", "note": "서 있는 135도 프레임 두 개를 세계 3차원 좌표로 PnP(frame_fit 한계 — 부품을 눕힌 판으로 풀지 않음)"}, "no_rotate": true}

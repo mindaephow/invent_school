@@ -69,7 +69,7 @@ def run(name, only=None):
                     m = np.array(m, float); best = 1e9
                     for o in A.parts:
                         if o is q or o.step.index > k or not o.conn: continue
-                        if e2.get("recv"):
+                        if (e2.get("settleRecv", e2.get("recv")) if (e2.get("side") or {}).get("until") == k else e2.get("recv")):
                             for c in o.conn["pegs"]:
                                 w = o.world("peg", c)
                                 best = min([best] + [float(np.linalg.norm(m - (np.array(w["pos"]) + np.array(w["dir"]) * w["len"] / 2 * sg))) for sg in (1, -1, 0)])
@@ -90,7 +90,7 @@ def run(name, only=None):
             if side.get("until") == k:   # 옆자리에서 이 번호에 합쳐지는 부품: settleDir(없으면 dir)·settleHover·settleMarks·settleOrder
                 d = e.get("settleDir") if e.get("settleDir") is not None else e.get("dir")
                 if d is None: return None
-                return unit(d), float(e.get("settleHover") or HOVER), e.get("settleOrder") or 1, bool(e.get("recv")), e.get("settleMarks") or [], "합치기"
+                return unit(d), float(e.get("settleHover") or HOVER), e.get("settleOrder") or 1, bool(e.get("settleRecv", e.get("recv"))), e.get("settleMarks") or [], "합치기"
             if h.step.index == k and (not side or k < side.get('until', 0)):   # 옆자리에서 처음 놓이는 번호도 보통 방식(hover·dir·marks)으로 그려진다
                 if not e.get("dir"): return None
                 rv = bool(e.get("recv")); return unit(e["dir"]), float(e.get("hover") or (HOVER_RECV if rv else HOVER)), e.get("joinOrder") or 1, rv, e.get("marks") or [], "보통"

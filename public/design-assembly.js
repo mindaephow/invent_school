@@ -565,7 +565,7 @@
           // 받는 부품(호스트)이 이 점 근처인지(구멍을 받는 recv 부품의 안내점은 '끼워질 돌기 끝'이지 자기가 들고 온 돌기가 아니라서 호스트의 안내점(hmk)으로는 인정하지 않는다 — 14번 큰기어의 T축 끝 때문에 부시 화살표 시작점이 기어 hover 만큼 올라가 허공에 찍혔다, 2026-11-08): 끼우는 방향 축 위로 14 이내이고, 축에서 옆으로 4 이내(옆 구멍의 돌기를 잘못 잡지 않게) — 부품 중심이 아니어도 그 부품의 안내점(제자리 돌기 끝 자리)이 같은 조건이면 호스트다(65mm 긴 축은 끝이 중심에서 32mm 떨어져 있다, 양팔저울 12번 부시)
           const near = (f, m) => { const d = [f[0] - m[0], f[1] - m[1], f[2] - m[2]]; const u = dirH || [0, 1, 0]; const ul = Math.hypot(u[0], u[1], u[2]) || 1; const al = (d[0] * u[0] + d[1] * u[1] + d[2] * u[2]) / ul; return Math.abs(al) < 14 && Math.hypot(d[0] - al * u[0] / ul, d[1] - al * u[1] / ul, d[2] - al * u[2] / ul) < 4; };
           const hostShift = pt.guideShift ? () => pt.guideShift : (m) => { const h = list.find((q) => q.isNew && q.final && (q.order || 1) < myOrder && (near(q.final, m) || (!q.recvHost && q.hmk && q.hmk.some((k) => near(k, m))))); return h ? [h.pos[0] - h.final[0], h.pos[1] - h.final[1], h.pos[2] - h.final[2]] : null; };
-          if ((moving ? mvSrc.recv : pt.recv) && !pt.pegTarget) { // pegTarget: 구멍 받는 부품이 움직여도 교재처럼 화살표가 고정된 돌기 끝을 향하게 그린다(marks = 고정된 돌기 끝)
+          if ((moving ? mvSrc.recv : (settling && pt.settleRecv !== undefined ? pt.settleRecv : pt.recv)) && !pt.pegTarget) { // pegTarget: 구멍 받는 부품이 움직여도 교재처럼 화살표가 고정된 돌기 끝을 향하게 그린다(marks = 고정된 돌기 끝)
             // 구멍을 받는 부품(프레임 등)이 움직일 때: 원은 떠 있는 부품의 구멍에, 화살표는 고정된 돌기 끝에서 그 구멍 쪽으로
             // faceMarks: 돌기 끝이 판 바깥 면과 같은 높이가 아닐 때, 제자리에 끼운 뒤 판 바깥 면의 구멍 자리
             const faces = !settling && pt.faceMarks ? pt.faceMarks : targets;

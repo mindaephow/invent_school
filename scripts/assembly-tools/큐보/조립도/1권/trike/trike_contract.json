@@ -142,28 +142,31 @@
 "noPart": false
 },
 "23": {
-"parts": {},
-"noPart": false
-},
-"24": {
 "parts": {
 "축": 1,
 "부시": 2
 },
 "noPart": false
 },
-"25": {
+"24": {
 "parts": {
 "리벳": 4,
 "37프레임": 1
 },
 "noPart": false
 },
-"26": {
+"25": {
 "parts": {
 "축": 1,
 "작은바퀴": 2,
 "부시": 2
+},
+"noPart": false
+},
+"26": {
+"parts": {
+"데코바퀴": 1,
+"T축": 1
 },
 "noPart": false
 },
@@ -176,18 +179,11 @@
 },
 "28": {
 "parts": {
-"데코바퀴": 1,
-"T축": 1
-},
-"noPart": false
-},
-"29": {
-"parts": {
 "메인보드": 1
 },
 "noPart": false
 },
-"30": {
+"29": {
 "parts": {},
 "noPart": true
 }

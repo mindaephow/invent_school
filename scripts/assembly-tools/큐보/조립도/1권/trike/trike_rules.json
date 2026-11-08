@@ -1,0 +1,6 @@
+{
+ "parts_sum": true,
+ "strict": true,
+ "orient_check": true,
+ "placecheck": true
+}
