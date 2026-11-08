@@ -6,6 +6,13 @@ import hashlib, json
 def fp(st):
     st = dict(st); st.pop("review", None); st.pop("reviewWhy", None)   # 번호판 색(주황/파랑) 표시용 플래그는 내용이 아니다 — 검증 상태가 바뀔 때마다 증거·✓ 지문이 깨지지 않게 뺀다(2026-10-18)
     st["note"] = str(st.get("note", "")).split("\n━ 작업 점검 ━")[0]
+    if any((pt.get("poseAt") or {}) for pt in st.get("parts") or [] if isinstance(pt, dict)):   # 완성(마지막 화면) 전용 자세(poseAt 항목에 "final": true)는 이 번호 모양이 아니다 — 1~N번 증거 지문이 깨지지 않게 뺀다(2026-11-09 로봇팽이 완성)
+        st = json.loads(json.dumps(st))
+        for pt in st.get("parts") or []:
+            pa = pt.get("poseAt") if isinstance(pt, dict) else None
+            if pa:
+                for k in [k for k, v in pa.items() if isinstance(v, dict) and v.get("final")]: pa.pop(k)
+                if not pa: pt.pop("poseAt")
     return hashlib.sha1(json.dumps(st, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()[:12]
 
 

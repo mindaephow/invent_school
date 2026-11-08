@@ -8,7 +8,7 @@ import json
 import numpy as np
 from asmlib import *
 
-A = Asm('cubo-1-spinner', '로봇팽이', '교재 35~43쪽 · 로봇팽이 (1~22단계 로봇, 23~27 팽이, 28~32 손잡이, 33·34 합체)', camera={'target': [30, 40, 30], 'radius': 320, 'theta': 1.05, 'phi': 1.1}, centerAll=True)
+A = Asm('cubo-1-spinner', '로봇팽이', '교재 35~43쪽 · 로봇팽이 (1~22단계 로봇, 23~27 팽이, 28~32 손잡이, 33·34 합체)', camera={'target': [30, 40, 30], 'radius': 320, 'theta': 0.64, 'phi': 0.9}, centerAll=True)
 
 # ── 01 번호 등록 — 책 번호 1~34(PDF 35~42쪽). 설명은 책 그림에서 읽은 대로 한 줄씩(부품 놓기는 05 에서 번호마다)
 _NOTES = {
@@ -358,11 +358,32 @@ _RS33 = np.diag([1.0, -1.0, -1.0])   # 팽이 거꾸로
 s33.move_made(_gS33, _RS33, pivot=(0.0, 32.5, 0.0), shift=(float(_AX33[0]), float(_yg33 - 15.0 - 0.0), float(_AX33[2])), dir=[0, 1, 0], hover=40, group='팽이 끼우기')
 
 # ── 34 ── 교재 34 (2026-11-08): 창고 3의 손잡이(32번)를 33번 몸체에 끼워 로봇팽이 완성.
-#   ⚠ 미해결: 손잡이가 끼워지는 정확한 자리·방향을 책 34번에서 못 읽었다(손잡이 흰 막대 끝이 몸체 위 35프레임 아래로 들어가는 것으로 보임). 임시로 손잡이 바닥 판이 몸체 위 35프레임 위에 얹히게 둔다.
-s34 = A.steps[33]; s34.kw.pop('noPart', None); s34.kw['madeNoPart'] = True; s34.cam = (3.11, 0.49, False, None, None, None); s34.camSrc = 'eye'
+#   손잡이 자세 확정(2026-11-09): 막대 둘이 로봇 15프레임 사이 틈 둘에 끼워지고 35프레임 아래로 지난다(아래 줄 주석). ⚠ 남은 것: 막대가 얼마나 깊이 들어가는지(끝 위치)와 카메라는 눈대중 — 책 34번 오른쪽 끝(팽이 쪽)에서 흰 막대 끝이 보이는지로 확인 필요.
+s34 = A.steps[33]; s34.kw.pop('noPart', None); s34.kw['madeNoPart'] = True; s34.cam = (1.54, 0.62, False, None, None, None)   # 책 34 는 33번 화면을 옆으로 90° 돌린 시점(큰 어두운 판이 아래, 손잡이가 왼쪽 위) — 눈대중 맞춤 ⚠ 격자 fit 아님; s34.camSrc = 'eye'
 _gH34 = A.group('손잡이 전체', [_pt for _st in A.steps[27:32] for _pt in _st.parts])
 _top35 = [float(v) for v in v13_0.p]   # 13번 35프레임(뒤집힌 뒤 몸체 맨 위 판)
-s34.move_made(_gH34, np.eye(3), pivot=(0.0, 0.0, 0.0), shift=(_top35[0], _top35[1] + 2.5, _top35[2]), dir=[0, 1, 0], hover=40, group='손잡이 끼우기')   # ⚠ 임시 자리(몸체 맨 위 35프레임 위). 책 34는 손잡이 빨간 끝이 바깥·흰 막대 끝이 몸체 쪽이나, 그 방향으로 두면 몸체(37프레임·3단블록 x 80~110)와 겹쳐 자리를 못 정했다.
+# 책 34(확대): 손잡이 흰 막대 둘(115프레임, 간격 20·폭 10)이 로봇 12번 빨간 15프레임 셋(x −40·−20·0, z 방향) 사이 폭 10 틈 둘(x −30·−10)에 막대 길이 방향(−z)으로 미끄러져 들어가 맨 위 35프레임(13번, y 63.5~68.5) 아래로 지나간다. 막대 층 = 15프레임 층(y 61)
+_R34 = np.array([[0.0, 0, 1], [0, 1, 0], [-1, 0, 0]])   # 손잡이 모델 x(막대 길이)→−z, 모델 z→+x (y축 90° 회전)
+_x15 = [float(v_.p[0]) for v_ in [pt_ for pt_ in A.steps[11].parts if pt_.n == '15프레임']]   # 12번 15프레임 x 셋
+_xc34 = (min(_x15) + max(_x15)) / 2   # 가운데 15프레임 x = 두 틈의 가운데
+_y15 = float([pt_ for pt_ in A.steps[11].parts if pt_.n == '15프레임'][0].p[1])
+_zlo34 = min(float(pt_.p[2]) for pt_ in A.steps[11].parts if pt_.n == '15프레임') - 25   # 15프레임 z 시작(길이 50)
+_zhi34 = float(A.steps[11].parts[9].p[2]) + 25   # 15프레임 z 끝
+s34.move_made(_gH34, _R34, pivot=(0.0, 0.0, 0.0), shift=(_xc34, _y15 - 17.5, _zhi34 + 30.0), dir=[0, 0, 1], hover=60, group='손잡이 끼우기')   # 손잡이 막대 층 y 17.5 → 15프레임 층, 바닥 판 안쪽 면이 15프레임 끝에서 5mm 밖(z+30 은 판 길이 25 + 여유 5)
+
+# ── 완성 ── 책 완성 그림(99.jpg = 맨 앞 완성품 00.jpg, 2026-11-09): 로봇이 똑바로 서고(메인보드 위·큰기어 아래 = 22번 자세, 33번 뒤집기를 되돌린다), 팽이는 로봇에서 떨어져 왼쪽 앞(화면 기준: 앞 끝 블록 쪽, −X·+Z)에 서 있다. 손잡이는 34번 자세 그대로 로봇과 함께 돌아간다.
+#   자세는 완성(번호 35)에서만 쓰는 poseAt 로 준다 — 앞 번호 데이터는 그대로 둔다.
+_FIN = str(len(A.steps) + 1)
+_rob = [_pt for _k in list(range(0, 22)) + list(range(27, 32)) for _pt in A.steps[_k].parts]   # 로봇(1~22) + 손잡이(28~32)
+_spin = [_pt for _k in range(22, 27) for _pt in A.steps[_k].parts]                              # 팽이(23~27)
+for _pt in _rob:   # 34번 자세 → 33번 뒤집기를 거꾸로(같은 축·같은 중심으로 한 번 더 뒤집기)
+    _pt.extra.setdefault("poseAt", {})[_FIN] = {"final": True, "p": rnd(_PV33 + _RF33 @ (np.array(_pt.p, float) - _PV33)), "r": R_to_euler(_RF33 @ np.array(_pt.R, float))}
+_xs = [_pt.extra["poseAt"][_FIN]["p"][0] for _pt in A.steps[0].parts + A.steps[1].parts]
+_zs = [_pt.extra["poseAt"][_FIN]["p"][2] for _pt in A.steps[0].parts + A.steps[1].parts]
+_T_SPIN = np.array([min(_xs) - 65.0, 0.0, (min(_zs) + max(_zs)) / 2 + 25.0])   # 팽이를 로봇 왼쪽(+X) 앞(+Z)에 — 눈대중, 책 완성 그림과 비교해 맞춘다
+for _pt in _spin:
+    _p0, _R0 = (_pt._base if _pt._base else (np.array(_pt.p, float), np.array(_pt.R, float)))
+    _pt.extra.setdefault("poseAt", {})[_FIN] = {"final": True, "p": rnd(np.array(_p0, float) + _T_SPIN), "r": R_to_euler(np.array(_R0, float))}
 
 # ── 04 창고 정리(1차) — 책 35~42쪽을 1→34번 순서로 보며 정했다(2026-11-08).
 #   번호표로 확인: 4번 "2 + 3" · 6번 "4 + 5" · 15번 "13 + 14". 나머지는 그림 모양으로 판단(추정).
