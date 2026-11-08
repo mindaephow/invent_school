@@ -681,6 +681,8 @@ class Step:
         for pid2, hp, fc, tgt in _faces:   # 이름에 쓴 면이 돌기가 들어가는 입구가 맞는지(앞뒤를 거꾸로 쓴 실수)
             if fc is not None and not _enters(hp, fc, part.peg(pid2)["dir"]):
                 s.A.log(f"{s.index}단계 {n}: '{tgt}' 은(는) {hp.n} 에서 돌기가 들어오는 쪽 면이 아니다(앞뒤가 반대)")
+        if d0 is not None and dir is not None and float(np.dot(np.array(vec(dir), float), np.array(d0, float))) > 0.01:   # 띄우는 방향(dir)은 돌기가 들어가는 방향의 반대여야 한다 — 같으면 부품이 구멍 속으로 파묻혀 안 보이고 연결점(초록 점)만 공중에 남는다(2026-11-08 로봇팽이 12번 리벳, 사용자 "떨어지면 자동 에러로 잡혀야지")
+            s.A.log(f"{s.index}단계 {n}: ❌ 띄우는 방향 dir {[round(float(v), 2) for v in vec(dir)]} 이 돌기 방향 {[round(float(v), 2) for v in d0]} 과 같은 쪽 — 부품이 구멍 속으로 파묻혀 안 보이고 연결점만 공중에 뜬다(dir 는 돌기 방향의 반대, 생략하면 자동)")
         part.extra.update({"dir": rnd(-d0 if dir is None else vec(dir)), "marks": marks})
         if hover: part.extra["hover"] = hover
         if n == "T축" and "pegDepth" not in part.extra and _lk and _ht_ok(n):

@@ -89,7 +89,9 @@ def check(name, only=None):
                 if fj.get("tool") == "infer3d":   # 판이 없는 번호(블록·막대만 있는 번호)의 격자(2026-10-31 사용자 "문제가 해결 안 되게 만든 규칙은 바꿔라"): 격자를 만들 판이 없어 mkfit3d.py 가 모델에서 3D 가 확정된 점(돌기 끝·구멍·리벳 끝)을 책 픽셀과 짝지어 PnP 로 푼다. holefit 가 아니라는 이유로 막던 것을 infer 앵커와 같은 기준으로 인정한다(3D 점 ≥6·평균 ≤2.5·최대 ≤4.5px) — 통과해도 사용자 확인 권장 ⚠.
                     n3 = len(fj.get("xyz3d") or []); mean = fj.get("err_px"); mx = fj.get("max_err_px")
                     good = (n3 >= 6 and mean is not None and mean <= 2.5 and mx is not None and mx <= 4.5)
-                    why = ("3D 점 PnP 격자(mkfit3d.py): 3D 확정 점 %d개 평균 %s·최대 %s px — 사용자 확인 권장" % (n3, mean, mx)) if good else ("3D 점 PnP 격자 근거 부족(3D 점 %d개·평균 %s·최대 %s px — 점 ≥6·평균 ≤2.5·최대 ≤4.5 필요)" % (n3, mean, mx))
+                    soft = (not good) and (not needs_grid) and n3 >= 4 and mean is not None and mx is not None   # 판(프레임)이 없는 번호는 같은 평면에서 잴 수 있는 점이 4~5개뿐일 수 있다 — ❌ 가 아니라 ⚠(화면 비교로 확인, 사용자 지시 2026-11-08)
+                    if soft: good = True
+                    why = ("3D 점 PnP 격자(mkfit3d.py): 3D 확정 점 %d개 평균 %s·최대 %s px — 사용자 확인 권장%s" % (n3, mean, mx, "(판 없는 번호라 점 %d개뿐 — 화면 비교로 확인)" % n3 if soft else "")) if good else ("3D 점 PnP 격자 근거 부족(3D 점 %d개·평균 %s·최대 %s px — 점 ≥6·평균 ≤2.5·최대 ≤4.5 필요)" % (n3, mean, mx))
                     items.append(("⚠" if good else bad, "격자 " + fn, why)); continue
                 if fj.get("tool") == "line-fit":   # 한 줄 부품(1×N 막대) 격자(2026-10-31 사용자 "한 줄 부품이 많은데 통과 못 하게 만든 규칙부터 잘못"): holefit 는 한 줄이면 호모그래피를 못 구한다 → line_fit.py 가 같은 번호 판 격자의 카메라로 막대 위치를 풀어 만든다. 기준은 infer 앵커와 같은 값(읽은 구멍 ≥6·평균 ≤2.5·최대 ≤4.5px·기준 격자 ≤2.5px) — 통과해도 사용자 확인 권장 ⚠.
                     ev = fj.get("evidence") or {}; mean = fj.get("err_px"); mx = fj.get("max_err_px")
@@ -134,7 +136,8 @@ def check(name, only=None):
                 items.append(("✅" if _sil >= 0.85 else bad, "카메라", "실루엣 겹침 IoU %.3f(기준 ≥0.85, 자동 — 점을 읽지 않음)" % _sil))
             elif guess or (e is not None and e > 2.0):
                 why = "카메라 값이 추정이거나 점이 4개 미만(점 %s, 오차 %s)" % (pts, e) if guess else "카메라 맞춘 오차 %.2fpx > 2.0px(축 계산 기준)" % e
-                items.append(("⚠", "카메라", "승인됨(사용자): " + str(ap["camera"]) + " — " + why) if ap.get("camera") else (bad, "카메라", why))
+                if (not needs_grid) and not guess and pts >= 4: items.append(("⚠", "카메라", why + " — 판(프레임)이 없는 번호라 px 기준 대신 화면 비교로 확인(사용자 지시 2026-11-08)"))
+                else: items.append(("⚠", "카메라", "승인됨(사용자): " + str(ap["camera"]) + " — " + why) if ap.get("camera") else (bad, "카메라", why))
             else: items.append(("✅", "카메라", "오차 %.2fpx, 점 %d개" % (e, pts)))
         # E 증거 ───────────────
         ev = evid.get(str(k))

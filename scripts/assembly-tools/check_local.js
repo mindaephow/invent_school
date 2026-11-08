@@ -23,8 +23,12 @@ const all=[];steps.forEach((s,k)=>(s.parts||[]).forEach((pt,i)=>all.push({k:k+1,
 const MM={}; steps.forEach((s)=>Object.entries(s.moveMade||{}).forEach(([k,e])=>{MM[k]=e;}));   // moveMade: 앞 번호 부품을 뒤 번호에서 옮긴 자세(마지막 것)
 const fin=(pt,k,i)=>{ const me=MM[k+':'+i]; if(me&&me.p) return {p:me.p,r:me.r||pt.r||[0,0,0]}; const mv=pt.move; if(!mv) return {p:pt.p,r:pt.r||[0,0,0]}; return {p:mv.p||pt.p.map((v,k)=>v+mv.by[k]), r:mv.r||pt.r||[0,0,0]}; }; // 옮겨 붙는 부품은 마지막 자세(제자리)로 겹침을 본다
 const items=all.map(a=>{const f=fin(a.pt,a.k,a.i);return {a,boxes:C.coreBoxes(a.pt.n,dims[a.pt.n]||[0,0,0]),q:quat(f.r),pos:{x:f.p[0],y:f.p[1],z:f.p[2]}};});
+const MMslot={}; steps.forEach((s)=>Object.keys(s.moveMade||{}).forEach(k=>{MMslot[k]=s.slot;}));
+const isMoved=(a)=>{const own=steps[a.k-1].slot;const ms=MMslot[a.k+':'+a.i];return ms!=null&&own!=null&&ms!==own;};   // 다른 창고에서 합치기로 옮겨진 부품만
+const sameSlotOrMoved=(A,B)=>{const sa=steps[A.a.k-1].slot,sb=steps[B.a.k-1].slot;if(sa==null||sb==null||sa===sb)return true;return isMoved(A.a)||isMoved(B.a);};
 let n=0;
 for(let i=0;i<items.length;i++)for(let j=i+1;j<items.length;j++){const A=items[i],B=items[j];if(!A.boxes||!B.boxes)continue;
+ if(sameSlotOrMoved(A,B)===false)continue;   // 다른 창고(slot)에서 원점에 따로 만든 부품끼리는 합치기(moveMade) 전엔 같은 공간이 아니다(2026-11-08 로봇팽이 29번: 팽이 부시↔손잡이 15프레임 오탐)
  if(C.boxesOverlap(A.boxes,A.pos,A.q,B.boxes,B.pos,B.q,0.05)){n++;if(n<=40)console.log('  겹침',A.a.k+'.'+A.a.i,A.a.pt.n,'<>',B.a.k+'.'+B.a.i,B.a.pt.n);}}
 console.log('몸통 겹침:',n);
 // 바닥 기준: 가장 낮은 부품 바닥

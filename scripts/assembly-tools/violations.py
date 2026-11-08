@@ -49,6 +49,18 @@ def collect(name):
                 add(k, t, cj.LAST.get(msg, []), msg)
     except Exception as e_:
         print("violations: 겹침·틈·방향 점검을 못 붙임 —", str(e_)[:100], file=sys.stderr)
+    try:   # 몸통 겹침(node check_local.js 의 '겹침 k.i 이름 <> k.i 이름'): 부품이 서로 뚫고 들어간 것 — 터미널 숫자로만 끝나던 것을 화면 ✕ 로 보이게(사용자 지적 2026-11-08 로봇팽이 15번 큰기어가 판을 뚫음)
+        import subprocess, json as _j
+        _ap = str(asmpath.resolve(name + "_asm.json")); _st = _j.load(open(_ap, encoding="utf-8"))["steps"]
+        _o = subprocess.run(["node", "check_local.js", _ap], capture_output=True, text=True, encoding="utf-8", cwd=HERE).stdout
+        def _at(k_, i_):   # 그 부품이 마지막으로 놓이거나 옮겨지는 번호
+            key_ = "%d:%d" % (k_, i_); return max([k_] + [n_ + 1 for n_, s_ in enumerate(_st) if key_ in (s_.get("moveMade") or {})])
+        for m_ in re.finditer(r"겹침\s+(\d+)\.(\d+)\s+(\S+)\s+<>\s+(\d+)\.(\d+)\s+(\S+)", _o):
+            ka, ia, na, kb, ib, nb = int(m_.group(1)), int(m_.group(2)), m_.group(3), int(m_.group(4)), int(m_.group(5)), m_.group(6)
+            gear = ("기어" in na) or ("기어" in nb)
+            add(max(_at(ka, ia), _at(kb, ib)), "overlap", ["%d:%d" % (ka, ia), "%d:%d" % (kb, ib)], "%s ↔ %s 몸통이 겹침(뚫고 들어감)%s" % (na, nb, " — 기어는 상자 근사라 모서리 오탐일 수 있음, 중심 거리로 확인" if gear else ""))
+    except Exception as e_:
+        print("violations: 몸통 겹침을 못 붙임 —", str(e_)[:100], file=sys.stderr)
     try:   # 손값 경고(사용자 지시 2026-11-08): 조립도 .py 에 손으로 적은 hover=숫자·marks=[[…]]·offset=[…] 는 부품 자리에서 계산된 값이 아니다 → 그 번호·부품을 ✋ 로 경고한다(막지는 않는다)
         _src = open(str(asmpath.resolve(name + ".py")), encoding="utf-8").read()
         for ln in _src.splitlines():

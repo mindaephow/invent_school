@@ -3,5 +3,6 @@
  "strict": true,
  "orient_check": true,
  "placecheck": true,
- "holeid_check": true
+ "holeid_check": true,
+ "hover_dir_check": true
 }

@@ -4,6 +4,7 @@
 #   다른 점검기(matecheck·fakeguide·joincheck)는 제자리 좌표·marks 만 읽고 hover 를 읽지 않아, hover 를 안 준 리벳(화면 기본 22)이
 #   받는 판(화면 기본 20)에 붙은 채 보여도 "0건" 이었다. 수치는 _asm.json 에 다 있으므로 화면 없이 계산할 수 있다.
 # 규칙 ②: 받는 판의 joinOrder 가 리벳보다 커야 한다(화살표 시작점).
+# 규칙 ③: 리벳의 dir(띄우는 방향)과 받는 판의 dir 의 내적이 0 이하면 반대(리벳이 판 속으로 내려가 안 보임).
 # 규칙 ①: 받는 판의 유효 hover(hover 또는 기본 20) − 끼우는 쪽 유효 hover(hover 또는 기본 22) ≥ 10mm.
 #   (design-assembly.js: HOVER=22, recv 기본 HOVER_RECV=20 — 그 값이 바뀌면 아래 상수도 같이 바꾼다)
 # 짝 찾기: 받는 판의 marks 점과 끼우는 쪽 marks 점이 돌기 방향에 수직인 면에서 1mm 안이면 한 짝.
@@ -19,7 +20,7 @@ def eff(p):
     h = p.get("hover")
     return float(h) if h else (HOVER_RECV if p.get("recv") else HOVER)
 
-def check_steps(steps, only=None):
+def check_steps(steps, only=None, dircheck=False):
     """-> (위반 [(번호, 메시지)], 본 쌍 수, 못 본 [(번호, 이유)])"""
     bad, pairs, skipped = [], 0, []
     for k, s in enumerate(steps, 1):
@@ -35,6 +36,9 @@ def check_steps(steps, only=None):
             if not mine:
                 continue
             pairs += len(mine); gap = eff(r) - max(eff(f) for f in mine)
+            rev = [f for f in mine if float(np.array(f["dir"], float) @ d) <= 0]   # 규칙 ③: 리벳이 띄워지는 쪽(dir)이 받는 판과 같아야 한다 — 반대면 리벳이 구멍 속으로 파묻혀 안 보이고 초록 연결점만 공중에 남는다(2026-11-08 로봇팽이 12번)
+            if rev and dircheck:   # 켠 조립도(rules.json hover_dir_check)만 — 다른 조립도 12곳은 오탐인지 아직 안 가려서 막지 않는다
+                bad.append((k, "%s %d개의 띄우는 방향 dir %s 가 %s 의 dir %s 와 반대 — 리벳이 구멍 속으로 파묻혀 안 보이고 연결점만 공중에 뜬다(attach dir 는 띄우는 방향 = 돌기 방향의 반대, G12)" % (rev[0]["n"], len(rev), rev[0]["dir"], r["n"], r["dir"])))
             if (r.get("joinOrder") or 1) <= max((f.get("joinOrder") or 1) for f in mine):   # 화면은 joinOrder 가 더 작은 부품(리벳)을 먼저 끼우는 것으로 보고 판의 화살표를 떠 있는 리벳 끝에서 시작한다
                 bad.append((k, "%s joinOrder %s 가 리벳(%s)보다 크지 않다 — 판의 화살표가 리벳 끝이 아니라 제자리 구멍에서 시작해 리벳 위로 겹쳐 지나간다(G12)" % (r["n"], r.get("joinOrder") or 1, max((f.get("joinOrder") or 1) for f in mine))))
             if gap < MIN_GAP:
@@ -54,7 +58,10 @@ def main():
     for f in files:
         try: steps = json.load(open(f, encoding="utf-8"))["steps"]
         except Exception: continue
-        bad, pairs, skipped = check_steps(steps, only); tot += len(bad)
+        rl = {}
+        try: rl = json.load(open(f.replace('_asm.json', '_rules.json'), encoding='utf-8'))
+        except Exception: pass
+        bad, pairs, skipped = check_steps(steps, only, bool(rl.get('hover_dir_check'))); tot += len(bad)
         if bad or name != "all":
             print("%s: 결합 전 높이 위반 %d곳 (본 짝 %d)" % (os.path.basename(f).replace("_asm.json", ""), len(bad), pairs))
             for k, m in bad: print("   ❌ %d번 %s" % (k, m))

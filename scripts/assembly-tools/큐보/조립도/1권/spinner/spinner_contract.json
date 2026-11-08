@@ -67,84 +67,128 @@
 "noPart": false
 },
 "12": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 9,
+"15프레임": 3
+},
+"noPart": false
 },
 "13": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 4,
+"35프레임": 1
+},
+"noPart": false
 },
 "14": {
-"parts": {},
-"noPart": true
+"parts": {
+"T축": 1,
+"큰기어": 1,
+"부시": 1
+},
+"noPart": false
 },
 "15": {
 "parts": {},
-"noPart": true
+"noPart": false
 },
 "16": {
-"parts": {},
-"noPart": true
+"parts": {
+"3단블록": 1
+},
+"noPart": false
 },
 "17": {
-"parts": {},
-"noPart": true
+"parts": {
+"2단블록": 2
+},
+"noPart": false
 },
 "18": {
-"parts": {},
-"noPart": true
+"parts": {
+"19프레임": 1
+},
+"noPart": false
 },
 "19": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 3,
+"29프레임": 1
+},
+"noPart": false
 },
 "20": {
-"parts": {},
-"noPart": true
+"parts": {
+"리벳": 2,
+"39프레임": 1
+},
+"noPart": false
 },
 "21": {
-"parts": {},
-"noPart": true
+"parts": {
+"메인보드": 1
+},
+"noPart": false
 },
 "22": {
 "parts": {},
 "noPart": true
 },
 "23": {
-"parts": {},
-"noPart": true
+"parts": {
+"축": 1,
+"작은바퀴": 1
+},
+"noPart": false
 },
 "24": {
-"parts": {},
-"noPart": true
+"parts": {
+"부시": 1
+},
+"noPart": false
 },
 "25": {
-"parts": {},
-"noPart": true
+"parts": {
+"부시": 1
+},
+"noPart": false
 },
 "26": {
-"parts": {},
-"noPart": true
+"parts": {
+"작은기어": 1
+},
+"noPart": false
 },
 "27": {
-"parts": {},
-"noPart": true
+"parts": {
+"부시": 1
+},
+"noPart": false
 },
 "28": {
-"parts": {},
-"noPart": true
+"parts": {
+"35프레임": 1,
+"3단블록": 2
+},
+"noPart": false
 },
 "29": {
-"parts": {},
-"noPart": true
+"parts": {
+"15프레임": 1
+},
+"noPart": false
 },
 "30": {
-"parts": {},
-"noPart": true
+"parts": {
+"15프레임": 2
+},
+"noPart": false
 },
 "31": {
-"parts": {},
-"noPart": true
+"parts": {
+"115프레임": 2
+},
+"noPart": false
 },
 "32": {
 "parts": {},
@@ -152,10 +196,10 @@
 },
 "33": {
 "parts": {},
-"noPart": true
+"noPart": false
 },
 "34": {
 "parts": {},
-"noPart": true
+"noPart": false
 }
 }

@@ -2220,8 +2220,34 @@
     store:   ['▣', '다른 창고 부품이 보임', 0xe11d48],
     mark:    ['⌖', '안내점이 부품 연결점에 안 맞음', 0x14b8a6],
     hand:    ['✋', '연결점이 아닌 값을 씀', 0xec4899],
-    link:    ['◎', '연결점(recv·떠 있음)', 0xffd400], orient: ['↻', '방향이 책과 다름', 0x2f80ff]
+    link:    ['◎', '연결점(recv·떠 있음)', 0xffd400], orient: ['↻', '방향이 책과 다름', 0x2f80ff],
+    float:   ['◌', '연결점이 부품에서 떨어져 허공에 있음', 0xff0000]
   };
+  // 연결점(초록 점)이 부품에서 4mm 넘게 떨어져 허공에 있으면 번호를 열 때마다 자동으로 잡아 빨갛게 키우고 위반 상자에 띄운다(사용자 지시 2026-11-08 — 14·16번에서 점이 허공에 찍혀도 아무 경고가 없었다, 규칙 G23·G25).
+  //   점은 화살표 공식이 만든 장면에서만 위치를 알 수 있어 build.py 가 못 재므로 화면이 스스로 잰다(viewer_snippets.md 6번과 같은 계산).
+  let floatTimer = null, floatMarked = [];
+  function scheduleFloatCheck(base) {
+    clearTimeout(floatTimer);
+    floatTimer = setTimeout(() => {
+      try {
+        floatMarked.forEach(d => { if (d.dot && d.dot.material && d.col) { d.dot.material.color.copy(d.col); d.dot.scale.copy(d.scale); } }); floatMarked = [];
+        if (!assemblyGuideGroup || !assemblyListParts.length) return;
+        scene.updateMatrixWorld(true);
+        const dots = [], pts = [], V = new THREE.Vector3();
+        assemblyGuideGroup.traverse(o => { if (o.isMesh && o.userData && o.userData.dot && o.visible) dots.push(o); });
+        (assemblyGuideGroup.children || []).forEach(c => (c.userData.attached || []).forEach(m => { if (m && m.isMesh && m.userData && m.userData.dot && m.visible && !dots.includes(m)) dots.push(m); }));
+        assemblyListParts.forEach(p => { if (!p || !p.mesh || p.mesh.visible === false) return; p.mesh.traverse(c => { if (!c.isMesh || !c.geometry || (c.userData && (c.userData.dot || c.userData.guide))) return; const pa = c.geometry.attributes.position; if (!pa) return; for (let i = 0; i < pa.count; i++) { V.fromBufferAttribute(pa, i).applyMatrix4(c.matrixWorld); pts.push(V.x, V.y, V.z); } }); });
+        if (!dots.length || !pts.length) return;
+        const far = [];
+        dots.forEach(d => { const w = new THREE.Vector3(); d.getWorldPosition(w); let b = 1e18; for (let j = 0; j < pts.length; j += 3) { const dx = pts[j] - w.x, dy = pts[j + 1] - w.y, dz = pts[j + 2] - w.z; const q = dx * dx + dy * dy + dz * dz; if (q < b) b = q; } b = Math.sqrt(b); if (b > 4) far.push({ d, b, w }); });
+        if (!far.length) return;
+        far.forEach(f => { if (f.d.material && f.d.material.color) { floatMarked.push({ dot: f.d, col: f.d.material.color.clone(), scale: f.d.scale.clone() }); f.d.material = f.d.material.clone(); f.d.material.color.set(0xff0000); f.d.scale.multiplyScalar(2.2); } });
+        const worst = far.reduce((m, f) => Math.max(m, f.b), 0);
+        applyViolations((base || []).concat([{ type: 'float', msg: '연결점 ' + far.length + '개가 부품에서 최대 ' + worst.toFixed(1) + 'mm 떨어져 허공에 있음 (' + far.map(f => '(' + f.w.x.toFixed(0) + ',' + f.w.y.toFixed(0) + ',' + f.w.z.toFixed(0) + ')').join(' ') + ')', idx: [] }]));
+        console.warn('[연결점 허공]', far.map(f => ({ pos: [f.w.x, f.w.y, f.w.z].map(v => +v.toFixed(1)), 거리: +f.b.toFixed(1) })));
+      } catch (e) { console.warn('연결점 검사 오류', e); }
+    }, 900);
+  }
   let violTinted = [];
   function applyViolations(arr) {
     violTinted.forEach(t => { if (t.mesh) t.mesh.material = t.orig; (t.clones || []).forEach(m => m.dispose && m.dispose()); }); violTinted = [];
@@ -5522,7 +5548,7 @@
     listParts(categoryId){ return robotPartsCache.filter(x => (!categoryId || x.category === categoryId) && PART_DEFS['robot:' + x.id]).map(x => { const m = robotModelCache.get(x.id), bb = m && m.bbox; return { name: x.name, type: 'robot:' + x.id, size: bb ? [bb.max[0] - bb.min[0], bb.max[1] - bb.min[1], bb.max[2] - bb.min[2]] : null }; }); }, // 큐보 부품 전체 리스트용: 이 카테고리의 3D 모델이 있는 부품과 실제 모델 크기(w,h,d)
     preload(names, categoryId){ return Promise.all(names.map(n => { const t = this.resolve(n, categoryId); return t ? ensureRobotModel(t.slice(6)) : null; })); },
     // 규칙 위반 표시(사용자 지시 2026-11-08): 종류마다 색·기호가 다르다. 데이터는 build.py 가 def.violations[번호] 로 준다.
-    setViolations(arr){ applyViolations(arr || []); },
+    setViolations(arr){ applyViolations(arr || []); scheduleFloatCheck(arr || []); },
     show(list, targets, orders, comps){ assemblyTargets = targets || []; assemblyOrders = orders || []; restoreParts(list, {}, true); applyAssemblyGroups(comps); },
     // 아직 제자리로 안 들어간 부품들의 결합 순서 번호(작은 것부터) — 재생이 순서대로 하나씩 결합시킨다
     pendingOrders(){ return [...new Set(assemblyTargets.map((t, i) => (t ? (assemblyOrders[i] || 1) : null)).filter(Boolean))].sort((a, b) => a - b); },
