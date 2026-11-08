@@ -244,6 +244,24 @@ BOOKS = {
             (18, 1, {"zoom": (0.18, 0.42, 0.95, 1.0), "scale": 1.4}, "단계 18 — 아래쪽 확대: 반대쪽 벽에도 같은 모양(리벳 4 + 37프레임)"),
             (19, 1, {"zoom": (0.12, 0.40, 0.92, 1.0), "scale": 1.4}, "단계 19 — 아래쪽 확대: 반대쪽 큰기어 위 구멍에 작은기어+T축"),
         ],    },
+    "spinner": {   # 1권 4차시 로봇팽이 PDF 35~42쪽 — 책 번호 1~34 + 완성. 35쪽은 위에 완성품·LIST, 그림 1·2는 아래 줄. ▶ 로 이어지는 "전 그림"(번호 없는 칸)은 cells 로 NN_k 에 둔다
+        "volume": 1,
+        "pages": {
+            35: [(0, (70, 595, 1062, 1218), "교재 35쪽 맨 앞 완성품 사진 — 로봇팽이: 메인보드·DC모터·큰기어 아래·팽이(작은바퀴) 방향은 여기서 확인"), (1, box("L", 3), ""), (2, box("R", 3), "")],
+            36: [(3 + i, box(*g), "") for i, g in enumerate(GRID)],
+            37: [(9 + i, box(*g), "") for i, g in enumerate(GRID)],
+            38: [(15 + i, box(*g), "") for i, g in enumerate(GRID)],
+            39: [(21, box("L", 1), ""), (22, box("R", 1), "팽이로봇 완성"), (23, box("R", 2), ""), (24, box("L", 3), ""), (25, box("R", 3), "")],
+            40: [(26, box("R", 1), ""), (27, box("R", 2), "팽이완성"), (28, box("L", 3), ""), (29, box("R", 3), "")],
+            41: [(30, box("L", 1), ""), (31, box("R", 1), ""), (32, (75, 765, 1355, 1313), "손잡이 완성"), (33, box("R", 3), "")],
+            42: [(34, (720, 248, 1355, 786), ""), (99, (75, 807, 705, 1359), "완성")],
+        },
+        # ▶ 로 이어지는 전 그림: (단계, 번호k, 쪽, 칸, 설명) — NN_k.jpg
+        "cells": [(23, 1, 39, box("L", 2), "단계 23 전 그림(▶) — 축을 바퀴 가운데에 끼움"), (26, 1, 40, box("L", 1), "단계 26 전 그림(▶) — 작은 기어를 축에 끼움"),
+                  (27, 1, 40, box("L", 2), "단계 27 전 그림(▶) — 붉은 부시를 축에 끼움"), (33, 1, 41, box("L", 3), "단계 33 전 그림(▶) — 22번을 뒤집어 표시된 홀에 팽이를 끼운다"),
+                  (34, 1, 42, (75, 248, 705, 786), "단계 34 전 그림(▶) — 32번 손잡이를 그림과 같이 끼워 넣는다")],
+        "extra": [],
+    },
     "rabbit": {   # 1권 1차시 토끼·양팔저울 중 토끼 13~16쪽 — 13쪽은 위에 완성품·LIST, 그림 4칸(1~4)은 아래 두 줄
         "volume": 1,
         "pages": {
@@ -316,6 +334,8 @@ def main():
         for step, b, note in items:
             c = crop(im, b); fn = "%02d.jpg" % step; save(c, os.path.join(out, fn)); crops[step] = c
             index.append({"step": step, "idx": 0, "file": fn, "note": note or ("교재 %d쪽 단계 %s 그림" % (page, "완성" if step == 99 else step))})
+    for step, k, pg, b, note in B.get("cells", []):   # ▶ 전 그림
+        c = crop(page_image(B["volume"], pg), b); fn = "%02d_%d.jpg" % (step, k); save(c, os.path.join(out, fn)); index.append({"step": step, "idx": k, "file": fn, "note": note})
     for step, k, how, note in B["extra"]:
         c = crops[step]; h, w = c.shape[:2]
         if "level" in how:   # 수평이 되게: 장면을 −level° 돌린다(cv2 양수 = 반시계)

@@ -772,6 +772,7 @@ class Step:
         if hover: part.extra["hover"] = hover
         _ex = part.extra.get("explode")
         if isinstance(_ex, dict) and "offset" not in _ex and hover: _ex["offset"] = [round(float(x) * hover, 3) for x in vec(part.extra["dir"])]   # 결합 전에 띄운 모습 = 끼우는 방향으로 hover 만큼(손 offset 금지)
+        part._hole_ids = [pid for pid, _ in pairs if pid]   # 끼우는 부품이 쓴 자기 구멍 id — stepchecks 의 holeid_check 가 읽기 표 링 칸에 그 번호가 적혔는지 본다(내보내기·지문에는 안 들어간다)
         return s._add(part)
 
 def _peg_occupied_by(A, host, gid, skip, step=None):
