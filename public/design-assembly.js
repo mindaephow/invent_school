@@ -1259,7 +1259,7 @@
       const cur = stepStatus[step], next = !cur ? 'edit' : cur === 'edit' ? 'done' : null, mine = step;
       { const vio = ((def.violations && def.violations[mine]) || []);
        if (next === 'done' && vio.length) { notice(mine + '단계에 규칙 위반이 ' + vio.length + '건 있어서 완료로 잠글 수 없어요. 화면의 빨간 표시를 먼저 고쳐 주세요.'); return; } }   // 규칙 위반이 있으면 완료(잠금)로 못 넘어간다(사용자 지시 2026-11-08)
-      try { await b2.statusStore.set(def.id, mine, next); if (next) stepStatus[mine] = next; else delete stepStatus[mine]; paintStatus(); paintDone(); notice(mine + '단계를 "' + (next === 'done' ? '완료' : next === 'edit' ? '수정중' : '상태 없음') + '"(으)로 저장했습니다.' + (next === 'done' ? ' 이제 이 단계는 확인이 끝난 단계로 보호돼요.' : '')); }
+      try { await b2.statusStore.set(def.id, mine, next); if (next) stepStatus[mine] = next; else delete stepStatus[mine]; paintStatus(); paintDone(); }
       catch (e) { b2.status('상태 저장 실패: ' + e.message + ' (supabase/assembly_status.sql 을 실행했는지 확인)', 'error'); notice('상태 저장에 실패했습니다: ' + e.message); }
     });
   }
