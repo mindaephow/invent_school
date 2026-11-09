@@ -104,7 +104,8 @@ def run(name, only=None):
                 for h, (hu, hhv, hord, _r, _m, _k) in cand:
                     if h is q or hord >= order: continue
                     d = np.array(h.p, float) - m; al = float(d @ u)
-                    if (abs(al) < 14 and np.linalg.norm(d - u * al) < 4 or any(abs(float((np.array(mk_, float) - m) @ u)) < 14 and np.linalg.norm((np.array(mk_, float) - m) - u * float((np.array(mk_, float) - m) @ u)) < 4 for mk_ in (h.extra.get("marks") or []))) and any(min(float(np.linalg.norm(np.array(w_["pos"]) + np.array(w_["dir"]) * w_["len"] / 2 * sg_ - m)) for sg_ in (1, -1, 0)) < 3 for w_ in (h.world("peg", c_) for c_ in h.conn["pegs"])): return hu * hhv, h   # 호스트는 그 안내점에 자기 돌기가 있는 부품만(구멍뿐인 프레임은 호스트가 아니다)
+                    lim_ = 40 if h.n.endswith("축") else 14   # 긴 축(65mm)은 끝 돌기가 중심에서 멀다 — 호스트 거리 허용을 길이에 맞춘다
+                    if (abs(al) < lim_ and np.linalg.norm(d - u * al) < 4 or any(abs(float((np.array(mk_, float) - m) @ u)) < lim_ and np.linalg.norm((np.array(mk_, float) - m) - u * float((np.array(mk_, float) - m) @ u)) < 4 for mk_ in (h.extra.get("marks") or []))) and any(min(float(np.linalg.norm(np.array(w_["pos"]) + np.array(w_["dir"]) * w_["len"] / 2 * sg_ - m)) for sg_ in (1, -1, 0)) < 3 for w_ in (h.world("peg", c_) for c_ in h.conn["pegs"])): return hu * hhv, h   # 호스트는 그 안내점에 자기 돌기가 있는 부품만(구멍뿐인 프레임은 호스트가 아니다)
                 return None, None
             fm_ = ex.get('faceMarks') or []
             for i_, m in enumerate(m_):

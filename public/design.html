@@ -6043,6 +6043,14 @@
     serialize(){ return serializeParts(); },
     restore(list){ restoreParts(list, {}, true); assemblyGroups = []; assemblyPanelOn = false; assemblyStored = null; refreshGroupChip(); },
     camera(c){ target.set(c.target[0], c.target[1], c.target[2]); orbit.radius = c.radius; orbit.theta = c.theta; orbit.phi = c.phi; },
+    // 번호를 열 때마다 자동으로 카메라 보는 중심을 그 번호에 보이는 부품 전체의 가운데로 맞춘다(사용자 지시 2026-11-09 — 규칙·중심 맞추기는 손이 아니라 상시 자동, 규칙 E11 ①). 각도(theta·phi)와 거리는 그대로, 중심만 옮긴다.
+    fitCenter(){
+      if (!assemblyListParts.length) return false;
+      scene.updateMatrixWorld(true); const box = new THREE.Box3();
+      assemblyListParts.forEach(p => { if (!p || !p.mesh || p.mesh.visible === false) return; p.mesh.traverse(c => { if (!c.isMesh || !c.geometry || (c.userData && (c.userData.dot || c.userData.guide))) return; box.expandByObject(c); }); });
+      if (box.isEmpty()) return false;
+      box.getCenter(target); updateCamera(); return true;
+    },
     camState(){ return { theta: orbit.theta, phi: orbit.phi, radius: orbit.radius, target: [target.x, target.y, target.z] }; },
     // 부품 찍기: 다음에 3D 화면을 누르는 한 번으로 부품 하나를 고른다 → cb(화면 순서 번호, 못 찍으면 -1)
     pickPart(cb){ partPickCb = cb || null; canvas.style.cursor = cb ? 'crosshair' : ''; },

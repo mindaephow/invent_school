@@ -144,7 +144,7 @@ def rivet_gaps(A, k):
         for j in range(k, 0, -1):
             e = (A.steps[j - 1].kw.get("moveMade") or {}).get(key)
             if e: return np.array(e["p"], float), np.array(euler_to_R(e["r"]), float)
-        return _pose(q, k)
+        return pose_at(A, q, k)   # 옛 방식 extra["move"](그 번호부터 옮긴 자세)도 반영
     pool = [(q, *pose_k(q)) for k2, st2 in enumerate(A.steps, 1) if k2 <= k and str(k2) not in hide for q in st2.parts if q.n in dims and q.n != "리벳"]
     def host(pt, skip=None):   # 점이 든 부품 — 부품 자기 좌표 상자(obb)로 재다(기울어진 부품도 맞게, 2026-11-01)
         for q, p, R in pool:

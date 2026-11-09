@@ -64,7 +64,8 @@ def check(name, only=None):
     for k, st in enumerate(asm, 1):
         if only and k not in only: continue
         parts = st.get("parts") or []
-        if st.get("noPart") or not (parts or st.get("moveMade")): continue
+        _worked = bool(st.get("madeNoPart")) and (str(k) in evid or any(re.match(r"%02d_[A-Za-z0-9]+\.json$" % k, x) for x in (os.listdir(os.path.join(R, "fits")) if os.path.isdir(os.path.join(R, "fits")) else [])))   # 합치는 번호(새 부품 없음)도 작업을 시작했으면(격자·증거 있음) 같은 점검 대상 — 안 시작한 번호는 새로 막지 않는다(2026-11-09 3륜바이크 4·7번 증거 ❌ 가 verify_step 에서 안 풀림)
+        if st.get("noPart") or not (parts or st.get("moveMade") or _worked): continue
         items = []   # (기호, 항목, 이유)
         ap = approvals.get(str(k), {}) if isinstance(approvals.get(str(k), {}), dict) else {}
         if len(str(ap.get("사용자 말씀", "")).strip()) < 5: ap = {}   # 사용자 말씀(인용) 없는 승인은 인정하지 않는다

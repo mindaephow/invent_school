@@ -7,6 +7,7 @@ import asmpath
 import sys, os, re, runpy
 import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
+CENTER_TOL = 40   # mm — 번호 완성 모습의 x·z 중심 허용 오차(사용자 기준 없음, 임의값: 마지막 보고에서 확인받는다)
 
 def _load(name):
     os.chdir(HERE)
@@ -61,6 +62,36 @@ def collect(name):
             add(max(_at(ka, ia), _at(kb, ib)), "overlap", ["%d:%d" % (ka, ia), "%d:%d" % (kb, ib)], "%s ↔ %s 몸통이 겹침(뚫고 들어감)%s" % (na, nb, " — 기어는 상자 근사라 모서리 오탐일 수 있음, 중심 거리로 확인" if gear else ""))
     except Exception as e_:
         print("violations: 몸통 겹침을 못 붙임 —", str(e_)[:100], file=sys.stderr)
+    try:   # 중심: 번호를 끝낸 모습(그 번호 화면에 보이는 부품 전체)의 x·z 범위 중심이 원점(화면 가운데)에서 CENTER_TOL 넘게 벗어나면 ⊕ (사용자 지시 2026-11-09, A4)
+        import json as _j, asmlib as _al
+        _st = _j.load(open(str(asmpath.resolve(name + "_asm.json")), encoding="utf-8"))["steps"]
+        for k in range(1, len(_st) + 1):
+            hide = {int(x) for x in (_st[k - 1].get("hideMade") or {}) if str(x).isdigit()}
+            lo = np.array([1e9, 1e9]); hi = np.array([-1e9, -1e9]); mine = []
+            for j in range(1, k + 1):
+                if j in hide or _st[j - 1].get("slot", 1) != _st[k - 1].get("slot", 1): continue
+                for i, pt in enumerate(A.steps[j - 1].parts):
+                    if (pt.extra or {}).get("hideAt") and int(pt.extra["hideAt"]) <= k: continue
+                    sz = (pt.conn or {}).get("size")
+                    if not sz: continue
+                    pose = pt._base if getattr(pt, "_base", None) else (pt.p, pt.R)   # 나중에 옮겨진 부품은 처음 놓인 자세부터(move·moves 가 번호별로 덮는다)
+                    mv = [m for m in ((pt.extra or {}).get("moves") or ([pt.extra["move"]] if "move" in (pt.extra or {}) else [])) if int(m["at"]) <= k]
+                    if mv: m = max(mv, key=lambda q: int(q["at"])); pose = (m["p"], _al.euler_to_R(m["r"]))
+                    h = np.abs(np.array(pose[1], float)) @ (np.array(sz, float) / 2); c = np.array(pose[0], float)
+                    lo = np.minimum(lo, [c[0] - h[0], c[2] - h[2]]); hi = np.maximum(hi, [c[0] + h[0], c[2] + h[2]])
+                    if j == k: mine.append("%d:%d" % (j, i))
+            if hi[0] < lo[0]: continue
+            cx, cz = (lo + hi) / 2
+            if max(abs(cx), abs(cz)) > CENTER_TOL: add(k, "center", mine, "완성 모습 x·z 중심이 원점에서 x %+.0f·z %+.0f mm 벗어남(허용 ±%d) — 화면 가운데에 오게 놓는다" % (cx, cz, CENTER_TOL))
+    except Exception as e_:
+        print("violations: 중심 점검을 못 붙임 —", str(e_)[:100], file=sys.stderr)
+    try:   # 카메라: 그 번호의 맞춘 격자(fits/NN_*.json)가 있는데 카메라가 짐작(guess)이면 ◉ — 맞춘 값을 안 쓴 것(사용자 지시 2026-11-09: 반복 확인은 상시 감시로)
+        import glob as _g
+        for k in range(1, len(A.steps) + 1):
+            if getattr(A.steps[k - 1], "camSrc", None) != "fit" and _g.glob(os.path.join(HERE, "refs", name, "fits", "%02d_*.json" % k)):
+                add(k, "cam", [], "책 그림으로 맞춘 격자(fits)가 있는데 카메라가 짐작값이다 — axes_fit 결과 theta·phi 를 쓴다")
+    except Exception as e_:
+        print("violations: 카메라 점검을 못 붙임 —", str(e_)[:100], file=sys.stderr)
     try:   # 손값 경고(사용자 지시 2026-11-08): 조립도 .py 에 손으로 적은 hover=숫자·marks=[[…]]·offset=[…] 는 부품 자리에서 계산된 값이 아니다 → 그 번호·부품을 ✋ 로 경고한다(막지는 않는다)
         _src = open(str(asmpath.resolve(name + ".py")), encoding="utf-8").read()
         for ln in _src.splitlines():

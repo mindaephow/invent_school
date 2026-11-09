@@ -94,7 +94,7 @@ def main():
         f"{name}.py": SKELETON.format(volume=volume, title=title, id=name, name=name, count=len(listing), list_comment=lc),
         f"{name}_list.json": json.dumps(listing, ensure_ascii=False),
         f"{name}_def.json": json.dumps({"listNote": "만드는 중 — 단계가 끝나기 전까지 LIST 개수는 안 맞는 것이 정상"}, ensure_ascii=False),
-        f"{name}_rules.json": json.dumps({"count": [], "view": [], "camera": []}),
+        f"{name}_rules.json": json.dumps({"count": [], "view": [], "camera": [], "parts_sum": True, "mate_marks": True, "strict": True, "orient_check": True, "placecheck": True, "img_db": True, "rulecheck": True}, ensure_ascii=False, indent=1),   # 새 차시는 검사 항목을 처음부터 전부 켠다(사용자 지시 2026-11-09 — 기본 환경이 갖춰져 있어야 오류가 자동으로 잡힌다, 규칙 C5·00절). guideMode="mates" 는 SKELETON 에 있다
     }
     os.makedirs(out_dir, exist_ok=True)
     for fn, content in files.items():

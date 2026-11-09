@@ -18,11 +18,15 @@ for c in range(1, 19):
         if c <= 15 and r > f.get("rows", 3): continue
         if c > 15 and r > 9: continue
         p = Pc(c, r); cv2.putText(out, "%d-%d" % (c, r), (int(p[0]) - 18, int(p[1]) + 5), 0, 0.5, (255, 0, 0), 1)
-src_py = open(name + ".py", encoding="utf-8").read(); cut = src_py.index("# ── 부품 체크")
-g = {"__name__": "x", "__file__": name + ".py"}; exec(compile(src_py[:cut], name + ".py", "exec"), g); A = g["A"]
+src_py = open(name + ".py", encoding="utf-8").read()
+if "# ── 부품 체크" in src_py:
+    cut = src_py.index("# ── 부품 체크"); g = {"__name__": "x", "__file__": name + ".py"}; exec(compile(src_py[:cut], name + ".py", "exec"), g); A = g["A"]
+else:   # 표시가 없는 조립도(3륜바이크)는 probe 로 돌려 A 를 읽는다(C9: __main__ 으로 돌리면 파일이 덮어써진다)
+    import runpy; g = {}; A = next(v for v in runpy.run_path(name + ".py", run_name="probe").values() if hasattr(v, "steps") and hasattr(v, "parts") and hasattr(v, "meta"))
 done = set()
 for Pt in A.parts:
     if Pt.step.index not in steps: continue
+    if getattr(Pt, "_base", None) and int((Pt.extra or {}).get("move", {}).get("at", 99)) > N: Pt.p, Pt.R = Pt._base   # 나중에 옮겨질 부품(3륜바이크 1~10번)은 처음 놓인 자세로 — 그 번호 화면의 자리(이 번호에서 이미 옮겨졌으면 옮긴 자세 그대로)
     for h in Pt.conn.get("pegs", []):
         w = Pt.world("peg", h)
         if abs(w["dir"][1]) < 0.7: continue

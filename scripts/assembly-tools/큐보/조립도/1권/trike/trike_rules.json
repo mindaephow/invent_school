@@ -2,5 +2,8 @@
  "parts_sum": true,
  "strict": true,
  "orient_check": true,
- "placecheck": true
+ "placecheck": true,
+ "mate_marks": true,
+ "img_db": true,
+ "rulecheck": true
 }

@@ -795,7 +795,7 @@
   // 자동 검사 경고(관리자 전용): public/design-warnings.js(scripts/assembly-tools/insertion_check.js 가 만듦)의 경고를 단계 번호 옆 ⚠로 보이고, 오른쪽 아래 카드에서 관리자가 "문제없음"/"해결요청"을 고른다. 고른 결과는 ivs_assembly_checks 에 저장.
   let checkVerdicts = {}; // '단계|경고키' → 'ok' | 'fix'
   const warnsOf = (i) => (def && window.IVS_ASM_WARNINGS && window.IVS_ASM_WARNINGS[def.id] && window.IVS_ASM_WARNINGS[def.id][i]) || [];
-  const VIOL_ICON = { floor: '▼', overlap: '✕', gap: '↔', link: '◎', orient: '↻', hand: '✋' };
+  const VIOL_ICON = { floor: '▼', overlap: '✕', gap: '↔', link: '◎', orient: '↻', hand: '✋', center: '⊕', cam: '◉' };
   function violMark(i) { const V = (def.violations && def.violations[i]) || []; return V.length ? ' ' + [...new Set(V.map((v) => VIOL_ICON[v.type] || '!'))].join('') : ''; }   // 위반이 있는 번호 버튼에 종류 기호를 붙인다
   function warnMark(i) {
     const w = warnsOf(i); if (!w.length) return '';
@@ -1489,6 +1489,7 @@
     { const myStep0 = step; setTimeout(() => { if (step === myStep0 && b.relabelGroups) b.relabelGroups(def.steps[myStep0 - 1] && def.steps[myStep0 - 1].groupSwap); }, 120); } // 그룹 이름은 왼쪽부터 1번
     { const myStep = step, myTh = sv ? sv.theta : th, myPh = sv ? sv.phi : ph, mySrc = sv ? 'admin' : (st && st.camSrc ? st.camSrc : ''); // 교재 시점 = 단계 데이터의 방향·높이각 + 화면에 맞춘 보는 중심·거리. 카메라가 자리 잡은 뒤(0.15초) 저장해 하단 표시줄이 지금 시점과 비교한다
       setTimeout(() => { if (step !== myStep || !b.camState) return; const cs = b.camState(); baseCam = { step: myStep, th: myTh, ph: myPh, target: cs.target, radius: cs.radius, src: mySrc }; }, 150); }
+    if (!sv && b.fitCenter) { const myStepC = step; setTimeout(() => { if (step !== myStepC) return; if (b.fitCenter() && baseCam && baseCam.step === myStepC) { const cs2 = b.camState(); baseCam.target = cs2.target; } }, 1000); } // 관리자가 저장한 📷 시점이 없으면 보는 중심을 보이는 부품 전체의 가운데로 자동으로 맞춘다(상시 자동, E11 ①)
     const n = total();
     const curSt = step >= 1 ? def.steps[step - 1] : null, realN = def.steps.filter((q) => !q.label).length; // 창고·불러오기 같은 label 단계는 단계 번호에 넣지 않는다(사용자 지시 2026-10-04)
     $('asmLabel').textContent = step === 0 ? '시작 전' : (step === last() ? '완성!' : (curSt && curSt.label ? curSt.label : stepTag(step) + ' / ' + realN + ' 단계'));

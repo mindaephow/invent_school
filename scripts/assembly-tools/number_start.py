@@ -161,7 +161,7 @@ if k > 1 and _isf and (k - 1) >= int(_isf):
     if _miss_i or _obs < 3: _gate.append(("앞 번호 %d 이미지 작업 순서" % (k - 1), "빠진 그림: %s%s" % (", ".join(_miss_i) or "없음", ("" if _obs >= 3 else " · 관찰 그림 %d장(3장 이상 필요)" % _obs)), "빠진 그림을 만드는 단계(책 확대 읽기 → crop_ticks → holefit → axes_fit·refs_rect → observe)부터 한다 — 규칙 순서를 건너뛴 것(큐보 부품결합규칙.md B5·B8)"))
 if k > 1:   # 앞 번호: 사용자 ✓ 또는 지금 내용과 같은 지문의 비교 증거(record_check)가 있어야 다음 번호를 시작한다
     _prev = asm[k - 2]
-    if _prev.get("noPart") or not (_prev.get("parts") or _prev.get("moveMade")): _gate.append(("앞 번호 %d" % (k - 1), "아직 작성 전(부품 없음)", "앞 번호부터 끝낸다 — 번호는 순서대로"))
+    if _prev.get("noPart") or not (_prev.get("parts") or _prev.get("moveMade") or _prev.get("madeNoPart")): _gate.append(("앞 번호 %d" % (k - 1), "아직 작성 전(부품 없음)", "앞 번호부터 끝낸다 — 번호는 순서대로"))
     else:   # 부품이 있는 번호, 또는 앞 번호 부품을 옮기기만 하는(합치는) 번호
         _ok = False
         try:

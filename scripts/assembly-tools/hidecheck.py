@@ -32,6 +32,8 @@ def stray_loc(steps):
                 u = (p.get("side") or {}).get("until"); at = u if (u and k >= u) else m
                 for j in range(m + 1, k + 1):
                     if ((steps[j - 1].get("moveMade") or {}).get("%d:%d" % (m, pi))): at = j
+                mvat = (p.get("move") or {}).get("at")   # 옛 방식(part.move): 그 번호부터 옮겨 붙은 것으로 본다(트라이크 머리·팔)
+                if mvat and k >= mvat: at = mvat
                 # 받침(목적지): 같은 번호 m 의 부품 일부가 이미 옮겨져 왔다면(양팔저울 23번: 22번의 오른쪽 판·리벳은 옮겨지고 왼쪽 판·리벳은 그 자리) 옮겨지지 않고 남은 부품은 그 위에 합쳐지는 받침이라 그 번호 화면에 보이는 것이 맞다 — 창고 2 에 있어도 오탐하지 않는다(사용자 지시 2026-11-08)
                 if at == m and any(((steps[j - 1].get("moveMade") or {}).get("%d:%d" % (m, pj))) for j in range(m + 1, k + 1) for pj in range(len(steps[m - 1].get("parts") or [])) if pj != pi): continue
                 if slot_of(at) != sl and str(m) not in hide and ("%d:%d" % (m, pi)) not in hide: seen.setdefault(m, []).append(pi)

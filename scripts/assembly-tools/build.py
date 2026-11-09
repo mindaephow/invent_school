@@ -17,6 +17,15 @@ def run(cmd, show=True):
     out = (p.stdout or "") + (p.stderr or "")
     if show and out.strip(): print(out.rstrip())
     return p.returncode, out
+# 기본 환경 자동 세팅(사용자 지시 2026-11-09): 이 조립도의 _rules.json 에 빠진 기본 검사 항목을 빌드할 때 자동으로 채운다 — 나중에 손으로 챙기지 않아도 검사가 켜져 있다(새 조립도 new_assembly.py 와 같은 목록, 규칙 00절). 이미 적힌 값은 건드리지 않는다.
+_DEFAULT_FLAGS = {"parts_sum": True, "mate_marks": True, "strict": True, "orient_check": True, "placecheck": True, "img_db": True, "rulecheck": True}
+try:
+    _rf = asmpath.resolve(name + "_rules.json"); _rj = json.load(open(_rf, encoding="utf-8")); _miss = [k for k in _DEFAULT_FLAGS if k not in _rj]
+    if _miss:
+        _rj.update({k: _DEFAULT_FLAGS[k] for k in _miss}); open(_rf, "w", encoding="utf-8").write(json.dumps(_rj, ensure_ascii=False, indent=1))
+        print("기본 검사 항목 자동 추가:", ", ".join(_miss))
+except Exception as _e:
+    print("⚠ 기본 검사 항목 자동 추가를 못 함:", str(_e)[:100])
 run([sys.executable, "partlib.py"], show=False)
 rc, out0 = run([sys.executable, asmpath.ap(name, ".py")])
 if rc: sys.exit("스크립트 실행 실패")
@@ -57,7 +66,10 @@ for _h, (_s, _n) in _cnt.items():
 for line in (out0 + chr(10) + out).splitlines():
     s = line.strip()
     if s.startswith("안내점 맞물림 없는 부품:") and not s.endswith(" 0"):   # 안내점(marks)이 가리키는 구멍에 돌기가 제자리에서 안 들어가 있으면 화살표가 안 나온다(드롭체커 27번). <이름>_rules.json 에 "mate_marks": true 인 조립도만 막고, 나머지는 경고로 보여 준다(옛 조립도 ✓ 번호는 못 고친다)
-        if _MATE_MARKS: bad.append(s)
+        if _MATE_MARKS:   # 시작하지 않은 뒤 번호(1~_UP0 밖)의 맞물림 문제는 세지 않는다 — 위 단계별 검사와 같은 규칙(A1)
+            _mm = [int(m_.group(1)) for m_ in (re.match(r"(\d+)단계 .*맞물려 있지 않음", l_.strip()) for l_ in (out0 + chr(10) + out).splitlines()) if m_]
+            if any(k_ <= _UP0 for k_ in _mm) or not _mm: bad.append(s)
+            else: print("⚠ " + s + " (뒤 번호 %s단계 — 아직 시작하지 않아 막지 않음)" % ",".join(str(k_) for k_ in sorted(set(_mm))))
         else: print("⚠ " + s + " (참고 — <이름>_rules.json 에 \"mate_marks\": true 를 넣으면 이 조립도는 막는다)")
     if s.startswith("[경고]") or "[경고]" in s: bad.append(s)
     if s.startswith("LIST") and "불일치" in s: bad.append(s)
@@ -183,6 +195,12 @@ _noread = [_k for _k, _st in enumerate(asm, 1) if _k <= _upto and _st.get("parts
 print("번호별 읽기 표(" + _rdf + "):", (f"{len([1 for k, st in enumerate(asm, 1) if st.get('parts')]) - len(_noread)}단계 있음" + (f" — ❌ 안 적은 단계 {_noread}" if _noread else "")))
 if write and _noread:
     sys.exit("❌ 번호별 읽기 표가 비어 있는 단계가 있어 --write 를 하지 않는다: " + str(_noread) + " — " + _rdf + " 에 그 번호의 면·링·부품을 적는다(격자를 만든 뒤 구멍을 센 결과). 묻지 말고 적고 계속한다.")
+
+# 연결점(초록 점)은 무조건 부품 DB 의 돌기·구멍 점을 그대로 쓴다 = guideMode "mates" (사용자 지시 2026-11-09, 규칙 G26). 따로 재거나 적은 안내점·허용치 방식은 쓰지 않는다.
+_ef = asmpath.resolve(name + "_entry.js")
+if os.path.exists(_ef) and 'guideMode: "mates"' not in open(_ef, encoding="utf-8").read():
+    print("❌ 연결점 방식이 mates 가 아니다(DB 연결점 그대로 쓰지 않음) — Asm(..., guideMode=\"mates\") 와 항목 파일에 guideMode: \"mates\" 가 있어야 한다(G26)")
+    if write: sys.exit("❌ guideMode mates 가 아니어서 --write 를 하지 않는다 — 조립도 스크립트의 Asm(...) 에 guideMode=\"mates\" 를 넣는다.")
 
 # ───── 그룹 이동 참고 정보(관리자 지시 2026-10-09: 막는 장치가 아니라 판단을 돕는 정보): rules 에 "placecheck": true 가 있으면 그룹으로 옮겨 붙이는 부품의 상대 자세가 옮기기 전·후에 같은지 보여 준다.
 #   어긋남이 크면 막지 않고 알려 준다 — 완성 모습·앞뒤 번호를 펼쳐 놓고 이유를 판단해 읽기 표 '판단과정'에 적는다.
