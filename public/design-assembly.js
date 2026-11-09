@@ -875,7 +875,7 @@
     // 3번 줄(2026-10-17 관리자 지시): 마무리 점검을 아래로 빼고 높이 스캔·좌우 스캔 버튼을 같은 줄에 둔다
     let row3 = $('asmAdminRow3');
     if (!row3) { row3 = document.createElement('div'); row3.id = 'asmAdminRow3'; row3.style.cssText = row2.style.cssText; row2.parentNode.insertBefore(row3, row2.nextSibling); }
-    ['asmAuditBtn', 'asmAuditViewBtn', 'asmVerifyBtn', 'asmScanHBtn', 'asmScanDBtn', 'asmScanSBtn'].forEach((id) => { const e = $(id); if (e && e.parentNode !== row3) row3.appendChild(e); });
+    ['asmAuditBtn', 'asmAuditViewBtn', 'asmScanHBtn', 'asmScanDBtn', 'asmScanSBtn'].forEach((id) => { const e = $(id); if (e && e.parentNode !== row3) row3.appendChild(e); });
     row3.hidden = !isAdm();
   }
   // 검증 체크 카드(관리자만, 2026-10-18 사용자 요청): 관리자면 화면에 떠 있고(머리줄을 끌어 옮김·접기 버튼), 지금 번호의 자동 점검 결과 중 안 된 항목을 체크박스로 보인다.
@@ -903,53 +903,40 @@
     } catch (e) { /* 자동 점검 결과를 못 읽어도 체크는 할 수 있다 */ }
     verifyAuto = auto;
   }
+  // 2026-11-09 사용자 지시: 떠다니는 카드 대신 "사용 부품·필요 부품" 아래에 하단 규칙 바와 같은 칩 형태로 상시 표시한다(접으면 그 자리가 비니 바로 보임).
   function paintVerify() {
-    let box = $('asmVerifyBox');
-    if (!isAdm() || step < 1 || !def) { if (box) box.hidden = true; return; }
+    const box = $('verifyChips');
+    if (!box) return;
+    if (!isAdm() || step < 1 || !def) { box.hidden = true; return; }
     if (verifyLoadedFor !== def.id) loadVerifyAuto().then(() => paintStatus());
-    if (!box) {
-      box = document.createElement('div'); box.id = 'asmVerifyBox';
-      box.style.cssText = 'position:fixed;right:16px;top:96px;z-index:60;width:350px;max-height:60vh;overflow:auto;background:#fff;border:2px solid #2563eb;border-radius:14px;padding:10px 12px;box-shadow:0 8px 28px rgba(0,0,0,.25);font:13px/1.45 sans-serif;color:#111827;';
-      try { const sp = JSON.parse(localStorage.getItem('ivs-asm-verify-pos') || 'null'); if (sp) { box.style.left = sp.left + 'px'; box.style.top = sp.top + 'px'; box.style.right = 'auto'; } } catch (e) { /* 위치를 못 읽어도 기본 자리 */ }
-      box.addEventListener('pointerdown', (ev) => {   // 머리줄을 잡고 끌면 옮긴다(위치는 이 브라우저에 기억)
-        const hd = ev.target.closest && ev.target.closest('[data-drag]'); if (!hd || ev.target.closest('button')) return;
-        const r = box.getBoundingClientRect(), dx = ev.clientX - r.left, dy = ev.clientY - r.top;
-        const mv = (e) => { const W = box.offsetWidth, left = Math.max(0, Math.min(window.innerWidth - W, e.clientX - dx)), top = Math.max(0, Math.min(window.innerHeight - 40, e.clientY - dy)); box.style.left = left + 'px'; box.style.top = top + 'px'; box.style.right = 'auto'; };
-        const up = () => { document.removeEventListener('pointermove', mv); document.removeEventListener('pointerup', up); try { localStorage.setItem('ivs-asm-verify-pos', JSON.stringify({ left: parseFloat(box.style.left), top: parseFloat(box.style.top) })); } catch (e) { /* */ } };
-        document.addEventListener('pointermove', mv); document.addEventListener('pointerup', up); ev.preventDefault();
-      });
-      document.body.appendChild(box);
-    }
-    let folded = false; try { folded = localStorage.getItem('ivs-asm-verify-folded') === '1'; } catch (e) { /* */ }
-    const n = step, a = verifyAuto[String(n)] || null, made = stepMade(def.steps[n - 1]);
     box.hidden = false; box.innerHTML = '';
-    const state = !made ? '아직 안 만듦' : verifyDone(n) ? '맞음 확인 ✅' : a ? '확인 못 함 (' + (a['상태'] === '주의' ? '일부' : '대부분') + ' 안 함)' : '확인 전';
-    const h = document.createElement('div'); h.dataset.drag = '1'; h.style.cssText = 'display:flex;align-items:center;gap:6px;font-weight:700;cursor:move;user-select:none;touch-action:none;' + (folded ? '' : 'margin-bottom:6px;');
-    const ht = document.createElement('span'); ht.style.cssText = 'flex:1;color:' + (verifyDone(n) ? '#2563eb' : '#ea580c') + ';'; ht.textContent = '☑ 맞는지 확인 · ' + n + '번 — ' + state; h.appendChild(ht);
-    const mkb = (txt, title, fn) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = txt; b.title = title; b.style.cssText = 'padding:2px 9px;font-size:12px;font-weight:600;border-radius:999px;border:1px solid #d1d5db;background:#fff;color:#111827;cursor:pointer;'; b.addEventListener('click', fn); return b; };
-    h.appendChild(mkb('↻', '자동 점검 결과를 DB 에서 다시 읽어요(verify_step.py 를 돌린 뒤)', async () => { await loadVerifyAuto(true); paintStatus(); }));
-    h.appendChild(mkb(folded ? '▴ 펼치기' : '▾ 접기', '카드를 접거나 펼쳐요', () => { try { localStorage.setItem('ivs-asm-verify-folded', folded ? '0' : '1'); } catch (e) { /* */ } paintVerify(); }));
-    box.appendChild(h);
-    if (folded) return;
-    const hint = document.createElement('div'); hint.style.cssText = 'font-size:11.5px;color:#6b7280;margin-bottom:6px;'; hint.textContent = '책과 맞는지 확인한 것만 ✅로 남고, 확인이 안 된 건 "안 한 것"으로 이유를 적어요. ★ 둘(책 위 겹침 비교·번호 대조)이 확인되면(자동 또는 내가 체크) 번호판이 파랑이 돼요. 머리줄을 끌어 옮길 수 있어요.'; box.appendChild(hint);
-    if (!made) { const d = document.createElement('div'); d.style.cssText = 'color:#6b7280;'; d.textContent = '아직 안 만든 번호예요.'; box.appendChild(d); return; }
-    const todo = VERIFY_ITEMS.filter((t) => !(a && a['항목'] && a['항목'][t] === 'ok'));
-    if (!todo.length) { const okd = document.createElement('div'); okd.style.cssText = 'color:#16a34a;font-weight:700;'; okd.textContent = '✅ 책과 맞는지 전부 확인함 — 안 한 것 없음'; box.appendChild(okd); return; }
-    const badge = { ok: '✅', warn: '⚠', fail: '❌' };
-    todo.forEach((t) => {
-      const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:8px;align-items:flex-start;border-top:1px solid #e5e7eb;padding:5px 0;';
-      const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = checkVerdicts[n + '|verify:' + t] === 'ok';
-      const lab = document.createElement('div'); lab.style.cssText = 'flex:1;';
-      const res = a && a['항목'] ? a['항목'][t] : null, msg = a && a['내용'] ? a['내용'][t] : '';
-      const nm = document.createElement('b'); nm.textContent = (VERIFY_MUST.indexOf(t) >= 0 ? '★ ' : '') + (VERIFY_LABEL[t] || t) + ' '; lab.appendChild(nm);
-      const bd = document.createElement('span'); bd.textContent = (res ? badge[res] : '·') + ' ' + (msg || (a ? '' : '자동 점검 결과 없음')); bd.style.color = res === 'fail' ? '#b91c1c' : res === 'warn' ? '#b45309' : '#374151'; lab.appendChild(bd);
-      cb.addEventListener('change', async () => {
-        const b2 = bridge(), on = cb.checked; if (!b2 || !b2.checkStore) return;
+    const n = step, a = verifyAuto[String(n)] || null, made = stepMade(def.steps[n - 1]);
+    const dotColor = { ok: '#16a34a', warn: '#d97706', bad: '#ef4444' };
+    const mk = (txt, title, cls, fn) => {
+      const b = document.createElement('button'); b.type = 'button'; b.title = title || '';
+      b.innerHTML = '<span style="color:' + (dotColor[cls] || '#9ca3af') + '">●</span> ' + txt;
+      b.style.cssText = 'font-size:12px;padding:4px 10px;border-radius:14px;border:1px solid #d1d5db;background:#fff;color:#111827;cursor:pointer;';
+      if (cls === 'bad') b.style.cssText += 'border-color:#ef4444;color:#b91c1c;font-weight:700;';
+      else if (cls === 'ok') b.style.cssText += 'border-color:#16a34a;color:#15803d;';
+      else if (cls === 'warn') b.style.cssText += 'border-color:#d97706;color:#b45309;';
+      if (fn) b.addEventListener('click', fn);
+      return b;
+    };
+    if (!made) { box.appendChild(mk(n + '번 · 아직 안 만듦', '책과 맞는지 확인 — 아직 안 만든 번호', '', null)); return; }
+    box.appendChild(mk(n + '번 맞는지', '자동 점검 결과를 DB 에서 다시 읽어요(verify_step.py 를 돌린 뒤). ★ 둘(책 위 겹침 비교·번호 대조)이 확인되면(자동 또는 내가 체크) 번호판이 파랑이 됩니다.', verifyDone(n) ? 'ok' : 'warn', async () => { await loadVerifyAuto(true); paintStatus(); }));
+    VERIFY_ITEMS.forEach((t) => {
+      const res = a && a['항목'] ? a['항목'][t] : null, msg = (a && a['내용'] ? a['내용'][t] : '') || '';
+      const checked = checkVerdicts[n + '|verify:' + t] === 'ok';
+      const done = res === 'ok' || checked;
+      const label = (VERIFY_MUST.indexOf(t) >= 0 ? '★' : '') + t;
+      const chip = mk(label, (VERIFY_LABEL[t] || t) + (msg ? ' — ' + msg : '') + (!res && !checked ? ' (자동 점검 결과 없음 — 눌러서 직접 확인함으로 표시)' : ''), done ? 'warn' : (res === 'fail' ? 'bad' : ''), async () => {
+        const b2 = bridge(); if (!b2 || !b2.checkStore) return;
+        const on = !checked;
         try { await b2.checkStore.set(def.id, n, 'verify:' + t, on ? 'ok' : null); if (on) checkVerdicts[n + '|verify:' + t] = 'ok'; else delete checkVerdicts[n + '|verify:' + t]; }
-        catch (e) { notice('저장에 실패했습니다: ' + e.message + ' (supabase/assembly_checks.sql 을 실행했는지 확인)'); cb.checked = !on; }
+        catch (e) { notice('저장에 실패했습니다: ' + e.message + ' (supabase/assembly_checks.sql 을 실행했는지 확인)'); }
         paintStatus();
       });
-      row.appendChild(cb); row.appendChild(lab); box.appendChild(row);
+      box.appendChild(chip);
     });
   }
   function paintStatus() {
@@ -969,7 +956,7 @@
     { const tb = $('asmThumbBtn'); if (tb) tb.hidden = sb.hidden; }
     { const rb = $('asmReloadBtn'); if (rb) rb.hidden = !adm || step < 0; }
     { const ab = $('asmAuditBtn'); if (ab) ab.hidden = !adm || step < 0; }
-    ['asmAuditViewBtn', 'asmVerifyBtn', 'asmScanHBtn', 'asmScanDBtn', 'asmScanSBtn'].forEach((id) => { const e = $(id); if (e) e.hidden = !adm || step < 1; });
+    ['asmAuditViewBtn', 'asmScanHBtn', 'asmScanDBtn', 'asmScanSBtn'].forEach((id) => { const e = $(id); if (e) e.hidden = !adm || step < 1; });
     { const jb = $('asmJointBtn'); if (jb) jb.hidden = !adm || step < 1; }
     { const fb = $('asmFreezeBtn'); if (fb) fb.hidden = sb.hidden; }
     const st = stepStatus[step]; sb.textContent = STATUS_LABEL[st] || '⬜ 상태 없음';
@@ -1192,10 +1179,6 @@
         });
         lastAuditText = out.join(NL); notice(lastAuditText, null, { copy: true, rich: true, lineHook: jointLineHook });
       }); }
-    { const kb = document.createElement('button'); kb.type = 'button'; kb.id = 'asmVerifyBtn'; kb.hidden = true; kb.textContent = '☑ 검증 카드';
-      kb.style.cssText = sb.style.cssText; kb.title = '검증 체크 카드를 다시 펼쳐 기본 자리로 가져와요(카드는 관리자 화면에 늘 떠 있어요)';
-      sb.parentNode.insertBefore(kb, sb);
-      kb.addEventListener('click', () => { try { localStorage.setItem('ivs-asm-verify-folded', '0'); localStorage.removeItem('ivs-asm-verify-pos'); } catch (e) { /* */ } const bx = $('asmVerifyBox'); if (bx) { bx.style.left = ''; bx.style.top = '96px'; bx.style.right = '16px'; } paintVerify(); }); }
     { const vb = document.createElement('button'); vb.type = 'button'; vb.id = 'asmAuditViewBtn'; vb.hidden = true; vb.textContent = '📄 점검 결과 보기';
       vb.style.cssText = sb.style.cssText; vb.title = '가장 최근 마무리 점검 브리핑을 다시 보여 줘요(스캔을 다시 돌리지 않아요, 관리자만)';
       sb.parentNode.insertBefore(vb, sb);
