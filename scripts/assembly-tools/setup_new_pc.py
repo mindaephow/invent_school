@@ -42,7 +42,7 @@ def ponytail():
     if any("ladder-gate.js" in h.get("command", "") for e in pre for h in e.get("hooks", [])):
         say("OK  ", ".claude/settings.json 에 사다리 훅 연결됨")
     else:
-        pre.append({"matcher": "Edit|Write|NotebookEdit|Bash", "hooks": [{"type": "command", "command": 'node "$CLAUDE_PROJECT_DIR/.claude/ponytail/hooks/ladder-gate.js"'}]})
+        pre.append({"matcher": ".*", "hooks": [{"type": "command", "command": 'node "$CLAUDE_PROJECT_DIR/.claude/ponytail/hooks/ladder-gate.js"'}]})
         json.dump(cfg, open(sj, "w", encoding="utf-8"), indent=2, ensure_ascii=False)
         say("MADE", ".claude/settings.json 에 사다리 훅 연결(Claude 를 다시 열어야 적용)")
     post = cfg["hooks"].setdefault("PostToolUse", [])   # 상시검사: 조립도 파일을 고치면 build·rulecheck 를 자동으로 돌린다(autocheck.py, 사용자 지시 2026-11-08)

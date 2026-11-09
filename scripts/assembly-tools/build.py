@@ -179,6 +179,13 @@ for _k, _st in enumerate(asm, 1):
     ok = (1 in _h and 2 in _h)   # 2026-10-08: 판이 없다는 이유의 원본 1장 예외 폐지(격자는 큰기어 구멍·판 구멍 등 보이는 구멍으로 항상 만든다)   # 프레임(판)이 있는 단계는 반드시 회전·방향 표시·격자(idx 2) — 원본 한 장으로 때우지 못한다
     if not ok: _nogrid.append(_k)
 print("책 이미지 작업(방향 표시·격자) 단계별 그림:", (f"{len([1 for k, st in enumerate(asm, 1) if st.get('parts')]) - len(_nogrid)}단계 있음" + (f" — ❌ 격자가 없는 단계 {_nogrid}" if _nogrid else "")))
+_lb_saved = int((json.load(open(name + "_gate.json", encoding="utf-8")) if os.path.exists(name + "_gate.json") else {}).get("last_built", 0))
+try:   # 저장된 조립도에서 새 부품 없이 합치는 번호(moveMade·madeNoPart)도 '이미 저장한 번호'다 — stepchecks 의 마지막 번호 정의와 같게(부품만 세면 27번 같은 합치기 번호가 늘 새 번호로 취급돼 막힌다)
+    _sv = json.load(open(asmpath.resolve(name + "_asm.json"), encoding="utf-8"))["steps"]
+    _lb_saved = max([_lb_saved] + [i_ for i_, s_ in enumerate(_sv, 1) if s_.get("parts") or s_.get("moveMade") or s_.get("madeNoPart")])
+except Exception: pass   # 이미 저장한 번호(<= last_built)를 고치는 저장은 격자·읽기 표 게이트로 막지 않는다(사용자 지시 2026-11-10: 앞 번호 격자가 비었다고 26번 수정 저장이 막히면 안 된다). 새로 더하는 번호(> last_built)는 그대로 막는다.
+_nogrid_all = list(_nogrid); _nogrid = [k_ for k_ in _nogrid if k_ > _lb_saved]
+if _nogrid_all and not _nogrid: print("   (이미 저장한 번호 %s 는 격자가 없지만 고치는 저장이라 막지 않는다 — 격자는 따로 만들어야 한다)" % _nogrid_all)
 if write and _nogrid:
     sys.exit("❌ 책 이미지 작업(방향에 맞춰 돌린 그림 위의 격자 1차·2차)이 없는 단계가 있어 --write 를 하지 않는다: " + str(_nogrid) + "\n   큐보 부품결합규칙.md 규칙(1번 규칙·D 절)대로 그 단계의 격자를 먼저 만든다(refs_make → refs_rect). 이 검사는 건너뛸 수 없다.")
 
@@ -193,6 +200,8 @@ if name == "dog":
 _rdf = name + "_read.json"; _rd = json.load(open(_rdf, encoding="utf-8")) if os.path.exists(_rdf) else {}
 _noread = [_k for _k, _st in enumerate(asm, 1) if _k <= _upto and _st.get("parts") and not all(str((_rd.get(str(_k)) or {}).get(_f, "")).strip() for _f in ("면", "링", "부품"))]
 print("번호별 읽기 표(" + _rdf + "):", (f"{len([1 for k, st in enumerate(asm, 1) if st.get('parts')]) - len(_noread)}단계 있음" + (f" — ❌ 안 적은 단계 {_noread}" if _noread else "")))
+_noread_all = list(_noread); _noread = [k_ for k_ in _noread if k_ > _lb_saved]
+if _noread_all and not _noread: print("   (이미 저장한 번호 %s 는 읽기 표가 비었지만 고치는 저장이라 막지 않는다 — 읽기 표는 따로 적어야 한다)" % _noread_all)
 if write and _noread:
     sys.exit("❌ 번호별 읽기 표가 비어 있는 단계가 있어 --write 를 하지 않는다: " + str(_noread) + " — " + _rdf + " 에 그 번호의 면·링·부품을 적는다(격자를 만든 뒤 구멍을 센 결과). 묻지 말고 적고 계속한다.")
 
@@ -229,6 +238,10 @@ if os.path.exists(_ckf):
         _eye_stale = [b_ for b_ in _bl if any(t_ in b_ for t_ in ("화면 확대 확인", "나란히 비교", "카메라 책과 대조", "짐작(guess)이 아님", "책과 비교한 뒤 내용이 바뀜"))]
         if _eye_stale: print("   (이미 저장한 번호를 고치는 저장이라 다음 눈 확인 %d개는 막지 않는다 — 저장 뒤 화면으로 다시 비교하고 record_check.py 로 증거를 새로 남긴다)" % len(_eye_stale)); [print("     ·", b_) for b_ in _eye_stale]
         _bl = [b_ for b_ in _bl if b_ not in _eye_stale]
+    # 이미 저장한 번호(<= last_built)의 막힘 항목은 저장을 막지 않는다(사용자 지시 2026-11-10: 앞 번호 읽기 표·눈 확인이 비었다고 고치는 저장이 막히면 안 된다). 새로 더하는 번호(> last_built)의 항목만 막는다. 건너뛴 항목은 출력에 남긴다.
+    _saved_bl = [b_ for b_ in _bl if re.match(r"(\d+)번", b_) and int(re.match(r"(\d+)번", b_).group(1)) <= _lb_saved]
+    if _saved_bl and write:
+        print("   (이미 저장한 번호의 미완 항목 %d개는 저장을 막지 않는다 — 나중에 채워야 한다)" % len(_saved_bl)); _bl = [b_ for b_ in _bl if b_ not in _saved_bl]
     if write and _bl: [print("   ☐(막힘)", b_) for b_ in _bl]
     if write and _bl: sys.exit("❌ 번호별 점검에서 막힌 항목이 있어 --write 를 하지 않는다 — 막힌 항목을 고친다. 눈으로 하는 확인(화면 확대·칸 수 대조·카메라 대조)은 화면 캡처와 책 그림을 나란히 비교하고 record_check.py 로 증거를 남긴 번호(또는 사용자가 ✓ 한 번호)만 통과한다. 마지막으로 만든 번호 하나만 증거 없이 쓸 수 있다.")
 # 규칙 점검(rulecheck.py): 번호마다 격자 출처·카메라 오차·증거·읽기 표를 판정해 요약을 보여 준다. 저장은 막지 않고(경고) 다음 번호 시작은 number_start 가 막는다.
@@ -288,7 +301,7 @@ if _lockbad:
 if write:  # (규칙 확인은 위에서 이미 검사)
     _m = re.search(r'id: "(cubo-\d+-[A-Za-z0-9_]+)"', open(name + "_entry.js", encoding="utf-8").read())   # 항목 파일의 id(2권은 cubo-2-...). 없으면 1권 규칙
     rc, out = run([sys.executable, "emit.py", name + "_entry.js", _m.group(1) if _m else "cubo-1-" + name]); print(out.strip())
-    if rc == 0: json.dump({"last_built": max([_k for _k, _st in enumerate(asm, 1) if _st.get("parts")] or [0])}, open(name + "_gate.json", "w", encoding="utf-8"))
+    if rc == 0: json.dump({"last_built": max([_k for _k, _st in enumerate(asm, 1) if _st.get("parts") or _st.get("moveMade") or _st.get("madeNoPart")] or [0])}, open(name + "_gate.json", "w", encoding="utf-8"))
     # 번호를 마무리(--write)할 때마다 자동 검사 경고 목록(public/design-warnings.js)도 새로 만든다. 경고는 막지 않는다 — 관리자 화면(⚠)에서 "문제없음/해결요청"을 고른다.
     if rc == 0:
         try:
