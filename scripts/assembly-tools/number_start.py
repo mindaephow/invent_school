@@ -36,6 +36,8 @@ def _warn():
         for n_ in sorted(set(names)):
             s_ = (ps.get("자세") or {}).get(n_)
             if s_: sit.append("%s: 지금까지 %d건 중 %d건(%d%%)을 사용자가 자세를 고쳤다(돌린 각도 %s) → 방향 근거를 책 그림에서 먼저 읽고 놓은 뒤 좌표로 대조한다. (통계 %s)" % (n_, s_["비교"], s_["고침"], 100 * s_["고침"] // max(1, s_["비교"]), ", ".join("%d°×%d" % (a_, c_) for a_, c_ in s_["각도"][:3]), ps.get("만든때", "?")))
+        _vf = load(os.path.join(here, name + "_verify.json"), {}); _unv = [i_ for i_ in range(1, k) if i_ <= len(a_) and (a_[i_ - 1].get("parts")) and str(i_) not in _vf]
+        if _unv: sit.append("❌ 앞 번호 %s 는 verify_step.py 점검 기록이 없다(왼쪽 점검 칩이 회색) → python verify_step.py %s <번호> 로 채우고, 끝낸 번호는 화면 칩을 읽어 보고한다(규칙 0번 다-3)" % (", ".join(map(str, _unv)), name))
         if k > 1: sit.append("앞 번호(%d번)까지 만든 모델과 바로 뒤 번호의 책 그림에서 먼저 읽는다 — 책 한 장만 보고 정하지 않는다." % (k - 1))
         sit.append("사용자가 저장한 ❄·📷 기록이 있으면 그 값이 기준이다(덮어쓰지 않는다).")
         print("  이번 번호(%d번)에 해당하는 것:" % k)
@@ -61,6 +63,18 @@ def _session_check():
             db = sorted(userdone.user_done(_m.group(1)) or ())
         except (SystemExit, Exception): db = None
     print("═══ 세션 시작 체크 (번호 작업 전에 읽는다) ═══")
+    # 화면 하단 규칙 바(칩)가 보여 주는 상시 감시를 먼저 점검한다(사용자 지시 2026-11-09): 훅 연결·설치 표시·이 세션에서 실제로 도는지
+    try:
+        import json as _j, time as _t, subprocess as _sp
+        _rs = _j.load(open(os.path.join(root, "public", "_rule_status.json"), encoding="utf-8"))
+        _cfg = open(os.path.join(root, ".claude", "settings.json"), encoding="utf-8").read() if os.path.exists(os.path.join(root, ".claude", "settings.json")) else ""
+        _miss = [n_ for n_ in ("ladder-gate.js", "autocheck.py", "scope_guard.py", "finish_guard.py") if n_ not in _cfg]
+        if _miss or "autocheckHook" not in _rs:
+            _sp.run([sys.executable, os.path.join(here, "setup_new_pc.py"), "--only-ponytail"], capture_output=True)   # 멱등 — 빠진 훅 연결·설치 표시를 채운다
+            print("  ⚠ 감시 칩: 훅 연결/설치 표시가 빠져 setup_new_pc --only-ponytail 로 채웠다(빠진 것: %s) → Claude 를 invent_school 폴더에서 다시 열어야 적용" % (", ".join(_miss) or "설치 표시"))
+        _age = (_t.time() * 1000 - _rs.get("autocheckAlive", {}).get("ts", 0)) / 60000
+        print("  %s 감시 칩: 상시검사 훅 %s" % ("✅" if _age < 30 else "⚠", ("동작 확인(%d분 전)" % _age) if _age < 30 else "이 세션에서 도는 흔적 없음 — 이 세션을 invent_school 폴더에서 시작하지 않았거나 첫 호출이다(한 번 더 돌려 보고, 그래도 없으면 invent_school 폴더에서 새 세션을 연다)"))
+    except Exception as _e: print("  ⚠ 감시 칩 점검 실패:", _e)
     print("  %s 개발 서버: %s" % ("✅" if up else "❌", ("localhost:%d 응답" % up) if up else "응답 없음 → 서버를 켠다(preview_start invent-school-dev, 포트 3178)"))
     print("  %s .env.local(SUPABASE 키): %s" % ("✅" if keys else "❌", "있음" if keys else "없음 → 사용자에게 달라고 한다(CLAUDE.md)"))
     print("  %s DB 읽기(사용자 ✓): %s" % ("✅" if db is not None else "❌", ("읽음 — ✓ 번호 %s" % db) if db is not None else "못 읽음 → ✓ 확인은 통과시키지 않는다(키를 한 줄로 요청하고, 키 없이 되는 작업은 계속한다 — 큐보 부품결합규칙.md B6)"))

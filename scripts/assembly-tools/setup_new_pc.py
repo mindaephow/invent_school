@@ -52,6 +52,13 @@ def ponytail():
         post.append({"matcher": "Edit|Write|NotebookEdit|Bash", "hooks": [{"type": "command", "command": 'python "$CLAUDE_PROJECT_DIR/scripts/assembly-tools/autocheck.py"'}]})
         json.dump(cfg, open(sj, "w", encoding="utf-8"), indent=2, ensure_ascii=False)
         say("MADE", ".claude/settings.json 에 상시검사 훅 연결(Claude 를 다시 열어야 적용)")
+    ss = cfg["hooks"].setdefault("SessionStart", [])   # 세션이 열리면 사용자가 시키지 않아도 최신 받기·훅 연결 점검이 먼저 돈다(사용자 지시 2026-11-09)
+    if any("session_start.py" in h.get("command", "") for e in ss for h in e.get("hooks", [])):
+        say("OK  ", ".claude/settings.json 에 세션 시작 자동 세팅 훅 연결됨")
+    else:
+        ss.append({"matcher": "startup|resume", "hooks": [{"type": "command", "command": 'python "$CLAUDE_PROJECT_DIR/scripts/assembly-tools/session_start.py"', "timeout": 60, "statusMessage": "환경 세팅(최신 받기)..."}, {"type": "command", "command": 'python "$CLAUDE_PROJECT_DIR/scripts/assembly-tools/setup_new_pc.py" --only-ponytail', "timeout": 30}]})
+        json.dump(cfg, open(sj, "w", encoding="utf-8"), indent=2, ensure_ascii=False)
+        say("MADE", ".claude/settings.json 에 세션 시작 자동 세팅 훅 연결(Claude 를 다시 열어야 적용)")
     try:
         import rule_status; rule_status.put("autocheckHook", {"installed": True})   # 화면 하단 규칙 바가 '감시 중'으로 표시한다
     except Exception: pass

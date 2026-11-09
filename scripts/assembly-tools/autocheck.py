@@ -6,6 +6,9 @@ STAMP = os.path.join(HERE, '.autocheck_stamp.json')
 try: st = json.load(open(STAMP))
 except Exception: st = {}
 env = dict(os.environ, PYTHONIOENCODING='utf-8')
+try:
+    import rule_status; rule_status.put('autocheckAlive', {})   # 상시검사 훅이 이 세션에서 실제로 도는지 number_start 가 본다(사용자 지시 2026-11-09)
+except Exception: pass
 out = []
 # 사용자 지시 2026-11-08: 상시검사는 지금 작업 중인 차시(조립도) 하나에서만 돈다 = 조립도 파일이 가장 최근에 바뀐 것. 다음 차시로 넘어가 그 조립도를 고치면 그쪽으로 옮겨 간다.
 cands = []

@@ -39,6 +39,45 @@ def axle_bad(A, tol=1.5):
         for q in A.parts: q.p, q.R = _orig[id(q)][0].copy(), _orig[id(q)][1].copy()
     return out
 
+_SHAFTY = ("DC모터", "서보모터", "T축", "축", "부시")
+
+def occupied_holes(A, k, lat=1.5, ov=0.5):
+    """k번 화면에서 한 구멍에 서로 다른 부품의 돌기가 둘 이상 들어 있는 곳(사용자 지시 2026-11-09: 연결점을 이미 쓴 구멍에 또 결합하면 모니터링 — 리벳·블록 돌기로 막힌 프레임 구멍에 눈블록 같은 돌기를 또 꽂음).
+    결합 자세(최종 자리) 기준이다. 돌기 둘이 한 구멍 축(옆 거리 ≤lat)·구멍 깊이 안에서 ov mm 넘게 겹치고, 둘 중 하나는 k번에 새로 놓였거나 옮긴 부품이면 걸린다.
+    [(k번 부품 순서들, 설명)] — 부품 순서는 A.steps[k-1].parts 의 index."""
+    import stepchecks
+    out = []
+    cur = {id(p): i for i, p in enumerate(A.steps[k - 1].parts)}
+    allp = [q for j in range(1, k + 1) for q in A.steps[j - 1].parts if q.conn]
+    pose = {id(q): stepchecks.pose_at(A, q, k) for q in allp}
+    def wr(q, c):
+        p, R = pose[id(q)]; return p + R @ np.array(c["pos"], float), R @ np.array(c["dir"], float)
+    pegs = []   # (부품, 돌기id, 시작점, 방향, 길이)
+    for q in allp:
+        for c in q.conn.get("pegs", []):
+            pos, d = wr(q, c); pegs.append((q, c["id"], pos, d / (np.linalg.norm(d) or 1.0), float(c.get("len") or 0)))
+    seen = set()
+    for h in allp:
+        if not h.n.endswith("프레임"): continue   # 프레임 구멍만(블록 구멍은 양쪽에서 돌기가 들어가는 것이 정상)
+        for hc in h.conn.get("holes", []):
+            hp, hd = wr(h, hc); hd = hd / (np.linalg.norm(hd) or 1.0); hl = float(hc.get("len") or 0) or 5.0
+            ins = []
+            for q, pid, pos, d, ln in pegs:
+                if q is h: continue
+                if abs(abs(float(np.dot(d, hd))) - 1) > 0.02: continue
+                w = pos - hp; t0 = float(np.dot(w, hd)); lt = np.linalg.norm(w - t0 * hd)
+                if lt > lat: continue
+                t1 = t0 + float(np.dot(d, hd)) * ln; a, b = sorted((t0, t1))
+                if q.n not in _SHAFTY and min(b, hl) - max(a, -hl) > ov: ins.append((q, pid))   # 축·모터 돌기는 구멍 안 축 결합이 정상이라 뺀다
+            if len({id(q) for q, _ in ins}) >= 2:
+                mine = sorted({cur[id(q)] for q, _ in ins if id(q) in cur})
+                if not mine: continue
+                key = (id(h), hc["id"])
+                if key in seen: continue
+                seen.add(key)
+                out.append((mine, "%s %s 구멍에 %s 돌기가 이미 들어 있는데 또 결합함(막힌 구멍)" % (h.n, hc["id"], " + ".join("%s.%s" % (q.n, pid) for q, pid in ins))))
+    return out
+
 def collect(name):
     import asmlib, guidecheck
     A = _load(name); out = {}
@@ -162,6 +201,11 @@ def collect(name):
                     add(k_, "fake", ["%d:%d" % (k_, i_)], "%s 가짜 안내점 — 안내점(marks)이 비어 부품 중심에서 허공 화살표가 나감(`extra.pop('dir')` 또는 settleMarks)" % p_["n"])
     except Exception as e_:
         print("violations: 가짜 안내점 점검을 못 붙임 —", str(e_)[:100], file=sys.stderr)
+    try:   # 막힌 구멍(사용자 지시 2026-11-09): 이미 돌기·리벳이 들어 있는 프레임 구멍에 또 결합하는 번호를 ⛔ 로 올린다
+        for k in range(1, len(A.steps) + 1):
+            for mine, msg in occupied_holes(A, k): add(k, "occupied", ["%d:%d" % (k, i) for i in mine], msg)
+    except Exception as e_:
+        print("violations: 막힌 구멍 점검을 못 붙임 —", str(e_)[:100], file=sys.stderr)
     return out
 
 def write_entry(name):

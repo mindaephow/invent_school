@@ -1,0 +1,21 @@
+{"t": "2026-11-09 18:18", "do": "1번부터 확인점검 시작: number_start·rulecheck·build 실행", "res": "번호 0개(asm.json 없음), build 9단계 recv 59프레임 h8_3 KeyError로 실패(구멍 id 불일치)"}
+{"t": "2026-11-09 18:27", "do": "02 refs 자르기(28장)·03 USED(LIST 일치)·04 slot/history(15·22·26·27)", "res": "build --write 등록, 부품 개수=LIST"}
+{"t": "2026-11-09 18:29", "do": "방향선 00_1 그림 생성(추정)·refs 0/99 DB 업로드 3장", "res": "public/_refs_tmp/soccer 임시복사(끝나면 삭제)"}
+{"t": "2026-11-09 18:32", "do": "1번 holefit P·U 통과, axes_fit(P) 0.44px, refs_rect 01_1/01_2, 읽기 표 채움", "res": "링 4(칸9·13 줄2), 다음: DB 업로드·화면 비교·증거"}
+{"t": "2026-11-09 18:33", "do": "1번 증거(record_check)·DB 업로드·rulecheck ✅", "res": "1번 완료(카메라 θ0.82 φ0.70 fit)"}
+{"t": "2026-11-09 18:38", "do": "2번 사전점검(holefit P·U, axes_fit 0.48px, refs_rect, 읽기 표, 카메라 fit, DB 업로드)", "res": "조립검사 ⚠ 3단블록 링이 자기 구멍 중심에서 2.5mm(violations mark) — thick=10 시도는 5mm 로 악화돼 되돌림, formula1 19번도 같은 증상(도구 쪽 문제로 의심)"}
+{"t": "2026-11-09 18:45", "do": "3번 사전점검(holefit W·B, axes_fit 0.73px, 읽기 표, fit 카메라)·모델 판 위치 x+10mm 정정(책 링 대조)", "res": "모터 돌기 칸2·8 줄2·4, 블록 칸1·9 줄1 책과 일치; 3단블록 안내점 violations 4건 남음(도구 쪽)"}
+{"t": "2026-11-09 18:50", "do": "2번 3단블록 thick=2(spinner 와 같음), 3번 블록 settleRecv=False", "res": "guidecheck 2·3번 위반 0 (4번 이후 36곳 남음)"}
+{"t": "2026-11-09 18:56", "do": "4번 사전점검 전체(holefit DoG 22/45, axes_fit 1.32px column_axis Y, 읽기 표, fit 카메라, 기어 recv 띄움 thick=8 joinOrder=2, DB 업로드, 화면 비교)", "res": "rulecheck 4번 확인, guidecheck 4·5번 위반 0"}
+{"t": "2026-11-09 18:59", "do": "5번 사전점검 전체(holefit 어두운판 22/45 0.23px, axes_fit 0.36px, 읽기 표, fit 카메라, DB 업로드, 화면 비교)", "res": "rulecheck 5번 확인"}
+{"t": "2026-11-09 19:28", "do": "6번 사전점검(분해도: mkfit3d 링 7점 1.93px, 모델 hover 를 책 간격에 맞춤 68.5/103.5/131.5, 부시 뒤집기, 옆자리 간격 ±47, 몸체 숨김, 읽기 표, 업로드, 화면 비교)", "res": "rulecheck 6번 ⚠(격자 사용자 확인 권장, 결합전 높이)"}
+{"t": "2026-11-09 19:36", "do": "7·8번 사전점검(holefit 어두운판, axes_fit 0.59/0.60px, 읽기 표, fit 카메라, 안쪽 부시 faceMarks·joinOrder, 반대 묶음 hideAt, settleHover 90, 업로드, 화면 비교)", "res": "rulecheck 7·8번 확인"}
+{"t": "2026-11-09 19:47", "do": "9", "res": "9번: 흰 판 holefit 통과·검은 판 격자 기준 미달(⚠, 카메라는 흰 판), axes 0.82/1.11, hover 85, 그림 3장 업로드"}
+{"t": "2026-11-09 19:49", "do": "10", "res": "10번: holefit 어두운판 20/27, axes -Z -Y 0.92/0.99, hover 75, 그림 3장"}
+{"t": "2026-11-09 19:54", "do": "11", "res": "11번: 37프레임 holefit DoG 11/21(⚠ 슬릿 편향, 8번 카메라와 일치), axes +X -Y 0.83/1.19, 블록 seated·화살표 4개, hover 55"}
+{"t": "2026-11-09 19:58", "do": "12", "res": "12번: 37프레임 holefit DoG 12/21 1.28px, axes +X -Y 0.98/1.09, 아래 프레임 hover 5(바닥)"}
+{"t": "2026-11-09 20:01", "do": "13", "res": "13번: 37프레임 holefit(링 구멍 4개에서 모서리 역산) 11/21 0.74px, axes -X -Y 2.19/1.14"}
+{"t": "2026-11-09 20:01", "do": "14", "res": "14번: 37프레임 holefit DoG 12/21 1.06px, axes -X -Y 2.15/1.10"}
+{"t": "2026-11-09 20:05", "do": "15", "res": "15번: 흰 59프레임 holefit DoG 23/45 1.91px, axes +X +Z 1.32px(거울 탈락) -1.08/0.71, 15~21 hideMade 몸체"}
+{"t": "2026-11-09 20:08", "do": "16", "res": "16번: holefit 불가 → mkfit3d 12점 3.63px(--허용 4) -1.12/0.59, 브래킷 joinOrder=2"}
+{"t": "2026-11-09 20:12", "do": "17", "res": "17번: 위 판 holefit DoG 30/45 0.48px, axes +X +Z 0.94px -0.93/0.87, hover 70, 관찰 3장"}
