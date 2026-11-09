@@ -1,7 +1,8 @@
 """새 PC(외부 PC) 준비 점검 — git 에 없는 것(.claude/launch.json, .env.local, conn.json/dims.json, 파이썬 라이브러리)을 확인·생성한다.
 사용: cd scripts/assembly-tools && PYTHONIOENCODING=utf-8 python setup_new_pc.py
+  --only-ponytail : 7번(포니테일 스킬·훅)만 점검·생성 (session_start.py 가 부른다)
 """
-import json, os, subprocess, sys
+import json, os, shutil, subprocess, sys, urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
@@ -9,6 +10,45 @@ ok = True
 
 def say(mark, msg):
     print(mark, msg)
+
+def ponytail():
+    """7. 포니테일 스킬(SKILL.md)·사다리 훅 — .claude/ 는 git 에 없으므로 PC 마다 받아서 만든다."""
+    global ok
+    skill = os.path.join(ROOT, ".claude", "skills", "ponytail", "SKILL.md")
+    if os.path.exists(skill):
+        say("OK  ", ".claude/skills/ponytail/SKILL.md")
+    else:
+        url = "https://raw.githubusercontent.com/DietrichGebert/ponytail/HEAD/skills/ponytail/SKILL.md"
+        try:
+            os.makedirs(os.path.dirname(skill), exist_ok=True)
+            with urllib.request.urlopen(url, timeout=20) as r, open(skill, "wb") as f:
+                f.write(r.read())
+            say("MADE", ".claude/skills/ponytail/SKILL.md 받음(DietrichGebert/ponytail)")
+        except Exception as e:
+            ok = False; say("FAIL", f"포니테일 SKILL.md 받기 실패({e}) → 네트워크 확인 후 다시 실행")
+    src = os.path.join(HERE, "ponytail", "ladder-gate.js")
+    dst = os.path.join(ROOT, ".claude", "ponytail", "hooks", "ladder-gate.js")
+    if not os.path.exists(src):
+        ok = False; say("FAIL", "ponytail/ladder-gate.js 원본 없음 → git pull 로 최신을 받았는지 확인"); return
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    if not os.path.exists(dst) or open(src, "rb").read() != open(dst, "rb").read():
+        shutil.copyfile(src, dst); say("MADE", ".claude/ponytail/hooks/ladder-gate.js 복사")
+    else:
+        say("OK  ", ".claude/ponytail/hooks/ladder-gate.js")
+    sj = os.path.join(ROOT, ".claude", "settings.json")
+    cfg = json.load(open(sj, encoding="utf-8")) if os.path.exists(sj) else {}
+    pre = cfg.setdefault("hooks", {}).setdefault("PreToolUse", [])
+    if any("ladder-gate.js" in h.get("command", "") for e in pre for h in e.get("hooks", [])):
+        say("OK  ", ".claude/settings.json 에 사다리 훅 연결됨")
+    else:
+        pre.append({"matcher": "Edit|Write|NotebookEdit|Bash", "hooks": [{"type": "command", "command": 'node "$CLAUDE_PROJECT_DIR/.claude/ponytail/hooks/ladder-gate.js"'}]})
+        json.dump(cfg, open(sj, "w", encoding="utf-8"), indent=2, ensure_ascii=False)
+        say("MADE", ".claude/settings.json 에 사다리 훅 연결(Claude 를 다시 열어야 적용)")
+    if not shutil.which("node"):
+        ok = False; say("FAIL", "node 없음 → 사다리 훅이 못 돈다(Node 설치)")
+
+if "--only-ponytail" in sys.argv:
+    ponytail(); sys.exit(0 if ok else 1)
 
 # 1. 파이썬 라이브러리
 for mod in ("numpy", "cv2"):
@@ -56,6 +96,9 @@ else:
 # 6. 규칙 문서
 rules = os.path.join(HERE, "큐보", "규칙", "큐보 부품결합규칙.md")
 say("OK  " if os.path.exists(rules) else "FAIL", "큐보/규칙/큐보 부품결합규칙.md (git pull 로 최신을 받았는지 확인)")
+
+# 7. 포니테일 스킬·사다리 훅
+ponytail()
 
 print()
 print("모두 준비됨 — 다음은 CLAUDE.md '세션을 시작할 때' 와 큐보/규칙/큐보 부품결합규칙.md 를 읽고 시작" if ok else

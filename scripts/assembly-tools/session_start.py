@@ -38,6 +38,10 @@ else:
 _, last = git("log", "-1", "--format=%h %s")
 print("[git] 현재:", last)
 
+# 환경이 다른 PC 면 포니테일 스킬·사다리 훅을 받아 맞춘다(.claude/ 는 git 에 없다)
+_r = subprocess.run([sys.executable, os.path.join(HERE, "setup_new_pc.py"), "--only-ponytail"], capture_output=True, text=True, encoding="utf-8", errors="replace")
+print("[환경] 포니테일:", "OK" if _r.returncode == 0 and "MADE" not in _r.stdout else "\n" + _r.stdout.strip())
+
 # 다른 PC·아이디가 남긴 "마지막 작업"(handoff.py) — 어느 조립도가 어디까지 됐는지 한눈에
 _rows = []
 _hf = os.path.join(HERE, "큐보", "인수인계.md")
