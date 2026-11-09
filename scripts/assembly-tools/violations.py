@@ -14,6 +14,31 @@ def _load(name):
     g = runpy.run_path(name + ".py", run_name="probe")
     return next(v for v in g.values() if hasattr(v, "steps") and hasattr(v, "parts") and hasattr(v, "meta"))
 
+def axle_bad(A, tol=1.5):
+    """축에 끼운 부품(recv 가 _axle_links 를 기억한 것)의 위치 어긋남 [(번호, 부품순서, 설명)]. 번호마다 부품 자세는 guidecheck 와 같이 pose_at 으로 둔다."""
+    import stepchecks
+    _orig = {id(q): (np.array(q.p, float), np.array(q.R, float)) for q in A.parts}
+    out = []
+    try:
+        for k in range(1, len(A.steps) + 1):
+            for q in A.parts: q.p, q.R = _orig[id(q)][0].copy(), _orig[id(q)][1].copy()
+            for q in A.parts:
+                if q.step.index <= k: q.p, q.R = stepchecks.pose_at(A, q, k)
+            for i, q in enumerate(A.steps[k - 1].parts):
+                for host, gid, pid in getattr(q, "_axle_links", []):
+                    g = host.peg(gid); d = np.array(g["dir"], float); d = d / np.linalg.norm(d)
+                    hs = [x for x in q.conn["holes"] if x["id"] == pid] or list(q.conn["holes"])   # 구멍 id 를 모르면(목록 형식 연결) 축 중심선에 가장 가까운 구멍
+                    best = None
+                    for c in hs:
+                        v = np.array(q.world("hole", c)["pos"], float) - np.array(g["pos"], float); al = float(np.dot(v, d)); of = float(np.linalg.norm(v - al * d))
+                        if best is None or of < best[0]: best = (of, al)
+                    off, along = best
+                    if off > tol: out.append((k, i, "%s 가 %s 축 중심선에서 %.1fmm 벗어남(≤%.1f)" % (q.n, host.n, off, tol)))
+                    elif abs(along) > g["len"] / 2 + 0.5: out.append((k, i, "%s 가 %s 축 길이 밖에 있음(축 중심에서 %.1fmm, 반 길이 %.1f)" % (q.n, host.n, along, g["len"] / 2)))
+    finally:
+        for q in A.parts: q.p, q.R = _orig[id(q)][0].copy(), _orig[id(q)][1].copy()
+    return out
+
 def collect(name):
     import asmlib, guidecheck
     A = _load(name); out = {}
@@ -123,6 +148,11 @@ def collect(name):
                 if bw: add(k, "orient", ["%d:%d" % (k, i) for i in bw], "부시 넓은 쪽이 판에 닿음 — 좁은 쪽(모델 +y)이 판 쪽이어야 한다")
     except Exception as e_:
         print("violations: stepchecks 점검을 못 붙임 —", str(e_)[:100], file=sys.stderr)
+    try:   # 축 위치: 축(·T축)에 끼운 부품은 최종 자리에서 내 구멍 중심이 축 중심선 위(≤1.5mm)이고 축 길이 안에 있어야 한다(사용자 지시 2026-11-09: 축과 위치가 안 맞으면 모니터링)
+        for k, q_idx, msg in axle_bad(A):
+            add(k, "axle", ["%d:%d" % (k, q_idx)], msg)
+    except Exception as e_:
+        print("violations: 축 위치 점검을 못 붙임 —", str(e_)[:100], file=sys.stderr)
     try:   # 가짜 안내점(G1a): 받는 부품(recv)인데 dir 만 있고 marks 가 비며 noGuide 도 아니면 부품 중심에서 허공 화살표가 나간다 — fakeguide_check.py 와 같은 조건(사용자 지시 2026-11-09: 상시 감시로)
         import json as _j2
         for k_, s_ in enumerate(_j2.load(open(asmpath.resolve(name + "_asm.json"), encoding="utf-8"))["steps"], 1):

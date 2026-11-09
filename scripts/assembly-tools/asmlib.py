@@ -738,18 +738,19 @@ class Step:
                 if HAND_LOG is not None:
                     import sys as _sys
                     _f = _sys._getframe(1); HAND_LOG.append({"file": _f.f_code.co_filename, "line": _f.f_lineno, "n": n, "ids": [x[0] for x in _np], "was_dict": isinstance(links, dict)})
-        marks = []; d0 = None; calc = p is None
+        marks = []; _face = []; d0 = None; calc = p is None
         for pid, (host, gid) in pairs:
             g = host.peg(gid); d = g["dir"]; tip = g["pos"] + d * g["len"] / 2
             if calc:
                 myh = tmp.hole(pid); base = g["pos"] - d * g["len"] / 2
                 if against is not None and host.n.endswith("축") and dir is not None:   # 통과 부품(축)에 끼우는 받는 부품이 다른 부품(against)의 면에 닿을 때까지 밀어 넣는다(부시가 블록 바깥면에 붙는 자리, 2026-11-09). 값은 against 부품의 크기·내 두께에서 계산한다 — 손값 p= 아님(C6)
                     import obb
-                    _a = np.array(dir, float); _a = _a / np.linalg.norm(_a)
+                    _a = -np.array(dir, float); _a = _a / np.linalg.norm(_a)   # dir = 결합 전에 띄우는 방향(뷰어·guidecheck 와 같다) → 밀어 넣는 방향은 그 반대
                     _ag = _host(s.A, against); _hs = np.array(_ag.conn.get("size") or partlib.get(_ag.n)["size"], float) / 2
                     _lo = obb.span(obb.corners(_ag.p, _ag.R, _hs), _a)[0]
                     _th = float(np.array(tmp.conn.get("size") or partlib.get(n)["size"], float)[int(np.argmax(np.abs(np.array([h for h in tmp.conn["holes"] if h["id"] == pid][0]["dir"], float))))])   # 내 구멍 축(부품 로컬) 방향 두께
-                    hole_center = g["pos"] + _a * (_lo - _th / 2 + float(np.dot(myh["pos"], _a)) - float(np.dot(g["pos"], _a)))   # 몸통 가운데가 면에서 두께/2 떨어지게(구멍 위치 어긋남 myh.pos 보정)
+                    hole_center = g["pos"] + _a * (_lo - _th / 2 + float(np.dot(myh["pos"], _a)) - float(np.dot(g["pos"], _a)))
+                    _face.append(rnd(hole_center - _a * _th / 2))   # 화살표 끝(faceMarks): 뷰어 링 = 끝 − 방향×두께/2 가 구멍 중심에 오도록(guidecheck G23). 꼬리(marks)는 고정된 돌기 끝(축 끝)   # 몸통 가운데가 면에서 두께/2 떨어지게(구멍 위치 어긋남 myh.pos 보정)
                 else:
                     hole_center = base + d * myh["len"] / 2 if g["len"] >= myh["len"] else g["pos"] + d * (myh["len"] - g["len"]) / 2
                 if host.n == "리벳":   # 리벳으로 프레임과 프레임을 잇는 곳은 두 프레임이 딱 붙는다(사용자 기본 규칙 2026-10-24): 받는 판의 면이 리벳 가운데(= 먼저 꽂은 쪽 프레임 면)에 닿게 한다 — 돌기 밑동 기준(위)으로 놓으면 1.5mm 뜬다
@@ -757,7 +758,7 @@ class Step:
                 if p is None: p = hole_center - myh["pos"]   # myh 는 이미 세계 방향으로 돌린 값(tmp 의 p=0)
             if d0 is None: d0 = d
             _dv = d if dir is None else np.array(dir, float)   # 안내점 = 끼우는 쪽(dir)에서 먼저 닿는 돌기 끝: dir 이 돌기 방향과 반대면 뿌리 쪽 끝(축 아래에서 부시를 끼우는 경우, G21)
-            marks.append(rnd(hole_center if (against is not None and calc and host.n.endswith("축")) else (tip if (host.n != "축" or float(np.dot(_dv, d)) >= 0) else g["pos"] - d * g["len"] / 2)))   # against: 화살표 끝 = 받는 구멍이 앉을 자리(면에 닿은 자리)   # 축(양 끝을 쓰는 통과 부품, G21)만 끼우는 쪽 끝, 나머지는 돌기 끝(tip)
+            marks.append(rnd((tip if (host.n != "축" or float(np.dot(_dv, d)) >= 0) else g["pos"] - d * g["len"] / 2)))   # against: 화살표 끝 = 받는 구멍이 앉을 자리(면에 닿은 자리)   # 축(양 끝을 쓰는 통과 부품, G21)만 끼우는 쪽 끝, 나머지는 돌기 끝(tip)
         if not calc:
             p = s._anchored(n, R, p)
             s._resolve_lazy(n, R, p, extra)
@@ -778,6 +779,8 @@ class Step:
             if fc is not None and not _enters(part, fc, hp.peg(gid2)["dir"]):
                 s.A.log(f"{s.index}단계 {n}: '{pname}' 은(는) {n} 에서 돌기가 들어오는 쪽 면이 아니다(앞뒤가 반대)")
         part.extra.update({"recv": True, "dir": rnd(d0 if dir is None else vec(dir)), "marks": marks})
+        if _face: part.extra["faceMarks"] = _face
+        part._axle_links = [(host, gid, pid) for pid, (host, gid) in pairs if host.n.endswith("축")]   # 축에 끼운 부품이면 어느 축·돌기·내 구멍인지 기억(violations 의 축 위치 점검이 읽는다, 저장 데이터에는 안 들어간다)
         if "settleDir" in part.extra and "settleMarks" not in part.extra and marks: part.extra["settleMarks"] = [list(m) for m in marks]; part.extra["marks"] = []   # 옆자리에서 합쳐지는 번호의 안내점 = 받는 돌기 끝(손 좌표 금지, 토끼 15번 2026-11-04)
         if hover: part.extra["hover"] = hover
         _ex = part.extra.get("explode")

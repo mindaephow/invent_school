@@ -179,8 +179,8 @@ s23b = step("[교재 23] 19 + 22: 22번 팔을 기둥 위쪽 두 3단블록 사�
 blkL, blkR = old1("3단블록", 1, 1), old1("3단블록", 1, 0)           # x=−10, x=+10
 Rax = np.column_stack([(0, 0, 1), (1, 0, 0), (0, 1, 0)])
 axle23 = s23b.place("축", Rax, PIV.copy(), dir=[-1, 0, 0], hover=40, pegDepth=40, joinOrder=2, marks=[rnd(PIV + np.array([-7.5, 0, 0]))])   # 안내 꼬리 = 띄운 축의 앞 돌기 끝(guidecheck 계산값)
-bu23a = s23b.recv("부시", np.diag([-1.0, -1.0, 1.0]) @ Rax, {"h1": (axle23, "p1")}, joinOrder=3, hover=22, dir=[1, 0, 0], against=blkL)
-bu23b = s23b.recv("부시", Rax, {"h1": (axle23, "p1")}, joinOrder=3, hover=22, dir=[-1, 0, 0], against=blkR)
+bu23a = s23b.recv("부시", Rax, {"h1": (axle23, "p1")}, joinOrder=3, hover=22, dir=[-1, 0, 0], against=blkL)
+bu23b = s23b.recv("부시", np.diag([-1.0, -1.0, 1.0]) @ Rax, {"h1": (axle23, "p1")}, joinOrder=3, hover=22, dir=[1, 0, 0], against=blkR)
 # 24·25 ── 팔에 건 뒤(최종 자세)에서 손잡이·바퀴
 s24 = step("[교재 24] L 프레임 세로 다리 구멍 4곳에 리벳을 꽂고, 37프레임(손잡이)을 그 위에 얹어요.")
 Rrv = AfR(np.column_stack([(0, 0, 1), (1, 0, 0), (0, 1, 0)]))     # 리벳 축 = 팔 길이 방향(u)

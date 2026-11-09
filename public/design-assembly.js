@@ -1519,6 +1519,9 @@
     clearInterval(timer); clearTimeout(timer); timer = null; timerDir = 0;
     $('asmPlay').textContent = '▶ 재생';
     $('asmReverse').textContent = '◀ 역재생';
+    if ($('asmPlayOne')) $('asmPlayOne').textContent = '▶ 이 번호만 재생';
+    if ($('asmPlayAll')) $('asmPlayAll').textContent = '▶ 처음부터 전체 재생';
+    playAll = false;
     const br = bridge(); if (br && br.guideDots) br.guideDots(true); // 멈추면 초록 점이 다시 보인다
   }
   function go(target) {
@@ -1549,19 +1552,23 @@
   let speed = 1;
   try { const v = Number(localStorage.getItem('ivs-asm-speed')); if (v >= 0.5 && v <= 3) speed = v; } catch (e) { /* 저장 못 해도 기본 속도 */ }
   const arrowMs = () => ARROW_MS / speed, joinMs = () => JOIN_MS / speed;
-  function play(dir) {
-    const wasPlaying = timerDir === dir;
+  let playAll = false;    // true 면 "처음부터 전체 재생" 중(1번부터 마지막 번호까지)
+  let playOnly = false;   // true 면 지금 번호만 화살표 → 결합까지 한 번 보이고 멈춘다("이 번호만 재생")
+  function play(dir, only) {
+    const wasPlaying = timerDir === dir && playOnly === !!only;
     stop();
-    if (wasPlaying) return; // 같은 재생 버튼을 다시 누르면 멈춤
+    if (wasPlaying) { playOnly = false; return; } // 같은 재생 버튼을 다시 누르면 멈춤
+    playOnly = !!only;
     const b = bridge();
-    if (dir > 0 && step >= last()) step = 0;
+    if (playOnly && (step < 1 || step >= last())) { playOnly = false; return; }   // 빈 판·완성 모습은 한 번호 재생이 없다
+    if (!playOnly && dir > 0 && step >= last()) step = 0;
     if (dir < 0 && step <= 0) step = last();
     if (dir > 0 && step === 0) step = 1; // 빈 판에서 바로 첫 단계 화살표부터
     render();
     timerDir = dir;
     if (b && b.guideDots) b.guideDots(false); // 재생 중에는 화살표만(초록 점 숨김)
     if (dir > 0) {
-      $('asmPlay').textContent = '⏸ 멈춤';
+      if (playOnly) $('asmPlayOne').textContent = '⏸ 멈춤'; else $('asmPlay').textContent = '⏸ 멈춤';
       const tick = () => {
         if (timerDir !== 1) return;
         // 결합: 부품마다 순서 번호(joinOrder)가 있으면 작은 번호부터 하나씩(14단계: 15프레임이 올라가 결합 → 그다음 부시)
@@ -1575,6 +1582,7 @@
         };
         const afterJoin = () => {
           if (timerDir !== 1) return;
+          if (playOnly) { playOnly = false; stop(); return; }   // 이 번호만: 결합까지 보였으면 멈춘다
           const next = step + 1;
           if (next > last()) { stop(); return; }
           go(next); // 다음 단계 화살표 표시
@@ -1790,6 +1798,12 @@
       vol.addEventListener('change', () => { if (window.__ivsPlaySnap) window.__ivsPlaySnap(); });
     }
     $('asmPlay').addEventListener('click', () => play(1));
+    if ($('asmPlayOne')) $('asmPlayOne').addEventListener('click', () => play(1, true));
+    if ($('asmPlayAll')) $('asmPlayAll').addEventListener('click', () => {
+      if (playAll) { stop(); return; }   // 재생 중에 다시 누르면 멈춤
+      stop(); go(0); play(1);            // 빈 판에서 시작하면 play 가 1번 화살표부터 보여 준다
+      playAll = true; $('asmPlayAll').textContent = '⏸ 멈춤'; $('asmPlay').textContent = '▶ 재생';
+    });
     $('asmReverse').addEventListener('click', () => play(-1));
     $('asmSlider').addEventListener('input', (e) => { stop(); go(Number(e.target.value)); });
     $('asmCombine').addEventListener('click', () => {
