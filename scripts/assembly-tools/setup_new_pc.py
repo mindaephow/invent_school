@@ -1,6 +1,7 @@
 """새 PC(외부 PC) 준비 점검 — git 에 없는 것(.claude/launch.json, .env.local, conn.json/dims.json, 파이썬 라이브러리)을 확인·생성한다.
 사용: cd scripts/assembly-tools && PYTHONIOENCODING=utf-8 python setup_new_pc.py
   --only-ponytail : 7번(포니테일 스킬·훅)만 점검·생성 (session_start.py 가 부른다)
+  --설치          : 없는 파이썬 라이브러리를 pip 로 설치한다(외부 다운로드 — 사용자 허락을 받은 뒤에만)
 """
 import json, os, shutil, subprocess, sys, urllib.request
 
@@ -61,11 +62,16 @@ if "--only-ponytail" in sys.argv:
     ponytail(); sys.exit(0 if ok else 1)
 
 # 1. 파이썬 라이브러리
-for mod in ("numpy", "cv2"):
+_PIP = {"numpy": "numpy", "cv2": "opencv-python", "scipy": "scipy"}   # scipy: bookcam.py(몸통 윤곽 겹침으로 카메라 풀기)가 쓴다
+_missing = []
+for mod in _PIP:
     try:
         __import__(mod); say("OK  ", f"python 라이브러리 {mod}")
     except ImportError:
-        ok = False; say("FAIL", f"{mod} 없음 → pip install numpy opencv-python")
+        _missing.append(mod); ok = False; say("FAIL", f"{mod} 없음 → 사용자 허락을 받고 python setup_new_pc.py --설치  (= pip install {_PIP[mod]}, PyPI 에서 받음)")
+if _missing and "--설치" in sys.argv:   # 외부 다운로드라 사용자 허락 뒤에만 돌린다
+    r = subprocess.run([sys.executable, "-m", "pip", "install", *[_PIP[m] for m in _missing]])
+    ok = r.returncode == 0; say("OK  " if ok else "FAIL", "pip install " + " ".join(_PIP[m] for m in _missing))
 
 # 2. node_modules
 if os.path.isdir(os.path.join(ROOT, "node_modules")):

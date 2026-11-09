@@ -30,7 +30,7 @@
 `.claude/skills/cubo-assembly/SKILL.md` 는 설명·입구일 뿐 규칙을 담지 않는다(옛 안내서 `cubo-assembly-guide.js` 는 2026-11-06 삭제 — MCP `get_assembly_guide` 는 규칙 파일·부품 DB 위치만 알려 준다). 어긋나면 `큐보 부품결합규칙.md` 가 우선이다(`.claude/` 는 ignore 라 없으면 `git show HEAD:.claude/skills/cubo-assembly/SKILL.md`).
 
 ## 세션을 시작할 때 (새 PC·새 세션)
-1. `cd scripts/assembly-tools && PYTHONIOENCODING=utf-8 python session_start.py --아이디 <내 계정>` — 최신 커밋을 받고(깨끗하면 fast-forward) 현재 커밋과 조립도별 "마지막 작업"을 보여 준다. **사용자에게 이렇게 정리해 보고하고 시작한다: "마지막 작업은 <PC>·<아이디>가 <날짜>에 <어디까지> 했고, 지금 <이 PC>·<내 아이디>가 이어받아 시작합니다. 다음 할 일은 <다음>."** 작업할 조립도가 정해지면 `python handoff.py <작업 이름> --아이디 <내 계정> --시작` 으로 이어받음을 기록한다. 새 PC 면 이어서 `python setup_new_pc.py`(라이브러리·node_modules·launch.json·.env.local 점검, FAIL 은 사용자에게 한 줄로 요청). 푸시 원격 이름은 `newrepo`(`git remote -v`).
+1. `cd scripts/assembly-tools && PYTHONIOENCODING=utf-8 python session_start.py --아이디 <내 계정>` — 최신 커밋을 받고(깨끗하면 fast-forward) 현재 커밋과 조립도별 "마지막 작업"을 보여 준다. **사용자에게 이렇게 정리해 보고하고 시작한다: "마지막 작업은 <PC>·<아이디>가 <날짜>에 <어디까지> 했고, 지금 <이 PC>·<내 아이디>가 이어받아 시작합니다. 다음 할 일은 <다음>."** 작업할 조립도가 정해지면 `python handoff.py <작업 이름> --아이디 <내 계정> --시작` 으로 이어받음을 기록한다. 새 PC 면 이어서 `python setup_new_pc.py`(라이브러리·node_modules·launch.json·.env.local 점검, FAIL 은 사용자에게 한 줄로 요청 — 파이썬 라이브러리 FAIL 은 허락을 받고 `python setup_new_pc.py --설치`). 푸시 원격 이름은 `newrepo`(`git remote -v`).
 2. **개발 서버**: `http://localhost:3178/design.html?subject=robot` 하나만 쓴다. 응답하면 그대로 쓰고, 없으면 `preview_start invent-school-dev`(없는 PC 는 `scripts/assembly-tools/README.md` 새 PC 절 3번).
 3. **로그인**: 설계 화면에 선생님 로그인이 보이면 사용자에게 요청한다(비밀번호는 대신 입력하지 않는다). 로그인 전에는 화면 비교·❄/📷 확인을 하지 않는다.
 4. **현재 상태**: `큐보/인수인계.md`(마지막 작업)·`큐보/조립도/<권>권/<이름>/진행기록.md`·`user_diffs/요청차이.md` → `git log`/`git status` → `number_start.py` 맨 위 "세션 시작 체크"(서버·키·사용자 ✓). ❌ 는 먼저 해결하거나 한 줄로 요청한다.

@@ -2251,8 +2251,9 @@
         (assemblyGuideGroup.children || []).forEach(c => (c.userData.attached || []).forEach(m => { if (m && m.isMesh && m.userData && m.userData.dot && m.visible && !dots.includes(m)) dots.push(m); }));
         assemblyListParts.forEach(p => { if (!p || !p.mesh || p.mesh.visible === false) return; p.mesh.traverse(c => { if (!c.isMesh || !c.geometry || (c.userData && (c.userData.dot || c.userData.guide))) return; const pa = c.geometry.attributes.position; if (!pa) return; for (let i = 0; i < pa.count; i++) { V.fromBufferAttribute(pa, i).applyMatrix4(c.matrixWorld); pts.push(V.x, V.y, V.z); } }); });
         if (!dots.length || !pts.length) return;
-        const far = [];
-        dots.forEach(d => { const w = new THREE.Vector3(); d.getWorldPosition(w); let b = 1e18; for (let j = 0; j < pts.length; j += 3) { const dx = pts[j] - w.x, dy = pts[j + 1] - w.y, dz = pts[j + 2] - w.z; const q = dx * dx + dy * dy + dz * dz; if (q < b) b = q; } b = Math.sqrt(b); if (b > 4) far.push({ d, b, w }); });
+        const far = [], boxes = [];
+        assemblyListParts.forEach(p => { if (!p || !p.mesh || p.mesh.visible === false) return; const bx = new THREE.Box3(); p.mesh.traverse(c => { if (c.isMesh && c.geometry && !(c.userData && (c.userData.dot || c.userData.guide))) bx.expandByObject(c); }); if (!bx.isEmpty()) boxes.push(bx); });   // 부품별 상자(점·화살표 뺀 본체)
+        dots.forEach(d => { const w = new THREE.Vector3(); d.getWorldPosition(w); let b = 1e18; for (let j = 0; j < pts.length; j += 3) { const dx = pts[j] - w.x, dy = pts[j + 1] - w.y, dz = pts[j + 2] - w.z; const q = dx * dx + dy * dy + dz * dz; if (q < b) b = q; } b = Math.sqrt(b); if (b > 5 && !(b <= 10 && boxes.some(bx => bx.containsPoint(w)))) far.push({ d, b, w }); });   // 큰 구멍(바퀴 허브)의 한가운데 점은 부품 상자 안이면 구멍 속이라 허공이 아니다(최대 10mm)   // 허용 5mm: 큰 구멍(바퀴 허브 반지름 4.7) 한가운데 링 점은 가장 가까운 꼭짓점까지 구멍 반지름만큼 떨어진다
         if (!far.length) return;
         far.forEach(f => { if (f.d.material && f.d.material.color) { floatMarked.push({ dot: f.d, col: f.d.material.color.clone(), scale: f.d.scale.clone() }); f.d.material = f.d.material.clone(); f.d.material.color.set(0xff0000); f.d.scale.multiplyScalar(2.2); } });
         const worst = far.reduce((m, f) => Math.max(m, f.b), 0);
@@ -2262,17 +2263,17 @@
     }, 900);
   }
   // 하단 규칙 바: 상시 검사가 켜져 있는지·위반이 몇 건인지 보여 주고, 눌러서 켜고 끈다(사용자 지시 2026-11-09). 검사 자체는 아래 기존 코드가 한다
-  const RULE_CHIPS = [{ id: 'overlap', name: '겹침', types: ['overlap'] }, { id: 'link', name: '연결점', types: ['mark', 'hand', 'link', 'float'] }, { id: 'gap', name: '틈', types: ['gap'] }, { id: 'protrude', name: '돌출', types: ['protrude'] }, { id: 'orient', name: '방향', types: ['orient'] }, { id: 'store', name: '창고', types: ['store'] }, { id: 'cam', name: '카메라', types: ['cam'] }, { id: 'fake', name: '가짜 안내점', types: ['fake'] }, { id: 'axle', name: '축 위치', types: ['axle'] }, { id: 'floor', name: '바닥 아래', types: ['floor'] }, { id: 'center', name: '중심 위치', types: [], auto: true }];   // auto: 위반 건수 대신 '자동'(번호를 열 때마다 fitCenter 가 화면 가운데로 맞춤)
+  const RULE_CHIPS = [{ id: 'overlap', name: '겹침', types: ['overlap'] }, { id: 'link', name: '연결점', types: ['mark', 'hand', 'link', 'float'] }, { id: 'gap', name: '틈', types: ['gap'] }, { id: 'protrude', name: '돌출', types: ['protrude'] }, { id: 'orient', name: '방향', types: ['orient'] }, { id: 'store', name: '창고', types: ['store'] }, { id: 'cam', name: '카메라 방향', types: ['cam'] }, { id: 'fake', name: '가짜 안내점', types: ['fake'] }, { id: 'axle', name: '축 위치', types: ['axle'] }, { id: 'floor', name: '바닥 아래', types: ['floor'] }, { id: 'center', name: '중심 위치', types: [], auto: true }];   // auto: 위반 건수 대신 '자동'(번호를 열 때마다 fitCenter 가 화면 가운데로 맞춤)
   // 칩에 마우스를 올리면 무슨 검사인지 보여 주는 설명(사용자 지시 2026-11-09). [이름, 하는 일, 걸리면 화면에서]
   const RULE_DESC = {
     ponytail: ['포니테일 사다리', '파일을 고치기 전에 "필요한가·이미 있는 곳·재사용"을 찾아 기록했는지 보는 규칙이에요. 기록은 90분 동안 유효하고, 없으면 고치기 전에 막혀요.', '남은 시간이 칩에 나와요. 기록이 없으면 빨갛게 바뀌어요.'],
     overlap: ['겹침', '부품 몸통이 서로 뚫고 들어간 것을 찾아요.', '걸린 부품이 주황색으로 칠해지고 위반 상자(✕)에 떠요.'],
-    link: ['연결점', '안내점·연결점이 부품의 자기 구멍·돌기에 안 맞거나, 부품에서 4mm 넘게 떨어져 허공에 떠 있거나, 부품 리스트가 아닌 숫자를 쓴 것을 찾아요(G23·G26).', '걸린 부품이 칠해지고 떠 있는 점이 빨갛게 커져요.'],
+    link: ['연결점', '안내점·연결점이 부품의 자기 구멍·돌기에 안 맞거나, 부품에서 5mm 넘게 떨어져 허공에 떠 있거나, 부품 리스트가 아닌 숫자를 쓴 것을 찾아요(G23·G26).', '걸린 부품이 칠해지고 떠 있는 점이 빨갛게 커져요.'],
     gap: ['틈', '리벳으로 이은 프레임이 떠 있거나(0.3mm 초과) 겹친 것(1.0mm 초과), 결합 틈·피치가 안 맞는 것을 찾아요.', '걸린 부품이 보라색(↔)으로 칠해져요.'],
     protrude: ['돌출', '볼트·너트의 가장 큰 부분(머리·몸)이 프레임 구멍 안에 묻히지 않고 프레임 면 밖으로 나온 것을 찾아요(G2).', '걸린 부품이 칠해지고 위반 상자(⬍)에 떠요.'],
     orient: ['방향', '부품 방향이 책과 달라요 — 결합 방향(규칙 10)·부시 넓은 쪽이 판에 닿은 것을 찾아요. 교재검사와 조립검사 양쪽에 걸쳐요.', '걸린 부품이 파란색(↻)으로 칠해져요.'],
     store: ['창고', '다른 창고에 있는 부품이 이 번호 화면에 보이는 것을 찾아요(A3). 풍차 18번 날개 4개 사고에서 만들었어요.', '보이면 안 되는 부품이 붉게 칠해져요.'],
-    cam: ['카메라', '책 그림으로 맞춘 격자가 있는데 카메라가 짐작값인 것을 찾아요(E). 맞춘 theta·phi를 쓰지 않은 거예요.', '위반 상자(◉)에 떠요.'],
+    cam: ['카메라 방향', '책 그림으로 맞춘 카메라(NN_axes.json: axes_fit·bookcam 결과)는 빌드가 자동으로 적용해요. 맞춘 격자가 있는데도 카메라가 짐작값으로 남은 번호만 여기 걸려요(E).', '위반 상자(◉)에 떠요.'],
     fake: ['가짜 안내점', '받는 부품(recv)인데 marks가 비어 부품 중심에서 허공 화살표가 나가는 것을 찾아요(G1a).', '걸린 부품이 칠해지고 위반 상자에 떠요.'],
     axle: ['축 위치', '축(·T축)에 끼운 바퀴·기어·부시 같은 부품이 최종 자리에서 축 중심선에서 1.5mm 넘게 벗어나거나 축 길이 밖에 있는 것을 찾아요.', '걸린 부품이 연두색(⊙)으로 칠해지고 위반 상자에 떠요.'],
     floor: ['바닥 아래', '보이는 부품이 바닥(y=0)보다 0.5mm 넘게 내려간 것을 찾아요(G24).', '바닥면이 빨갛게 칠해져요.'],

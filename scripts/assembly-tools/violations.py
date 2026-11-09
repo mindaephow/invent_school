@@ -115,6 +115,7 @@ def collect(name):
         print("violations: 중심 점검을 못 붙임 —", str(e_)[:100], file=sys.stderr)
     try:   # 카메라: 그 번호의 맞춘 격자(fits/NN_*.json)가 있는데 카메라가 짐작(guess)이면 ◉ — 맞춘 값을 안 쓴 것(사용자 지시 2026-11-09: 반복 확인은 상시 감시로)
         import glob as _g
+        A.apply_axes_cams(A.id.split('-', 2)[-1])   # 빌드(export_steps)와 같은 자동 적용을 먼저 해서, 정말 못 쓴 번호만 걸린다
         for k in range(1, len(A.steps) + 1):
             if getattr(A.steps[k - 1], "camSrc", None) != "fit" and _g.glob(os.path.join(HERE, "refs", name, "fits", "%02d_*.json" % k)):
                 add(k, "cam", [], "책 그림으로 맞춘 격자(fits)가 있는데 카메라가 짐작값이다 — axes_fit 결과 theta·phi 를 쓴다")

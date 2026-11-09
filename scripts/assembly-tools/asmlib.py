@@ -388,6 +388,19 @@ class Asm:
         return bad
     def group(s, name, parts):
         g = Group(name, parts); s.__dict__.setdefault('groups', []).append(g); return g
+    def apply_axes_cams(s, name, max_err=3.0, min_pts=4):
+        """카메라 자동 적용: refs/<이름>/NN_axes.json 의 fit(theta·phi)이 있고 점 수·오차가 기준 안이면, 아직 짐작값(camSrc=="guess")인 번호의 카메라로 쓴다(bookcam·tiltcam·axes_fit 결과를 손으로 옮겨 적지 않는다, 사용자 지시 2026-11-09). 바뀐 번호 목록을 돌려준다."""
+        import json as _j, os as _o
+        R = _o.path.join(_o.path.dirname(_o.path.abspath(__file__)), "refs", name); done = []
+        for i, st in enumerate(s.steps, 1):
+            if st.camSrc != "guess" or (st.cam and len(st.cam) > 2): continue   # 이미 맞춘 번호·tight/focus 같은 특수 카메라(다른 값이 붙은 것)는 건드리지 않는다
+            fp = _o.path.join(R, "%02d_axes.json" % i)
+            if not _o.path.exists(fp): continue
+            try: f = (_j.load(open(fp, encoding="utf-8")) or {}).get("fit") or {}
+            except Exception: continue
+            if f.get("theta") is None or f.get("phi") is None or (f.get("points") or 0) < min_pts or f.get("err_px") is None or f["err_px"] > max_err: continue
+            st.cam = (float(f["theta"]), float(f["phi"])); st.camSrc = "fit"; done.append(i)
+        return done
     def step(s, note, cam=None, camSrc="guess", **kw):
         st = Step(s, note, cam, camSrc, kw); s.steps.append(st); return st
     def log(s, msg): s.warn.append(msg); print("  [경고]", msg)
@@ -738,7 +751,7 @@ class Step:
                 if HAND_LOG is not None:
                     import sys as _sys
                     _f = _sys._getframe(1); HAND_LOG.append({"file": _f.f_code.co_filename, "line": _f.f_lineno, "n": n, "ids": [x[0] for x in _np], "was_dict": isinstance(links, dict)})
-        marks = []; _face = []; d0 = None; calc = p is None
+        marks = []; _face = []; _thick = None; d0 = None; calc = p is None
         for pid, (host, gid) in pairs:
             g = host.peg(gid); d = g["dir"]; tip = g["pos"] + d * g["len"] / 2
             if calc:
@@ -750,7 +763,8 @@ class Step:
                     _lo = obb.span(obb.corners(_ag.p, _ag.R, _hs), _a)[0]
                     _th = float(np.array(tmp.conn.get("size") or partlib.get(n)["size"], float)[int(np.argmax(np.abs(np.array([h for h in tmp.conn["holes"] if h["id"] == pid][0]["dir"], float))))])   # 내 구멍 축(부품 로컬) 방향 두께
                     hole_center = g["pos"] + _a * (_lo - _th / 2 + float(np.dot(myh["pos"], _a)) - float(np.dot(g["pos"], _a)))
-                    _face.append(rnd(hole_center - _a * _th / 2))   # 화살표 끝(faceMarks): 뷰어 링 = 끝 − 방향×두께/2 가 구멍 중심에 오도록(guidecheck G23). 꼬리(marks)는 고정된 돌기 끝(축 끝)   # 몸통 가운데가 면에서 두께/2 떨어지게(구멍 위치 어긋남 myh.pos 보정)
+                    _thick = _th   # 뷰어 링 = 끝 − 방향×두께/2 가 구멍 중심에 오도록 이 부품의 실제 두께를 알려 준다(바퀴 16 처럼 기본 5 와 다른 부품)
+                    _face.append(rnd(hole_center - _a * min(_th / 2, float(myh.get('len') or _th) / 2 + 2.5)))   # 끝은 구멍 길이 안쪽(guidecheck: 구멍 반길이+3 이내)으로, 링 오차는 1.5 이내가 되게   # 화살표 끝(faceMarks): 뷰어 링 = 끝 − 방향×두께/2 가 구멍 중심에 오도록(guidecheck G23). 꼬리(marks)는 고정된 돌기 끝(축 끝)   # 몸통 가운데가 면에서 두께/2 떨어지게(구멍 위치 어긋남 myh.pos 보정)
                 else:
                     hole_center = base + d * myh["len"] / 2 if g["len"] >= myh["len"] else g["pos"] + d * (myh["len"] - g["len"]) / 2
                 if host.n == "리벳":   # 리벳으로 프레임과 프레임을 잇는 곳은 두 프레임이 딱 붙는다(사용자 기본 규칙 2026-10-24): 받는 판의 면이 리벳 가운데(= 먼저 꽂은 쪽 프레임 면)에 닿게 한다 — 돌기 밑동 기준(위)으로 놓으면 1.5mm 뜬다
@@ -780,6 +794,7 @@ class Step:
                 s.A.log(f"{s.index}단계 {n}: '{pname}' 은(는) {n} 에서 돌기가 들어오는 쪽 면이 아니다(앞뒤가 반대)")
         part.extra.update({"recv": True, "dir": rnd(d0 if dir is None else vec(dir)), "marks": marks})
         if _face: part.extra["faceMarks"] = _face
+        if _thick: part.extra.setdefault("thick", round(float(_thick), 2))
         part._axle_links = [(host, gid, pid) for pid, (host, gid) in pairs if host.n.endswith("축")]   # 축에 끼운 부품이면 어느 축·돌기·내 구멍인지 기억(violations 의 축 위치 점검이 읽는다, 저장 데이터에는 안 들어간다)
         if "settleDir" in part.extra and "settleMarks" not in part.extra and marks: part.extra["settleMarks"] = [list(m) for m in marks]; part.extra["marks"] = []   # 옆자리에서 합쳐지는 번호의 안내점 = 받는 돌기 끝(손 좌표 금지, 토끼 15번 2026-11-04)
         if hover: part.extra["hover"] = hover
@@ -1025,6 +1040,7 @@ def part_dict(pt, final_of=None):
 
 def export_steps(A):
     out = []
+    A.apply_axes_cams(A.id.split('-', 2)[-1])   # 모든 조립도 공통: NN_axes.json 이 있는 번호의 카메라는 손으로 적지 않고 그 값을 쓴다(사용자 지시 2026-11-09)
     _legacy = A.id in ('cubo-1-airplane', 'cubo-1-autogun', 'cubo-1-soccer', 'cubo-1-trike')   # 규칙(2026-10-05)보다 먼저 만든 조립도는 알림만
     for _si, _nm, _y, _wh in floor_check(A):   # 관리자 기본 규칙: 조립도는 바닥 아래로 내려가지 않게 — 새 조립도는 build.py 가 [경고] 로 막는다
         print('%s 바닥 아래로 내려가는 부품: %d단계 %s (가장 낮은 y %.1f, %s)' % ('[알림]' if _legacy else '[경고]', _si, _nm, _y, _wh))

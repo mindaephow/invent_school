@@ -10,8 +10,12 @@ from asmlib import *
 from trike_base import load_existing, final_parts
 import partlib as _pl, hovercheck as _hc
 _PLATE_HOVER = _hc.HOVER + float(_pl.get('리벳')['size'][1]) + _hc.MIN_GAP   # G12: 판은 리벳(화면 기본 띄움)보다 리벳 길이(부품 목록) + 10mm(규칙) 더 멀리 — 손으로 적은 숫자 없음
+FLOOR_DY = 4.0   # 전체를 올려 바퀴 아랫면이 바닥(y=0)에 닿게 한다(아래 높이는 바퀴 반지름에서 계산)
+_WR_F = float(_pl.get('데코바퀴')['size'][0]) / 2   # 앞바퀴(검은 타이어)=데코바퀴 반지름
+_WR_R = float(_pl.get('작은바퀴')['size'][0]) / 2   # 뒷바퀴(빨간 타이어)=작은바퀴 반지름
 
 EX = load_existing()
+EX["camera"] = dict(EX["camera"], theta=-2.34, phi=0.99)   # 완성 모습 카메라: 책 완성 사진(00.jpg)이 23~25번과 같은 앞쪽 왼쪽 위 시점(팔이 왼쪽 아래)이라 그 카메라를 쓴다
 BASE = EX["steps"][:10]
 A = Asm('cubo-1-trike', EX["chapter"], EX["book"], camera=EX["camera"], listNote=EX.get("listNote", ""), guideMode="mates")   # 연결점은 부품 DB 돌기·구멍 그대로(다른 조립도와 같다)
 A.steps = []
@@ -142,7 +146,7 @@ BUILD2 = np.array([150.0, 21.0, -260.0])         # 따로 만드는 자리(20~22
 colBlk = old1("3단블록", 1, 0)                     # 기둥 위쪽 3단블록(x=+10), 반대쪽은 인덱스 1(x=−10)
 PIV = np.array([0.0, 83.64, -223.439]) + 10 * np.array([0.0, 0.7071, -0.7071])   # 기둥 위쪽 3단블록 구멍 h1(위쪽 끝 쪽, 사용자가 표시한 1번 홀) — h2 에서 기둥 방향으로 10mm 위
 K_PIV = 12   # 사용자가 표시하기(1번)로 짚은 구멍 — 13번째는 한 칸 위여서 틀렸다. 팔 12번째 구멍이 기둥 위쪽 블록 구멍 h1 과 같은 자리
-SIN = (PIV[1] - 21.0) / (10 * (K_PIV - 1))
+SIN = (PIV[1] - 21.0) / (10 * (K_PIV - 1))   # 앞바퀴 가운데 높이 21(20~22번 책 비교 증거가 이 팔 기울기 기준이라 바꾸지 않는다) — 앞바퀴가 데코바퀴(반지름 24)라 바닥에서 1mm 떠 있다
 COS = float(np.sqrt(1 - SIN ** 2))
 Ua = np.array([0, SIN, COS]); Wa = np.array([0, COS, -SIN]); Za = np.array([-1.0, 0, 0])
 Ma = np.column_stack([Ua, Wa, Za])               # 팔 로컬 → 세계
@@ -184,17 +188,23 @@ bu23b = s23b.recv("부시", np.diag([-1.0, -1.0, 1.0]) @ Rax, {"h1": (axle23, "p
 # 24·25 ── 팔에 건 뒤(최종 자세)에서 손잡이·바퀴
 s24 = step("[교재 24] L 프레임 세로 다리 구멍 4곳에 리벳을 꽂고, 37프레임(손잡이)을 그 위에 얹어요.")
 Rrv = AfR(np.column_stack([(0, 0, 1), (1, 0, 0), (0, 1, 0)]))     # 리벳 축 = 팔 길이 방향(u)
-rv24 = [s24.attach("리벳", Rrv, {"p1": (L, Af(70, y, z))}, rivet=True) for L, z in ((L1, 30), (L2, -30)) for y in (-10, -20)]
-handle = s24.recv("37프레임", Rrv, dict(zip(["h21", "h20", "h3", "h2"], [(r, "p2") for r in rv24])), hover=22)   # 판 구멍 y −30·−20·−10 중 리벳이 −10·−20 — 팔 끝(y ±5)을 피해 아래로
-s25 = step("[교재 25] 팔 끝 구멍에 축을 끼우고, 작은바퀴 2개를 양쪽 끝에 끼운 뒤 바깥쪽을 부시로 고정해요.")
+D24SGN, R24ROW = 1, 3
+# 책 24(확대): 주황 리벳 4개는 흰 팔 양쪽 두 유닛의 2단블록 보이는 쪽 구멍 h1·h2(월드 x −10·−20 / +10·+20)에 두 개씩 꽂히고, 판 윗줄 2·3·5·6열이 그 리벳 끝에 낀다(간격 1-2-1칸)
+_D24 = np.array([0.0, 0.8, -0.6]) * D24SGN   # 2단블록 구멍 축(±) 중 보이는 쪽
+R24 = np.column_stack([(1.0, 0, 0), _D24, np.cross((1.0, 0, 0), _D24)])
+rv24 = [s24.attach("리벳", R24, {"p1": (U, hid)}, rivet=True, dir=_D24.tolist()) for U, hid in ((U1, "h2"), (U1, "h1"), (U2, "h1"), (U2, "h2"))]
+handle = s24.recv("37프레임", R24, dict(zip(["h%d" % (3 * 1 + R24ROW), "h%d" % (3 * 2 + R24ROW), "h%d" % (3 * 4 + R24ROW), "h%d" % (3 * 5 + R24ROW)], [(r, "p2") for r in rv24])), hover=_PLATE_HOVER, joinOrder=2)   # 판 열(로컬 x −20·−10·+10·+20 = 월드 x), 행 R24ROW   # 판 구멍 y −30·−20·−10 중 리벳이 −10·−20 — 팔 끝(y ±5)을 피해 아래로
+s25 = step("[교재 25] 팔 끝 구멍에 축을 끼우고, 데코바퀴 2개를 양쪽 끝에 끼운 뒤 바깥쪽을 부시로 고정해요.")
 axle = s25.place("축", R_A, Af(hk(1), 0, 0), dir=(-Za).tolist(), hover=40, pegDepth=40, marks=[rnd(Af(hk(1), 0, -5))])
-RW = R_A
-wh1 = s25.recv("작은바퀴", RW, {"h3": (axle, "p1")}, p=Af(hk(1), 0, 13), hover=30)
-wh2 = s25.recv("작은바퀴", RW, [(axle, "p1")], p=Af(hk(1), 0, -13), hover=30, dir=(Ma @ np.array([0, 0, -1])).tolist())
-wh2.extra["marks"] = [rnd(Af(hk(1), 0, -32.5))]
-bu1 = s25.recv("부시", RW, [(axle, "p1")], p=Af(hk(1), 0, 23.75), hover=22)
-bu2 = s25.recv("부시", RW, [(axle, "p1")], p=Af(hk(1), 0, -23.75), hover=22, dir=(Ma @ np.array([0, 0, -1])).tolist())
-bu2.extra["marks"] = [rnd(Af(hk(1), 0, -32.5))]
+RW = np.column_stack([(0, 0, 1), (-1, 0, 0), (0, -1, 0)])   # 바퀴·부시는 축(x) 둘레로 돌아도 같은 모양 — 화면이 재는 상자가 비스듬해져 "바닥 아래"로 잘못 나오지 않게 상자를 세계 축에 맞춘다(구멍 축 = 월드 −x, 25번 바닥 아래 −10.25 원인)
+# 책 25: 바퀴는 팔 바깥 면에 닿고(against=팔 판), 부시는 그 바퀴 바깥 면에 닿는다 — 위치는 손으로 적지 않고 against 가 계산한다. 바퀴 허브·부시 좁은 쪽은 둘 다 안쪽(팔 쪽)을 향하게 좌우 대칭으로 뒤집는다(G5)
+_WH_HOVER = 30   # 앞바퀴 결합 전 띄움
+_BU_HOVER = _WH_HOVER + _hc.MIN_GAP   # G12: 나중에 끼우는 부시는 먼저 끼우는 바퀴보다 MIN_GAP 이상 더 바깥에서 시작(바퀴 안에 파묻혀 보이지 않게)
+RWF = np.diag([-1.0, -1.0, 1.0]) @ RW   # 좌우 반대쪽 부품의 뒤집은 자세
+wh1 = s25.recv("데코바퀴", RW, {"h1": (axle, "p1")}, hover=_WH_HOVER, joinOrder=2, dir=Za.tolist(), against=A2)
+wh2 = s25.recv("데코바퀴", RWF, {"h1": (axle, "p1")}, hover=_WH_HOVER, joinOrder=2, dir=(-Za).tolist(), against=A1)
+bu1 = s25.recv("부시", RWF, {"h1": (axle, "p1")}, hover=_BU_HOVER, joinOrder=3, dir=Za.tolist(), against=wh1)
+bu2 = s25.recv("부시", RW, {"h1": (axle, "p1")}, hover=_BU_HOVER, joinOrder=3, dir=(-Za).tolist(), against=wh2)
 
 armparts = [A1] + rvA + [A2, L1, L2, U1, U2]
 # 유닛의 안내(marks)는 L 구멍 3곳, 합칠 때(settleMarks)는 팔 구멍 — 변환 전에 정리한다
@@ -210,16 +220,18 @@ for L, U, sg in ((L1, U1, 1), (L2, U2, -1)):
         pt.extra["settleDir"] = [0, 0, 1 if sg > 0 else -1]
     U.extra["marks"] = [rnd(np.array(m) + off) for m in U.extra["marks"]]
 
-# ───────── 26·27 ── 몸체 뒷바퀴(T축 + 데코바퀴) / 28 메인보드 / 29 선 연결 ─────────
+# ───────── 26·27 ── 몸체 뒷바퀴(T축 + 작은바퀴) / 28 메인보드 / 29 선 연결 ─────────
+_RW_HOVER = 30   # 뒷바퀴 결합 전 띄움
+_T_HOVER = _RW_HOVER + float(_pl.get('T축')['pegs'][0]['len']) + _hc.MIN_GAP   # G12: T축은 머리가 바퀴 바깥면과 같은 높이로 들어가 끝이 바깥면에서 T축 길이(30)만큼 안쪽이다 → 떠 있는 바퀴(띄움 30) 바깥면보다 MIN_GAP 더 바깥에서 끝이 시작하려면 바퀴 띄움 + T축 길이 + MIN_GAP
 def rear_wheel(no, sg):
-    st = step(f"[교재 {no}] T축을 데코바퀴 가운데 구멍에 끼워 벽 구멍을 지나 모터 십자 구멍까지 꽂아요(벽 뒤쪽 가운데 줄 구멍).")
+    st = step(f"[교재 {no}] T축을 작은바퀴 가운데 구멍에 끼워 벽 구멍을 지나 모터 십자 구멍까지 꽂아요(벽 뒤쪽 가운데 줄 구멍).")
     RWh = ori("+z", "+x" if sg < 0 else "-x")
-    wheel = st.place("데코바퀴", RWh, (sg * 58, 20, -90), dir=[sg, 0, 0], hover=30, marks=[[sg * 50, 20, -90]])
-    t = st.attach("T축", RWh, {"p1": (wheel, "h1")}, dir=(sg, 0, 0), hover=45, pegDepth=28.6, headDown=True)
-    t.extra["marks"] = [[sg * 50, 20, -90]]
+    wheel = st.place("작은바퀴", RWh, (sg * 58, _WR_R - FLOOR_DY, -90), dir=[sg, 0, 0], hover=_RW_HOVER, marks=[[sg * 50, _WR_R - FLOOR_DY, -90]], noGuide=True)   # 책 26: 화살표는 T축 하나가 바퀴 가운데를 지나 벽 구멍으로 들어간다(바퀴 자체는 따로 화살표 없음, G1b)
+    t = st.attach("T축", RWh, {"p1": (wheel, "h3")}, dir=(sg, 0, 0), hover=_T_HOVER, pegDepth=float(_pl.get('T축')['pegs'][0]['len']) / 2, headDown=True)   # G12: 긴 축의 pegDepth = 부품 목록 돌기 길이/2
+    t.extra["marks"] = [[sg * 50, _WR_R - FLOOR_DY, -90]]
     return wheel, t
-rear_wheel(26, +1)
-rear_wheel(27, -1)
+rear_wheel(26, -1)   # 책 26: 뒤에서 볼 때 화면 왼쪽(로봇 왼쪽) 바퀴 — 모델은 앞이 −z 라 왼쪽이 −x
+rear_wheel(27, +1)   # 책 27: 화면 오른쪽(로봇 오른쪽 = +x) 바퀴
 s28 = step("[교재 28] 메인보드를 윗판(흰 59프레임) 위에 꽂아요: 보드 아래 돌기 2개가 판의 구멍 2곳에 들어가요.")
 Rbd = np.eye(3)
 bd_p = np.array([0, 56.25, -90.0])
@@ -228,7 +240,7 @@ board.extra["marks"] = [[0, 40, -100], [0, 40, -80]]
 s29 = step("[교재 29] 메인보드 왼쪽·오른쪽 단자에 DC모터 선을 연결하면 3륜바이크 완성!", noPart=True)
 
 CAMS = {11: (-1.0, 0.62), 12: (0.5, 0.85), 13: (-2.25, 0.8), 14: (0.5, 0.85), 15: (0.5, 0.85), 16: (0.5, 0.85), 17: (0.6, 0.85), 18: (0.6, 0.85),
-        19: (-0.6, 0.95), 20: (0.5, 0.9), 21: (0.5, 0.9), 22: (0.5, 0.9), 23: (-0.6, 0.95), 24: (-2.34, 0.99), 25: (0.5, 0.9), 26: (0.8, 0.95), 27: (-0.8, 0.95), 28: (0.4, 1.05), 29: (0.4, 1.05)}
+        19: (-0.6, 0.95), 20: (0.5, 0.9), 21: (0.5, 0.9), 22: (0.5, 0.9), 23: (-0.6, 0.95), 24: (-2.34, 0.99), 25: (0.5, 0.9), 26: (0.8, 0.95), 27: (-0.8, 0.95), 28: (0.4, 1.05), 29: (0.32, 1.16)}   # 29번(완성 전 마지막): 책이 뒤에서 본 시점 — 메인보드 윗면 모서리 4점 PnP(오차 큼, 방향만 theta 0.32·phi 1.16: fov 20~50 에서 같음), 맞춘 격자가 없어 짐작값으로 둔다
 for k, (th, ph) in CAMS.items():
     A.steps[k - 1].cam = (th, ph); A.steps[k - 1].camSrc = "guess"
 # 12번 카메라: 흰 59프레임 구멍 점 45개 axes_fit(holefit DoG 24점 + 격자 21점, 평균 0.89px, roll 2.9°) theta −0.68·phi 0.78 — 칸 +X(짧은 쪽 5)·줄 +Z(긴 쪽 9), 칸1줄1 = 그림 왼쪽 끝. 리벳 = 칸1줄1·칸5줄1·칸2줄4·칸4줄4
@@ -248,6 +260,7 @@ A.steps[19].cam = (0.53, 0.88); A.steps[19].camSrc = "fit"
 A.steps[20].cam = (2.39, 0.94); A.steps[20].camSrc = "fit"
 A.steps[21].cam = (1.01, 0.86); A.steps[21].camSrc = "fit"
 A.steps[22].cam = (-2.34, 0.99); A.steps[22].camSrc = "fit"
+# 카메라 자동 적용은 asmlib.export_steps 가 모든 조립도에 공통으로 한다(NN_axes.json 이 있는 번호, 24번: bookcam 2.71px)
 
 import copy
 def shift_steps(steps, dy):
@@ -272,7 +285,6 @@ def shift_steps(steps, dy):
                 if "from" in e: e["from"] = sh(e["from"])
                 if "marks" in e: e["marks"] = [sh(m) for m in e["marks"]]
     return S
-FLOOR_DY = 4.0   # 데코바퀴·작은바퀴(반지름 24·25)가 바닥에 닿게 전체를 올린다(바퀴 아랫면 y=0)
 A.meta["floorDy"] = FLOOR_DY   # 바닥 검사가 출력 단계의 올림을 알게
 
 # 1~10단계 보정: 10단계에서 모터 유닛이 판 양옆에 올라갈 때 블록 아래 끝돌기가 들어갈 바닥판 구멍에도 안내(move.marks)를 단다(교재 10 의 화살표)
@@ -377,7 +389,7 @@ USED = {1: "39프레임 1, 3단블록 2, 리벳 1", 2: "135도 프레임 2, 3단
         10: "없음(합치는 단계)", 11: "39프레임 1, 59프레임 1", 12: "25프레임 2, 59프레임 1, 리벳 4", 13: "1열브라켓 2, 리벳 2", 14: "리벳 2",
         15: "2단블록 2, 3단블록 1", 16: "59프레임 1", 17: "15프레임 2, 35프레임 1, 리벳 8", 18: "눈블록 2, 리벳 1", 19: "없음(합치는 단계)",
         20: "115프레임 2, 리벳 2", 21: "2단블록 2, 90도 프레임 2", 22: "없음(합치는 단계)", 23: "부시 2, 축 1", 24: "37프레임 1, 리벳 4",
-        25: "부시 2, 작은바퀴 2, 축 1", 26: "T축 1, 데코바퀴 1", 27: "T축 1, 데코바퀴 1", 28: "메인보드 1", 29: "없음(DC모터 연결)"}
+        25: "부시 2, 데코바퀴 2, 축 1", 26: "T축 1, 작은바퀴 1", 27: "T축 1, 작은바퀴 1", 28: "메인보드 1", 29: "없음(DC모터 연결)"}
 def apply_prep(steps):
     """03 부품 정리(▣ 사용 부품 줄)·04 창고 정리(slot·history·hideMade)를 번호별 단계에 붙인다."""
     for _i, _st in enumerate(steps, 1):
