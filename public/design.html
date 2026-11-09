@@ -300,6 +300,12 @@
     pointer-events:none;
   }
 
+  .scene-hint.below{ position:static; margin:0; }
+  .rule-bar{ position:absolute; left:10px; right:10px; bottom:10px; display:flex; flex-wrap:wrap; gap:6px; z-index:5; pointer-events:none; }
+  .rule-bar button{ pointer-events:auto; font-size:12px; padding:4px 10px; border-radius:14px; border:1px solid var(--panel-border); background:var(--panel); color:var(--ink); cursor:pointer; }
+  .rule-bar button.off{ color:var(--ink-soft); opacity:.65; }
+  .rule-bar button.bad{ border-color:#ef4444; color:#b91c1c; font-weight:700; }
+
   .viewcube-wrap{
     position:absolute; top:12px; right:12px; width:56px; height:56px;
     perspective:260px; z-index:20;
@@ -631,7 +637,7 @@
             <div class="part-list-body" id="requiredListBody"></div>
           </div>
         </div>
-        <div class="scene-hint">빈 곳 드래그: 회전 · ✋이동/오른쪽 버튼/두 손가락: 화면 밀기 · 선택한 부품 드래그: 부품 이동 · 휠/핀치: 확대축소 · Ctrl+드래그: 여러 부품 한번에 고르기 · Ctrl+클릭: 하나씩 더하기·빼기</div>
+        <div class="rule-bar" id="ruleBar" aria-label="상시 검사 규칙"></div>
         <div class="viewcube-wrap">
           <div class="viewcube" id="viewCube">
             <div class="face front" data-face="front">앞</div>
@@ -651,6 +657,7 @@
           <div class="group-list" id="groupList" hidden></div>
         </div>
       </div>
+        <div class="scene-hint below">빈 곳 드래그: 회전 · ✋이동/오른쪽 버튼/두 손가락: 화면 밀기 · 선택한 부품 드래그: 부품 이동 · 휠/핀치: 확대축소 · Ctrl+드래그: 여러 부품 한번에 고르기 · Ctrl+클릭: 하나씩 더하기·빼기</div>
       <div class="asm-stage-bar" id="asmStageBar" hidden>
         <p class="asm-stage-note" id="asmStageNote"></p>
         <div class="asm-stage-row">
@@ -2212,7 +2219,8 @@
     let low = Infinity, lowName = '';   // 부품 본체만 잰다(붙어 있는 초록 점·화살표는 뺀다)
     if (assemblyGuideGroup && assemblyListParts.length) assemblyListParts.forEach((p, i) => { if (!p || !p.mesh || p.mesh.visible === false) return; p.mesh.updateWorldMatrix(true, true); p.mesh.traverse((c) => { if (!c.isMesh || !c.geometry || (c.userData && (c.userData.dot || c.userData.guide))) return; if (!c.geometry.boundingBox) c.geometry.computeBoundingBox(); _fb.copy(c.geometry.boundingBox).applyMatrix4(c.matrixWorld); if (!_fb.isEmpty() && _fb.min.y < low) { low = _fb.min.y; lowName = i + ':' + (p.type || ''); } }); });
     window.__ivsFloorLow = { low, lowPart: lowName };   // 화면이 잰 가장 낮은 높이(도구로 읽어 숫자로 확인한다, G24)
-    floorAlert.visible = low < FLOOR_Y - FLOOR_ALERT_TOL;
+    const _fbad = low < FLOOR_Y - FLOOR_ALERT_TOL; floorAlert.visible = _fbad && !(ruleAdmin() && ruleOff.has('floor'));
+    if (_fbad !== floorBad) { floorBad = _fbad; renderRuleBar(); }
   }
 
   const VIOL_KINDS = {   // 종류 → [기호, 이름, 색]
@@ -2221,7 +2229,8 @@
     mark:    ['⌖', '안내점이 부품 연결점에 안 맞음', 0x14b8a6],
     hand:    ['✋', '연결점이 아닌 값을 씀', 0xec4899],
     link:    ['◎', '연결점(recv·떠 있음)', 0xffd400], orient: ['↻', '방향이 책과 다름', 0x2f80ff],
-    float:   ['◌', '연결점이 부품에서 떨어져 허공에 있음', 0xff0000]
+    float:   ['◌', '연결점이 부품에서 떨어져 허공에 있음', 0xff0000],
+    protrude: ['⬍', '볼트·너트가 프레임 면 밖으로 나옴', 0xd946ef], cam: ['◉', '카메라가 짐작값(맞춘 격자 안 씀)', 0x0ea5e9], fake: ['◌', '가짜 안내점(허공 화살표)', 0xf97316]
   };
   // 연결점(초록 점)이 부품에서 4mm 넘게 떨어져 허공에 있으면 번호를 열 때마다 자동으로 잡아 빨갛게 키우고 위반 상자에 띄운다(사용자 지시 2026-11-08 — 14·16번에서 점이 허공에 찍혀도 아무 경고가 없었다, 규칙 G23·G25).
   //   점은 화살표 공식이 만든 장면에서만 위치를 알 수 있어 build.py 가 못 재므로 화면이 스스로 잰다(viewer_snippets.md 6번과 같은 계산).
@@ -2248,8 +2257,77 @@
       } catch (e) { console.warn('연결점 검사 오류', e); }
     }, 900);
   }
+  // 하단 규칙 바: 상시 검사가 켜져 있는지·위반이 몇 건인지 보여 주고, 눌러서 켜고 끈다(사용자 지시 2026-11-09). 검사 자체는 아래 기존 코드가 한다
+  const RULE_CHIPS = [{ id: 'overlap', name: '겹침', types: ['overlap'] }, { id: 'link', name: '연결점', types: ['mark', 'hand', 'link', 'float'] }, { id: 'gap', name: '틈', types: ['gap'] }, { id: 'protrude', name: '돌출', types: ['protrude'] }, { id: 'orient', name: '방향', types: ['orient'] }, { id: 'store', name: '창고', types: ['store'] }, { id: 'cam', name: '카메라', types: ['cam'] }, { id: 'fake', name: '가짜 안내점', types: ['fake'] }, { id: 'floor', name: '바닥 아래', types: ['floor'] }, { id: 'center', name: '중심 위치', types: [], auto: true }];   // auto: 위반 건수 대신 '자동'(번호를 열 때마다 fitCenter 가 화면 가운데로 맞춤)
+  // 칩에 마우스를 올리면 무슨 검사인지 보여 주는 설명(사용자 지시 2026-11-09). [이름, 하는 일, 걸리면 화면에서]
+  const RULE_DESC = {
+    ponytail: ['포니테일 사다리', '파일을 고치기 전에 "필요한가·이미 있는 곳·재사용"을 찾아 기록했는지 보는 규칙이에요. 기록은 90분 동안 유효하고, 없으면 고치기 전에 막혀요.', '남은 시간이 칩에 나와요. 기록이 없으면 빨갛게 바뀌어요.'],
+    overlap: ['겹침', '부품 몸통이 서로 뚫고 들어간 것을 찾아요.', '걸린 부품이 주황색으로 칠해지고 위반 상자(✕)에 떠요.'],
+    link: ['연결점', '안내점·연결점이 부품의 자기 구멍·돌기에 안 맞거나, 부품에서 4mm 넘게 떨어져 허공에 떠 있거나, 부품 리스트가 아닌 숫자를 쓴 것을 찾아요(G23·G26).', '걸린 부품이 칠해지고 떠 있는 점이 빨갛게 커져요.'],
+    gap: ['틈', '리벳으로 이은 프레임이 떠 있거나(0.3mm 초과) 겹친 것(1.0mm 초과), 결합 틈·피치가 안 맞는 것을 찾아요.', '걸린 부품이 보라색(↔)으로 칠해져요.'],
+    protrude: ['돌출', '볼트·너트의 가장 큰 부분(머리·몸)이 프레임 구멍 안에 묻히지 않고 프레임 면 밖으로 나온 것을 찾아요(G2).', '걸린 부품이 칠해지고 위반 상자(⬍)에 떠요.'],
+    orient: ['방향', '부품 방향이 책과 달라요 — 결합 방향(규칙 10)·부시 넓은 쪽이 판에 닿은 것을 찾아요. 교재검사와 조립검사 양쪽에 걸쳐요.', '걸린 부품이 파란색(↻)으로 칠해져요.'],
+    store: ['창고', '다른 창고에 있는 부품이 이 번호 화면에 보이는 것을 찾아요(A3). 풍차 18번 날개 4개 사고에서 만들었어요.', '보이면 안 되는 부품이 붉게 칠해져요.'],
+    cam: ['카메라', '책 그림으로 맞춘 격자가 있는데 카메라가 짐작값인 것을 찾아요(E). 맞춘 theta·phi를 쓰지 않은 거예요.', '위반 상자(◉)에 떠요.'],
+    fake: ['가짜 안내점', '받는 부품(recv)인데 marks가 비어 부품 중심에서 허공 화살표가 나가는 것을 찾아요(G1a).', '걸린 부품이 칠해지고 위반 상자에 떠요.'],
+    floor: ['바닥 아래', '보이는 부품이 바닥(y=0)보다 0.5mm 넘게 내려간 것을 찾아요(G24).', '바닥면이 빨갛게 칠해져요.'],
+    center: ['중심 위치', '번호를 열 때마다 카메라 시선을 보이는 부품 전체의 가운데로 자동으로 맞춰요(A4). 끄면 자동 맞춤을 건너뛰어요.', '켜져 있으면 칩에 "자동"이라고 나와요.'],
+    autocheck: ['상시검사', '조립도 파일(.py·_read.json)을 고치면 build.py(겹침·안내점)와 rulecheck.py를 자동으로 돌려 문제만 알려 줘요. 지금 작업 중인 조립도 하나에서만 돌아요.', '조립도를 고칠 때마다 돌아요. 고친 적이 없으면 "감시 중", 훅이 연결 안 돼 있으면 빨간 "훅 없음"이에요.']
+  };
+  let ruleOff = new Set(); try { ruleOff = new Set(JSON.parse(localStorage.getItem('ivs-rule-off') || '[]')); } catch (e) { /* */ }
+  let lastViolRaw = [], floorBad = false;
+  const ruleAdmin = () => { try { return !!(window.__ivsIsAdmin && window.__ivsIsAdmin()); } catch (e) { return false; } };   // 조립 모니터링 바·끄기는 관리자 전용(사용자 지시 2026-11-09)
+  const ruleIsOff = (type) => ruleAdmin() && RULE_CHIPS.some(c => ruleOff.has(c.id) && c.types.includes(type));
+  function renderRuleBar() {
+    const bar = document.getElementById('ruleBar'); if (!bar) return;
+    if (!ruleAdmin()) { bar.innerHTML = ''; return; }
+    const st = ruleStatusChips();   // 포니테일 사다리는 가장 우선이라 맨 앞(사용자 지시 2026-11-09)
+    bar.innerHTML = st.pt + RULE_CHIPS.map(c => {
+      const off = ruleOff.has(c.id), n = lastViolRaw.filter(v => c.types.includes(v.type)).length + (c.id === 'floor' && floorBad && !lastViolRaw.some(v => v.type === 'floor') ? 1 : 0);
+      return '<button type="button" data-rule="' + c.id + '" class="' + (off ? 'off' : (n ? 'bad' : '')) + '" data-tip="' + c.id + '" data-on="' + (off ? 0 : 1) + '">' + (off ? '○ ' : '<span style="color:#16a34a">●</span> ') + c.name + (off ? ' 꺼짐' : (c.auto ? ' 자동' : ' ' + n)) + '</button>';
+    }).join('') + st.ac;
+  }
+  // Claude 쪽 상시 감시(포니테일 사다리·상시검사)는 public/_rule_status.json 을 읽어 보여 준다 — 켜고 끄는 칩이 아니라 지금 돌고 있는지만 표시
+  let ruleStatus = {};
+  function ruleStatusChips() {
+    const pt = ruleStatus.ponytail, ac = ruleStatus.autocheck, now = Date.now();
+    const left = pt ? Math.round((pt.ttlMin * 60000 - (now - pt.ts)) / 60000) : -1;
+    const chip = (cls, txt, tip) => '<button type="button" class="' + cls + '" data-status="1" data-tip="' + tip + '">' + txt + '</button>';
+    return { pt: chip(left > 0 ? '' : 'bad', (left > 0 ? '<span style="color:#16a34a">●</span> 포니테일 ' + left + '분' : '○ 포니테일 기록 없음'), 'ponytail'),
+      ac: chip(ac ? (ac.ok ? '' : 'bad') : (ruleStatus.autocheckHook ? '' : 'bad'), ac ? (ac.ok ? '<span style="color:#16a34a">●</span> 상시검사 이상 없음' : '● 상시검사 ' + String(ac.msg).slice(0, 24)) : (ruleStatus.autocheckHook ? '<span style="color:#16a34a">●</span> 상시검사 감시 중' : '○ 상시검사 훅 없음'), 'autocheck') };
+  }
+  async function pollRuleStatus() {
+    try { const r = await fetch('/_rule_status.json', { cache: 'no-store' }); ruleStatus = r.ok ? await r.json() : {}; } catch (e) { ruleStatus = {}; }
+    renderRuleBar();
+  }
+  pollRuleStatus(); setInterval(pollRuleStatus, 15000);
+  { let _wasAdmin = null; setInterval(() => { const a = ruleAdmin(); if (a !== _wasAdmin) { _wasAdmin = a; renderRuleBar(); } }, 1000); }   // 로그인 뒤 관리자 판별이 늦게 나와도 바가 따라 나타난다
+  document.getElementById('ruleBar') && document.getElementById('ruleBar').addEventListener('click', (e) => {
+    const b = e.target.closest && e.target.closest('button[data-rule]'); if (!b) return;
+    const id = b.dataset.rule; ruleOff.has(id) ? ruleOff.delete(id) : ruleOff.add(id);
+    try { localStorage.setItem('ivs-rule-off', JSON.stringify([...ruleOff])); } catch (e2) { /* */ }
+    floorAlertTick = 7; updateFloorAlert(); applyViolations(lastViolRaw);
+  });
+  renderRuleBar();
+  (function () {   // 칩 설명 카드: 마우스를 올리면 칩 위에 뜬다
+    const bar = document.getElementById('ruleBar'); if (!bar) return;
+    const tip = document.createElement('div');
+    tip.style.cssText = 'position:fixed;z-index:90;max-width:300px;background:#fff;color:#222;border:1px solid #cbd5e1;border-radius:12px;padding:10px 12px;box-shadow:0 8px 24px rgba(0,0,0,.2);font:12.5px/1.5 sans-serif;pointer-events:none;display:none';
+    document.body.appendChild(tip);
+    bar.addEventListener('mouseover', (e) => {
+      const b = e.target.closest && e.target.closest('button[data-tip]'); const d = b && RULE_DESC[b.dataset.tip]; if (!d) return;
+      const st = b.dataset.on === '1' ? '<span style="color:#16a34a">● 켜져 있어요 — 누르면 꺼요</span>' : b.dataset.on === '0' ? '<span style="color:#6b7280">○ 꺼져 있어요 — 누르면 켜요</span>' : '';
+      tip.innerHTML = '<b style="font-size:13.5px">' + d[0] + '</b>' + (st ? '<div style="margin:2px 0 4px">' + st + '</div>' : '') + '<div>' + d[1] + '</div><div style="margin-top:4px;color:#475569">▸ ' + d[2] + '</div>';
+      tip.style.display = 'block';
+      const r = b.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
+      tip.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r.left)) + 'px'; tip.style.top = Math.max(8, r.top - h - 8) + 'px';
+    });
+    bar.addEventListener('mouseout', (e) => { if (e.target.closest && e.target.closest('button[data-tip]')) tip.style.display = 'none'; });
+  })();
+
   let violTinted = [];
   function applyViolations(arr) {
+    lastViolRaw = arr; renderRuleBar(); arr = arr.filter(v => !ruleIsOff(v.type));
     violTinted.forEach(t => { if (t.mesh) t.mesh.material = t.orig; (t.clones || []).forEach(m => m.dispose && m.dispose()); }); violTinted = [];
     arr.forEach(v => {
       const k = VIOL_KINDS[v.type]; if (!k || v.type === 'floor') return;   // 바닥은 바닥면 빨강이 따로 보여 준다
@@ -6046,7 +6124,7 @@
     camera(c){ target.set(c.target[0], c.target[1], c.target[2]); orbit.radius = c.radius; orbit.theta = c.theta; orbit.phi = c.phi; },
     // 번호를 열 때마다 자동으로 카메라 보는 중심을 그 번호에 보이는 부품 전체의 가운데로 맞춘다(사용자 지시 2026-11-09 — 규칙·중심 맞추기는 손이 아니라 상시 자동, 규칙 E11 ①). 각도(theta·phi)와 거리는 그대로, 중심만 옮긴다.
     fitCenter(){
-      if (!assemblyListParts.length) return false;
+      if (!assemblyListParts.length || (ruleAdmin() && ruleOff.has('center'))) return false;   // 하단 규칙 바에서 '중심 위치'를 끄면 자동 맞춤을 건너뛴다
       scene.updateMatrixWorld(true); const box = new THREE.Box3();
       assemblyListParts.forEach(p => { if (!p || !p.mesh || p.mesh.visible === false) return; p.mesh.traverse(c => { if (!c.isMesh || !c.geometry || (c.userData && (c.userData.dot || c.userData.guide))) return; box.expandByObject(c); }); });
       if (box.isEmpty()) return false;

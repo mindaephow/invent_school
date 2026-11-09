@@ -109,6 +109,28 @@ def collect(name):
             add(k, "hand", keys, "%s 연결점이 아닌 숫자를 씀(%s) — 부품 리스트의 구멍·돌기 연결점에서 계산해야 한다" % (m_.group(3), what))
     except Exception as e_:
         print("violations: 손값 점검을 못 붙임 —", str(e_)[:100], file=sys.stderr)
+    try:   # 상시 감시로 옮긴 번호별 점검(사용자 지시 2026-11-09): 리벳 틈·볼트 머리/너트 돌출·부시 방향 — stepchecks 가 계산한 값을 그대로 화면 종류로 올린다(새 계산 없음). 볼트·너트 결합·메인보드는 조립도별 켜는 검사라 뺀다
+        import stepchecks as sc
+        for k in range(1, len(A.steps) + 1):
+            st = A.steps[k - 1]
+            ks = lambda nm: ["%d:%d" % (k, i) for i, p in enumerate(st.parts) if p.n == nm]
+            if any(p.n == "리벳" for p in st.parts):
+                for rn, a_, b_, g_ in sc.rivet_gaps(A, k): add(k, "gap", ks(rn) + ks(a_) + ks(b_), "리벳 %s↔%s 틈 %.1fmm (+떠 있음 −겹침)" % (a_, b_, g_))
+            if any(p.n in ("8볼트", "12볼트", "너트", "서보고정볼트") for p in st.parts):
+                for bn, fr, pr in sc.fastener_protrusion(A, k): add(k, "protrude", ks(bn), "%s 가 %s 면 밖으로 %.1fmm 나옴" % (bn, fr, pr))
+            if any(p.n == "부시" for p in st.parts):
+                bw = sc.bush_wrong(A, k)
+                if bw: add(k, "orient", ["%d:%d" % (k, i) for i in bw], "부시 넓은 쪽이 판에 닿음 — 좁은 쪽(모델 +y)이 판 쪽이어야 한다")
+    except Exception as e_:
+        print("violations: stepchecks 점검을 못 붙임 —", str(e_)[:100], file=sys.stderr)
+    try:   # 가짜 안내점(G1a): 받는 부품(recv)인데 dir 만 있고 marks 가 비며 noGuide 도 아니면 부품 중심에서 허공 화살표가 나간다 — fakeguide_check.py 와 같은 조건(사용자 지시 2026-11-09: 상시 감시로)
+        import json as _j2
+        for k_, s_ in enumerate(_j2.load(open(asmpath.resolve(name + "_asm.json"), encoding="utf-8"))["steps"], 1):
+            for i_, p_ in enumerate(s_.get("parts", [])):
+                if p_.get("recv") and p_.get("dir") and not p_.get("marks") and not p_.get("noGuide"):
+                    add(k_, "fake", ["%d:%d" % (k_, i_)], "%s 가짜 안내점 — 안내점(marks)이 비어 부품 중심에서 허공 화살표가 나감(`extra.pop('dir')` 또는 settleMarks)" % p_["n"])
+    except Exception as e_:
+        print("violations: 가짜 안내점 점검을 못 붙임 —", str(e_)[:100], file=sys.stderr)
     return out
 
 def write_entry(name):

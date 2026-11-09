@@ -28,6 +28,9 @@ for m, name, py in cands[:1]:
     bad = [l.strip() for l in (b.stdout + b.stderr).splitlines() if re.search(r'몸통 겹침 [1-9]|안내점 맞물림 없는 부품: [1-9]|Traceback|Error|규칙 위반 표시: [1-9]', l)]
     bad += [l.strip() for l in r.stdout.splitlines() if re.match(r'\s*\d+번 ❌', l) or l.startswith('합계')]
     out.append(f'[상시검사] {name}: ' + (' | '.join(bad) if bad else '이상 없음'))
+    try:
+        import rule_status; rule_status.put('autocheck', {'name': name, 'ok': not bad, 'msg': (' | '.join(bad) if bad else '이상 없음')[:120]})   # 화면 하단 규칙 바가 읽는다
+    except Exception: pass
 json.dump(st, open(STAMP, 'w'))
 if out:
     print('\n'.join(out), file=sys.stderr)

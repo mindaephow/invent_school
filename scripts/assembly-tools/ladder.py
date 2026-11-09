@@ -6,4 +6,5 @@ a = sys.argv[1:]
 if len(a) != 3: sys.exit("인자 3개(필요·찾은 곳·재사용)를 따옴표로 묶어 주세요")
 d = {"ts": int(time.time() * 1000), "need": a[0], "found": a[1], "reuse": a[2]}
 json.dump(d, open(os.path.join(ROOT, ".claude", "ponytail_ladder.json"), "w", encoding="utf-8"), ensure_ascii=False)
+import rule_status; rule_status.put("ponytail", {"need": a[0][:60], "ttlMin": 90})   # 화면 하단 규칙 바가 읽는다
 print("사다리 기록 저장(90분):", a[0][:40], "|", a[1][:60])

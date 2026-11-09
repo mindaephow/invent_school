@@ -44,6 +44,16 @@ def ponytail():
         pre.append({"matcher": "Edit|Write|NotebookEdit|Bash", "hooks": [{"type": "command", "command": 'node "$CLAUDE_PROJECT_DIR/.claude/ponytail/hooks/ladder-gate.js"'}]})
         json.dump(cfg, open(sj, "w", encoding="utf-8"), indent=2, ensure_ascii=False)
         say("MADE", ".claude/settings.json 에 사다리 훅 연결(Claude 를 다시 열어야 적용)")
+    post = cfg["hooks"].setdefault("PostToolUse", [])   # 상시검사: 조립도 파일을 고치면 build·rulecheck 를 자동으로 돌린다(autocheck.py, 사용자 지시 2026-11-08)
+    if any("autocheck.py" in h.get("command", "") for e in post for h in e.get("hooks", [])):
+        say("OK  ", ".claude/settings.json 에 상시검사 훅 연결됨")
+    else:
+        post.append({"matcher": "Edit|Write|NotebookEdit|Bash", "hooks": [{"type": "command", "command": 'python "$CLAUDE_PROJECT_DIR/scripts/assembly-tools/autocheck.py"'}]})
+        json.dump(cfg, open(sj, "w", encoding="utf-8"), indent=2, ensure_ascii=False)
+        say("MADE", ".claude/settings.json 에 상시검사 훅 연결(Claude 를 다시 열어야 적용)")
+    try:
+        import rule_status; rule_status.put("autocheckHook", {"installed": True})   # 화면 하단 규칙 바가 '감시 중'으로 표시한다
+    except Exception: pass
     if not shutil.which("node"):
         ok = False; say("FAIL", "node 없음 → 사다리 훅이 못 돈다(Node 설치)")
 

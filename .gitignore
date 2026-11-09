@@ -6,3 +6,4 @@ node_modules/
 scripts/assembly-tools/models/
 .env.local
 public/_refs_tmp/
+public/_rule_status.json
