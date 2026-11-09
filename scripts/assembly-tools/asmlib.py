@@ -141,7 +141,7 @@ def floor_check(A, tol=FLOOR_TOL, keys=False):
             _ax = R[:, 1]; half = float(sz[1] * abs(_ax[1]) + max(sz[0], sz[2]) * float(np.sqrt(max(0.0, 1.0 - _ax[1] ** 2))))
         else:
             half = np.abs(R[1]) @ sz
-        return float(p[1] + off[1] + lift - half)
+        return float(p[1] + off[1] + lift - half + float(A.meta.get("floorDy") or 0))   # floorDy: 출력 단계에서 전체를 y 로 올리는 값(trike FLOOR_DY) — 검사도 올린 뒤 값으로 잰다
     for st in A.steps:
         for pt in st.parts:
             ex = pt.extra; side = ex.get("side")
@@ -707,7 +707,7 @@ class Step:
         if float(np.dot(dn, dw)) > -0.9: return p
         nb = np.array(p, float) + np.array(R, float) @ (np.array(nc["pos"], float) - nl * nc["len"] / 2)
         return tuple(float(v) for v in np.array(p, float) + dw * (bot - 1.0 - float(np.dot(nb, dw))))   # 너트 머리(넓은 쪽 1mm)는 홀 테두리 안에 들어가 판 면과 같다 → 목 밑동은 면에서 1.0 안쪽(G2, SINK_PARTS 와 같은 값)
-    def recv(s, n, R, links, dir=None, hover=None, p=None, keep_dropped_check=True, **extra):
+    def recv(s, n, R, links, dir=None, hover=None, p=None, keep_dropped_check=True, against=None, **extra):
         """움직이는 쪽이 구멍을 받는 쪽(프레임이 블록 끝 돌기에 얹히는 경우).
         links 가 dict {내 구멍 id: (고정 부품, 돌기 id)} 면 위치 p 를 계산하고, [(고정 부품, 돌기 id), ...] 목록이면 p 를 직접 줘야 한다."""
         R = np.array(R, float); tmp = Part(n, R, (0, 0, 0), s)
@@ -743,13 +743,21 @@ class Step:
             g = host.peg(gid); d = g["dir"]; tip = g["pos"] + d * g["len"] / 2
             if calc:
                 myh = tmp.hole(pid); base = g["pos"] - d * g["len"] / 2
-                hole_center = base + d * myh["len"] / 2 if g["len"] >= myh["len"] else g["pos"] + d * (myh["len"] - g["len"]) / 2
+                if against is not None and host.n.endswith("축") and dir is not None:   # 통과 부품(축)에 끼우는 받는 부품이 다른 부품(against)의 면에 닿을 때까지 밀어 넣는다(부시가 블록 바깥면에 붙는 자리, 2026-11-09). 값은 against 부품의 크기·내 두께에서 계산한다 — 손값 p= 아님(C6)
+                    import obb
+                    _a = np.array(dir, float); _a = _a / np.linalg.norm(_a)
+                    _ag = _host(s.A, against); _hs = np.array(_ag.conn.get("size") or partlib.get(_ag.n)["size"], float) / 2
+                    _lo = obb.span(obb.corners(_ag.p, _ag.R, _hs), _a)[0]
+                    _th = float(np.array(tmp.conn.get("size") or partlib.get(n)["size"], float)[int(np.argmax(np.abs(np.array([h for h in tmp.conn["holes"] if h["id"] == pid][0]["dir"], float))))])   # 내 구멍 축(부품 로컬) 방향 두께
+                    hole_center = g["pos"] + _a * (_lo - _th / 2 + float(np.dot(myh["pos"], _a)) - float(np.dot(g["pos"], _a)))   # 몸통 가운데가 면에서 두께/2 떨어지게(구멍 위치 어긋남 myh.pos 보정)
+                else:
+                    hole_center = base + d * myh["len"] / 2 if g["len"] >= myh["len"] else g["pos"] + d * (myh["len"] - g["len"]) / 2
                 if host.n == "리벳":   # 리벳으로 프레임과 프레임을 잇는 곳은 두 프레임이 딱 붙는다(사용자 기본 규칙 2026-10-24): 받는 판의 면이 리벳 가운데(= 먼저 꽂은 쪽 프레임 면)에 닿게 한다 — 돌기 밑동 기준(위)으로 놓으면 1.5mm 뜬다
                     hole_center = np.array(host.p, float) + d * myh["len"] / 2
                 if p is None: p = hole_center - myh["pos"]   # myh 는 이미 세계 방향으로 돌린 값(tmp 의 p=0)
             if d0 is None: d0 = d
             _dv = d if dir is None else np.array(dir, float)   # 안내점 = 끼우는 쪽(dir)에서 먼저 닿는 돌기 끝: dir 이 돌기 방향과 반대면 뿌리 쪽 끝(축 아래에서 부시를 끼우는 경우, G21)
-            marks.append(rnd(tip if (host.n != "축" or float(np.dot(_dv, d)) >= 0) else g["pos"] - d * g["len"] / 2))   # 축(양 끝을 쓰는 통과 부품, G21)만 끼우는 쪽 끝, 나머지는 돌기 끝(tip)
+            marks.append(rnd(hole_center if (against is not None and calc and host.n.endswith("축")) else (tip if (host.n != "축" or float(np.dot(_dv, d)) >= 0) else g["pos"] - d * g["len"] / 2)))   # against: 화살표 끝 = 받는 구멍이 앉을 자리(면에 닿은 자리)   # 축(양 끝을 쓰는 통과 부품, G21)만 끼우는 쪽 끝, 나머지는 돌기 끝(tip)
         if not calc:
             p = s._anchored(n, R, p)
             s._resolve_lazy(n, R, p, extra)

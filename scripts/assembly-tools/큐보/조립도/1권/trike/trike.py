@@ -178,9 +178,9 @@ s23b = step("[교재 23] 19 + 22: 22번 팔을 기둥 위쪽 두 3단블록 사�
 # 23 ── 축(65)을 두 블록 구멍 h2 와 팔 구멍을 지나 끼우고 부시 2개
 blkL, blkR = old1("3단블록", 1, 1), old1("3단블록", 1, 0)           # x=−10, x=+10
 Rax = np.column_stack([(0, 0, 1), (1, 0, 0), (0, 1, 0)])
-axle23 = s23b.place("축", Rax, PIV.copy(), dir=[-1, 0, 0], hover=40, pegDepth=40, marks=[rnd(PIV + np.array([-7.5, 0, 0]))])   # 안내 꼬리 = 띄운 축의 앞 돌기 끝(guidecheck 계산값)
-bu23a = s23b.recv("부시", Rax, [(axle23, "p1")], p=PIV + np.array([17.75, 0, 0]), joinOrder=3, hover=22)
-bu23b = s23b.recv("부시", Rax, [(axle23, "p1")], p=PIV + np.array([-17.75, 0, 0]), joinOrder=3, hover=22, dir=[-1, 0, 0])
+axle23 = s23b.place("축", Rax, PIV.copy(), dir=[-1, 0, 0], hover=40, pegDepth=40, joinOrder=2, marks=[rnd(PIV + np.array([-7.5, 0, 0]))])   # 안내 꼬리 = 띄운 축의 앞 돌기 끝(guidecheck 계산값)
+bu23a = s23b.recv("부시", np.diag([-1.0, -1.0, 1.0]) @ Rax, {"h1": (axle23, "p1")}, joinOrder=3, hover=22, dir=[1, 0, 0], against=blkL)
+bu23b = s23b.recv("부시", Rax, {"h1": (axle23, "p1")}, joinOrder=3, hover=22, dir=[-1, 0, 0], against=blkR)
 # 24·25 ── 팔에 건 뒤(최종 자세)에서 손잡이·바퀴
 s24 = step("[교재 24] L 프레임 세로 다리 구멍 4곳에 리벳을 꽂고, 37프레임(손잡이)을 그 위에 얹어요.")
 Rrv = AfR(np.column_stack([(0, 0, 1), (1, 0, 0), (0, 1, 0)]))     # 리벳 축 = 팔 길이 방향(u)
@@ -228,10 +228,12 @@ board.extra["marks"] = [[0, 40, -100], [0, 40, -80]]
 s29 = step("[교재 29] 메인보드 왼쪽·오른쪽 단자에 DC모터 선을 연결하면 3륜바이크 완성!", noPart=True)
 
 CAMS = {11: (-1.0, 0.62), 12: (0.5, 0.85), 13: (-2.25, 0.8), 14: (0.5, 0.85), 15: (0.5, 0.85), 16: (0.5, 0.85), 17: (0.6, 0.85), 18: (0.6, 0.85),
-        19: (-0.6, 0.95), 20: (0.5, 0.9), 21: (0.5, 0.9), 22: (0.5, 0.9), 23: (-0.6, 0.95), 24: (0.5, 0.9), 25: (0.5, 0.9), 26: (0.8, 0.95), 27: (-0.8, 0.95), 28: (0.4, 1.05), 29: (0.4, 1.05)}
+        19: (-0.6, 0.95), 20: (0.5, 0.9), 21: (0.5, 0.9), 22: (0.5, 0.9), 23: (-0.6, 0.95), 24: (-2.34, 0.99), 25: (0.5, 0.9), 26: (0.8, 0.95), 27: (-0.8, 0.95), 28: (0.4, 1.05), 29: (0.4, 1.05)}
 for k, (th, ph) in CAMS.items():
     A.steps[k - 1].cam = (th, ph); A.steps[k - 1].camSrc = "guess"
 # 12번 카메라: 흰 59프레임 구멍 점 45개 axes_fit(holefit DoG 24점 + 격자 21점, 평균 0.89px, roll 2.9°) theta −0.68·phi 0.78 — 칸 +X(짧은 쪽 5)·줄 +Z(긴 쪽 9), 칸1줄1 = 그림 왼쪽 끝. 리벳 = 칸1줄1·칸5줄1·칸2줄4·칸4줄4
+A.steps[0].cam = (-0.58, 0.70); A.steps[0].camSrc = "fit"   # 1번: 격자 27점 axes_fit 0.77px
+A.steps[12].cam = (0.94, 1.03); A.steps[12].camSrc = "fit"   # 13번: 3D 점 6개 PnP(7.76px 거친 값, 화면 비교로 확인)
 A.steps[10].cam = (-2.24, 1.17); A.steps[10].camSrc = "fit"   # 11번: 격자 33점 axes_fit 1.84px(이상치 12점 제외)
 A.steps[11].cam = (-0.68, 0.78); A.steps[11].camSrc = "fit"
 # 14번 카메라: 흰 59프레임 아랫부분(5~9번째 줄) 구멍 점 25개 axes_fit(holefit 5×5, 평균 1.17px, roll −6.6°) theta −0.40·phi 0.74 — 칸 +X·줄 +Z, 위쪽 4줄은 검정 25프레임에 가려져 격자는 5~9줄만 읽음(소격자 1줄 = 판 5번째 줄)
@@ -271,6 +273,7 @@ def shift_steps(steps, dy):
                 if "marks" in e: e["marks"] = [sh(m) for m in e["marks"]]
     return S
 FLOOR_DY = 4.0   # 데코바퀴·작은바퀴(반지름 24·25)가 바닥에 닿게 전체를 올린다(바퀴 아랫면 y=0)
+A.meta["floorDy"] = FLOOR_DY   # 바닥 검사가 출력 단계의 올림을 알게
 
 # 1~10단계 보정: 10단계에서 모터 유닛이 판 양옆에 올라갈 때 블록 아래 끝돌기가 들어갈 바닥판 구멍에도 안내(move.marks)를 단다(교재 10 의 화살표)
 _base_pl = [old1("59프레임", 6), old1("29프레임", 6)]

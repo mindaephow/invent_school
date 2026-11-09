@@ -73,6 +73,9 @@ def run(name, only=None):
                             for c in o.conn["pegs"]:
                                 w = o.world("peg", c)
                                 best = min([best] + [float(np.linalg.norm(m - (np.array(w["pos"]) + np.array(w["dir"]) * w["len"] / 2 * sg))) for sg in (1, -1, 0)])
+                                if o.n.endswith("축"):   # 통과 부품(축)은 부시가 축 위 어디든 앉는다(블록 면에 닿는 자리, 2026-11-09 — 사용자 2026-11-08 '얼마나 들어가는지는 모른다'): 안내점이 축 길이 안의 축선 위면 자리다
+                                    _u = unit(w["dir"]); _r = m - np.array(w["pos"]); _al = float(_r @ _u)
+                                    if abs(_al) <= w["len"] / 2 + 1: best = min(best, float(np.linalg.norm(_r - _u * _al)))
                         else:
                             for c in o.conn["holes"]:
                                 w = o.world("hole", c); uu = unit(w["dir"]); r = m - np.array(w["pos"]); al = float(r @ uu)

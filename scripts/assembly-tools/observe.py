@@ -46,6 +46,15 @@ def check(name, step):
         if len(have) < n: miss.append("%s 관찰 %d곳 필요(지금 %d곳)" % (k, n, len(have)))
     for o in ob:
         if o["verdict"] != "같다": miss.append("판정 '다르다' — %s %s: %s" % (o["kind"], o["point"], o["note"]))
+    # 같은 그림 복사 금지(2026-11-09 3륜바이크 11~23번: 한 장을 결합·6방향 증거로 복사해 통과) — 지점마다 서로 다른 그림이어야 한다
+    import hashlib
+    seen = {}
+    for o in ob:
+        p = os.path.join(HERE, "refs", name, o.get("img", ""))
+        if not os.path.exists(p): miss.append("관찰 그림 파일이 없다: %s" % o.get("img")); continue
+        h = hashlib.md5(open(p, "rb").read()).hexdigest()
+        if h in seen: miss.append("관찰 그림이 같은 파일이다(복사) — %s '%s' 와 %s '%s'" % (seen[h]["kind"], seen[h]["point"], o["kind"], o["point"]))
+        else: seen[h] = o
     return miss
 
 def _plausible(b, s):

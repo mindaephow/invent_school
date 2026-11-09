@@ -5054,6 +5054,7 @@
       const id = p.type.slice(6), rp = robotPartsCache.find(x => String(x.id) === id), md = robotModelCache.get(rp && rp.id) || robotModelCache.get(id);
       if (!rp || !md || !/^\d+프레임$/.test(rp.name || '')) return;
       p.mesh.updateWorldMatrix(true, false);
+      { const me = p.mesh.matrixWorld.elements; const axisAligned = [0, 4, 8].every(i => [0, 1, 2].some(k => Math.abs(Math.abs(me[i + k] / (Math.hypot(me[i], me[i + 1], me[i + 2]) || 1)) - 1) < 0.02)); if (!axisAligned) return; }   // 비스듬히 기운 프레임은 세계 축 상자가 실제보다 커져 맞닿음 선이 엉뚱하게 그려진다(2026-11-09 3륜바이크 팔) — 축에 맞는 프레임만
       const g = p.mesh.geometry; if (!g.boundingBox) g.computeBoundingBox();
       fr.push({ box: g.boundingBox.clone().applyMatrix4(p.mesh.matrixWorld), color: md.color });
     });

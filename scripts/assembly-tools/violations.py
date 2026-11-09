@@ -65,7 +65,10 @@ def collect(name):
     try:   # 중심: 번호를 끝낸 모습(그 번호 화면에 보이는 부품 전체)의 x·z 범위 중심이 원점(화면 가운데)에서 CENTER_TOL 넘게 벗어나면 ⊕ (사용자 지시 2026-11-09, A4)
         import json as _j, asmlib as _al
         _st = _j.load(open(str(asmpath.resolve(name + "_asm.json")), encoding="utf-8"))["steps"]
-        for k in range(1, len(_st) + 1):
+        _pub = os.path.join(HERE, "..", "..", "public")
+        _auto = ("fitCenter()" in open(os.path.join(_pub, "design.html"), encoding="utf-8").read()
+                 and "b.fitCenter()" in open(os.path.join(_pub, "design-assembly.js"), encoding="utf-8").read())   # 뷰어가 번호를 열 때마다 보이는 부품 상자 가운데로 카메라를 자동으로 맞춘다(상시) — 연결돼 있으면 원점에서 벗어나도 화면 가운데다(사용자 지시 2026-11-09)
+        for k in range(1, 1 if _auto else len(_st) + 1):
             hide = {int(x) for x in (_st[k - 1].get("hideMade") or {}) if str(x).isdigit()}
             lo = np.array([1e9, 1e9]); hi = np.array([-1e9, -1e9]); mine = []
             for j in range(1, k + 1):
