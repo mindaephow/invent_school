@@ -795,7 +795,7 @@
   // 자동 검사 경고(관리자 전용): public/design-warnings.js(scripts/assembly-tools/insertion_check.js 가 만듦)의 경고를 단계 번호 옆 ⚠로 보이고, 오른쪽 아래 카드에서 관리자가 "문제없음"/"해결요청"을 고른다. 고른 결과는 ivs_assembly_checks 에 저장.
   let checkVerdicts = {}; // '단계|경고키' → 'ok' | 'fix'
   const warnsOf = (i) => (def && window.IVS_ASM_WARNINGS && window.IVS_ASM_WARNINGS[def.id] && window.IVS_ASM_WARNINGS[def.id][i]) || [];
-  const VIOL_ICON = { floor: '▼', overlap: '✕', gap: '↔', link: '◎', orient: '↻', hand: '✋', center: '⊕', cam: '◉' };
+  const VIOL_ICON = { floor: '▼', overlap: '✕', gap: '↔', link: '◎', orient: '↻', hand: '✋', center: '⊕', cam: '◉', split: '⛓' };
   function violMark(i) { const V = (def.violations && def.violations[i]) || []; return V.length ? ' ' + [...new Set(V.map((v) => VIOL_ICON[v.type] || '!'))].join('') : ''; }   // 위반이 있는 번호 버튼에 종류 기호를 붙인다
   function warnMark(i) {
     const w = warnsOf(i); if (!w.length) return '';
@@ -923,6 +923,10 @@
       return b;
     };
     if (!made) { box.appendChild(mk(n + '번 · 아직 안 만듦', '책과 맞는지 확인 — 아직 안 만든 번호', '', null)); return; }
+    if (!((def.steps[n - 1].parts || []).length)) {   // 새 부품 없이 앞 번호 부품을 합치거나 연결만 하는 번호 — 목록은 그대로 두고 따로 표시한다(사용자 지시 2026-11-10)
+      const mg = mk('합치기 · 새 부품 없음', '이 번호는 새 부품 없이 앞 번호에서 만든 부품을 합치거나 연결만 해요. 아래 점검 목록은 똑같이 체크해요.', '', null);
+      mg.style.cssText += 'border-color:#2563eb;color:#1d4ed8;font-weight:700;background:#eff6ff;'; box.appendChild(mg);
+    }
     box.appendChild(mk(n + '번 맞는지', '자동 점검 결과를 DB 에서 다시 읽어요(verify_step.py 를 돌린 뒤). ★ 둘(책 위 겹침 비교·번호 대조)이 확인되면(자동 또는 내가 체크) 번호판이 파랑이 됩니다.', verifyDone(n) ? 'ok' : 'warn', async () => { await loadVerifyAuto(true); paintStatus(); }));
     VERIFY_ITEMS.forEach((t) => {
       const res = a && a['항목'] ? a['항목'][t] : null, msg = (a && a['내용'] ? a['내용'][t] : '') || '';
@@ -943,7 +947,8 @@
     const adm = isAdm();
     [$('asmSteps'), $('asmStageSteps')].forEach((box) => { if (!box) return;
       box.querySelectorAll('button[data-step]').forEach((b) => { const i = Number(b.dataset.step), st = adm ? stepStatus[i] : null, tag = i === last() ? '완성' : stepTag(i);
-        b.textContent = tag + (st === 'done' ? ' ✓' : st === 'edit' ? ' 🛠' : '') + (adm ? warnMark(i) + violMark(i) : '');
+        const _ds = def.steps[i - 1], _merge = !!_ds && stepMade(_ds) && !(_ds.parts || []).length && i !== last();   // 새 부품 없이 합치기·연결만 하는 번호(사용자 지시 2026-11-10) — 번호판에 '합' 으로 따로 표시
+        b.textContent = tag + (st === 'done' ? ' ✓' : st === 'edit' ? ' 🛠' : '') + (adm ? warnMark(i) + violMark(i) : '') + (_merge ? ' 합' : '');
         // 작업 진행 표시(관리자만): 일부 번호만 만든 조립도에서 마무리하고 넘어간 번호는 파랑, 확인 필요(review)는 주황 — 안 만든 번호는 그대로 둔다
         const made = i !== last() && stepMade(def.steps[i - 1]);
         const review = !!(def.steps[i - 1] && def.steps[i - 1].review) && st !== 'done' && !verifyDone(i);   // 관리자가 ✅ 완료를 누르면 주황 → 파랑   // review: 만들었지만 마무리 안 됨(근거 약함·확인 필요) → 주황

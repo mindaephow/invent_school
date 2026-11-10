@@ -59,6 +59,53 @@ def ponytail():
         ss.append({"matcher": "startup|resume", "hooks": [{"type": "command", "command": 'python "$CLAUDE_PROJECT_DIR/scripts/assembly-tools/session_start.py"', "timeout": 60, "statusMessage": "환경 세팅(최신 받기)..."}, {"type": "command", "command": 'python "$CLAUDE_PROJECT_DIR/scripts/assembly-tools/setup_new_pc.py" --only-ponytail', "timeout": 30}]})
         json.dump(cfg, open(sj, "w", encoding="utf-8"), indent=2, ensure_ascii=False)
         say("MADE", ".claude/settings.json 에 세션 시작 자동 세팅 훅 연결(Claude 를 다시 열어야 적용)")
+    for ev, key, ent, label in (   # 범위 관문(작업 중인 조립도만)·끝까지 가 지킴이(B7: ❌ 가 남으면 턴을 못 끝낸다, 목표는 python finish_guard.py on <이름>)
+            ("PreToolUse", "scope_guard.py", {"matcher": "Bash", "hooks": [{"type": "command", "command": 'python "$CLAUDE_PROJECT_DIR/scripts/assembly-tools/scope_guard.py"'}]}, "작업 범위 관문 훅"),
+            ("Stop", "finish_guard.py", {"hooks": [{"type": "command", "command": 'python "$CLAUDE_PROJECT_DIR/scripts/assembly-tools/finish_guard.py"'}]}, "끝까지 가 지킴이 Stop 훅")):
+        lst = cfg["hooks"].setdefault(ev, [])
+        if any(key in h.get("command", "") for e in lst for h in e.get("hooks", [])):
+            say("OK  ", ".claude/settings.json 에 %s 연결됨" % label)
+        else:
+            lst.append(ent)
+            json.dump(cfg, open(sj, "w", encoding="utf-8"), indent=2, ensure_ascii=False)
+            say("MADE", ".claude/settings.json 에 %s 연결(Claude 를 다시 열어야 적용)" % label)
+    # 훅 명령은 절대 경로로 둔다(2026-11-10): 세션을 임시 폴더에서 열고 나중에 이 폴더로 옮기면 $CLAUDE_PROJECT_DIR 가 옛 폴더를 가리켜 훅이 파일을 못 찾고 실패한다(끝까지 가 지킴이 Stop 훅이 못 막아 턴이 중간에 끝난 원인).
+    # .claude/ 는 git 에 없는 PC 별 파일이라 절대 경로여도 된다. 저장소를 옮기면 이 점검을 다시 돌린다.
+    base, root_ = HERE.replace("\\", "/"), ROOT.replace("\\", "/"); fixed = 0
+    for lst in cfg["hooks"].values():
+        for e in lst:
+            for h in e.get("hooks", []):
+                c = h.get("command", "")
+                if "$CLAUDE_PROJECT_DIR" in c:
+                    h["command"] = c.replace("$CLAUDE_PROJECT_DIR/scripts/assembly-tools", base).replace("$CLAUDE_PROJECT_DIR", root_); fixed += 1
+    if fixed:
+        json.dump(cfg, open(sj, "w", encoding="utf-8"), indent=2, ensure_ascii=False)
+        say("MADE", ".claude/settings.json 훅 명령 %d개를 절대 경로로 바꿨다" % fixed)
+    else:
+        say("OK  ", ".claude/settings.json 훅 명령이 모두 절대 경로")
+    # 전역 훅(사용자 지시 2026-11-10): 폴더 상관없이 발명교실 조립도 작업을 시작하면 종료 지킴이·사다리·범위·자동 점검이 적용되게 사용자 전체 설정에 중계(global_hook.py)를 연결한다.
+    # 경로는 이 PC 의 저장소 위치로 쓴다(다른 PC 에서 복사해 온 옛 경로면 고친다). 다른 설정은 그대로 둔다. 새로 연결했거나 고쳤으면 Claude 를 다시 열어야 적용된다.
+    gp = os.path.join(os.path.expanduser("~"), ".claude", "settings.json")
+    try:
+        g = json.load(open(gp, encoding="utf-8")) if os.path.exists(gp) else {}
+        gcmd = 'python "%s/global_hook.py" ' % HERE.replace("\\", "/"); gch = 0
+        for ev, kind, matcher, extra in (("PreToolUse", "pre", ".*", {}), ("PostToolUse", "post", "Edit|Write|NotebookEdit|Bash", {}), ("Stop", "stop", None, {"timeout": 300})):
+            lst = g.setdefault("hooks", {}).setdefault(ev, [])
+            hs = [h for e in lst for h in e.get("hooks", []) if "global_hook.py" in h.get("command", "")]
+            if hs:
+                for h in hs:
+                    if h["command"] != gcmd + kind: h["command"] = gcmd + kind; gch += 1
+            else:
+                ent = {"hooks": [dict({"type": "command", "command": gcmd + kind}, **extra)]}
+                if matcher: ent["matcher"] = matcher
+                lst.append(ent); gch += 1
+        if gch:
+            os.makedirs(os.path.dirname(gp), exist_ok=True); json.dump(g, open(gp, "w", encoding="utf-8"), indent=2, ensure_ascii=False)
+            say("MADE", "~/.claude/settings.json 에 전역 훅 %d개 연결·갱신(Claude 를 다시 열어야 적용)" % gch)
+        else:
+            say("OK  ", "~/.claude/settings.json 전역 훅 연결됨(어느 폴더에서 열어도 조립도 작업이면 적용)")
+    except (OSError, ValueError) as e:
+        ok = False; say("FAIL", "~/.claude/settings.json 전역 훅 연결 실패: %s" % e)
     try:
         import rule_status; rule_status.put("autocheckHook", {"installed": True})   # 화면 하단 규칙 바가 '감시 중'으로 표시한다
     except Exception: pass

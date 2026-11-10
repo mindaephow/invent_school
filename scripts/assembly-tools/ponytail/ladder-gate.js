@@ -4,7 +4,9 @@
 const fs = require("fs");
 const path = require("path");
 
-const ROOT = path.resolve(process.env.CLAUDE_PROJECT_DIR || path.join(__dirname, "..", "..", ".."));   // 복사본(.claude/ponytail/hooks/) 기준 세 단계 위
+// 루트는 이 파일 위치로 정한다(복사본 .claude/ponytail/hooks/ 기준 세 단계 위). CLAUDE_PROJECT_DIR 는 세션을 임시 폴더에서 열었다가 옮기면 옛 폴더를 가리켜 프로젝트 안 수정이 "루트 밖"으로 판정돼 게이트가 아무것도 못 막는다(2026-11-10 오토건 — 포니테일 기록 없이 공용 도구를 고쳐도 통과). 복사본이 아닌 원본(scripts/assembly-tools/ponytail/)에서 돌릴 때만 환경 변수를 쓴다.
+const _byFile = path.resolve(__dirname, "..", "..", "..");
+const ROOT = fs.existsSync(path.join(_byFile, ".claude")) ? _byFile : path.resolve(process.env.CLAUDE_PROJECT_DIR || _byFile);
 const LADDER = path.join(ROOT, ".claude", "ponytail_ladder.json");
 const TTL_MS = 90 * 60 * 1000;
 const WRITE_CMD = /(\brm\b|\bmv\b|\bcp\b|\bsed\s+-i|\btee\b|\bgit\s+(commit|add|rm|reset|checkout|restore|clean|merge|push)\b|(^|[^>=!<])>{1,2}\s*[^&\s])/;

@@ -182,8 +182,8 @@ def process(step):
                 x,y=T(p[2],p[3])
                 if not (0<=int(x)<W and 0<=int(y)<H and MASK[int(y),int(x)]>128): continue
                 cv2.circle(g,(int(x),int(y)),3,(0,0,255),-1)
-                if p[1]==1: cv2.putText(g,str(p[0]),(int(x)-7,int(y)-10),cv2.FONT_HERSHEY_SIMPLEX,0.6,(255,0,0),2)
-                if p[0]==1: cv2.putText(g,'j%d'%p[1],(int(x)-30,int(y)+5),cv2.FONT_HERSHEY_SIMPLEX,0.55,(0,140,0),2)
+                if p[1]==1: cv2.putText(g,str((j.get('label_cols') or [])[p[0]-1] if j.get('label_cols') else p[0]),(int(x)-7,int(y)-10),cv2.FONT_HERSHEY_SIMPLEX,0.6,(255,0,0),2)   # label_cols/label_rows: 격자 번호 → 부품 번호(D13, 부품 번호가 반대 방향일 때)
+                if p[0]==1: cv2.putText(g,'%d'%((j.get('label_rows') or [])[p[1]-1] if j.get('label_rows') else p[1]),(int(x)-24,int(y)+5),cv2.FONT_HERSHEY_SIMPLEX,0.6,(12,88,234),2)   # 줄 번호는 j 없이 숫자만, 주황(화면 '번호 보기' 와 같은 색)
         if _SPLIT:   # 홀라인: 점들을 지나는 직선 하나(점이 한 줄일 때)
             for lab,j in fits:
                 _q=np.array([T(q[2],q[3]) for q in j['pts']],np.float32)

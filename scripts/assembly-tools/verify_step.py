@@ -56,8 +56,13 @@ for N in steps:
         text = ("확인함: " + _what[0] + " — " + text) if ok == "ok" else ("안 한 것: " + _what[1] + " (" + text + ")")
         res.append((tag, ok)); msgs_[tag] = text; print("  %s %s — %s" % ({"ok": "✅", "warn": "⚠", "fail": "❌"}[ok], tag, text))
     # 1 홀라인
-    f = jl(os.path.join(R, "fits", "%02d_P.json" % N))
-    if not f: add("홀라인", "fail", "fits/%02d_P.json 없음" % N)
+    import glob
+    _fp_ = os.path.join(R, "fits", "%02d_P.json" % N)
+    if not os.path.exists(_fp_):   # 라벨은 P 가 아니어도 된다(A·1·W…) — 번호의 첫 격자(fits/NN_*.json)를 홀라인으로 본다(2026-11-10 오토건: 라벨 A 라 규칙대로 만들었는데 ❌ 로 나왔다)
+        _alt = sorted(glob.glob(os.path.join(R, "fits", "%02d_*.json" % N)))
+        if _alt: _fp_ = _alt[0]
+    f = jl(_fp_)
+    if not f: add("홀라인", "fail", "fits/%02d_*.json 없음" % N)
     else:
         tool = f.get("tool", "?"); err = f.get("err_px")
         if tool == "via-later":   # 판이 없는 번호: 이 번호의 부품이 다시 보이는 뒤 번호의 홀라인·번호 대조가 통과하면 결합이 확인된 것으로 본다(사용자 2026-10-18)

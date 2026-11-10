@@ -851,11 +851,11 @@ def _feature_points(q):
     """부품 q 의 구멍 입구/출구/중심, 돌기 끝/밑동의 세계 좌표 목록 [(변형, 종류, id, 좌표)]."""
     out = []
     for c in q.conn["holes"]:
-        h = q.world("hole", c)
-        out += [("entry", "홀", h["id"], h["pos"] - h["dir"] * h["len"] / 2), ("exit", "홀", h["id"], h["pos"] + h["dir"] * h["len"] / 2), ("center", "홀", h["id"], h["pos"])]
+        h = q.world("hole", c); hl = h["len"] or 0.0   # 길이 없는 연결점(축 구멍 등, len=None)도 중심만 쓴다 — 새 안내점을 잠글 때 단계의 모든 부품을 훑다가 죽던 버그(오토건 10번 2026-11-10)
+        out += [("entry", "홀", h["id"], h["pos"] - h["dir"] * hl / 2), ("exit", "홀", h["id"], h["pos"] + h["dir"] * hl / 2), ("center", "홀", h["id"], h["pos"])]
     for c in q.conn["pegs"]:
-        g = q.world("peg", c)
-        out += [("tip", "돌기", g["id"], g["pos"] + g["dir"] * g["len"] / 2), ("base", "돌기", g["id"], g["pos"] - g["dir"] * g["len"] / 2)]
+        g = q.world("peg", c); gl = g["len"] or 0.0
+        out += [("tip", "돌기", g["id"], g["pos"] + g["dir"] * gl / 2), ("base", "돌기", g["id"], g["pos"] - g["dir"] * gl / 2)]
     return out
 
 

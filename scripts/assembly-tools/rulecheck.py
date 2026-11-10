@@ -10,7 +10,7 @@
 # 예외 승인: <이름>_approvals.json 에 {"<번호>": {"fits": "이유", "camera": "이유", "사용자 말씀": "사용자가 한 말 그대로"}} — "사용자 말씀" 이 없으면 인정하지 않는다. Claude 는 이 파일에 적지 않는다.
 # 모든 조립도를 같은 기준으로 ❌ 로 막는다(옛 조립도 구분 삭제 2026-11-04).
 import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
-import json, os, re, sys
+import json, os, re, sys, glob
 sys.stdout.reconfigure(encoding="utf-8")
 here = os.path.dirname(os.path.abspath(__file__))
 
@@ -50,6 +50,7 @@ def check(name, only=None):
     approvals = load(os.path.join(here, name + "_approvals.json"), {})
     evid = load(os.path.join(here, name + "_evidence.json"), {})
     read = load(os.path.join(here, name + "_read.json"), {})
+    verif = load(os.path.join(here, name + "_verify.json"), {})   # 왼쪽 점검 칩 기록(verify_step.py, record_check.py 가 자동으로 돌린다)
     try:
         import stepfp; fp = stepfp.fp; same_ev = lambda e, st: stepfp.same(e, st, asm)
     except Exception: fp = lambda st: None; same_ev = lambda e, st: False
@@ -167,6 +168,19 @@ def check(name, only=None):
             if _dbmiss is None: items.append(("⚠", "그림DB", "DB 그림 비교를 못 했다(dbimgcheck 실패) — python dbimgcheck.py %s 로 직접 본다" % name))
             elif k in _dbmiss: items.append((bad, "그림DB", "로컬 그림이 DB 에 없음: %s — 올리고(viewer_snippets.md 3) 화면을 새로 불러와 🖼 장수를 확인한다" % ", ".join(sorted(_dbmiss[k]))))
             else: items.append(("✅", "그림DB", "로컬 그림이 모두 DB 에 있음"))
+        if rules.get("ring_cells") and glob.glob(os.path.join(R, "fits", "%02d_*.json" % k)):   # 책 링 ↔ 칸·줄 대조(cellmap.py, 사용자 지시 2026-11-10): 격자는 카메라만 풀려는 것이 아니라 링이 몇 칸·몇 줄 구멍인지 정해 모델의 결합 구멍과 맞추려는 것이다(D2·D4·D8)
+            items.append(("✅", "링 대조", "책 링↔칸·줄 대조 그림 있음(NN_4)") if os.path.exists(os.path.join(R, "%02d_4.jpg" % k)) else (bad, "링 대조", "책 링↔칸·줄 대조 그림(NN_4.jpg)이 없음 — python cellmap.py %s %d 로 만들어 읽기 표 '링'·모델 결합 구멍과 맞춘다(record_check.py 가 자동으로 돌린다)" % (name, k)))
+        if rules.get("both_holelines") and k >= int(rules.get("both_holelines_from", 1)) and glob.glob(os.path.join(R, "fits", "%02d_*.json" % k)):   # 양쪽 홀라인(규칙 0번 체크리스트 3, D2, 사용자 지시 2026-11-10): 받는 쪽·끼우는 쪽 구멍 격자를 모두 만든다 — 한쪽뿐이면 ❌, 못 만든 이유를 판단과정에 "⚠ 양쪽" 으로 적으면 ⚠
+            _nf = len(glob.glob(os.path.join(R, "fits", "%02d_*.json" % k)))
+            _why = str((read.get(str(k)) or {}).get("판단과정", ""))
+            if _nf >= 2: items.append(("✅", "양쪽 홀라인", "격자 %d개" % _nf))
+            elif "⚠ 양쪽" in _why: items.append(("⚠", "양쪽 홀라인", "격자 1개뿐 — 판단과정에 사유 있음"))
+            else: items.append((bad, "양쪽 홀라인", "격자가 1개뿐 — 받는 쪽과 끼우는 쪽 둘 다 crop_ticks→holefit 로 만든다(D2). 가려져 못 만들면 시도·수치를 읽기 표 판단과정에 '⚠ 양쪽 …' 으로 적는다"))
+        if rules.get("chips_verify"):   # 왼쪽 점검 칩(규칙 가-0 다-3, 사용자 지시 2026-11-10) — 칩 기록이 없거나 번호를 고친 뒤 안 돌렸으면 ❌: 그 번호는 끝난 것이 아니다
+            _vr = verif.get(str(k)) if isinstance(verif, dict) else None
+            if not _vr: items.append((bad, "점검 칩", "verify_step 기록 없음(왼쪽 칩이 회색) — python verify_step.py %s %d (record_check.py 가 자동으로 돌린다)" % (name, k)))
+            elif fp(st) is not None and _vr.get("지문") != fp(st): items.append((bad, "점검 칩", "점검 뒤 번호 내용이 바뀜(낡음) — python verify_step.py %s %d 를 다시 돌린다" % (name, k)))
+            else: items.append(("✅" if _vr.get("상태") == "통과" else "⚠", "점검 칩", "상태 %s — %s" % (_vr.get("상태"), ", ".join("%s %s" % (a, {"ok": "✅", "warn": "⚠", "fail": "❌"}.get(b, b)) for a, b in (_vr.get("항목") or {}).items() if b != "ok") or "전부 ✅")))
         if rules.get("overlay_proof"):   # P 증명 — 책 그림 위 겹침 그림(NN_3.jpg)
             items.append(("✅", "증명", "겹침 그림 있음(NN_3.jpg)") if os.path.exists(os.path.join(R, "%02d_3.jpg" % k)) else (bad, "증명", "책 그림 위 겹침 그림(NN_3.jpg)이 없음 — overlay_check.py 로 만든다"))
         if k in done:   # 사용자가 화면에서 직접 ✓ 한 번호는 사용자 승인으로 본다(❌ → ⚠)

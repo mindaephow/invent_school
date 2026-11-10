@@ -14,5 +14,9 @@
  "orient_check": true,
  "placecheck": true,
  "img_db": true,
+ "chips_verify": true,
+ "ring_cells": true,
+ "both_holelines": true,
+ "both_holelines_from": 11,
  "rulecheck": true
 }

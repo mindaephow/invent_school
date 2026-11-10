@@ -112,6 +112,59 @@ def occupied_holes(A, k, lat=1.5, ov=0.5):
                 out.append((mine, "%s %s 구멍에 %s 돌기가 이미 들어 있는데 또 결합함(막힌 구멍)" % (h.n, hc["id"], " + ".join("%s.%s" % (q.n, pid) for q, pid in ins))))
     return out
 
+def _mate_pairs(A, k, lat=1.5, ov=0.5):
+    """k번 화면(최종 자세)에서 돌기가 다른 부품의 구멍 안에 들어가 결합된 쌍들 {frozenset({id(돌기 부품), id(구멍 부품)})} 와 id → 부품. occupied_holes 와 같은 기준."""
+    import stepchecks
+    allp = [q for j in range(1, k + 1) for q in A.steps[j - 1].parts if q.conn]
+    pose = {id(q): stepchecks.pose_at(A, q, k) for q in allp}
+    def wr(q, c):
+        p, R = pose[id(q)]; return p + R @ np.array(c["pos"], float), R @ np.array(c["dir"], float)
+    holes = []
+    for h in allp:
+        for hc in h.conn.get("holes", []):
+            hp, hd = wr(h, hc); holes.append((h, hp, hd / (np.linalg.norm(hd) or 1.0), float(hc.get("len") or 0) or 5.0))
+    pairs = set()
+    for q in allp:
+        for c in q.conn.get("pegs", []):
+            ln = float(c.get("len") or 0)
+            if ln <= 0: continue
+            pos, d = wr(q, c); d = d / (np.linalg.norm(d) or 1.0)
+            for h, hp, hd, hl in holes:
+                if h is q or abs(abs(float(np.dot(d, hd))) - 1) > 0.02: continue
+                w = pos - hp; t0 = float(np.dot(w, hd))
+                if abs(t0) > ln + hl + 1 or float(np.linalg.norm(w - t0 * hd)) > lat: continue
+                t1 = t0 + float(np.dot(d, hd)) * ln; a, b = sorted((t0, t1))
+                if min(b, hl) - max(a, -hl) > ov: pairs.add(frozenset((id(q), id(h))))
+    return pairs, {id(q): q for q in allp}
+
+def split_bad(A):
+    """결합이 된 것인데 다른 곳으로 이동(합치기)할 때 분리되는 것(사용자 지시 2026-11-10: 10번에서 합쳐진 축이 11번 합치기에서 유닛과 따로 내려와 있었다). [(번호, 부품 키 목록, 설명)]
+    ① 제자리(seated)로 그려지는 부품이 move 로 옮겨 붙는 번호인데 moveGuide·noGuide 가 없어 묶음과 같이 안 뜨는 것(화면 코드: seated 분기가 먼저 걸려 제자리에 남는다)
+    ② 앞 번호(k−1)에서 돌기↔구멍으로 결합돼 있던 두 부품이, 이동(move)이 있는 k번에서 결합이 풀린 것(한쪽만 옮겨짐)."""
+    out = []
+    for q in A.parts:
+        ex = q.extra or {}
+        if ex.get("seated") and "move" in ex and not (ex.get("moveGuide") or ex.get("noGuide")):
+            at = int(ex["move"]["at"]); si = q.step.index; pi = A.steps[si - 1].parts.index(q)
+            out.append((at, ["%d:%d" % (si, pi)], "%s(%d번)는 제자리(seated)라 %d번 합치기 이동에서 묶음과 같이 안 뜨고 따로 남음 — moveGuide·noGuide 를 켠다" % (q.n, si, at)))
+    moved_at = {}
+    for q in A.parts:
+        mv = (q.extra or {}).get("moves") or ([q.extra["move"]] if "move" in (q.extra or {}) else [])
+        for m in mv: moved_at.setdefault(int(m["at"]), set()).add(id(q))
+    for k in sorted(moved_at):
+        if k < 2: continue
+        try:
+            prev, _ = _mate_pairs(A, k - 1); now, byid = _mate_pairs(A, k)
+        except Exception: continue   # 옛 형식 조립도는 자세를 못 구하면 건너뛴다
+        for pr in sorted(prev - now, key=lambda s: sorted(map(str, s))):
+            ids = list(pr)
+            if not all(i in byid for i in ids): continue
+            if not any(i in moved_at[k] for i in ids): continue   # 둘 다 안 움직였으면 이 번호 때문이 아니다
+            a, b = byid[ids[0]], byid[ids[1]]
+            keys = ["%d:%d" % (x.step.index, A.steps[x.step.index - 1].parts.index(x)) for x in (a, b)]
+            out.append((k, keys, "%s(%d번)와 %s(%d번)는 %d번에 결합돼 있었는데 %d번 이동으로 떨어짐 — 같이 옮겨야 한다" % (a.n, a.step.index, b.n, b.step.index, k - 1, k)))
+    return out
+
 def collect(name):
     import asmlib, guidecheck
     A = _load(name); out = {}
@@ -245,6 +298,10 @@ def collect(name):
             for mine, msg in occupied_holes(A, k): add(k, "occupied", ["%d:%d" % (k, i) for i in mine], msg)
     except Exception as e_:
         print("violations: 막힌 구멍 점검을 못 붙임 —", str(e_)[:100], file=sys.stderr)
+    try:   # 분리(사용자 지시 2026-11-10): 결합된 부품이 합치기 이동에서 따로 남거나 떨어지면 ⛓ 로 올린다
+        for k, keys, msg in split_bad(A): add(k, "split", keys, msg)
+    except Exception as e_:
+        print("violations: 분리 점검을 못 붙임 —", str(e_)[:100], file=sys.stderr)
     return out
 
 def write_entry(name):

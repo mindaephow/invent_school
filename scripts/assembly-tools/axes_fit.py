@@ -55,6 +55,8 @@ def main():
         w = P(v) - o; s = 55.0 / max(abs(w[0]), abs(w[1]), 1e-6) if k != "Y" else 55.0 / max(abs(w[1]), 1e-6)
         d[k] = [round(float(w[0] * s), 1), round(float(w[1] * s), 1)]
     out = {"global": d, "fit": {"from": "%02d_%s.json" % (step, label), "err_px": round(float(e), 2), "points": len(obj), "theta": round(math.radians(az), 2), "phi": round(math.radians(90 - el), 2), "cols": cd, "rows": rd}}
+    out["rotate_to"] = cd[-1]   # 구멍 줄(칸 방향)이 놓인 세계 축 — refs_rect 가 그림을 이 축선과 같은 방향으로 작은 각도만 돌린다(규칙 E3). 안 적으면 격자 줄과 축선이 어긋나 보인다(사용자 지적 2026-11-10: 홀라인·xyz축 그림)
+    if rd[-1] == "Y": out["column_axis"] = "Y"   # 서 있는 판은 가운데 열이 Z 가 아니라 Y 선을 따른다(refs_rect 머리말)
     json.dump(out, open(os.path.join(D, "%02d_axes.json" % step), "w", encoding="utf-8"), ensure_ascii=False)
     _roll = math.degrees(math.asin(max(-1, min(1, float(right[1])))))   # 화면 가로축이 수평에서 기운 정도 — 뷰어 카메라는 기울이지(roll) 못하니 0 에 가까워야 한다
     print("카메라 roll %.1f°(0 에 가까워야 뷰어 카메라로 같은 그림이 나온다)" % _roll)

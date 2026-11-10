@@ -51,5 +51,13 @@ def main():
     ev[str(step)] = {"fp": fp, "shape": stepfp.shape_fp(asm[step - 1], stepfp.anchor(asm)), "note": note, "time": time.strftime("%Y-%m-%d %H:%M:%S"), "cmp": "refs/%s/cmp/%02d.png" % (name, step)}
     json.dump(ev, open(ef, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     print("✅ %d번 비교 증거 기록: %s" % (step, out)); print("   지문", fp, "| 결과:", note)
+    # 왼쪽 점검 칩 자동 연동(사용자 지시 2026-11-10 — "번호마다 이미지 작업을 하고도 칩이 한 번도 자동으로 안 채워졌다"): 증거를 남기는 순간 verify_step 을 돌려 칩 기록(<이름>_verify.json·DB)을 채운다
+    import subprocess
+    _v = subprocess.run([sys.executable, os.path.join(here, "verify_step.py"), name, str(step)], capture_output=True, text=True, encoding="utf-8", env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+    # 책 링 ↔ 칸·줄 대조(cellmap.py, 사용자 지시 2026-11-10): 격자는 카메라만 풀려고 만드는 것이 아니라 링이 몇 칸·몇 줄 구멍인지 정하려는 것이다 — 증거를 남길 때마다 같이 만들어 읽기 표 '링'·모델 결합 구멍과 맞춰 본다
+    _c = subprocess.run([sys.executable, os.path.join(here, "cellmap.py"), name, str(step)], capture_output=True, text=True, encoding="utf-8", env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+    print("── 책 링 ↔ 칸·줄(cellmap 자동) — 읽기 표 '링'과 모델 결합 구멍이 이 칸·줄과 같은지 확인 ──"); print("\n".join(l for l in (_c.stdout or _c.stderr).splitlines() if l.startswith("  링") or l.startswith("그림") or l.startswith("❌")))
+    print("── 왼쪽 점검 칩(verify_step 자동) ──"); print("\n".join(l for l in _v.stdout.splitlines() if l.startswith("  ") or l.startswith("검증 결과")))
+    print("   → 화면을 새로 불러와 칩(왼쪽)·하단 감시 칩이 초록인지 눈으로 읽은 뒤 다음 번호로 간다(규칙 가-0 다-3). ⚠·❌ 가 있으면 그 번호는 끝난 것이 아니다.")
 
 if __name__ == "__main__": main()

@@ -2,22 +2,29 @@
 #   "<이름> 완성해/진행해" 같은 지시를 받으면  python finish_guard.py on <이름>  으로 목표를 켠다(.finish_goal).
 #   목표가 켜져 있으면 rulecheck 에 ❌ 번호가 남은 동안 턴 종료를 막는다(종료 코드 2 + 안내) — 막혀도 ⚠ 로 적고 계속 만든다.
 #   ❌ 가 0개면 목표를 끄고 통과. 4번 연속 ❌ 개수가 안 줄면(진짜 막힘) 통과시키고 알린다. 사용자 질문에 답만 할 때는  python finish_guard.py off.
+#   처음부터 작동(2026-11-10): 목표를 손으로 켜지 않아도 작업 중인 조립도(.active_assembly, set_active.py)가 있으면 그것을 목표로 자동으로 켠다 —
+#   목표를 안 켜서 턴이 중간에 끝나던 사고(오토건 2026-11-10)를 막는다. off 는 .finish_off 표시를 남겨 자동 켜짐도 끄고, on·set_active.py 가 지운다.
 import asmpath
 import sys, os, json, re, subprocess
 sys.stdout.reconfigure(encoding="utf-8"); sys.stderr.reconfigure(encoding="utf-8")
 HERE = os.path.dirname(os.path.abspath(__file__)); G = os.path.join(HERE, ".finish_goal"); S = os.path.join(HERE, ".finish_goal_state.json")
+OFF = os.path.join(HERE, ".finish_off"); ACTIVE = os.path.join(HERE, ".active_assembly")
 def bad_count(name):
     p = subprocess.run([sys.executable, os.path.join(HERE, "rulecheck.py"), name], capture_output=True, text=True, encoding="utf-8", env=dict(os.environ, PYTHONIOENCODING="utf-8"))
     m = re.search(r"합계: ❌ (\d+)번", p.stdout)
     return int(m.group(1)) if m else None
 def main():
     a = sys.argv[1:]
-    if a[:1] == ["on"] and len(a) > 1: open(G, "w", encoding="utf-8").write(a[1]); json.dump({"last": 10**6, "stalls": 0}, open(S, "w")); print("목표 켬:", a[1]); return
+    if a[:1] == ["on"] and len(a) > 1:
+        if os.path.exists(OFF): os.remove(OFF)
+        open(G, "w", encoding="utf-8").write(a[1]); json.dump({"last": 10**6, "stalls": 0}, open(S, "w")); print("목표 켬:", a[1]); return
     if a[:1] == ["off"]:
         for f in (G, S):
             if os.path.exists(f): os.remove(f)
-        print("목표 끔"); return
-    if not os.path.exists(G): return
+        open(OFF, "w", encoding="utf-8").write("질문 답만 — set_active.py 나 finish_guard.py on 으로 다시 켠다"); print("목표 끔"); return
+    if not os.path.exists(G):
+        if os.path.exists(OFF) or not os.path.exists(ACTIVE): return
+        open(G, "w", encoding="utf-8").write(open(ACTIVE, encoding="utf-8").read().strip()); json.dump({"last": 10**6, "stalls": 0}, open(S, "w"))   # 작업 중인 조립도 = 목표(자동)
     name = open(G, encoding="utf-8").read().strip(); n = bad_count(name)
     if n is None: print("⚠ rulecheck 결과를 못 읽어 막지 않는다", file=sys.stderr); return
     if n == 0:
