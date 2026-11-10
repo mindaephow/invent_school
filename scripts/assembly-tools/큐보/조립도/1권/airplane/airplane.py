@@ -256,13 +256,13 @@ blk15 = [s15.attach("3단블록", R_B3f, {"p7": (pl_, "홀면 +y 열%d·줄3" % 
 s16 = TOC2_STEPS[1]; s16.kw.pop("noPart", None)
 s16.note = "[교재 16] 두 판 양옆에서 흰 115프레임 2개를 블록 끝돌기 4곳(열1·열5·열11·열15)에 끼워요."
 R_BAR = Rx(90)                                                                   # 115프레임 눕힘: 긴 쪽 x, 구멍축 z
-barN = s16.recv("115프레임", R_BAR, {"h1_1": (blk15[0], "p1"), "h5_1": (blk15[1], "p1"), "h11_1": (blk15[2], "p1"), "h15_1": (blk15[3], "p1")}, hover=60)   # 앞(+z) 쪽 끝돌기
-barF = s16.recv("115프레임", R_BAR, {"h1_1": (blk15[0], "p2"), "h5_1": (blk15[1], "p2"), "h11_1": (blk15[2], "p2"), "h15_1": (blk15[3], "p2")}, hover=60)   # 뒤(−z) 쪽 끝돌기
+barN = s16.recv("115프레임", R_BAR, {"h1": (blk15[0], "p1"), "h5": (blk15[1], "p1"), "h11": (blk15[2], "p1"), "h15": (blk15[3], "p1")}, hover=60)   # 앞(+z) 쪽 끝돌기
+barF = s16.recv("115프레임", R_BAR, {"h1": (blk15[0], "p2"), "h5": (blk15[1], "p2"), "h11": (blk15[2], "p2"), "h15": (blk15[3], "p2")}, hover=60)   # 뒤(−z) 쪽 끝돌기
 
 # ── 17 ── 읽은 것(교재 76쪽 17): 위에서 315프레임(3줄×15칸)을 블록 윗 돌기 8개(열1·5·11·15 × 줄1·줄3)에 얹는다.
 s17 = TOC2_STEPS[2]; s17.kw.pop("noPart", None)
 s17.note = "[교재 17] 위에서 315프레임을 블록 윗 돌기 8개(열1·열5·열11·열15의 줄1·줄3)에 얹어요."
-top15 = s17.recv("315프레임", np.eye(3), {"h%d_%d" % (c_, r_): (blk15[i_], "p5" if r_ == 1 else "p3") for i_, c_ in enumerate((1, 5, 11, 15)) for r_ in (1, 3)}, hover=60)
+top15 = s17.recv("315프레임", np.eye(3), {"h%d" % ((c_ - 1) * 3 + r_): (blk15[i_], "p5" if r_ == 1 else "p3") for i_, c_ in enumerate((1, 5, 11, 15)) for r_ in (1, 3)}, hover=60)
 top15.extra["skipMates"] = ["3단블록.p4"]                                  # 교재 17은 블록 바깥 돌기 8곳만 화살표(가운데 돌기도 같이 꽂히지만 안 그린다)
 
 
@@ -287,7 +287,7 @@ def _wing(sign):
     Rb = np.column_stack([d, np.cross(Y, d), Y])                                  # 블록: 긴 쪽 d, 윗 돌기면 위
     bk = s18.attach("3단블록", Rb, {"p3": (fr, "h1"), "p5": (fr, "h3")}, hover=40)
     Rr = np.column_stack([d, Y, np.cross(d, Y)])                                  # 빨간 판: 긴 쪽 d, 눕힘
-    rd = s18.recv("15프레임", Rr, {"h1_1": (bk, "p8"), "h3_1": (bk, "p7")}, hover=50)
+    rd = s18.recv("15프레임", Rr, {"h1": (bk, "p8"), "h3": (bk, "p7")}, hover=50)
     bk.extra["skipMates"] = ["3단블록.p4", "3단블록.p6"]                              # 교재 18은 블록 바깥 돌기만 화살표(가운데 돌기는 같이 꽂히지만 안 그린다)
     # 사용자 지시: 조립은 위에서 아래로 내려오는 방향이다(교재 18 화살표가 모두 아래쪽) — 빨간 판은 그대로 있고, 블록이 위에서 내려와 빨간 판에 꽂힌 뒤, 프레임이 위에서 내려와 블록에 꽂힌다.
     for k_ in ("hover", "recv", "dir", "marks"): rd.extra.pop(k_, None)
@@ -320,7 +320,7 @@ s20.note = "[교재 20] 윗판 가운데 줄에 2단블록 2개를 꽂고(열6·
 R_B2f = orient("2단블록", {"돌기면 -z": "아래", "돌기면 +x": "+X"})
 b20a = s20.attach("2단블록", R_B2f, {"p6": (top15, "홀면 +y 열6·줄2"), "p5": (top15, "홀면 +y 열7·줄2")}, hover=50)
 b20b = s20.attach("2단블록", R_B2f, {"p6": (top15, "홀면 +y 열9·줄2"), "p5": (top15, "홀면 +y 열10·줄2")}, hover=50)
-red20 = s20.recv("15프레임", np.eye(3), {"h1_1": (b20a, "p3"), "h2_1": (b20a, "p4"), "h4_1": (b20b, "p3"), "h5_1": (b20b, "p4")}, hover=90)
+red20 = s20.recv("15프레임", np.eye(3), {"h1": (b20a, "p3"), "h2": (b20a, "p4"), "h4": (b20b, "p3"), "h5": (b20b, "p4")}, hover=90)
 b20a.extra["joinOrder"] = b20b.extra["joinOrder"] = 1; red20.extra["joinOrder"] = 2     # 블록 두 개가 먼저 판에 꽂히고, 그다음 빨간 판이 위에서 내려온다
 s20.kw["history"] = "그룹 1 + 조립 → 그룹 1"                                         # 20번 설명 아래 내역(사용자 지시)
 
@@ -364,10 +364,10 @@ P23_F = np.array([157.5, 55.0, -20.0])                                          
 R23 = np.array([[0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [1.0, 0.0, 0.0]])                      # 틀의 y(블록 쪽)→+x, z(위 막대)→+y(위), x(긴 쪽)→+z
 pl23 = s23.place("29프레임", R23, tuple(P23_F + S23))
 R_B2z = orient("2단블록", {"돌기면 -z": "아래", "돌기면 +x": "+Z"})                    # 눕혀 만들 때의 블록 자세(아래돌기 면이 판, 끝돌기 +x → +z)
-bk23 = [s23.attach("2단블록", R23 @ R_B2z, {"p5": (pl23, "h%d_2" % c_), "p6": (pl23, "h%d_1" % c_)}, hover=50) for c_ in (1, 9)]
+bk23 = [s23.attach("2단블록", R23 @ R_B2z, {"p5": (pl23, "h%d" % (c_ * 2)), "p6": (pl23, "h%d" % (c_ * 2 - 1))}, hover=50) for c_ in (1, 9)]
 for _b in bk23: _b.extra["joinOrder"] = 1                                                   # 사용자 지시: 먼저 2단블록을 29프레임에 조립
-bar23a = s23.recv("19프레임", R23 @ Rx(90), {"h1_1": (bk23[0], "p1"), "h9_1": (bk23[1], "p1")}, hover=60)      # 위 막대(+y)
-bar23b = s23.recv("19프레임", R23 @ Rx(90), {"h1_1": (bk23[0], "p2"), "h9_1": (bk23[1], "p2")}, hover=60)      # 아래 막대(−y)
+bar23a = s23.recv("19프레임", R23 @ Rx(90), {"h1": (bk23[0], "p1"), "h9": (bk23[1], "p1")}, hover=60)      # 위 막대(+y)
+bar23b = s23.recv("19프레임", R23 @ Rx(90), {"h1": (bk23[0], "p2"), "h9": (bk23[1], "p2")}, hover=60)      # 아래 막대(−y)
 bar23a.extra["joinOrder"] = bar23b.extra["joinOrder"] = 2                                        # 그다음 19프레임 2개
 
 # ── 24 ── 읽은 것(교재 77쪽 24 "22 + 23"): 23번 틀을 본체 앞쪽(+x) 20번 조립품의 115프레임 바깥에 대고, 115프레임에 미리 꽂은 리벳 4개(구멍 6·7·9·10번)로 29프레임 구멍에 끼운다.
@@ -378,7 +378,7 @@ G23 = Group("23번 틀", [pl23] + bk23 + [bar23a, bar23b])
 s24.move_group(G23, np.eye(3), pivot=np.zeros(3), shift=-S23)
 for _q in G23.parts: _q.extra["move"].update({"dir": [1, 0, 0], "hover": 70})
 R_RVX = Rz(-90)                                                                          # 리벳 모델 y → +x (아래 돌기가 115프레임 구멍으로, 위 돌기가 29프레임 쪽)
-rv24 = [s24.attach("리벳", R_RVX, {"돌기면 -y 1": (barN, "h%d_1" % k_)}, rivet=True, hover=0) for k_ in (6, 7, 9, 10)]
+rv24 = [s24.attach("리벳", R_RVX, {"돌기면 -y 1": (barN, "h%d" % k_)}, rivet=True, hover=0) for k_ in (6, 7, 9, 10)]
 for _r in rv24: _r.extra["pegDepth"] = 3
 pl23.extra["move"]["marks"] = [list(map(float, _r.p)) for _r in rv24]                    # 판 구멍이 받는 리벳 위 끝 자리
 
@@ -405,10 +405,10 @@ s27 = TOC3_STEPS[6]; s27.kw.pop("noPart", None)
 s27.note = "[교재 27] 빨간 17프레임에 리벳 6개(1~3번·5~7번 구멍, 4번은 비움)를 꽂고, 35프레임 2장을 서로 반대 방향으로 끼워요."
 BAR_X = 199.5
 bar17 = s27.place("17프레임", R23 @ Ry(90), (BAR_X + ST[0], 60.0 + ST[1], AXL + ST[2]))
-rv27 = {k_: s27.attach("리벳", R23, {"돌기면 -y 1": (bar17, "h%d_1" % k_)}, rivet=True, hover=12) for k_ in (1, 2, 3, 5, 6, 7)}
+rv27 = {k_: s27.attach("리벳", R23, {"돌기면 -y 1": (bar17, "h%d" % k_)}, rivet=True, hover=12) for k_ in (1, 2, 3, 5, 6, 7)}
 for _r in rv27.values(): _r.extra["joinOrder"] = 1; _r.extra["pegDepth"] = 3
-plA = s27.recv("35프레임", R23 @ Ry(90), {"h5_1": (rv27[3], "p2"), "h4_1": (rv27[2], "p2"), "h3_1": (rv27[1], "p2")}, hover=50)
-plB = s27.recv("35프레임", R23 @ Ry(90), {"h1_3": (rv27[5], "p2"), "h2_3": (rv27[6], "p2"), "h3_3": (rv27[7], "p2")}, hover=50)      # A와 점대칭: A는 줄1·열3~5, B는 줄3·열1~3
+plA = s27.recv("35프레임", R23 @ Ry(90), {"h13": (rv27[3], "p2"), "h10": (rv27[2], "p2"), "h7": (rv27[1], "p2")}, hover=50)
+plB = s27.recv("35프레임", R23 @ Ry(90), {"h3": (rv27[5], "p2"), "h6": (rv27[6], "p2"), "h9": (rv27[7], "p2")}, hover=50)      # A와 점대칭: A는 줄1·열3~5, B는 줄3·열1~3
 plA.extra["joinOrder"] = plB.extra["joinOrder"] = 2
 G27 = [bar17] + list(rv27.values()) + [plA, plB]
 _C27F = np.array([BAR_X + ST[0], 60.0 + ST[1], AXL + ST[2]])                                  # 17프레임 가운데(28번에서 축에 꿰이는 최종 자리)
@@ -492,6 +492,19 @@ for k, v in CAMS.items():
     th, ph, src = v[:3]
     A.steps[k - 1].cam = (th, ph, k in TIGHT, FOCUS.get(k), AXES.get(k), None); A.steps[k - 1].camSrc = src
 
+# 03 부품 정리(1차, 2026-11-11): 교재 73~78쪽 번호 1~31 을 번호 순서로 읽은 사용 부품(리벳은 그림 옆 "(n)" 숫자 그대로). 합계 = LIST(리모컨 1 은 3D 모델 없음·책 번호 그림에 안 나옴 → 번호에 적지 않는다, 추정)
+USED = {1: "315프레임 1, 리벳 2, 90도 프레임 1, DC모터 1", 2: "2단블록 4", 3: "축 1, 작은기어 2, 부시 1", 4: "315프레임 1, 리벳 2, 90도 프레임 1", 5: "DC모터 1, 부시 1",
+        6: "25프레임 2, 2열브라켓 2, 리벳 4", 7: "27프레임 1", 8: "59프레임 2", 9: "315프레임 1, 29프레임 1, 리벳 4", 10: "리벳 6", 11: "2단블록 1, 1열브라켓 1",
+        12: "큰기어 1, T축 1, 부시 1", 13: "없음(합치는 단계)", 14: "3단블록 2, 15프레임 1", 15: "37프레임 2, 3단블록 4", 16: "115프레임 2", 17: "315프레임 1",
+        18: "135도 프레임 2, 3단블록 2, 15프레임 2", 19: "리벳 6", 20: "2단블록 2, 15프레임 1", 21: "없음(합치는 단계)", 22: "작은바퀴 2, T축 2",
+        23: "29프레임 1, 2단블록 2, 19프레임 2", 24: "리벳 4", 25: "29프레임 1, 축 1, 부시 1", 26: "데코바퀴 1, 부시 1", 27: "17프레임 1, 리벳 6, 35프레임 2",
+        28: "부시 1", 29: "없음(합치는 단계)", 30: "메인보드 1", 31: "없음(합치는 단계)"}
+for _i, _u in USED.items():
+    _pp = A.steps[_i - 1].note.split("\n▣ 사용 부품:")
+    _tail = ("\n" + _pp[1].split("\n", 1)[1]) if len(_pp) > 1 and "\n" in _pp[1] else ""
+    A.steps[_i - 1].note = _pp[0] + "\n▣ 사용 부품: " + _u + _tail
+
+import stepchecks; stepchecks.apply(A, "airplane")
 A.save_links()                                    # 이번 빌드의 잠금 기록 저장(수정 지시가 있는 빌드는 갱신하지 않는다)
 A.check_fixes()                                   # 적용되지 않은 수정 지시가 있으면 경고(번호가 밀렸거나 오타)
 A.report = lambda: [print("경고:", w) for w in A.warn]
