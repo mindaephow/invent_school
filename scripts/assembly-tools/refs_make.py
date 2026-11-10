@@ -31,6 +31,18 @@ BOOKS = {
         },
         "extra": [],
     },
+    "autogun": {   # 1권 7차시 오토건 64~69쪽(1430px 판 좌표) — 64쪽 맨 앞 완성품 사진 + 1·2번, 65~69쪽 6칸씩(3~32번)
+        "volume": 1,
+        "pages": {
+            64: [(0, (60, 640, 980, 1270), "교재 64쪽 맨 앞 완성품 사진 — 오토건(긴 총신이 왼쪽 앞, 받침 위 모터·기어, 위 큰 기어와 고무줄), 앞뒤·위 방향은 여기서 확인"), (1, (78, 1324, 706, 1870), ""), (2, (721, 1324, 1355, 1870), "")],
+            65: [(3 + i, box(*g), "") for i, g in enumerate(GRID)],
+            66: [(9 + i, box(*g), "") for i, g in enumerate(GRID)],
+            67: [(15 + i, box(*g), "") for i, g in enumerate(GRID)],
+            68: [(21 + i, box(*g), "") for i, g in enumerate(GRID)],
+            69: [(27 + i, box(*g), "") for i, g in enumerate(GRID)],
+        },
+        "extra": [],
+    },
     "speedbike": {
         "volume": 2,
         "pages": {

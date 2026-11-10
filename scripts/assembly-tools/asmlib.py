@@ -723,6 +723,7 @@ class Step:
     def recv(s, n, R, links, dir=None, hover=None, p=None, keep_dropped_check=True, against=None, **extra):
         """움직이는 쪽이 구멍을 받는 쪽(프레임이 블록 끝 돌기에 얹히는 경우).
         links 가 dict {내 구멍 id: (고정 부품, 돌기 id)} 면 위치 p 를 계산하고, [(고정 부품, 돌기 id), ...] 목록이면 p 를 직접 줘야 한다."""
+        _ffh = extra.pop("faceFromHole", False)   # True 면 리벳에 끼우는 받는 부품의 링(faceMarks·thick)을 구멍 연결점에서 계산한다 — 이 조립도만 켠다(다른 조립도 안내를 안 바꾸려고 2026-11-10)
         R = np.array(R, float); tmp = Part(n, R, (0, 0, 0), s)
         raw = list(links.items()) if isinstance(links, dict) else [(None, x) for x in links]
         pairs, _faces = [], []
@@ -769,6 +770,10 @@ class Step:
                     hole_center = base + d * myh["len"] / 2 if g["len"] >= myh["len"] else g["pos"] + d * (myh["len"] - g["len"]) / 2
                 if host.n == "리벳":   # 리벳으로 프레임과 프레임을 잇는 곳은 두 프레임이 딱 붙는다(사용자 기본 규칙 2026-10-24): 받는 판의 면이 리벳 가운데(= 먼저 꽂은 쪽 프레임 면)에 닿게 한다 — 돌기 밑동 기준(위)으로 놓으면 1.5mm 뜬다
                     hole_center = np.array(host.p, float) + d * myh["len"] / 2
+                    _th = float(np.array(tmp.conn.get("size") or partlib.get(n)["size"], float)[int(np.argmax(np.abs(np.array([h for h in tmp.conn["holes"] if h["id"] == pid][0]["dir"], float))))])   # 리벳에 끼우는 받는 부품(2026-11-10 G26): 꼬리 = 리벳 돌기 끝 연결점(그대로), 머리 = 받는 부품 자기 구멍 연결점에서 계산한 faceMarks 로 링이 구멍 중심에 오게 한다
+                    if _ffh and abs(float(np.dot(tip - d * 2.5 - hole_center, d))) > 1.5:   # 기본 두께(5) 공식으로 링이 구멍 중심에서 1.5mm 넘게 벗어날 때만 — 이미 맞는 다른 조립도의 안내는 건드리지 않는다
+                        _thick = _th
+                        _face.append(rnd(hole_center + d * min(_th / 2, float(myh.get("len") or _th) / 2 + 2.5)))
                 if p is None: p = hole_center - myh["pos"]   # myh 는 이미 세계 방향으로 돌린 값(tmp 의 p=0)
             if d0 is None: d0 = d
             _dv = d if dir is None else np.array(dir, float)   # 안내점 = 끼우는 쪽(dir)에서 먼저 닿는 돌기 끝: dir 이 돌기 방향과 반대면 뿌리 쪽 끝(축 아래에서 부시를 끼우는 경우, G21)
@@ -868,7 +873,7 @@ def _mate(peg, hole):
     rel = peg["pos"] - hole["pos"]
     along = float(np.dot(rel, hole["dir"]))
     lat = float(np.linalg.norm(rel - along * hole["dir"]))
-    return lat < 2 and abs(along) <= (peg["len"] + hole["len"]) / 2 + 1
+    return lat < 2 and abs(along) <= ((peg["len"] or 0) + (hole["len"] or 0)) / 2 + 1
 
 
 def compute_anchors(A):
@@ -1021,6 +1026,7 @@ def to_side(part, Rs, Cf, Cs, until, settle_dir, hosts=(), keep_settle=False):
     if "marks" in ex:
         if not (keep_settle and ex.get("settleMarks")): ex["settleMarks"] = settle_marks(part, hosts) if hosts else []   # keep_settle=True: recv 가 이미 낸 받는 쪽 안내점(settleMarks)은 지우지 않는다(풍차). 기본은 옛 동작(토끼 저장본 유지)
         ex["marks"] = [rnd(P(m)) for m in ex["marks"]]
+        if ex.get("faceMarks"): ex["faceMarks"] = [rnd(P(m)) for m in ex["faceMarks"]]   # 화살표 머리(faceMarks)도 marks 와 같은 변환으로 옆자리에 옮긴다(2026-11-10: 안 옮겨 최종 좌표에 남던 문제)
     if "dir" in ex: ex["dir"] = rnd(Rs @ np.array(ex["dir"], float))
     if settle_dir: ex["settleDir"] = list(settle_dir)   # 합쳐지는 방향이 없는 부품(받는 쪽 안내가 없는 블록 등)은 settleDir 를 새로 만들지 않는다
     if "settleMarks" in ex and not ex["settleMarks"]: del ex["settleMarks"]

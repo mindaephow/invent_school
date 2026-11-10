@@ -1,1 +1,18 @@
-{"count": [15, 16, 22, 23, 24], "view": [], "camera": []}
+{
+ "count": [
+  15,
+  16,
+  22,
+  23,
+  24
+ ],
+ "view": [],
+ "camera": [],
+ "parts_sum": true,
+ "mate_marks": true,
+ "strict": true,
+ "orient_check": true,
+ "placecheck": true,
+ "img_db": true,
+ "rulecheck": true
+}

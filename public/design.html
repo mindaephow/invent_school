@@ -2235,7 +2235,7 @@
     hand:    ['✋', '연결점이 아닌 값을 씀', 0xec4899],
     link:    ['◎', '연결점(recv·떠 있음)', 0xffd400], orient: ['↻', '방향이 책과 다름', 0x2f80ff],
     float:   ['◌', '연결점이 부품에서 떨어져 허공에 있음', 0xff0000],
-    protrude: ['⬍', '볼트·너트가 프레임 면 밖으로 나옴', 0xd946ef], cam: ['◉', '카메라가 짐작값(맞춘 격자 안 씀)', 0x0ea5e9], fake: ['◌', '가짜 안내점(허공 화살표)', 0xf97316], axle: ['⊙', '축에 끼운 부품이 축 위치와 안 맞음', 0x84cc16], occupied: ['⛔', '이미 돌기·리벳이 들어 있는 구멍에 또 결합함', 0xdc2626]
+    protrude: ['⬍', '볼트·너트가 프레임 면 밖으로 나옴', 0xd946ef], cam: ['◉', '카메라가 짐작값(맞춘 격자 안 씀)', 0x0ea5e9], fake: ['◌', '가짜 안내점(허공 화살표)', 0xf97316], axle: ['⊙', '축에 끼운 부품이 축 위치와 안 맞음', 0x84cc16], occupied: ['⛔', '이미 돌기·리벳이 들어 있는 구멍에 또 결합함', 0xdc2626], nohole: ['⊘', '모터에 T축·축이 구멍 없는 곳에 끼워짐', 0x7c3aed]
   };
   // 연결점(초록 점)이 부품에서 4mm 넘게 떨어져 허공에 있으면 번호를 열 때마다 자동으로 잡아 빨갛게 키우고 위반 상자에 띄운다(사용자 지시 2026-11-08 — 14·16번에서 점이 허공에 찍혀도 아무 경고가 없었다, 규칙 G23·G25).
   //   점은 화살표 공식이 만든 장면에서만 위치를 알 수 있어 build.py 가 못 재므로 화면이 스스로 잰다(viewer_snippets.md 6번과 같은 계산).
@@ -2264,7 +2264,7 @@
     }, 900);
   }
   // 하단 규칙 바: 상시 검사가 켜져 있는지·위반이 몇 건인지 보여 주고, 눌러서 켜고 끈다(사용자 지시 2026-11-09). 검사 자체는 아래 기존 코드가 한다
-  const RULE_CHIPS = [{ id: 'overlap', name: '겹침', types: ['overlap'] }, { id: 'link', name: '연결점', types: ['mark', 'hand', 'link', 'float'] }, { id: 'gap', name: '틈', types: ['gap'] }, { id: 'protrude', name: '돌출', types: ['protrude'] }, { id: 'orient', name: '방향', types: ['orient'] }, { id: 'store', name: '창고', types: ['store'] }, { id: 'cam', name: '카메라 방향', types: ['cam'] }, { id: 'fake', name: '가짜 안내점', types: ['fake'] }, { id: 'axle', name: '축 위치', types: ['axle'] }, { id: 'occupied', name: '막힌홀', types: ['occupied'] }, { id: 'floor', name: '바닥 아래', types: ['floor'] }, { id: 'center', name: '중심 위치', types: [], auto: true }];   // auto: 위반 건수 대신 '자동'(번호를 열 때마다 fitCenter 가 화면 가운데로 맞춤)
+  const RULE_CHIPS = [{ id: 'overlap', name: '겹침', types: ['overlap'] }, { id: 'link', name: '연결점', types: ['mark', 'hand', 'link', 'float'] }, { id: 'gap', name: '틈', types: ['gap'] }, { id: 'protrude', name: '돌출', types: ['protrude'] }, { id: 'orient', name: '방향', types: ['orient'] }, { id: 'store', name: '창고', types: ['store'] }, { id: 'cam', name: '카메라 방향', types: ['cam'] }, { id: 'fake', name: '가짜 안내점', types: ['fake'] }, { id: 'axle', name: '축 위치', types: ['axle'] }, { id: 'occupied', name: '막힌홀', types: ['occupied'] }, { id: 'nohole', name: '모터 구멍', types: ['nohole'] }, { id: 'floor', name: '바닥 아래', types: ['floor'] }, { id: 'center', name: '중심 위치', types: [], auto: true }];   // auto: 위반 건수 대신 '자동'(번호를 열 때마다 fitCenter 가 화면 가운데로 맞춤)
   // 칩에 마우스를 올리면 무슨 검사인지 보여 주는 설명(사용자 지시 2026-11-09). [이름, 하는 일, 걸리면 화면에서]
   const RULE_DESC = {
     ponytail: ['포니테일 사다리', '파일을 고치기 전에 "필요한가·이미 있는 곳·재사용"을 찾아 기록했는지 보는 규칙이에요. 기록은 90분 동안 유효하고, 없으면 고치기 전에 막혀요.', '남은 시간이 칩에 나와요. 기록이 없으면 빨갛게 바뀌어요.'],
@@ -2278,6 +2278,7 @@
     fake: ['가짜 안내점', '받는 부품(recv)인데 marks가 비어 부품 중심에서 허공 화살표가 나가는 것을 찾아요(G1a).', '걸린 부품이 칠해지고 위반 상자에 떠요.'],
     axle: ['축 위치', '축(·T축)에 끼운 바퀴·기어·부시 같은 부품이 최종 자리에서 축 중심선에서 1.5mm 넘게 벗어나거나 축 길이 밖에 있는 것을 찾아요.', '걸린 부품이 연두색(⊙)으로 칠해지고 위반 상자에 떠요.'],
     occupied: ['막힌홀', '프레임 구멍에 이미 다른 부품의 돌기·리벳이 들어 있는데 또 결합하려는 것을 찾아요(연결점은 한 번만 쓸 수 있어요).', '걸린 부품이 붉게 칠해지고(⛔) 위반 상자에 떠요.'],
+    nohole: ['모터 구멍', '모터(DC·서보)에 T축·축을 결합할 때, 막대가 들어가는 자리에 모터 구멍이 없는(축 중심선에서 1.5mm 넘게 벗어난) 것을 찾아요(사용자 지시 2026-11-10).', '걸린 막대가 보라색(⊘)으로 칠해지고 위반 상자에 떠요.'],
     floor: ['바닥 아래', '보이는 부품이 바닥(y=0)보다 0.5mm 넘게 내려간 것을 찾아요(G24).', '바닥면이 빨갛게 칠해져요.'],
     center: ['중심 위치', '번호를 열 때마다 카메라 시선을 보이는 부품 전체의 가운데로 자동으로 맞춰요(A4). 끄면 자동 맞춤을 건너뛰어요.', '켜져 있으면 칩에 "자동"이라고 나와요.'],
     autocheck: ['상시검사', '조립도 파일(.py·_read.json)을 고치면 build.py(겹침·안내점)와 rulecheck.py를 자동으로 돌려 문제만 알려 줘요. 지금 작업 중인 조립도 하나에서만 돌아요.', '조립도를 고칠 때마다 돌아요. 고친 적이 없으면 "감시 중", 훅이 연결 안 돼 있으면 빨간 "훅 없음"이에요.']

@@ -39,6 +39,40 @@ def axle_bad(A, tol=1.5):
         for q in A.parts: q.p, q.R = _orig[id(q)][0].copy(), _orig[id(q)][1].copy()
     return out
 
+def nohole_bad(A, tol=1.5, minlen=10.0):
+    """모터(DC·서보)에 T축·축(돌기 길이 ≥minlen)을 결합하는 번호에서, 막대가 모터 안으로 들어가는 자리에 막대와 나란한 모터 구멍이 있는지(옆 거리 ≤tol) 본다(사용자 지시 2026-11-10: 8번 T축이 모터 구멍 없는 곳에 끼워짐 — 모터에 T축·축을 결합할 때만).
+    막대가 그 번호에 새로 놓인 번호만 본다. [(번호, 막대 부품순서, 설명)]"""
+    import stepchecks
+    out = []
+    for k in range(1, len(A.steps) + 1):
+        allp = [q for j in range(1, k + 1) for q in A.steps[j - 1].parts if q.conn]
+        if not any(q.n in ("T축", "축") for q in A.steps[k - 1].parts): continue   # 막대가 새로 놓이는 번호만 자세를 계산한다
+        try: pose = {id(q): stepchecks.pose_at(A, q, k) for q in allp}
+        except Exception: continue   # 옛 형식(구멍 id 가 다른) 조립도는 자세를 못 구하면 건너뛴다
+        for i, s in enumerate(A.steps[k - 1].parts):
+            if s.n not in ("T축", "축") or not s.conn: continue
+            for g in s.conn.get("pegs", []):
+                ln = float(g.get("len") or 0)
+                if ln < minlen: continue
+                p, R = pose[id(s)]; c = p + R @ np.array(g["pos"], float); d = R @ np.array(g["dir"], float); d = d / np.linalg.norm(d)
+                ts = np.arange(-ln / 2 + 0.5, ln / 2 - 0.4, 1.0)
+                for o in allp:
+                    if o is s or o.n not in ("DC모터", "서보모터") or not o.conn.get("size"): continue
+                    op, oR = pose[id(o)]; half = np.array(o.conn["size"], float) / 2 - 0.3
+                    tin = [t for t in ts if np.all(np.abs(oR.T @ (c + d * t - op)) <= half)]
+                    if len(tin) < 2: continue
+                    best = None
+                    for h in o.conn.get("holes", []):
+                        hp = op + oR @ np.array(h["pos"], float); hd = oR @ np.array(h["dir"], float); hd = hd / (np.linalg.norm(hd) or 1.0)
+                        if abs(abs(float(np.dot(hd, d))) - 1) > 0.02: continue
+                        w = hp - c; al = float(np.dot(w, d))
+                        if al < min(tin) - 1.0 or al > max(tin) + 1.0: continue   # 막대가 들어가는 구간의 구멍만(모터 뒷면 구멍이 우연히 같은 줄에 있어도 안 쳐 준다)
+                        off = float(np.linalg.norm(w - al * d))
+                        if best is None or off < best: best = off
+                    if best is None or best > tol:
+                        out.append((k, i, "%s 가 들어가는 %s 에 그 자리 구멍이 없음 — 막대 중심선에서 가장 가까운 모터 구멍이 %s(≤%.1f)" % (s.n, o.n, "없음" if best is None else "%.1fmm" % best, tol)))
+    return out
+
 _SHAFTY = ("DC모터", "서보모터", "T축", "축", "부시")
 
 def occupied_holes(A, k, lat=1.5, ov=0.5):
@@ -193,6 +227,11 @@ def collect(name):
             add(k, "axle", ["%d:%d" % (k, q_idx)], msg)
     except Exception as e_:
         print("violations: 축 위치 점검을 못 붙임 —", str(e_)[:100], file=sys.stderr)
+    try:   # 구멍 없는 곳(사용자 지시 2026-11-10): 긴 막대(T축·축)가 지나는 부품에 그 자리 구멍이 없으면 올린다
+        for k, q_idx, msg in nohole_bad(A):
+            add(k, "nohole", ["%d:%d" % (k, q_idx)], msg)
+    except Exception as e_:
+        print("violations: 구멍 없는 곳 점검을 못 붙임 —", str(e_)[:100], file=sys.stderr)
     try:   # 가짜 안내점(G1a): 받는 부품(recv)인데 dir 만 있고 marks 가 비며 noGuide 도 아니면 부품 중심에서 허공 화살표가 나간다 — fakeguide_check.py 와 같은 조건(사용자 지시 2026-11-09: 상시 감시로)
         import json as _j2
         for k_, s_ in enumerate(_j2.load(open(asmpath.resolve(name + "_asm.json"), encoding="utf-8"))["steps"], 1):
