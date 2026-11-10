@@ -1,7 +1,7 @@
 # 끝까지 가지 지킴이(2026-11-09, 큐보 부품결합규칙.md B7) — Claude Code Stop hook.
 #   "<이름> 완성해/진행해" 같은 지시를 받으면  python finish_guard.py on <이름>  으로 목표를 켠다(.finish_goal).
 #   목표가 켜져 있으면 rulecheck 에 ❌ 번호가 남은 동안 턴 종료를 막는다(종료 코드 2 + 안내) — 막혀도 ⚠ 로 적고 계속 만든다.
-#   ❌ 가 0개면 목표를 끄고 통과. 4번 연속 ❌ 개수가 안 줄면(진짜 막힘) 통과시키고 알린다. 사용자 질문에 답만 할 때는  python finish_guard.py off.
+#   ❌ 가 0개면 목표를 끄고 통과. 60번 연속 ❌ 개수가 안 줄면(진짜 막힘) 통과시키고 알린다. 사용자 질문에 답만 할 때는  python finish_guard.py off.
 #   처음부터 작동(2026-11-10): 목표를 손으로 켜지 않아도 작업 중인 조립도(.active_assembly, set_active.py)가 있으면 그것을 목표로 자동으로 켠다 —
 #   목표를 안 켜서 턴이 중간에 끝나던 사고(오토건 2026-11-10)를 막는다. off 는 .finish_off 표시를 남겨 자동 켜짐도 끄고, on·set_active.py 가 지운다.
 import asmpath
@@ -31,7 +31,7 @@ def main():
         os.remove(G); print("✅ %s 규칙 점검 ❌ 0 — 목표 끝" % name); return
     st = json.load(open(S)) if os.path.exists(S) else {"last": 10**6, "stalls": 0}
     st["stalls"] = 0 if n < st["last"] else st["stalls"] + 1; st["last"] = n; json.dump(st, open(S, "w"))
-    if st["stalls"] >= 4: print("⚠ %s ❌ %d번이 4번 연속 안 줄어 막지 않는다 — 막힌 이유를 보고한다" % (name, n), file=sys.stderr); return
+    if st["stalls"] >= 60: print("⚠ %s ❌ %d번이 60번 연속 안 줄어 막지 않는다 — 막힌 이유를 보고한다" % (name, n), file=sys.stderr); return
     print("❌ %s 규칙 점검에 ❌ %d번이 남았다 — 목표(완성)를 끝내기 전에 턴을 끝내지 않는다(B7). 막히면 읽기 표 판단과정에 ⚠ 로 적고 다음 번호로 계속 만든다. 질문·중간 보고로 끝내지 않는다." % (name, n), file=sys.stderr)
     sys.exit(2)
 main()

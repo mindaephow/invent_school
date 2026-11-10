@@ -45,6 +45,19 @@ process.stdin.on("end", () => {
     needs = !/ladder\.py|setup_new_pc\.py|session_start\.py/.test(cmd) && WRITE_CMD.test(cmd);
   }
   if (!needs) process.exit(0);
+  // 조립도 파일(큐보/조립도/<권>/<이름>/ 아래)을 고치려면 그 조립도의 number_start.py 도장(90분)이 있어야 한다 — 앞 번호 기록을 읽지 않고 눈대중으로 고치는 사고 방지(사용자 지시 2026-11-11).
+  try {
+    const target = tool === "Bash" ? (WRITE_CMD.test(input.command || "") && !/number_start\.py/.test(input.command || "") ? input.command : "") : (input.file_path || "");
+    const m = String(target).split("\\").join("/").match(/큐보\/조립도\/[^/\s"']+\/([^/\s"']+)\//);
+    if (m) {
+      let ok = false;
+      try { const st = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude", "number_start_stamp.json"), "utf8")); ok = st.name === m[1] && Date.now() - st.ts < TTL_MS; } catch {}
+      if (!ok) {
+        process.stderr.write("조립도(" + m[1] + ") 파일을 고치기 전에 python scripts/assembly-tools/number_start.py " + m[1] + " <번호> 를 먼저 돌려 앞 번호 기록(읽기 표·격자·부품 위치)을 읽으세요. 앞 번호에서 이미 조립한 홀 번호를 기준으로 쓰고 눈대중으로 정하지 않습니다.\n");
+        process.exit(2);
+      }
+    }
+  } catch {}
 
   try {
     const d = JSON.parse(fs.readFileSync(LADDER, "utf8"));

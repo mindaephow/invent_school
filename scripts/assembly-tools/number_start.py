@@ -8,6 +8,9 @@ import json, os, re, sys
 sys.stdout.reconfigure(encoding="utf-8")
 here = os.path.dirname(os.path.abspath(__file__))
 name, k = sys.argv[1], int(sys.argv[2]); NN = "%02d" % k
+try:   # 조립도 파일 수정 게이트(ladder-gate.js)가 보는 도장: 이 번호 시작(앞 번호 기록 읽기)을 했다는 표시, 90분 유효(2026-11-11 사용자 지시 — 앞 번호 기록을 안 쓰고 눈대중으로 고친 사고)
+    import json as _j, time as _t; _r = os.path.normpath(os.path.join(here, "..", "..")); _j.dump({"name": name, "step": k, "ts": int(_t.time() * 1000)}, open(os.path.join(_r, ".claude", "number_start_stamp.json"), "w", encoding="utf-8"))
+except Exception: pass
 CONT = "--연속" in sys.argv   # 반자동 연속 진행(사용자 지시 2026-10-14): 앞 과정 미완이어도 막지 않고 표시만 하고 계속한다. 표시는 <이름>_flags.json 에 쌓여 마지막 검토 목록이 된다.
 def load(p, default):
     return json.load(open(p, encoding="utf-8")) if os.path.exists(p) else default
