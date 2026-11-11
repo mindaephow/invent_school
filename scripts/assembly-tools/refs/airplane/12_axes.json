@@ -1,0 +1,1 @@
+{"global": {"X": [-55.0, 25.7], "Y": [-5.9, -55.0], "Z": [-55.0, -5.9]}, "fit": {"from": "12_P.json", "err_px": 4.83, "points": 4, "theta": 2.26, "phi": 1.29, "cols": "+X", "rows": "+Z", "note": "위에서 내려다보는 해(phi<1.55): 한 평면 4점 IPPE — mkfit3d 의 거울 해(phi 2.12)는 쓰지 않음"}, "rotate_to": "X"}
