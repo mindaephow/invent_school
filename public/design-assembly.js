@@ -792,9 +792,10 @@
       row.appendChild(cancel); row.appendChild(ok); bx.appendChild(p); if (noteEl) bx.appendChild(noteEl); bx.appendChild(row); ov.appendChild(bx); document.body.appendChild(ov); (noteEl || ok).focus();
     });
   }
-  // 자동 검사 경고(관리자 전용): public/design-warnings.js(scripts/assembly-tools/insertion_check.js 가 만듦)의 경고를 단계 번호 옆 ⚠로 보이고, 오른쪽 아래 카드에서 관리자가 "문제없음"/"해결요청"을 고른다. 고른 결과는 ivs_assembly_checks 에 저장.
+  // 자동 검사 경고(관리자 전용): 지금 열린 번호의 겹침 경고를 오른쪽 아래 카드에 보이고, 그 카드에서 관리자가 "문제없음"/"해결요청"을 고른다. 고른 결과는 ivs_assembly_checks 에 저장.
   let checkVerdicts = {}; // '단계|경고키' → 'ok' | 'fix'
-  const warnsOf = (i) => (def && window.IVS_ASM_WARNINGS && window.IVS_ASM_WARNINGS[def.id] && window.IVS_ASM_WARNINGS[def.id][i]) || [];
+  // 자동 검사 경고 = 하단 칩과 같은 기준: 화면에 지금 놓인 부품의 몸통 겹침(bridge.xray). 예전 미리 계산 목록은 판을 세운 자세를 몰라 오경고가 나서 없앴다(사용자 지시 2026-11-11).
+  const warnsOf = (i) => { const b = bridge(), xr = i === step && b && b.xray ? b.xray(lastLabels) : null; return xr ? xr.overlaps.map((q) => ({ key: i + '|' + q.a + '|' + q.b, part: q.a, text: q.a + '이(가) ' + q.b + ' 와 겹쳐 있어요' })) : []; };
   const VIOL_ICON = { floor: '▼', overlap: '✕', gap: '↔', link: '◎', orient: '↻', hand: '✋', center: '⊕', cam: '◉', split: '⛓' };
   function violMark(i) { const V = (def.violations && def.violations[i]) || []; return V.length ? ' ' + [...new Set(V.map((v) => VIOL_ICON[v.type] || '!'))].join('') : ''; }   // 위반이 있는 번호 버튼에 종류 기호를 붙인다
   function warnMark(i) {
