@@ -27,4 +27,19 @@ spec["fov"] = None
 r2 = composefit.solve(spec, W, H)
 ok2 = r2["fov"] in (25, 30, 35)
 print("fov 탐색 →", r2["fov"], "평균 %.3f" % r2["mean"])
-sys.exit(0 if ok and ok2 else (print("❌ composefit 검사 실패") or 1))
+# 격자 점: holefit 가 찾은 칸만 쓰고(est 제외), 투영해 만든 fits 는 거부하며, 링 가정이 틀리면 링 오차만 커지는지
+plate = {(c, r): np.array([-30.0 + 10 * (c - 1), 17.5, -10.0 + 10 * (r - 1)]) for c in range(1, 7) for r in range(1, 4)}
+proj = lambda q: cv2.projectPoints(np.float32([q]), rv, tv, K, None)[0][0][0]
+fj = {"tool": "holefit", "est": [[2, 2]], "pts": [[c, r, float(proj(q)[0]), float(proj(q)[1])] for (c, r), q in plate.items()]}
+gf = {"origin": [-30.0, 17.5, -10.0], "col": [10, 0, 0], "row": [0, 0, 10]}
+gp = composefit.grid_points(fj, gf)
+ok3 = len(gp) == 17 and all(p["kind"] == "grid" for p in gp)
+try: composefit.grid_points(dict(fj, tool="infer3d"), gf); ok4 = False
+except SystemExit: ok4 = True
+rings = []
+for x in (-20, 0, 20):   # 리벳 링: 실제는 줄3(z=+10) 인데 줄2(z=0)로 가정한 점
+    q = np.array([x, 30.0, 10.0]); px = proj(q); rings.append({"p": [x, 30.0, 0.0], "px": [float(px[0]), float(px[1])], "kind": "ring"})
+r3 = composefit.solve({"fov": FOV, "pts": gp + rings}, W, H)
+ok5 = r3["kinds"]["ring"] > 2 * max(r3["kinds"]["grid"], 0.3)
+print("격자 점 %d개, 투영 격자 거부 %s, 링 가정 틀림 → 링 %.2f px ≫ 격자 %.2f px %s" % (len(gp), ok4, r3["kinds"]["ring"], r3["kinds"]["grid"], ok5))
+sys.exit(0 if ok and ok2 and ok3 and ok4 and ok5 else (print("❌ composefit 검사 실패") or 1))

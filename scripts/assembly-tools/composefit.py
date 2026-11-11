@@ -6,6 +6,10 @@
 #      "groups": {"R": {"init": [tx, tz]}},      # 그룹에 속한 점은 (x,z) 에 이 이동량이 더해진다 — 책에서 떨어져 놓인 부품 묶음의 자리
 #      "levels": {"b": {"init": 40}, "f": {"init": 30}},   # level 이름마다 y 에 더해지는 높이(띄운 간격). 점의 level 이 리스트면 합
 #      "grid": {...}, "note": "..."}              # grid·note 는 그대로 결과에 옮긴다(mkfit3d 가 읽는 형식)
+#      "grid_fit": {"file": "15_P.json", "origin": [x,y,z], "col": [dx,dy,dz], "row": [dx,dy,dz], "max_points": 24}
+#           # 판 격자도 같이 쓴다: holefit 가 책 그림에서 실제로 찾은 구멍(fits/NN_*.json 의 pts 중 est 가 아닌 칸, tool 이 holefit)을 점으로 더한다.
+#           # origin/col/row = 칸1·줄1 구멍의 3D 와 칸·줄 +1 의 3D 이동(10mm 간격). mkfit3d/infer3d 가 쓴 fits 는 카메라로 투영한 값이라 쓰지 않는다(순환).
+#           # 결과에 "링 점 평균 / 격자 점 평균" 오차를 따로 보여 준다 — 한쪽만 크면 그쪽의 가정(줄·높이·칸 번호)이 틀린 것이다.
 #   하는 일: pnp.fit 로 초기 카메라를 잡고, 카메라(6)+그룹 이동+level 높이를 Levenberg–Marquardt 로 한 번에 푼다. 점별 오차(px)·풀린 이동·높이·theta/phi 를 출력하고
 #     --out 에 "풀린 3D 점"이 들어간 spec(pts=[[x,y,z],[u,v]], fov 고정)을 쓴다 → 그대로 `python mkfit3d.py <이름> <번호> <라벨> <칸> <줄> 결과.json` 으로 격자·축 파일을 만든다.
 #   쓰는 법의 주의: 점은 8개 이상, 자유 변수(그룹 2개씩+level)보다 식(점×2)이 충분히 많아야 한다. 평균 오차가 2.5px 를 넘거나 풀린 값이 말이 안 되면 링 픽셀 읽기를 먼저 다시 본다.
@@ -52,6 +56,15 @@ def _world(spec, gnames, lnames, free):
     return np.array(out)
 
 
+def grid_points(fj, gf):
+    """holefit 가 찾은 구멍(est 아닌 칸)만 3D↔픽셀 점으로 바꾼다. 카메라로 투영해 만든 fits(tool=infer3d 등)는 거부한다."""
+    if fj.get("tool") != "holefit": raise SystemExit("❌ 격자 점은 holefit 가 측정한 fits 만 쓴다(이 파일 tool=%s) — 카메라로 투영해 만든 격자는 순환이라 쓰지 않는다" % fj.get("tool"))
+    est = {tuple(e) for e in fj.get("est", [])}
+    o = np.array(gf["origin"], float); dc = np.array(gf["col"], float); dr = np.array(gf["row"], float)
+    pts = [{"p": (o + dc * (c - 1) + dr * (r - 1)).tolist(), "px": [x, y], "kind": "grid"} for c, r, x, y in fj["pts"] if (c, r) not in est]
+    return pts[: int(gf.get("max_points", 40))]
+
+
 def solve(spec, W, H, fov=None):
     """spec 를 풀어 (평균오차, 점별오차, 카메라 rv·tv·K, 풀린 3D 점, 이동, 높이, fov) 를 돌려준다."""
     fov = fov if fov is not None else spec.get("fov")
@@ -80,7 +93,8 @@ def solve(spec, W, H, fov=None):
     free = x[6:]
     return {"mean": float(err.mean()), "max": float(err.max()), "per": err, "rv": x[0:3].reshape(3, 1), "tv": x[3:6].reshape(3, 1), "K": K,
             "obj": _world(spec, gnames, lnames, free), "groups": {g: [float(free[2 * i]), float(free[2 * i + 1])] for i, g in enumerate(gnames)},
-            "levels": {l: float(free[2 * len(gnames) + i]) for i, l in enumerate(lnames)}, "fov": fov}
+            "levels": {l: float(free[2 * len(gnames) + i]) for i, l in enumerate(lnames)}, "fov": fov,
+            "kinds": {k: float(np.mean([e for e, p in zip(err, spec["pts"]) if p.get("kind", "ring") == k])) for k in {p.get("kind", "ring") for p in spec["pts"]}}}
 
 
 def main():
@@ -91,6 +105,11 @@ def main():
     im = cv2.imread(os.path.join(HERE, "refs", name, "%02d.jpg" % N))
     if im is None: sys.exit("❌ 책 그림을 못 읽는다: refs/%s/%02d.jpg" % (name, N))
     H, W = im.shape[:2]
+    gf = spec.get("grid_fit")
+    if gf:
+        fj = json.load(open(os.path.join(HERE, "refs", name, "fits", gf["file"]), encoding="utf-8"))
+        extra = grid_points(fj, gf); spec["pts"] = spec["pts"] + extra
+        print("격자 점 %d개 추가(%s, holefit 가 실제로 찾은 구멍만)" % (len(extra), gf["file"]))
     r = solve(spec, W, H)
     C, fwd, up, right = cam_from(r["rv"], r["tv"])
     grid = spec.get("grid"); tgt = spec.get("axes_target")
@@ -99,6 +118,7 @@ def main():
     az, el, rad = angles(C, tgt if tgt is not None else r["obj"].mean(axis=0))
     print("fov %g 평균 %.2f 최대 %.2f px 점별 %s | theta %.2f phi %.2f" % (r["fov"], r["mean"], r["max"], [round(float(v), 1) for v in r["per"]], math.radians(az), math.radians(90 - el)))
     print("(theta·phi 는 보는 중심(axes_target·grid 가운데)에 따라 달라지는 참고값 — 카메라 파일은 --out 결과를 mkfit3d 에 넣어 만든다)")
+    if len(r["kinds"]) > 1: print("종류별 평균 오차(px): " + ", ".join("%s %.2f" % (k, v) for k, v in sorted(r["kinds"].items())) + "  ← 한쪽만 크면 그쪽 가정(줄·높이·칸 번호)이 틀린 것")
     for g, v in r["groups"].items(): print("그룹 %s 이동(x,z) = (%.2f, %.2f)" % (g, v[0], v[1]))
     for l, v in r["levels"].items(): print("높이 %s = %.2f" % (l, v))
     if "--out" in sys.argv:
