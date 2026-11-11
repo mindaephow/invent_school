@@ -138,7 +138,7 @@ def check(name, only=None):
                 items.append(("✅" if _sil >= 0.85 else bad, "카메라", "실루엣 겹침 IoU %.3f(기준 ≥0.85, 자동 — 점을 읽지 않음)" % _sil))
             elif guess or (e is not None and e > 2.0):
                 why = "카메라 값이 추정이거나 점이 4개 미만(점 %s, 오차 %s)" % (pts, e) if guess else "카메라 맞춘 오차 %.2fpx > 2.0px(축 계산 기준)" % e
-                if (not needs_grid) and not guess and pts >= 4: items.append(("⚠", "카메라", why + " — 판(프레임)이 없는 번호라 px 기준 대신 화면 비교로 확인(사용자 지시 2026-11-08)"))
+                if not guess and pts >= 4: items.append(("⚠", "카메라", why + " — 사진 구도 맞추기(규칙 E11, 사용자 지시 2026-11-11): px 오차로 막지 않는다. 구도만 비슷하면 되고 화면 비교(record_check 증거)로 확인"))
                 else: items.append(("⚠", "카메라", "승인됨(사용자): " + str(ap["camera"]) + " — " + why) if ap.get("camera") else (bad, "카메라", why))
             else: items.append(("✅", "카메라", "오차 %.2fpx, 점 %d개" % (e, pts)))
         # E 증거 ───────────────
