@@ -2230,6 +2230,7 @@
   const VIOL_KINDS = {   // 종류 → [기호, 이름, 색]
     floor:   ['▼', '바닥 아래', 0xff2d2d], overlap: ['✕', '겹침', 0xff8a00], gap: ['↔', '틈', 0xa855f7],
     store:   ['▣', '다른 창고 부품이 보임', 0xe11d48],
+    center:  ['⊕', '화면 가운데(원점)에서 멀리 시작', 0x0891b2],
     mark:    ['⌖', '안내점이 부품 연결점에 안 맞음', 0x14b8a6],
     hand:    ['✋', '연결점이 아닌 값을 씀', 0xec4899],
     link:    ['◎', '연결점(recv·떠 있음)', 0xffd400], orient: ['↻', '방향이 책과 다름', 0x2f80ff],
@@ -2263,7 +2264,7 @@
     }, 900);
   }
   // 하단 규칙 바: 상시 검사가 켜져 있는지·위반이 몇 건인지 보여 주고, 눌러서 켜고 끈다(사용자 지시 2026-11-09). 검사 자체는 아래 기존 코드가 한다
-  const RULE_CHIPS = [{ id: 'overlap', name: '겹침', types: ['overlap'] }, { id: 'link', name: '연결점', types: ['mark', 'hand', 'link', 'float'] }, { id: 'gap', name: '틈', types: ['gap'] }, { id: 'protrude', name: '돌출', types: ['protrude'] }, { id: 'orient', name: '방향', types: ['orient'] }, { id: 'store', name: '창고', types: ['store'] }, { id: 'cam', name: '카메라 방향', types: ['cam'] }, { id: 'fake', name: '가짜 안내점', types: ['fake'] }, { id: 'axle', name: '축 위치', types: ['axle'] }, { id: 'occupied', name: '막힌홀', types: ['occupied'] }, { id: 'nohole', name: '모터 구멍', types: ['nohole'] }, { id: 'split', name: '분리', types: ['split'] }, { id: 'floor', name: '바닥 아래', types: ['floor'] }, { id: 'center', name: '중심 위치', types: [], auto: true }];   // auto: 위반 건수 대신 '자동'(번호를 열 때마다 fitCenter 가 화면 가운데로 맞춤)
+  const RULE_CHIPS = [{ id: 'overlap', name: '겹침', types: ['overlap'] }, { id: 'link', name: '연결점', types: ['mark', 'hand', 'link', 'float'] }, { id: 'gap', name: '틈', types: ['gap'] }, { id: 'protrude', name: '돌출', types: ['protrude'] }, { id: 'orient', name: '방향', types: ['orient'] }, { id: 'store', name: '창고', types: ['store'] }, { id: 'cam', name: '카메라 방향', types: ['cam'] }, { id: 'fake', name: '가짜 안내점', types: ['fake'] }, { id: 'axle', name: '축 위치', types: ['axle'] }, { id: 'occupied', name: '막힌홀', types: ['occupied'] }, { id: 'nohole', name: '모터 구멍', types: ['nohole'] }, { id: 'split', name: '분리', types: ['split'] }, { id: 'floor', name: '바닥 아래', types: ['floor'] }, { id: 'center', name: '중심 위치', types: ['center'] }];   // auto: 위반 건수 대신 '자동'(번호를 열 때마다 fitCenter 가 화면 가운데로 맞춤)
   // 칩에 마우스를 올리면 무슨 검사인지 보여 주는 설명(사용자 지시 2026-11-09). [이름, 하는 일, 걸리면 화면에서]
   const RULE_DESC = {
     ponytail: ['포니테일 사다리', '파일을 고치기 전에 "필요한가·이미 있는 곳·재사용"을 찾아 기록했는지 보는 규칙이에요. 기록은 90분 동안 유효하고, 없으면 고치기 전에 막혀요.', '남은 시간이 칩에 나와요. 기록이 없으면 빨갛게 바뀌어요.'],
@@ -2280,7 +2281,7 @@
     nohole: ['모터 구멍', '모터(DC·서보)에 T축·축을 결합할 때, 막대가 들어가는 자리에 모터 구멍이 없는(축 중심선에서 1.5mm 넘게 벗어난) 것을 찾아요(사용자 지시 2026-11-10).', '걸린 막대가 보라색(⊘)으로 칠해지고 위반 상자에 떠요.'],
     split: ['분리', '앞 번호에서 결합돼 묶음(그룹)이 된 부품이, 다른 곳으로 옮겨 붙는(합치기) 번호에서 모양을 유지하며 함께 이동하지 못하고 따로 남거나 떨어진 것을 찾아요(사용자 지시 2026-11-10: 10번에 끼운 축이 11번에서 유닛과 따로 내려와 있었다).', '걸린 부품이 청록색(⛓)으로 칠해지고 위반 상자에 떠요.'],
     floor: ['바닥 아래', '보이는 부품이 바닥(y=0)보다 0.5mm 넘게 내려간 것을 찾아요(G24).', '바닥면이 빨갛게 칠해져요.'],
-    center: ['중심 위치', '번호를 열 때마다 카메라 시선을 보이는 부품 전체의 가운데로 자동으로 맞춰요(A4). 끄면 자동 맞춤을 건너뛰어요.', '켜져 있으면 칩에 "자동"이라고 나와요.'],
+    center: ['중심 위치', '번호를 끝낸 모습(그 창고에서 보이는 부품 전체)의 x·z 중심이 화면 가운데(원점)에서 100mm 넘게 떨어진 곳에서 조립을 시작한 것을 찾아요(A4). 저장해 둔 📷 카메라가 있으면 자동 가운데 맞춤이 안 먹어서 화면 밖에서 만들어도 못 알아채요 — 비행기 꼬리 23~28번 사고. 끄면 자동 가운데 맞춤(카메라)도 건너뛰어요.', '걸린 번호의 새 부품이 청록색(⊕)으로 칠해지고 위반 상자에 떠요. 부품 자리를 원점 쪽으로 옮긴다.'],
     autocheck: ['상시검사', '조립도 파일(.py·_read.json)을 고치면 build.py(겹침·안내점)와 rulecheck.py를 자동으로 돌려 문제만 알려 줘요. 지금 작업 중인 조립도 하나에서만 돌아요.', '조립도를 고칠 때마다 돌아요. 고친 적이 없으면 "감시 중", 훅이 연결 안 돼 있으면 빨간 "훅 없음"이에요.']
   };
   let ruleOff = new Set(); try { ruleOff = new Set(JSON.parse(localStorage.getItem('ivs-rule-off') || '[]')); } catch (e) { /* */ }

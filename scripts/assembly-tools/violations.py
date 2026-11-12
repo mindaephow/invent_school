@@ -7,7 +7,7 @@ import asmpath
 import sys, os, re, runpy
 import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
-CENTER_TOL = 40   # mm — 번호 완성 모습의 x·z 중심 허용 오차(사용자 기준 없음, 임의값: 마지막 보고에서 확인받는다)
+CENTER_TOL = 100   # mm — 번호 완성 모습의 x·z 중심 허용 오차("대략 중심", 사용자 2026-11-12; 숫자는 임의값 — 비행기 본체가 ±95 라 100 으로 두고 480~650mm 이탈만 잡는다. 사용자가 정하면 바꾼다)
 
 def _load(name):
     os.chdir(HERE)
@@ -219,13 +219,14 @@ def collect(name):
         _pub = os.path.join(HERE, "..", "..", "public")
         _auto = ("fitCenter()" in open(os.path.join(_pub, "design.html"), encoding="utf-8").read()
                  and "b.fitCenter()" in open(os.path.join(_pub, "design-assembly.js"), encoding="utf-8").read())   # 뷰어가 번호를 열 때마다 보이는 부품 상자 가운데로 카메라를 자동으로 맞춘다(상시) — 연결돼 있으면 원점에서 벗어나도 화면 가운데다(사용자 지시 2026-11-09)
-        for k in range(1, 1 if _auto else len(_st) + 1):
+        for k in range(1, len(_st) + 1):   # 카메라 자동 맞춤(fitCenter)이 있어도 저장된 📷 카메라가 덮어쓰므로 부품 자리 자체를 항상 본다(사용자 지시 2026-11-12, 비행기 꼬리 23~28번)
             hide = {int(x) for x in (_st[k - 1].get("hideMade") or {}) if str(x).isdigit()}
             lo = np.array([1e9, 1e9]); hi = np.array([-1e9, -1e9]); mine = []
             for j in range(1, k + 1):
                 if j in hide or _st[j - 1].get("slot", 1) != _st[k - 1].get("slot", 1): continue
                 for i, pt in enumerate(A.steps[j - 1].parts):
-                    if (pt.extra or {}).get("hideAt") and int(pt.extra["hideAt"]) <= k: continue
+                    _ha = (pt.extra or {}).get("hideAt")
+                    if _ha and (k in [int(x) for x in _ha] if isinstance(_ha, (list, tuple, set)) else int(_ha) <= k): continue   # hideAt 은 숨길 번호 목록(한 개면 그 번호부터)
                     sz = (pt.conn or {}).get("size")
                     if not sz: continue
                     pose = pt._base if getattr(pt, "_base", None) else (pt.p, pt.R)   # 나중에 옮겨진 부품은 처음 놓인 자세부터(move·moves 가 번호별로 덮는다)
