@@ -35,7 +35,14 @@ def _pose(pt, k):   # k번에서의 자세: 옆자리에서 만드는 중이면 
     return (np.array(b[0], float), np.array(b[1], float)) if b else (np.array(pt.p, float), np.array(pt.R, float))
 
 def pose_at(A, q, k):
-    """k번 시점의 부품 q 자세 — 앞 번호 부품을 k번 이전에 옮긴 것(moveMade·move)만 반영하고, k번 뒤에 옮긴 것은 되돌려 읽는다."""
+    """k번 시점의 부품 q 자세 — 앞 번호 부품을 k번 이전에 옮긴 것(moveMade·move)만 반영하고, k번 뒤에 옮긴 것은 되돌려 읽는다.
+    lift({from, at, by}): 뷰어(design-assembly.js)와 같게 from ≤ k < at 인 동안은 그 자세에 by 를 더한 자리에 보인다(롤링봇 팔: 29번 합치기 전까지 올려 둔 자리)."""
+    p, R = _pose_moved(A, q, k)
+    lf = q.extra.get("lift")
+    if lf and int(lf.get("from") or 0) <= k < int(lf.get("at")): p = np.array(p, float) + np.array(lf.get("by") or [0, 0, 0], float)
+    return p, R
+
+def _pose_moved(A, q, k):
     from asmlib import euler_to_R
     key = "%d:%d" % (q.step.index, q.step.parts.index(q))
     for j in range(k, 0, -1):
@@ -145,7 +152,7 @@ def rivet_gaps(A, k):
             e = (A.steps[j - 1].kw.get("moveMade") or {}).get(key)
             if e: return np.array(e["p"], float), np.array(euler_to_R(e["r"]), float)
         return pose_at(A, q, k)   # 옛 방식 extra["move"](그 번호부터 옮긴 자세)도 반영
-    pool = [(q, *pose_k(q)) for k2, st2 in enumerate(A.steps, 1) if k2 <= k and str(k2) not in hide for q in st2.parts if q.n in dims and q.n != "리벳"]
+    pool = [(q, *pose_k(q)) for k2, st2 in enumerate(A.steps, 1) if k2 <= k and str(k2) not in hide for q in st2.parts if q.n in dims and q.n != "리벳" and k not in [int(x) for x in (q.extra.get("hideAt") or [])]]   # hideAt 으로 숨긴(다른 창고에 보관 중인) 부품은 호스트가 아니다
     def host(pt, skip=None):   # 점이 든 부품 — 부품 자기 좌표 상자(obb)로 재다(기울어진 부품도 맞게, 2026-11-01)
         for q, p, R in pool:
             if q is skip: continue

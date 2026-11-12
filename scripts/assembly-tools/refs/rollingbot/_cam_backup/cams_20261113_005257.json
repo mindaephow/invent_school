@@ -1,0 +1,70 @@
+[
+ {
+  "id": "89afdceb-e376-4da5-b2f0-d261f92bddc3",
+  "assembly_id": "cubo-1-rollingbot",
+  "step": 6,
+  "cam": {
+   "phi": 1.102,
+   "theta": 2.314,
+   "radius": 328.5,
+   "target": [
+    22.8,
+    41.7,
+    -10.5
+   ]
+  },
+  "updated_by": null,
+  "updated_at": "2026-10-04T17:04:22.775+00:00"
+ },
+ {
+  "id": "6bb48876-63ca-4cb2-aff6-7397a99d672e",
+  "assembly_id": "cubo-1-rollingbot",
+  "step": 7,
+  "cam": {
+   "phi": 1.358,
+   "theta": -4.062,
+   "radius": 374.6,
+   "target": [
+    -25.5,
+    81.1,
+    -109.3
+   ]
+  },
+  "updated_by": null,
+  "updated_at": "2026-10-04T17:05:00.215+00:00"
+ },
+ {
+  "id": "bb7f147b-2695-418e-ac6f-ea39a2d02a8d",
+  "assembly_id": "cubo-1-rollingbot",
+  "step": 8,
+  "cam": {
+   "phi": 1.094,
+   "theta": -0.574,
+   "radius": 333.8,
+   "target": [
+    -15,
+    54.8,
+    42
+   ]
+  },
+  "updated_by": null,
+  "updated_at": "2026-10-04T17:05:30.234+00:00"
+ },
+ {
+  "id": "f7f9d9f5-456b-4d99-ad75-7c13c4e2c27a",
+  "assembly_id": "cubo-1-rollingbot",
+  "step": 22,
+  "cam": {
+   "phi": 1.138,
+   "theta": 0.854,
+   "radius": 375.1,
+   "target": [
+    36.6,
+    125.4,
+    128.9
+   ]
+  },
+  "updated_by": null,
+  "updated_at": "2026-11-12T08:03:04.443+00:00"
+ }
+]

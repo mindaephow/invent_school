@@ -5640,7 +5640,7 @@
     setViolations(arr){ applyViolations(arr || []); scheduleFloatCheck(arr || []); },
     show(list, targets, orders, comps){ assemblyTargets = targets || []; assemblyOrders = orders || []; restoreParts(list, {}, true); applyAssemblyGroups(comps); },
     // 아직 제자리로 안 들어간 부품들의 결합 순서 번호(작은 것부터) — 재생이 순서대로 하나씩 결합시킨다
-    pendingOrders(){ return [...new Set(assemblyTargets.map((t, i) => (t ? (assemblyOrders[i] || 1) : null)).filter(Boolean))].sort((a, b) => a - b); },
+    pendingOrders(){ const pre = (assemblyTargets.pre || []).filter((q, i) => q && assemblyTargets[i]).map((q) => q.order); return [...new Set(assemblyTargets.map((t, i) => (t ? (assemblyOrders[i] || 1) : null)).filter(Boolean).concat(pre))].sort((a, b) => a - b); },
     // 고른 부품을 제자리(구멍 자리)로 부드럽게 옮겨 붙인다. 반환: 'ok' | 'none'(고른 부품 없음) | 'notTarget'(이번 단계에 끼우는 부품이 아님)
     combineSelected(){
       if (!selected || selected.isGroup) return 'none';
@@ -5711,6 +5711,10 @@
     // 이번 단계에 떠 있는 부품 전부를 제자리로 부드럽게 끼운다(재생용) — 안내(화살표·점)는 지운다.
     combineNew(ms, order){
       const DUR = ms || 500, t0 = performance.now(), moves = [], idxs = [];
+      parts.forEach((part, idx) => {   // preJoin: 이 순서에 사전 결합이 있는 부품은 최종 자리가 아니라 사전 자리(떠 있는 받는 부품 안)로만 옮기고, 최종 자리는 자기 순서에 내려온다
+        const q = assemblyTargets.pre && assemblyTargets.pre[idx];
+        if (q && assemblyTargets[idx] && order != null && q.order === order) { assemblyTargets.pre[idx] = null; const p0 = part.body.position; moves.push({ part, from: { x: p0.x, y: p0.y, z: p0.z }, t: q.t }); idxs.push(idx); return; }
+      });
       parts.forEach((part, idx) => {
         const t = assemblyTargets[idx];
         if (!t || (order != null && (assemblyOrders[idx] || 1) !== order)) return;

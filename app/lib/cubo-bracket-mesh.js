@@ -7,6 +7,7 @@
 import { CUBO_FRAME_STD as S } from './cubo-part-maker.js'
 import { makeKit } from './cubo-mesh-kit.js'
 import { addPlate } from './cubo-plate-mesh.js'
+import { conformTJunctions } from './cubo-mesh-repair.js'
 
 export const CUBO_BRACKET_STD = {
   armLength: 30,    // 바닥 팔 길이
@@ -14,24 +15,26 @@ export const CUBO_BRACKET_STD = {
 }
 
 // rows = 열 수(1 또는 2). 폭 = 10 × rows.
-export function bracketTriangles(rows, seg = 16) {
+// label: 2열브라켓 바닥 팔(긴 쪽) 윗면 구멍 없는 칸에 'LONG' 을 새긴다(사용자 지시 2026-11-13, 어느 쪽이 긴 쪽인지 구별). 깊이 0.5 < 판 두께 3 이라 크기·구멍 위치는 그대로. label=false 로 끄면 이전 모양.
+export function bracketTriangles(rows, seg = 16, { label = rows === 2, conform = true } = {}) {
   const Hv = CUBO_BRACKET_STD.heights[rows]
   const W = S.width * rows, hw = W / 2
   const zCells = Array.from({ length: rows }, (_, j) => ({ lo: -hw + j * S.pitch, hi: -hw + (j + 1) * S.pitch, c: -hw + S.pitch / 2 + j * S.pitch }))
   // 판 하나를 (길이 u, 두께 v, 폭 t) 좌표로 만든다
-  const plate = (cellsU) => {
+  const plate = (cellsU, lab) => {
     const k = makeKit(seg)
-    addPlate(k, { xCells: cellsU, zCells })
+    addPlate(k, { xCells: cellsU, zCells, label: lab })
     return k.result()
   }
   const kit = makeKit(seg)
   // 바닥 팔: 길이 방향 u = 월드 z (-15..15), 두께 v = y, 폭 t = x. (x,y,z)=(−t, v, u)
-  const A = plate([{ lo: -15, hi: -5, c: null }, { lo: -5, hi: 5, c: 0 }, { lo: 5, hi: 15, c: 10 }])
+  const A = plate([{ lo: -15, hi: -5, c: null }, { lo: -5, hi: 5, c: 0 }, { lo: 5, hi: 15, c: 10 }], label ? { text: 'LONG', px: 0.6, depth: 0.5, uTop: -9.3, cell: 0 } : undefined)   // 글자는 윗면(Y4) 구멍 없는 첫 칸, 세운 팔(z −15~−10)에 가리지 않는 u −10~−6 구간에
   kit.append(A, ([u, v, t]) => [-t, v, u])
   // 세운 팔: 길이 방향 u = 월드 y (0..Hv), 두께 v = z (-15..-10), 폭 t = x. (x,y,z)=(t, u, v-15)
   const holes = [Hv - S.margin - S.pitch, Hv - S.margin] // 맨 끝 구멍은 끝에서 5, 그 아래 구멍은 10 더 아래
   const cellsB = [{ lo: 0, hi: holes[0] - S.pitch / 2, c: null }, ...holes.map((c) => ({ lo: c - S.pitch / 2, hi: c + S.pitch / 2, c }))]
   const B = plate(cellsB)
   kit.append(B, ([u, v, t]) => [t, u, v - 15])
-  return kit.result()
+  const out = kit.result()
+  return label && conform ? conformTJunctions(out) : out
 }

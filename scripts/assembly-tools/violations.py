@@ -75,6 +75,11 @@ def nohole_bad(A, tol=1.5, minlen=10.0):
 
 _SHAFTY = ("DC모터", "서보모터", "T축", "축", "부시")
 
+def _hidden_at(q, k):
+    """k번 화면에서 숨겨진 부품인가(hideAt 은 숨길 번호 목록, 한 개면 그 번호부터)."""
+    ha = (q.extra or {}).get("hideAt")
+    return bool(ha) and (k in [int(x) for x in ha] if isinstance(ha, (list, tuple, set)) else int(ha) <= k)
+
 def occupied_holes(A, k, lat=1.5, ov=0.5):
     """k번 화면에서 한 구멍에 서로 다른 부품의 돌기가 둘 이상 들어 있는 곳(사용자 지시 2026-11-09: 연결점을 이미 쓴 구멍에 또 결합하면 모니터링 — 리벳·블록 돌기로 막힌 프레임 구멍에 눈블록 같은 돌기를 또 꽂음).
     결합 자세(최종 자리) 기준이다. 돌기 둘이 한 구멍 축(옆 거리 ≤lat)·구멍 깊이 안에서 ov mm 넘게 겹치고, 둘 중 하나는 k번에 새로 놓였거나 옮긴 부품이면 걸린다.
@@ -82,7 +87,7 @@ def occupied_holes(A, k, lat=1.5, ov=0.5):
     import stepchecks
     out = []
     cur = {id(p): i for i, p in enumerate(A.steps[k - 1].parts)}
-    allp = [q for j in range(1, k + 1) for q in A.steps[j - 1].parts if q.conn]
+    allp = [q for j in range(1, k + 1) for q in A.steps[j - 1].parts if q.conn and not _hidden_at(q, k)]   # 숨겨진 부품(작업대로 옮겨 만든 1번 부품 등)은 같은 자리의 작업대 부품과 겹쳐 잡히지 않게 뺀다
     pose = {id(q): stepchecks.pose_at(A, q, k) for q in allp}
     def wr(q, c):
         p, R = pose[id(q)]; return p + R @ np.array(c["pos"], float), R @ np.array(c["dir"], float)
@@ -115,7 +120,7 @@ def occupied_holes(A, k, lat=1.5, ov=0.5):
 def _mate_pairs(A, k, lat=1.5, ov=0.5):
     """k번 화면(최종 자세)에서 돌기가 다른 부품의 구멍 안에 들어가 결합된 쌍들 {frozenset({id(돌기 부품), id(구멍 부품)})} 와 id → 부품. occupied_holes 와 같은 기준."""
     import stepchecks
-    allp = [q for j in range(1, k + 1) for q in A.steps[j - 1].parts if q.conn]
+    allp = [q for j in range(1, k + 1) for q in A.steps[j - 1].parts if q.conn and not _hidden_at(q, k)]
     pose = {id(q): stepchecks.pose_at(A, q, k) for q in allp}
     def wr(q, c):
         p, R = pose[id(q)]; return p + R @ np.array(c["pos"], float), R @ np.array(c["dir"], float)
@@ -232,6 +237,8 @@ def collect(name):
                     pose = pt._base if getattr(pt, "_base", None) else (pt.p, pt.R)   # 나중에 옮겨진 부품은 처음 놓인 자세부터(move·moves 가 번호별로 덮는다)
                     mv = [m for m in ((pt.extra or {}).get("moves") or ([pt.extra["move"]] if "move" in (pt.extra or {}) else [])) if int(m["at"]) <= k]
                     if mv: m = max(mv, key=lambda q: int(q["at"])); pose = (m["p"], _al.euler_to_R(m["r"]))
+                    sd = (pt.extra or {}).get("side")
+                    if sd and k < int(sd.get("until") or 0): pose = (sd["p"], _al.euler_to_R(sd["r"]))   # 옆자리에서 따로 조립하는 번호(합쳐지는 번호 전)는 화면이 그리는 옆자리 자세로 잰다
                     h = np.abs(np.array(pose[1], float)) @ (np.array(sz, float) / 2); c = np.array(pose[0], float)
                     lo = np.minimum(lo, [c[0] - h[0], c[2] - h[2]]); hi = np.maximum(hi, [c[0] + h[0], c[2] + h[2]])
                     if j == k: mine.append("%d:%d" % (j, i))

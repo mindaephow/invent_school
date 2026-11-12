@@ -29,6 +29,7 @@ _d = _o.path.dirname(_o.path.abspath(__file__))
 while not _o.path.exists(_o.path.join(_d, 'asmlib.py')) and _o.path.dirname(_d) != _d: _d = _o.path.dirname(_d)
 _s.path.insert(0, _d)
 import json, sys
+import partlib
 import numpy as np
 from asmlib import *
 
@@ -147,7 +148,7 @@ bigF = s8.recv("39프레임", R_BIG_F, {"홀면 +y 열4·줄2": (mot1, "p2"), "�
 s9 = SKEL[6]; s9.kw.pop("noPart", None)
 s9.note = "[교재 9] 윗판에 리벳 6개를 꽂아요: 앞쪽 윗판에 4개, 뒤쪽 윗판 끝에 2개. 그 위에 25프레임 2개는 앞쪽 리벳에, 19프레임은 뒤쪽 리벳에 끼워요."
 def _top_rv(plate, col, row):    # 윗판(뒤집힌 판)의 윗면 구멍 h{열}_{줄} 에 리벳(아래 돌기)을 꽂는다 — 통구멍이라 구멍 id 로 지정
-    return s9.attach("리벳", np.eye(3), {"돌기면 -y 1": (plate, "h%d_%d" % (col, row))}, rivet=True, hover=22)
+    return s9.attach("리벳", np.eye(3), {"돌기면 -y 1": (plate, "h%d" % ((col - 1) * 5 + row))}, rivet=True, hover=22)
 rv9 = [_top_rv(PB2, 9, 4), _top_rv(PB2, 7, 5), _top_rv(PB2, 3, 5), _top_rv(PB2, 1, 4), _top_rv(PA2, 9, 4), _top_rv(PA2, 9, 2)]
 R_DN = np.array([[1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, -1.0]])        # 구멍 면(홀면 +y)이 아래, 열이 +X, 줄1 이 큰 z
 plM = s9.recv("25프레임", R_DN, {"홀면 +y 열3·줄2": (rv9[0], "돌기면 +y 1"), "홀면 +y 열5·줄1": (rv9[1], "돌기면 +y 1")}, hover=80)
@@ -163,8 +164,8 @@ s10 = SKEL[7]; s10.kw.pop("noPart", None)
 s10.note = "[교재 10] 상자를 반대로 뒤집어요. 뒤집은 윗면(판)에 2단블록 2개를 눕혀 꽂아요."
 s10.move_built(rot_z(180), pivot=(0, 0, 0), floor=True)
 R_B2L = orient("2단블록", {"돌기면 -z": "아래", "돌기면 +x": "+Z"})        # 눕힘: 돌기 2개 면이 판 쪽, 긴 쪽이 z 방향, 끝돌기(+x)가 +Z(앞)
-b10a = s10.attach("2단블록", R_B2L, {"p5": (PB, "h8_5"), "p6": (PB, "h8_4")}, hover=40)       # 뒤집은 뒤 x −30 (원래 x +30 → 열8)
-b10b = s10.attach("2단블록", R_B2L, {"p5": (PB, "h2_5"), "p6": (PB, "h2_4")}, hover=40)       # 뒤집은 뒤 x +30 (원래 x −30 → 열2)
+b10a = s10.attach("2단블록", R_B2L, {"p5": (PB, "h40"), "p6": (PB, "h39")}, hover=40)       # 뒤집은 뒤 x −30 (원래 x +30 → 열8)
+b10b = s10.attach("2단블록", R_B2L, {"p5": (PB, "h10"), "p6": (PB, "h9")}, hover=40)       # 뒤집은 뒤 x +30 (원래 x −30 → 열2)
 # ── 11 ── 교재 84쪽 11: 블록 2개의 윗돌기 4곳에 37프레임(3×7)을 얹고, 블록 끝돌기 2개에 빨간 17프레임(1×7)을 앞쪽에서 끼운다
 s11 = SKEL[8]; s11.kw.pop("noPart", None)
 s11.note = "[교재 11] 2단블록 2개의 윗돌기에 37프레임을 얹고, 블록 끝돌기에 빨간 17프레임을 끼워요."
@@ -175,7 +176,7 @@ red17 = s11.recv("17프레임", R_RED, {"홀면 +y 1": (b10a, "돌기면 +x 1"),
 # ── 12 ── 교재 84쪽 12: 메인보드를 뒤판(A) 윗면 구멍 두 곳에(x 0, z −30·−10) 꽂는다
 s12 = SKEL[9]; s12.kw.pop("noPart", None)
 s12.note = "[교재 12] 메인보드를 뒤쪽 판 위에 올려 돌기 2개를 판 구멍에 꽂아요."
-board = s12.attach("메인보드", np.eye(3), {"돌기면 -y 열1·줄2": (PA, "h1_3"), "돌기면 -y 열1·줄1": (PA, "h3_3")}, hover=60)
+board = s12.attach("메인보드", np.eye(3), {"돌기면 -y 열1·줄2": (PA, "h3"), "돌기면 -y 열1·줄1": (PA, "h13")}, hover=60)
 # ── 13 ── 교재 84쪽 13: 새 부품 없음(메인보드 왼쪽 소켓에 DC모터 케이블 연결)
 SKEL[10].note = "[교재 13] 메인보드 왼쪽에 DC모터를 연결해요(케이블)."
 
@@ -185,14 +186,15 @@ SKEL[10].note = "[교재 13] 메인보드 왼쪽에 DC모터를 연결해요(케
 s14 = SKEL[11]; s14.kw.pop("noPart", None)
 s14.note = "[교재 14] 팔 조립품을 따로 만들어요: 29프레임에 2단블록 3개를 눕혀 꽂고, 그 위에 29프레임을 얹어요."
 R_L14 = np.array([[0.0, 0.0, -1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]])          # 열이 +Z(열1 z −40), 줄1 이 x +5, 줄2 가 x −5, 구멍 면 위
-low14 = s14.place("29프레임", R_L14, (250, 2.5, 0))     # 본체와 떨어진 옆자리(x +250)에서 따로 만든다 — 16단계에서 합쳐질 때 최종 자세로 옮긴다(85쪽)
+low14 = s14.place("29프레임", R_L14, (0, 2.5, 0))     # 본체와 떨어진 옆자리(x 0, 원점 — A4)에서 따로 만든다 — 16단계에서 합쳐질 때 최종 자세로 옮긴다(85쪽)
 R_B2X = orient("2단블록", {"돌기면 -z": "아래", "돌기면 +x": "+X"})              # 눕힘: 돌기 2개가 아래, 긴 쪽이 x(판 폭 방향)
-b14a = s14.attach("2단블록", R_B2X, {"p5": (low14, "h1_1"), "p6": (low14, "h1_2")}, hover=40)
+b14a = s14.attach("2단블록", R_B2X, {"p5": (low14, "h1"), "p6": (low14, "h2")}, hover=40)
 R_B2Z = orient("2단블록", {"돌기면 -z": "아래", "돌기면 +x": "+Z"})              # 눕힘: 돌기 2개가 아래, 긴 쪽이 z(판 길이 방향=열 방향), 구멍 면이 ±X(앞뒤 줄 쪽)
-b14r1 = s14.attach("2단블록", R_B2Z, {"p6": (low14, "h4_1"), "p5": (low14, "h5_1")}, hover=40)    # 줄1(x +5)에 길이 방향으로 열4·열5
-b14r2 = s14.attach("2단블록", R_B2Z, {"p6": (low14, "h4_2"), "p5": (low14, "h5_2")}, hover=40)    # 줄2(x −5)에 길이 방향으로 열4·열5
+b14r1 = s14.attach("2단블록", R_B2Z, {"p6": (low14, "h7"), "p5": (low14, "h9")}, hover=40)    # 줄1(x +5)에 길이 방향으로 열4·열5
+b14r2 = s14.attach("2단블록", R_B2Z, {"p6": (low14, "h8"), "p5": (low14, "h10")}, hover=40)    # 줄2(x −5)에 길이 방향으로 열4·열5
 R_U14 = np.array([[0.0, 0.0, 1.0], [0.0, -1.0, 0.0], [1.0, 0.0, 0.0]])        # 구멍 면이 아래, 열이 +Z, 줄1 이 x −5
 up14 = s14.recv("29프레임", R_U14, {"홀면 +y 열6·줄2": (b14a, "p4"), "홀면 +y 열6·줄1": (b14a, "p3"), "홀면 +y 열9·줄2": (b14r1, "p3"), "홀면 +y 열9·줄1": (b14r2, "p3")}, hover=80)
+up14.extra["joinOrder"] = 2                                                          # 블록이 먼저 꽂히고 그다음 위판이 내려온다(G12: 호스트 순서 > 떠 있는 부품 순서)
 for _st in A.steps[:13]:
     for _pt in _st.parts: _addhide(_pt, list(range(14, 21)), "13번까지 만든 본체")   # 14~20번은 창고 2·3 에서 작업 → 본체(창고 1)는 보관 중
 
@@ -200,15 +202,15 @@ for _st in A.steps[:13]:
 # 읽은 것(2026-10-05, 그림 17·19번의 판 구멍 수 세기: 긴 판은 15칸): 15번 그림의 안내 원 = 위 프레임 5번째·14번째 구멍, 아래 프레임 같은 구멍 (블록 돌기 2개가 프레임 2개에 하나씩). 16번에서 이 조립품이 14번 팔 위에 얹힌다 → 얹힌 자세(프레임 첫 구멍이 14번 블록 윗돌기 위)로 만든 뒤 to_side 로 옆자리에 둔다.
 s15 = SKEL[12]; s15.kw.pop("noPart", None)
 s15.note = "[교재 15] 팔 윗부분을 따로 만들어요: 115프레임 2개를 나란히 놓고, 2단블록 2개를 아래에서 꽂아요(프레임의 5번째 구멍과 14번째 구멍)."
-blk15a = s15.place("2단블록", R_B2X, (250.0, 10, 40))      # 5번째 구멍(z 40), 두 프레임에 걸쳐 눕고 윗돌기 2개가 위, 끝돌기가 ±X
-blk15b = s15.place("2단블록", R_B2X, (250.0, 10, 130))     # 14번째 구멍(z 130)
+blk15a = s15.place("2단블록", R_B2X, (0.0, 10, 40))      # 5번째 구멍(z 40), 두 프레임에 걸쳐 눕고 윗돌기 2개가 위, 끝돌기가 ±X
+blk15b = s15.place("2단블록", R_B2X, (0.0, 10, 130))     # 14번째 구멍(z 130)
 # 프레임 2개는 블록 위로 띄워 둔다(관리자 지시 2026-10-05: 15번은 블록 돌기 2개가 프레임 2개에 하나씩 — 앞 프레임 40, 뒤 프레임 80 높이로 떨어져 보이게)
-bar2 = s15.recv("115프레임", R_L14, {"h5_1": (blk15a, "p3"), "h14_1": (blk15b, "p3")}, hover=40)     # 앞 프레임(줄 x −5)
-bar1 = s15.recv("115프레임", R_L14, {"h5_1": (blk15a, "p4"), "h14_1": (blk15b, "p4")}, hover=80)     # 뒤 프레임(줄 x +5)
+bar2 = s15.recv("115프레임", R_L14, {"h5": (blk15a, "p3"), "h14": (blk15b, "p3")}, hover=40)     # 앞 프레임(줄 x −5)
+bar1 = s15.recv("115프레임", R_L14, {"h5": (blk15a, "p4"), "h14": (blk15b, "p4")}, hover=80)     # 뒤 프레임(줄 x +5)
 # ── 16 ── 교재 85쪽 16: 15번 조립품을 14번 팔 위에 얹는다(새 부품 없음) — 프레임 첫 구멍 2곳이 14번 블록 윗돌기 2개에, 5번째 구멍 블록의 아래 돌기 2개가 아랫판 열9 구멍 2곳에
 s16 = SKEL[13]; s16.kw.pop("noPart", None)
 s16.note = "[교재 16] 15번에서 만든 윗부분을 14번 팔 위에 얹어요: 프레임 첫 구멍 2개를 14번 블록의 윗돌기 2개에, 블록의 아래 돌기 2개를 아랫판 오른쪽 구멍 2곳에 꽂아요."
-CF15, CS15 = np.array([250.0, 17.5, 70.0]), np.array([250.0, 57.5, 370.0])      # 옆자리 = 팔에서 z 방향으로 300 떨어지고 바닥 위로 40 띄운 곳(15번 조립품 전체를 한 묶음으로 올린다 — 관리자 지시 2026-10-05)
+CF15, CS15 = np.array([0.0, 17.5, 70.0]), np.array([0.0, 57.5, 0.0])      # 옆자리 = 팔에서 z 방향으로 300 떨어지고 바닥 위로 40 띄운 곳(15번 조립품 전체를 한 묶음으로 올린다 — 관리자 지시 2026-10-05)
 for _q in (bar1, bar2, blk15a, blk15b):
     to_side(_q, np.eye(3), CF15, CS15, 16, (0, 1, 0), hosts=(low14,) if _q in (blk15a, blk15b) else ())
 bar1.extra["recv"] = bar2.extra["recv"] = True
@@ -232,7 +234,7 @@ for _p in (smallL17, bigL17): _p.extra["joinOrder"] = 2
 s18 = SKEL[15]; s18.kw.pop("noPart", None)
 s18.note = "[교재 18] 두 판이 만나는 곳 아래줄에 3단블록을 꽂고(돌기가 바깥), 90도 프레임을 3단블록의 바깥 돌기 2개에 끼워요."
 R_B3S_L = orient("3단블록", {"돌기면 +z": "+X", "돌기면 +x": "+Z"})               # 눕힘: 안쪽 돌기 면이 판(+X), 길이가 z 방향
-blk18 = s18.attach("3단블록", R_B3S_L, {"p5": (smallL17, "h6_1"), "p4": (smallL17, "h7_1"), "p3": (bigL17, "h1_1")}, hover=40)
+blk18 = s18.attach("3단블록", R_B3S_L, {"p5": (smallL17, "h16"), "p4": (smallL17, "h19"), "p3": (bigL17, "h1")}, hover=40)
 blk18.extra["skipMates"] = ["3단블록.p4"]                                          # 가운데 돌기는 안내 화살표 없이 자동으로 꽂힌다
 ang18 = s18.recv("90도 프레임", R_BIG_L, {"h1": (blk18, "p8"), "h5": (blk18, "p7")}, hover=80)
 blk18.extra["joinOrder"] = 1; ang18.extra["joinOrder"] = 2
@@ -249,7 +251,7 @@ for _p in (smallR19, bigR19): _p.extra["joinOrder"] = 2
 s20 = SKEL[17]; s20.kw.pop("noPart", None)
 s20.note = "[교재 20] 반대쪽에도 두 판이 만나는 곳 아래줄에 3단블록을 꽂고, 90도 프레임을 바깥 돌기 2개에 끼워요."
 R_B3S_R = orient("3단블록", {"돌기면 +z": "-X", "돌기면 +x": "+Z"})
-blk20 = s20.attach("3단블록", R_B3S_R, {"p5": (smallR19, "h6_3"), "p4": (smallR19, "h7_3"), "p3": (bigR19, "h1_3")}, hover=40)
+blk20 = s20.attach("3단블록", R_B3S_R, {"p5": (smallR19, "h18"), "p4": (smallR19, "h21"), "p3": (bigR19, "h3")}, hover=40)
 blk20.extra["skipMates"] = ["3단블록.p4"]
 ang20 = s20.recv("90도 프레임", R_BIG_L, {"h1": (blk20, "p8"), "h5": (blk20, "p7")}, hover=80)
 blk20.extra["joinOrder"] = 1; ang20.extra["joinOrder"] = 2
@@ -263,8 +265,12 @@ def _abs_place(st, n, R, p, **extra):
     """절대 좌표로 놓는다 — place 와 달리 '앞 부품 옆 상대 위치' 잠금(_anchored)을 쓰지 않는다. 21번에서 팔 전체를 올린(move) 뒤에 놓는 부품은 잠금이 낡은(올리기 전) 팔 자리를 기준으로 잡혀 빌드마다 값이 번갈아 바뀌었다."""
     st._resolve_lazy(n, R, p, extra); st._lock_extra(n, extra)
     return st._add(Part(n, R, p, st, extra))
+def _peg_depth(q):
+    """긴 축·T축의 화살표 꼬리 깊이 — 꼬리(안내점 + 방향×(띄움−깊이))가 띄운 축 끝(중심 + 방향×(띄움−돌기길이/2))에 오도록 부품 DB 돌기 길이와 안내점에서 계산한다(G12·G26, 손 숫자 금지)."""
+    u = np.array(q.extra["dir"], float); u = u / np.linalg.norm(u)
+    return float((np.array(q.extra["marks"][0], float) - np.array(q.p, float)) @ u) + float(q.conn["pegs"][0]["len"]) / 2
 DY = 60.0
-XC = 249.4                                                           # 팔 두 옆판 사이(안쪽 폭 20)의 가운데 x — 2단블록 부품 치우침 때문에 250 이 아니라 249.4
+XC = 0.0                                                           # 팔 두 옆판 사이(안쪽 폭 20)의 가운데 x — 2단블록 부품 치우침 때문에 250 이 아니라 249.4
 g_arm = A.group("20번까지 만든 팔", [_pt for _st in A.steps[13:20] for _pt in _st.parts])
 s21 = SKEL[18]; s21.kw.pop("noPart", None)
 s21.note = "[교재 21] 세운 판 조립품을 따로 만들어요: 315프레임에 2단블록 3개를 꽂고, 39프레임을 5칸 비껴 위에 얹어요."
@@ -274,15 +280,15 @@ VZ = 170.0                                                            # 세운 �
 lowP = _abs_place(s21, "315프레임", MFU, (XC - 7.5, 20.0 + DY, VZ))                  # 아랫판(회색): 열1 이 위, 열15 가 아래 — 열k 가운데 높이 = 100+DY−10k
 _Rb_flat = np.array([[1.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, -1.0, 0.0]])   # 눕힌 블록: 길이 방향 +X, 돌기 면 ±Y
 R_BV = MFU @ _Rb_flat
-blkL21 = s21.attach("2단블록", R_BV, {"p6": (lowP, "h7_3"), "p5": (lowP, "h8_3")}, hover=40)     # 줄3, 아랫판 7·8번째 칸
-blkB21 = s21.attach("2단블록", R_BV, {"p6": (lowP, "h14_3"), "p5": (lowP, "h15_3")}, hover=40)   # 줄3, 14·15번째 칸
-blkA21 = s21.attach("2단블록", R_BV, {"p6": (lowP, "h14_1"), "p5": (lowP, "h15_1")}, hover=40)   # 줄1, 14·15번째 칸
-topP = s21.recv("39프레임", MFU, {"h1_3": (blkL21, "p3"), "h2_3": (blkL21, "p4"), "h8_3": (blkB21, "p3"), "h9_3": (blkB21, "p4"), "h8_1": (blkA21, "p3"), "h9_1": (blkA21, "p4")}, hover=80)
+blkL21 = s21.attach("2단블록", R_BV, {"p6": (lowP, "h21"), "p5": (lowP, "h24")}, hover=40)     # 줄3, 아랫판 7·8번째 칸
+blkB21 = s21.attach("2단블록", R_BV, {"p6": (lowP, "h42"), "p5": (lowP, "h45")}, hover=40)   # 줄3, 14·15번째 칸
+blkA21 = s21.attach("2단블록", R_BV, {"p6": (lowP, "h40"), "p5": (lowP, "h43")}, hover=40)   # 줄1, 14·15번째 칸
+topP = s21.recv("39프레임", MFU, {"h3": (blkL21, "p3"), "h6": (blkL21, "p4"), "h24": (blkB21, "p3"), "h27": (blkB21, "p4"), "h22": (blkA21, "p3"), "h25": (blkA21, "p4")}, hover=80)
 for _b in (blkL21, blkB21, blkA21): _b.extra["joinOrder"] = 1
 topP.extra["joinOrder"] = 2
 VA_PARTS = [lowP, blkL21, blkB21, blkA21, topP]
 lowP.extra["recv"] = True
-for _q in VA_PARTS: to_side(_q, MFU.T, np.array([XC, 20.0 + DY, VZ]), np.array([250.0, 60.0, VZ]), 22, (0, 0, 1)); _q.extra["settleHover"] = 60   # 22번에서 팔 끝(+Z 쪽)에서 −Z 로 끼워 들어간다
+for _q in VA_PARTS: to_side(_q, MFU.T, np.array([XC, 20.0 + DY, VZ]), np.array([0.0, 60.0, 0.0]), 22, (0, 0, 1)); _q.extra["settleHover"] = 60   # 22번에서 팔 끝(+Z 쪽)에서 −Z 로 끼워 들어간다
 
 s22 = SKEL[19]; s22.kw.pop("noPart", None)
 s22.note = "[교재 22] 세운 판 조립품(21번)을 팔(20번) 끝에 끼우고, 축을 팔 옆판·세운 판 구멍으로 꿰어 한쪽 끝에 부시를 끼워요."
@@ -290,26 +296,39 @@ R_AX = Rz(-90)                                                        # 구멍�
 R_AXM = Rz(90)                                                        # 구멍축(모델 y) → 세계 −x
 AXY, AXZ = 30.0 + DY, VZ                                              # 옆판 맨 위 구멍 높이, 열22
 axis22 = _abs_place(s22, "축", R_AXM, (XC, AXY, AXZ), dir=[1, 0, 0], hover=75, pegDepth=15, marks=[[XC + 15.0, AXY, AXZ]])   # +X 에서 −X 로 꿰므로 축 몸통이 −X 쪽을 본다(검사: 띄우는 방향의 반대)
-axis22.extra["horizontal"] = True
-bushP = _abs_place(s22, "부시", Rz(90), (XC + 32.5 - 2.75, AXY, AXZ), recv=True, dir=[1, 0, 0], hover=40, marks=[[XC + 32.5, AXY, AXZ]])
+axis22.extra["horizontal"] = True; axis22.extra["pegDepth"] = _peg_depth(axis22)
+bushP = _abs_place(s22, "부시", Rz(90), (XC + 18.55, AXY, AXZ), recv=True, dir=[1, 0, 0], hover=115.6, marks=[[XC + 21.3, AXY, AXZ]])   # 부시는 축 끝이 아니라 +X 옆판 바깥 면(XC+15)까지 끼워 프레임에 닿는다(사용자 지시 2026-11-13). 안내점 = 부시 바깥 면(옆판 바깥 면 XC+15 + 두께 5.5). 옆판은 사용자 ❄ 12.7(바깥 면 15.2)이라 부시 가운데 17.95. 띄운 자리(133.55)는 그대로: 17.95+115.6
 bushP.extra["thick"] = 5.5
-axis22.extra["joinOrder"] = 1; bushP.extra["joinOrder"] = 2
+axis22.extra["joinOrder"] = 2; bushP.extra["joinOrder"] = 3   # 결합 순서: 21번 세운 판 묶음(settleOrder 기본 1)이 먼저 끼워지고 → 축 → 부시(사용자 지시 2026-11-13)
 s23 = SKEL[20]; s23.kw.pop("noPart", None)
 s23.note = "[교재 23] 축의 반대쪽 끝에도 부시를 끼워요."
-bushM = _abs_place(s23, "부시", Rz(-90), (XC - 32.5 + 2.75, AXY, AXZ), recv=True, dir=[-1, 0, 0], hover=40, marks=[[XC - 32.5, AXY, AXZ]])
+bushM = _abs_place(s23, "부시", Rz(-90), (XC - 15.0 - 2.75, AXY, AXZ), recv=True, dir=[-1, 0, 0], hover=52, marks=[[XC - 20.5, AXY, AXZ]])   # 22번 부시와 같게: 축 끝이 아니라 −X 옆판 바깥 면(XC−15)까지 끼워 프레임에 닿는다(사용자 지시 2026-11-13). 띄운 자리(−70.3)는 그대로: −17.8−52
 bushM.extra["thick"] = 5.5
+def _bush_marks(_b, _sgn):   # 안내 꼬리(marks) = 고정된 축 돌기 끝(DB 연결점), 링 끝(faceMarks) = 부시 구멍 중심 + 방향×두께/2 — 부시가 축 끝이 아니라 프레임 바깥 면에 앉아도 둘 다 DB 점에서 계산
+    _pg = [axis22.world("peg", g) for g in axis22.conn["pegs"]]
+    _tip = max((w["pos"] + w["dir"] * float(w["len"]) / 2 * x for w in _pg for x in (1, -1)), key=lambda q: q[0] * _sgn)
+    _bh = min(_b.conn["holes"], key=lambda c: float(np.linalg.norm(_b.world("hole", c)["pos"] - np.array([_b.p[0], AXY, AXZ]))))
+    _b.extra["marks"] = [rnd(_tip)]
+    _b.extra["faceMarks"] = [rnd(_b.world("hole", _bh)["pos"] + np.array([_sgn, 0.0, 0.0]) * _b.extra["thick"] / 2)]
+_bush_marks(bushP, 1); _bush_marks(bushM, -1)
 s24 = SKEL[21]; s24.kw.pop("noPart", None)
 s24.note = "[교재 24] DC모터를 세운 판 위쪽 안쪽에 달아요: 모터 돌기 2개를 1번째·5번째 칸 구멍에 꽂아요."
 R_MV = np.array([[0.0, -1.0, 0.0], [0.0, 0.0, -1.0], [1.0, 0.0, 0.0]])   # 돌기 면(+y)이 −X(세운 판 쪽), 케이블(모델 +z)이 아래(−Y)
-motor24 = s24.attach("DC모터", R_MV, {"p2": (lowP, "h1_2"), "p1": (lowP, "h5_2")}, hover=60)
+motor24 = s24.attach("DC모터", R_MV, {"p2": (lowP, "h2"), "p1": (lowP, "h14")}, hover=60)
 s25 = SKEL[22]; s25.kw.pop("noPart", None)
 s25.note = "[교재 25] 큰기어 가운데 구멍과 세운 판 2번째 칸 구멍으로 T축을 꿰어 모터 십자 구멍에 꽂아요(머리가 바깥)."
 GY = 100.0 + DY - 20.0                                                # 세운 판 2번째 칸 높이(열k 높이 = 100+DY−10k)
 gear25 = _abs_place(s25, "큰기어", R_AX, (XC - 10.0 - 4.5, GY, VZ), recv=True, dir=[-1, 0, 0], hover=60, marks=[[XC + 5.0, GY, VZ]])
 gear25.extra["thick"] = 9
-rod25 = _abs_place(s25, "T축", R_AX, (XC - 10.0, GY, VZ), dir=[-1, 0, 0], hover=90, pegDepth=15, marks=[[XC - 10.0 - 2.5, GY, VZ]])
+_gh = min(gear25.conn["holes"], key=lambda c: float(np.linalg.norm(gear25.world("hole", c)["pos"] - np.array([XC - 10.0, GY, VZ]))))   # T축이 지나는 기어 구멍(DB 연결점)
+gear25.extra["faceMarks"] = [rnd(gear25.world("hole", _gh)["pos"] + np.array([-1.0, 0.0, 0.0]) * gear25.extra["thick"] / 2)]   # 링 = 화살표 끝 − 방향×두께/2 가 자기 구멍 중심에 오는 면 점(G26 ①·G27 ③, 손 숫자 금지)
+_TL = float(partlib.get("T축")["pegs"][0]["len"])                      # T축 길이(부품 DB 돌기 길이)
+_RX = gear25.p[0] - gear25.extra["thick"] / 2 + _TL / 2                 # 큰기어는 홀 테두리가 있어 T축 머리가 기어 바깥 면에 딱 들어간다(넘치지 않음, 사용자 지시 2026-11-13·규칙 K) — 위치는 기어 두께와 DB 길이에서 계산
+rod25 = _abs_place(s25, "T축", R_AX, (_RX, GY, VZ), dir=[-1, 0, 0], hover=60 + 2 * _TL, pegDepth=15, marks=[[_RX - 2.5, GY, VZ]])   # 결합 순서(사용자 지시 2026-11-13): T축이 먼저 기어(홀 테두리)에 끼워지고, 끼운 기어+T축이 함께 판·모터로 간다 — 그림은 기어(60)가 떠 있고 T축은 기어보다 T축 길이 x2 만큼 더 떨어져 있다(끝이 기어 면에서 T축 길이만큼 띄움)(DB 길이로 계산, 손값 없음)
 rod25.extra["horizontal"] = True
-gear25.extra["joinOrder"] = 1; rod25.extra["joinOrder"] = 2
+rod25.extra["joinOrder"] = 1; gear25.extra["joinOrder"] = 2   # 규칙(G12): 기어의 안내 화살표가 떠 있는 T축 끝에서 시작하려면 기어 순서가 T축보다 커야 한다. 재생: ① T축이 먼저 떠 있는 기어에 끼워진다(preJoin, 기어가 뜬 거리로) ② 끼운 기어+T축이 함께 내려와 판·모터에 결합(then=기어 순서)
+rod25.extra["preJoin"] = {"order": 1, "hover": gear25.extra.get("hover", 60), "then": gear25.extra["joinOrder"]}
+gear25.extra["marks"] = [[_RX + _TL / 2, GY, VZ]]                                  # 기어 안내점 = 끼워진 T축 돌기 끝(기어 바깥 면 + T축 길이, DB 길이에서 계산)
 
 # ── 26 ── 교재 86쪽 26: 2열브라켓(창고 3) — 넓은 면을 위로 해 리벳 4개를 꽂고 29프레임을 위에 얹는다
 # 읽은 것(2026-10-05): 브라켓은 넓은 면(구멍 2×2)이 위, 세운 벽이 아래 왼쪽으로 내려간다("긴 쪽"이 벽 폭). 리벳 4개(그림 위 (4))가 그 구멍에 꽂히고, 29프레임(2×9)의 1·2번째 칸 2줄 구멍 4곳이 리벳에 끼워진다(판 나머지는 오른쪽으로 길게 나온다). 이 조립품은 27번에서 팔과 합쳐진다(87쪽).
@@ -320,7 +339,7 @@ R_P26 = Ry(-90) @ np.array([[1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, -1.0]]
 # 26번 조립품(브라켓+리벳 4+29프레임)은 27번에서 큰기어 위로 올라가 붙는다(최종 자세) → 교재 26 의 평평한 모습(옆자리)은 임시 조립(_SA)으로 계산해 그 자세·안내를 가져오고,
 # 최종 자세는 29프레임을 27번의 기어 리벳 3개에 꽂은 자리에서 같은 강체 변환으로 옮긴다(조립품은 한 덩어리).
 _SA = Asm("scratch", "scratch", "scratch"); _ss = _SA.step("flat")
-_br_f = _abs_place(_ss, "2열브라켓", R_BR26, (0.0, 40.0, -300.0))
+_br_f = _abs_place(_ss, "2열브라켓", R_BR26, (0.0, 40.0, 0.0))
 _rv_f = [_ss.attach("리벳", orient("리벳", {"돌기면 -y": "아래"}), {"돌기면 -y 1": (_br_f, "h%d" % _i)}, rivet=True, hover=22) for _i in (1, 2, 3, 4)]
 _xz = [(round(float(_r.p[0]), 1), round(float(_r.p[2]), 1)) for _r in _rv_f]
 _cols = sorted(set(z for x, z in _xz)); _rows = sorted(set(x for x, z in _xz))
@@ -332,17 +351,18 @@ s27 = SKEL[24]; s27.kw.pop("noPart", None)
 s27.note = "[교재 27] 큰기어 구멍 3곳에 리벳 3개를 꽂고, 26번에서 만든 조립품(29프레임)을 그 위에 얹어요."
 # 기어 구멍(십자 모양 네 구멍) 중 3곳 — 그림 27 의 29프레임 안내 원 3개(7·9번째 칸 한 줄, 8번째 칸 다른 줄)와 맞다. 눕혀서 보는 그림 27 에서 비는 구멍은 세운 판 아래쪽(15번째 칸 쪽)이므로 위쪽 구멍이 리벳을 받는다(관리자 지시 2026-10-05: 리벳 하나 위치·판 한 칸 위)
 rvg = [s27.attach("리벳", R_RV_L, {"돌기면 -y 1": (gear25, _h)}, rivet=True, hover=22) for _h in ("h2", "h4", "h1")]
-pl26 = s26.recv("29프레임", R_BIG_L, {"h7_1": (rvg[0], "돌기면 +y 1"), "h9_1": (rvg[1], "돌기면 +y 1"), "h8_2": (rvg[2], "돌기면 +y 1")}, hover=80)   # 최종 자세(기어 위)
+pl26 = s26.recv("29프레임", R_BIG_L, {"h13": (rvg[0], "돌기면 +y 1"), "h17": (rvg[1], "돌기면 +y 1"), "h16": (rvg[2], "돌기면 +y 1")}, hover=80)   # 최종 자세(기어 위)
 import copy as _cp
 _RT = pl26.R @ _pl_f.R.T; _tt = pl26.p - _RT @ _pl_f.p
 def _final_of(q): return s26._add(Part(q.n, _RT @ q.R, _RT @ q.p + _tt, s26, _cp.deepcopy(q.extra)))
 br26 = _final_of(_br_f)
 rv26 = [_final_of(_r) for _r in _rv_f]
-pl26.extra.clear(); pl26.extra.update(_cp.deepcopy(_pl_f.extra))
+pl26.extra.clear(); pl26.extra.update(_cp.deepcopy(_pl_f.extra)); pl26.extra["joinOrder"] = 2   # 27번에서는 기어 리벳(1) 다음에 판이 얹힌다
 for _q, _f in [(br26, _br_f)] + list(zip(rv26, _rv_f)) + [(pl26, _pl_f)]:
     _q.extra["side"] = {"p": rnd(_f.p), "r": R_to_euler(_f.R), "until": 27}     # 26번 화면: 평평한 모습(옆자리)
     _q.extra["settleDir"] = [-1, 0, 0]; _q.extra["settleHover"] = 60            # 27번: 바깥(−X)에서 내려와 기어 리벳에 얹힌다
 pl26.extra["settleMarks"] = [peg_tip(_r, "p2") for _r in rvg]
+pl26.extra["settleOrder"] = 2                                                        # 27번 합치기: 기어 리벳(1)이 먼저, 그다음 판(G12)
 rvg_order = [_r.extra.__setitem__("joinOrder", 1) for _r in rvg]
 
 # ── 28 ── 교재 87쪽 28: 315프레임(4번째)을 세운 판 옆면(+Z)에 대고 리벳 2개(세운 판 블록 구멍)와 모터 옆 돌기 2개로 고정한다
@@ -357,8 +377,8 @@ rvB28 = s28.attach("리벳", R_RVZM, {"돌기면 -y 1": (blkB21, _hB)}, rivet=Tr
 rvL28 = s28.attach("리벳", R_RVZM, {"돌기면 -y 1": (blkL21, _hL)}, rivet=True, hover=22)
 R_PL28 = np.array([[0.0, 0.0, -1.0], [1.0, 0.0, 0.0], [0.0, -1.0, 0.0]])   # 열이 +Y(1번째 칸이 아래), 구멍 면이 −Z(세운 판 쪽), 줄1 이 +X 쪽(모터 옆 돌기 줄)
 _colM = lambda pid: int(round(1 + (float(motor24.peg(pid)["pos"][1]) - (100.0 + DY - 150.0)) / 10.0))   # 판 N번째 칸 높이 y = (100+DY−150) + 10(N−1) (1번째 칸 = 세운 판 15번째 칸)
-pl28 = s28.recv("315프레임", R_PL28, {"h1_3": (rvB28, "돌기면 +y 1"), "h8_3": (rvL28, "돌기면 +y 1"),
-                                     "h%d_2" % _colM("p3"): (motor24, "p3"), "h%d_2" % _colM("p4"): (motor24, "p4")}, hover=80)
+pl28 = s28.recv("315프레임", R_PL28, {"h3": (rvB28, "돌기면 +y 1"), "h24": (rvL28, "돌기면 +y 1"),
+                                     "h%d" % ((_colM("p3") - 1) * 3 + 2): (motor24, "p3"), "h%d" % ((_colM("p4") - 1) * 3 + 2): (motor24, "p4")}, hover=80)
 for _r in (rvB28, rvL28): _r.extra["joinOrder"] = 1
 pl28.extra["joinOrder"] = 2
 
@@ -367,7 +387,7 @@ pl28.extra["joinOrder"] = 2
 #   (추정: 가운데 열(열4)에 세운 판이 선다 — 그림 29·30 에서 세운 판이 빨간 17프레임 가운데쯤에 선다.)
 s29 = SKEL[26]; s29.kw.pop("noPart", None)
 s29.note = "[교재 29] 본체(13번)와 팔 조립품(28번)을 합쳐요: 세운 판 맨 아래 블록 끝돌기 2개를 본체 윗판 가운데 구멍 2곳에 꽂아요."
-_pegB = blkB21.peg("p1"); _holeB = pl37.hole("h4_1")
+_pegB = blkB21.peg("p1"); _holeB = pl37.hole("h10")
 DELTA = np.array(_holeB["pos"], float) - np.array(_pegB["pos"], float)       # 세운 판 블록 끝돌기 → 본체 윗판 구멍
 g_new = A.group("21~28번에서 만든 부분", [_pt for _st in A.steps[20:28] for _pt in _st.parts])
 s29.move_group(g_new, np.eye(3), shift=tuple(DELTA))                         # 29번에 내려와 본체에 붙는다
@@ -380,7 +400,7 @@ for _st in A.steps[13:20]:
     for _pt in _st.parts:
         _pt.extra["move"]["p"] = rnd(np.array(_pt.extra["move"]["p"], float) + DELTA)
         _pt.extra["lift"] = {"from": 21, "at": 29, "by": rnd(-DELTA), "dir": [0, 1, 0], "hover": 60}
-for _bl, _hn in ((blkB21, "h4_1"), (blkA21, "h4_3")):
+for _bl, _hn in ((blkB21, "h10"), (blkA21, "h12")):
     _hp = np.array(pl37.hole(_hn)["pos"], float) + np.array([0.0, 2.5, 0.0])
     _bl.extra["move"]["marks"] = [rnd(_hp)]
 
@@ -393,7 +413,7 @@ _WX, _WY, _WZ = float(_cx[0]), float(_cx[1]), 50.0                        # 모�
 _R_WH = Rx(-90.0)                                                         # 바퀴·T축 구멍축(모델 y) → −Z (모터 쪽), 머리가 바깥(+Z)
 wheel30 = _abs_place(s30, "작은바퀴", _R_WH, (_WX, _WY, _WZ + 8.0), dir=[0, 0, 1], hover=70)
 rod30 = _abs_place(s30, "T축", _R_WH, (_WX, _WY, _WZ + 5.0), dir=[0, 0, 1], hover=110, marks=[[_WX, _WY, _WZ]])
-rod30.extra["horizontal"] = True; wheel30.extra["joinOrder"] = 1; rod30.extra["joinOrder"] = 2
+rod30.extra["horizontal"] = True; rod30.extra["pegDepth"] = _peg_depth(rod30); wheel30.extra["joinOrder"] = 1; rod30.extra["joinOrder"] = 2
 # ── 31 ── 교재 87쪽 31: 새 부품 없음(메인보드 오른쪽 소켓에 팔 DC모터 케이블 연결)
 SKEL[28].kw.pop("noPart", None) if False else None
 SKEL[28].note = "[교재 31] 메인보드 오른쪽에 팔의 DC모터를 연결해요(케이블)."
@@ -479,21 +499,41 @@ for _st in A.steps[:13]:
     for _pt in _st.parts: _addhide(_pt, list(range(14, 29)), "13번까지 만든 본체")
 
 # 작업 자리(창고, 6-5절). 규칙(사용자 지시 2026-10-04): 이어서 만들면 같은 창고, 새 부분을 처음 만들면 새 창고, 두 창고를 합치는 단계는 번호가 작은 창고에서 한다(1과 2 → 1, 0과 1 → 0). 근거: 번호표("3"·"2", "21"·"20", "13+28")와 그림 모양
-_SLOT = {1: 1, 2: 1, 3: 2, **{k: 1 for k in range(4, 14)}, 14: 2, 15: 3, **{k: 2 for k in range(16, 21)}, 21: 3, 22: 2, 23: 2, 24: 2, 25: 2, 26: 3, 27: 2, 28: 2, 29: 1, 30: 1, 31: 1}
+_SLOT = {1: 1, 2: 1, 3: 2, **{k: 1 for k in range(4, 14)}, 14: 2, 15: 3, **{k: 2 for k in range(16, 21)}, 21: 3, 22: 3, 23: 3, 24: 3, 25: 3, 26: 3, 27: 3, 28: 3, 29: 1, 30: 1, 31: 1}
 for _i, _sl in _SLOT.items(): A.steps[_i - 1].kw["slot"] = _sl
 _HIST = {3: "📦 본체(1~2번)를 창고에 넣고 시작", 4: "📦 본체를 창고에서 불러오고, 창고 2의 3번 윗판을 가져와 결합",
          14: "📦 본체(1~13번)를 창고에 넣고 시작", 15: "📦 14번 조립품을 창고에 넣고 시작", 16: "창고 2의 14번 + 창고 3의 15번을 가져와 조립",
-         21: "📦 20번까지 만든 조립품을 창고에 넣고 시작", 22: "창고 2의 20번 + 창고 3의 21번을 가져와 조립",
-         26: "📦 25번까지 만든 조립품을 창고에 넣고 시작", 27: "창고 3의 26번을 가져와 조립", 29: "창고 1의 13번 + 창고 2의 28번을 가져와 조립"}
+         21: "📦 20번까지 만든 조립품을 창고에 넣고 시작", 22: "창고 2의 20번(팔)을 창고 3 으로 가져와 21번과 조립",
+         26: "📦 25번까지 만든 조립품을 창고에 넣고 시작", 27: "26번 조립품을 가져와 조립", 29: "창고 1의 13번 + 창고 3의 28번을 가져와 조립"}
 for _i, _h in _HIST.items(): A.steps[_i - 1].kw["history"] = _h
 A.meta["finalSlot"] = 0   # 완성 화면 = 창고 0 (관리자 지시 2026-10-04: 완성 단계는 0번)
 # 카메라: 1·2번은 교재 82쪽 그림(앞 +Z·오른쪽 +X 위) 짐작. 나머지는 쪽 작업 때 교재 그림에서 맞춘다(그 전까지 같은 값의 짐작).
-for _k in range(1, 32): A.steps[_k - 1].cam = (-0.79, 0.95, False, None, None, None); A.steps[_k - 1].camSrc = "guess"   # 교재 82쪽: +X 가 오른쪽 위, +Z 가 오른쪽 아래로 보이는 시점 = 방위 −0.79rad(화면 글자는 "+X+Z 쪽에서 봄"이라고 나오지만 실제 장면이 교재와 같은 배치 — 글자만 보고 부호를 바꾸지 말 것, 장면을 교재와 나란히 비교), 높이 약 36° — 눈대중(guess)
+for _k in range(1, 32): A.steps[_k - 1].cam = (-0.79, 0.95); A.steps[_k - 1].camSrc = "guess"   # 2값만 준다 — 6값(False…)을 주면 빌드의 axes 자동 적용(apply_axes_cams)이 건너뛴다   # 교재 82쪽: +X 가 오른쪽 위, +Z 가 오른쪽 아래로 보이는 시점 = 방위 −0.79rad(화면 글자는 "+X+Z 쪽에서 봄"이라고 나오지만 실제 장면이 교재와 같은 배치 — 글자만 보고 부호를 바꾸지 말 것, 장면을 교재와 나란히 비교), 높이 약 36° — 눈대중(guess)
 # 1·2단계: 부품 전체(판 2장·블록·모터)가 화면에 크게 들어오도록 중심점을 준다(설명 패널은 3D 화면 아래로 옮겼으니 가릴 일이 없다)
-for _k in (1, 2): A.steps[_k - 1].cam = (-0.79, 0.95, False, [[-50, 0, -100], [50, 0, 45], [0, 115, 20]], None, None)
+# 1·2번 카메라는 손으로 적지 않는다 — 각 번호 axes.json(mkfit3d)이 빌드에서 자동 적용된다
 # 19·20번: 교재가 팔을 반대쪽(+X 면)에서 본 그림(열 번호가 왼쪽으로 커진다) = 방위 +0.79rad (눈대중)
-for _k in (19, 20, 22): A.steps[_k - 1].cam = (0.79, 0.95, False, None, None, None)   # 22번 그림도 +X 쪽(검정 윗판 쪽)에서 본 것
+# 19번 카메라는 손으로 적지 않는다 — 19번 axes.json(mkfit3d)이 빌드에서 자동 적용된다
+# 22번 카메라도 손으로 적지 않는다 — 22번 axes.json(mkfit3d)이 빌드에서 자동 적용된다
+# 책 구도 맞춤(2026-11-13, 눈대중 ⚠) — 사용자 📷(DB ivs_assembly_cams)와 같은 방위·높이. 거리·중심은 DB 쪽: 6(300,[22.8,30,-25]) 7(335,[-10,45,-60]) 8(310,[-10,35,10]) 15(273.5,[0,90,0]) 22(390,[10,90,130]) 20(420,[20,45,30])
+for _k, _c in ((6, (2.314, 0.95)), (7, (-4.062, 1.0)), (8, (-0.574, 1.0)), (15, (-2.3, 1.0)), (22, (0.854, 1.0))): A.steps[_k - 1].cam = _c
+# 20번: 책처럼 +X 쪽에서 판 옆면을 보는 각도(사용자 📷 와 같은 값, 2026-11-13 책 구도 맞춤 — 눈대중 ⚠)
+for _k in (20,): A.steps[_k - 1].cam = (1.0, 1.05, False, None, None, None)
+# 5번 카메라는 5번 axes.json(39프레임 axes_fit 0.52px, theta −1.99·phi 0.81, 칸 +Z 해)을 빌드가 자동 적용한다 — 여기서 손으로 적지 않는다
 
+# 03 부품 체크(B): 번호별 사용 부품 — 모델 데이터에서 센 값을 교재 그림의 "(n)" 표시·LIST 와 대조함(2026-11-12)
+USED = {1: "59프레임 2, 3단블록 2, DC모터 1", 2: "3단블록 4", 3: "59프레임 2, 3단블록 2", 4: "없음(합치는 단계)", 5: "리벳 2, 39프레임 1, 35프레임 1",
+        6: "리벳 2, 39프레임 1", 7: "리벳 4, 35프레임 1", 8: "39프레임 1", 9: "리벳 6, 25프레임 2, 19프레임 1", 10: "2단블록 2",
+        11: "37프레임 1, 17프레임 1", 12: "메인보드 1", 13: "없음(합치는 단계)", 14: "29프레임 2, 2단블록 3", 15: "2단블록 2, 115프레임 2",
+        16: "없음(합치는 단계)", 17: "리벳 2, 37프레임 1, 315프레임 1", 18: "3단블록 1, 90도 프레임 1", 19: "리벳 2, 37프레임 1, 315프레임 1",
+        20: "3단블록 1, 90도 프레임 1", 21: "315프레임 1, 2단블록 3, 39프레임 1", 22: "축 1, 부시 1", 23: "부시 1", 24: "DC모터 1",
+        25: "큰기어 1, T축 1", 26: "29프레임 1, 2열브라켓 1, 리벳 4", 27: "리벳 3", 28: "리벳 2, 315프레임 1", 29: "없음(합치는 단계)",
+        30: "작은바퀴 1, T축 1", 31: "작은바퀴 1"}
+for _i, _u in USED.items():
+    _pp = A.steps[_i - 1].note.split("\n▣ 사용 부품:")
+    _tail = ("\n" + _pp[1].split("\n", 1)[1]) if len(_pp) > 1 and "\n" in _pp[1] else ""
+    A.steps[_i - 1].note = _pp[0] + "\n▣ 사용 부품: " + _u + _tail
+
+import stepchecks; stepchecks.apply(A, "rollingbot")   # 단계별 정밀 검사 파일(rollingbot_checks.json) — P1 4-3, A16
 A.save_links()                                    # 이번 빌드의 잠금 기록 저장(수정 지시가 있는 빌드는 갱신하지 않는다)
 A.check_fixes()                                   # 적용되지 않은 수정 지시가 있으면 경고(번호가 밀렸거나 오타)
 if "--orient" in sys.argv:   # 부품 방향 보고: python rollingbot.py --orient 2,4,5  (교재 그림의 구멍 면·돌기 면 방향과 나란히 비교)

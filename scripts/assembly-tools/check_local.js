@@ -25,7 +25,8 @@ const fin=(pt,k,i)=>{ const me=MM[k+':'+i]; if(me&&me.p) return {p:me.p,r:me.r||
 const items=all.map(a=>{const f=fin(a.pt,a.k,a.i);return {a,boxes:C.coreBoxes(a.pt.n,dims[a.pt.n]||[0,0,0]),q:quat(f.r),pos:{x:f.p[0],y:f.p[1],z:f.p[2]}};});
 const MMslot={}; steps.forEach((s)=>Object.keys(s.moveMade||{}).forEach(k=>{MMslot[k]=s.slot;}));
 const isMoved=(a)=>{const own=steps[a.k-1].slot;const ms=MMslot[a.k+':'+a.i];return ms!=null&&own!=null&&ms!==own;};   // 다른 창고에서 합치기로 옮겨진 부품만
-const sameSlotOrMoved=(A,B)=>{const sa=steps[A.a.k-1].slot,sb=steps[B.a.k-1].slot;if(sa==null||sb==null||sa===sb)return true;return isMoved(A.a)||isMoved(B.a);};
+const hasMove=(a)=>!!(a.pt.move||a.pt.moves);   // pt.move 로 합쳐 옮겨지는 부품은 마지막 자세가 공통 좌표다 — 둘 다 그렇다면 창고가 달라도 비교한다(2026-11-13 롤링봇: 팔 315프레임↔세운 판 0.6mm 겹침을 칩이 놓침)
+const sameSlotOrMoved=(A,B)=>{const sa=steps[A.a.k-1].slot,sb=steps[B.a.k-1].slot;if(sa==null||sb==null||sa===sb)return true;return isMoved(A.a)||isMoved(B.a)||(hasMove(A.a)&&hasMove(B.a));};
 let n=0;
 for(let i=0;i<items.length;i++)for(let j=i+1;j<items.length;j++){const A=items[i],B=items[j];if(!A.boxes||!B.boxes)continue;
  if(sameSlotOrMoved(A,B)===false)continue;   // 다른 창고(slot)에서 원점에 따로 만든 부품끼리는 합치기(moveMade) 전엔 같은 공간이 아니다(2026-11-08 로봇팽이 29번: 팽이 부시↔손잡이 15프레임 오탐)

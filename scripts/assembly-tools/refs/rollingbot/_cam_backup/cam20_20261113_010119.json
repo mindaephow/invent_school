@@ -1,0 +1,19 @@
+[
+ {
+  "id": "b185b7e2-dec7-4b86-b446-a4d1649f2a95",
+  "assembly_id": "cubo-1-rollingbot",
+  "step": 20,
+  "cam": {
+   "phi": 0.886,
+   "theta": 0.782,
+   "radius": 361.1,
+   "target": [
+    14.3,
+    61.8,
+    42
+   ]
+  },
+  "updated_by": null,
+  "updated_at": "2026-11-12T08:03:04.398+00:00"
+ }
+]

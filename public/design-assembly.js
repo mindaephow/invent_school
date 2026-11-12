@@ -577,7 +577,7 @@
         }
         // holeMarks: 프레임 구멍에 고정된 결합 위치 원(교재처럼 판 구멍에 표시, 부품이 움직여도 그 자리)
         if (isNew && !moving && pt.holeMarks) pt.holeMarks.forEach((m) => guides.push({ from: m, to: m, dir: dirH || [0, 1, 0], idx: list.length, ringOnly: true }));
-        list.push({ recvHost: !!pt.recv, key: (si + 1) + ':' + (s.parts || []).indexOf(pt0), step: si + 1, eff: effStepOf(pt, si + 1, upTo), noFreeze: !!(pt.noFreeze && pt.noFreeze.includes(upTo)), name: pt.n, label: pt.n + ' ' + numOf.get(pt0) + '번', type, mount: 'floor', pos: pos.slice(), quat: b.quat(rot), rot: rot.slice(), isNew, hmk: (isNew && pt.marks && pt.marks.length) ? pt.marks.map((k) => k.slice()) : null, final: (isNew && dirH) || ex ? base.slice() : null, order: settling ? (pt.settleOrder || 1) : (pt.joinOrder || (ex && ex.order) || 1), moveGroup: (moving && pt.moveGroup) || null, arrowFrom: pt.arrowFrom || null, skipMates: pt.skipMates || null, sideUntil: pt.side ? pt.side.until : null, fin: moved ? (pt.move.p || add(pt.p, pt.move.by || [0, 0, 0], 1)) : pt.p, finRot: (moved && pt.move.r) ? pt.move.r : pt.r }); // 합쳐지는 묶음(settle)은 모두 한꺼번에 내려온다 // ex: 14단계처럼 "결합 전"으로 띄운 부품도 제자리(결합 후)가 있다
+        list.push({ recvHost: !!pt.recv, key: (si + 1) + ':' + (s.parts || []).indexOf(pt0), step: si + 1, eff: effStepOf(pt, si + 1, upTo), noFreeze: !!(pt.noFreeze && pt.noFreeze.includes(upTo)), name: pt.n, label: pt.n + ' ' + numOf.get(pt0) + '번', type, mount: 'floor', pos: pos.slice(), quat: b.quat(rot), rot: rot.slice(), isNew, hmk: (isNew && pt.marks && pt.marks.length) ? pt.marks.map((k) => k.slice()) : null, final: (isNew && dirH) || ex ? base.slice() : null, pre: (isNew && dirH && pt.preJoin) ? { order: pt.preJoin.order || 1, then: pt.preJoin.then || null, t: add(base, dirH, pt.preJoin.hover || HOVER) } : null, order: settling ? (pt.settleOrder || 1) : (pt.joinOrder || (ex && ex.order) || 1), moveGroup: (moving && pt.moveGroup) || null, arrowFrom: pt.arrowFrom || null, skipMates: pt.skipMates || null, sideUntil: pt.side ? pt.side.until : null, fin: moved ? (pt.move.p || add(pt.p, pt.move.by || [0, 0, 0], 1)) : pt.p, finRot: (moved && pt.move.r) ? pt.move.r : pt.r }); // 합쳐지는 묶음(settle)은 모두 한꺼번에 내려온다 // ex: 14단계처럼 "결합 전"으로 띄운 부품도 제자리(결합 후)가 있다
       });
     });
     deferredShift.forEach((fn) => fn());
@@ -587,14 +587,15 @@
       const T = (v) => { const w = mvec(xf.m, v); return [w[0] + xf.t[0], w[1] + xf.t[1], w[2] + xf.t[2]]; };
       list.forEach((d) => {
         if (d.noXform) return;
-        d.pos = T(d.pos); if (d.final) d.final = T(d.final);
+        d.pos = T(d.pos); if (d.final) d.final = T(d.final); if (d.pre) d.pre = { order: d.pre.order, then: d.pre.then, t: T(d.pre.t) };
         d.rot = matToEuler(mmul(xf.m, eulerToMat(d.rot))); d.quat = b.quat(d.rot);
       });
       guides.forEach((g) => { g.from = T(g.from); g.to = T(g.to); g.dir = mvec(xf.m, g.dir); });
     }
     { const lf = def.lift && Number(def.lift[target]); if (lf) list.forEach((d) => { d.pos = [d.pos[0], d.pos[1] + lf, d.pos[2]]; if (d.final) d.final = [d.final[0], d.final[1] + lf, d.final[2]]; }); if (lf && def.guideMode !== 'mates') guides.forEach((g) => { g.from = [g.from[0], g.from[1] + lf, g.from[2]]; g.to = [g.to[0], g.to[1] + lf, g.to[2]]; }); } // lift: 단계 번호 → 그 단계에서만 화면 전체(부품·안내 화살표·초록 점)를 y 로 띄운다 — 안내도 같이 올려야 점이 부품에서 안 뜬다(G23, 풍차 12번 2026-11-08)(바닥 아래에서 올라와야 하는 새 부품이 있는 단계, 꼬마기사 23번)
     const guidesOut = def.guideMode === 'mates' ? mateGuides(list, target) : guides;
-    return { list, guides: guidesOut, missing, stored, storedThumb, storedSlot: storedEff ? slotOfStep(storedEff) : 1, viewEff, storedSlots: Object.fromEntries(Object.keys(storedEffBy).map((k) => [k, storedSlotOvr[k] !== undefined ? storedSlotOvr[k] : slotOfStep(storedEffBy[k])])), storedThumbBy, storedTypes, targets: list.map((d) => d.final || null), orders: list.map((d) => d.order || 1) };
+    return { list, guides: guidesOut, missing, stored, storedThumb, storedSlot: storedEff ? slotOfStep(storedEff) : 1, viewEff, storedSlots: Object.fromEntries(Object.keys(storedEffBy).map((k) => [k, storedSlotOvr[k] !== undefined ? storedSlotOvr[k] : slotOfStep(storedEffBy[k])])), storedThumbBy, storedTypes, targets: list.map((d) => d.final || null), orders: list.map((d) => (d.pre && d.pre.then) || d.order || 1), pre:   // preJoin.then: 사전 결합한 부품은 받는 부품이 내려오는 순서에 같이 내려온다(규칙 검사용 joinOrder 는 받는 부품보다 커야 해서 따로 둔다)
+ list.map((d) => d.pre || null) };
   }
 
   // 단계 이름표: label 이 있는 단계(예: "창고")는 이름으로, 나머지는 label 없는 단계만 세어 번호를 붙인다
@@ -795,11 +796,12 @@
   // 자동 검사 경고(관리자 전용): 지금 열린 번호의 겹침 경고를 오른쪽 아래 카드에 보이고, 그 카드에서 관리자가 "문제없음"/"해결요청"을 고른다. 고른 결과는 ivs_assembly_checks 에 저장.
   let checkVerdicts = {}; // '단계|경고키' → 'ok' | 'fix'
   // 자동 검사 경고 = 하단 칩과 같은 기준: 화면에 지금 놓인 부품의 몸통 겹침(bridge.xray). 예전 미리 계산 목록은 판을 세운 자세를 몰라 오경고가 나서 없앴다(사용자 지시 2026-11-11).
-  const warnsOf = (i) => { const b = bridge(), xr = i === step && b && b.xray ? b.xray(lastLabels) : null; return xr ? xr.overlaps.map((q) => ({ key: i + '|' + q.a + '|' + q.b, part: q.a, text: q.a + '이(가) ' + q.b + ' 와 겹쳐 있어요' })) : []; };
+  const warnCache = {};   // 번호 → 그 번호를 마지막으로 열었을 때의 겹침 경고(열지 않은 번호 버튼에도 ⚠ 를 보이려고, 사용자 지시 2026-11-13)
+  const warnsOf = (i) => { const b = bridge(), xr = i === step && b && b.xray ? b.xray(lastLabels) : null; if (xr) warnCache[i] = xr.overlaps.map((q) => ({ key: i + '|' + q.a + '|' + q.b, part: q.a, text: q.a + '이(가) ' + q.b + ' 와 겹쳐 있어요' })); return warnCache[i] || []; };
   const VIOL_ICON = { floor: '▼', overlap: '✕', gap: '↔', link: '◎', orient: '↻', hand: '✋', center: '⊕', cam: '◉', split: '⛓' };
   function violMark(i) { const V = (def.violations && def.violations[i]) || []; return V.length ? ' ' + [...new Set(V.map((v) => VIOL_ICON[v.type] || '!'))].join('') : ''; }   // 위반이 있는 번호 버튼에 종류 기호를 붙인다
   function warnMark(i) {
-    const w = warnsOf(i); if (!w.length) return '';
+    const w = warnsOf(i); if (!w.length) return (((def.violations && def.violations[i]) || []).some((x) => x.type === 'overlap')) ? ' ⚠' : '';   // 열어 보지 않은 번호도 하단 '겹침' 칩과 같은 저장 데이터(def.violations)로 ⚠ 를 보인다(사용자 지시 2026-11-13)
     const v = w.map((x) => checkVerdicts[i + '|' + x.key]);
     return v.some((x) => !x) ? ' ⚠' : v.some((x) => x === 'fix') ? ' 🔧' : '';
   }
@@ -1422,7 +1424,8 @@
   function render() {
     saveLast();
     const b = bridge();
-    const { list, guides, missing, stored, storedThumb, storedSlot, storedSlots, storedThumbBy, storedTypes, targets, orders, viewEff } = buildList(step);
+    const { list, guides, missing, stored, storedThumb, storedSlot, storedSlots, storedThumbBy, storedTypes, targets, orders, pre, viewEff } = buildList(step);
+    targets.pre = pre;   // preJoin: 같은 단계에서 먼저 일어나는 사전 결합(예: T축이 떠 있는 기어에 먼저 끼워진 뒤 한 덩어리로 내려온다)
     window.__asmStored = storedTypes; // design.html 의 사용 부품 목록이 읽는다
     { const sp = posesDB[step]; // ❄ 로 기록한 모습이 있으면 그 자리·자세로 보여 준다(제자리 target 은 그대로라 결합은 원래 자리로 된다)
       if (sp) list.forEach((d) => { const o = d.noFreeze ? null : sp[d.label]; if (o && Array.isArray(o.p)) { d.pos = o.p.slice(); { const lf = def.lift && Number(def.lift[step]); if (lf) d.pos[1] += lf; } /* 화면 전체를 띄우는 단계(def.lift)는 ❄ 기록 자리도 같이 띄운다(안 띄우면 기록된 부품만 아래에 남아 연결이 끊겨 보인다) */ if (Array.isArray(o.r)) d.rot = o.r.slice(); if (Array.isArray(o.q)) d.quat = o.q.slice(); } });
@@ -1442,7 +1445,7 @@
     renderStorage(storedP, storedThumb, kindsP, storedSlotP, storedSlotsP, storedThumbByP);
     pushSlotThumbs();
     if (b.setViewSlot) b.setViewSlot(viewSlot !== null && viewSlot !== slotOfStep(step) ? viewSlot : null, viewLabel, viewThumb);
-    b.show(list.map(({ isNew, name, final, order, ...d }) => d), targets, orders, def.guideMode === 'mates' ? mateComponents(list).concat(ghostComps) : []);
+    b.show(list.map(({ isNew, name, final, order, pre: _pre, ...d }) => d), targets, orders, def.guideMode === 'mates' ? mateComponents(list).concat(ghostComps) : []);
     if (b.setViolations) { const V = (def.violations && def.violations[step]) || []; b.setViolations(V.map((v) => ({ type: v.type, msg: v.msg, idx: (v.keys || []).map((k) => list.findIndex((x) => x.key === k)).filter((i) => i >= 0) }))); }   // 규칙 위반: 종류별 색·기호로 칠한다(build.py 가 def.violations 를 만든다)
     // 지금 단계에 보이는 부품(끼우기 직전 위치 포함)에 카메라를 맞춘다 — 처음부터 너무 멀리서 보이지 않게
     // 이번 단계에 끼우는 부품과 그 끼워지는 자리를 화면 가운데에 크게 보여준다(나머지 부품은 배경)
