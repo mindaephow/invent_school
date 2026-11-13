@@ -1,0 +1,2 @@
+{"t": "2026-11-13 04:10", "do": "02 이미지: refs_make.py BOOKS 에 battlerobot 추가(PDF 91~96쪽), refs/battlerobot 31장 생성·DB 업로드", "res": "DB 31장, dbimgcheck 로컬=DB 확인"}
+{"t": "2026-11-13 04:13", "do": "02 방향선 그림 00_1 생성·업로드, number_start 03 게이트가 qtyOverride 를 기대값으로 쓰게 수정(관리자 확인 수량 15프레임6·35프레임3·리벳16)", "res": "dbimgcheck DB 32장, number_start 1번 앞 과정 게이트 통과 확인 예정"}
