@@ -98,7 +98,7 @@ _warn()
 def _remind():
     try:   # 다른 조립도에서 같은 부품이 새로 들어간 번호의 이미지 작업(격자·카메라·그림·풀이)을 먼저 본다(D15)
         import similar_steps as _ss
-        print("═══ 이전 조립도에서 같은 부품이 들어간 번호 — 격자·카메라·그림을 먼저 참고한다 (%s %d번, D15) ═══" % (name, k)); _ss.show(name, k, 3)
+        print("═══ 이전 조립도에서 같은 부품이 들어간 번호 — 격자·카메라·그림을 먼저 참고한다 (%s %d번, D15) ═══" % (name, k)); _ss.show(name, k)
     except Exception as _e_: print("(참고 번호 검색 실패: %s)" % str(_e_)[:80])
     try:
         print("═══ 이미 알고 있는 정보 — 이미지 작업 전에 읽는다 (%s %d번) ═══" % (name, k))
