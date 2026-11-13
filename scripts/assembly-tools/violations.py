@@ -171,6 +171,95 @@ def split_bad(A):
             out.append((k, keys, "%s(%d번)와 %s(%d번)는 %d번에 결합돼 있었는데 %d번 이동으로 떨어짐 — 같이 옮겨야 한다" % (a.n, a.step.index, b.n, b.step.index, k - 1, k)))
     return out
 
+def move_hover_bad(A):
+    """앞 번호(k−1)에서 결합돼 있던 부품들이 이동(move)하는 k번에 서로 다른 거리·방향으로 떠서 오면 결합이 풀려 보인다 — [(번호, 부품 키 목록, 설명)]
+    (사용자 지적 2026-11-14 배틀로봇 15번: 오른쪽 옆판 3단블록만 noGuide 라 move 에 hover 가 없으면 자기 hover 40 으로 떠 판·프레임에서 떨어졌다).
+    화면(design-assembly.js 이동 띄움)과 같은 규칙: 띄움 = move.hover, 없으면 noGuide 부품은 자기 hover, 그것도 없으면 22. 방향 = move.dir."""
+    out = []; moved = {}
+    for q in A.parts:
+        ex = q.extra or {}
+        for m in (ex.get("moves") or ([ex["move"]] if "move" in ex else [])):
+            if m.get("dir"): moved.setdefault(int(m["at"]), {})[id(q)] = (q, m)
+    def off(q, m):
+        ex = q.extra or {}; u = np.array(m["dir"], float); u = u / (np.linalg.norm(u) or 1.0)
+        hv = m.get("hover") or (ex.get("hover") if ex.get("noGuide") else None) or 22
+        return u * float(hv), float(hv)
+    for k in sorted(moved):
+        if k < 2: continue
+        try: prev, _ = _mate_pairs(A, k - 1)
+        except Exception: continue
+        for pr in sorted(prev, key=lambda s: sorted(map(str, s))):
+            ids = list(pr)
+            if not all(i in moved[k] for i in ids): continue
+            (a, ma), (b, mb) = moved[k][ids[0]], moved[k][ids[1]]
+            (oa, ha), (ob, hb) = off(a, ma), off(b, mb)
+            if float(np.linalg.norm(oa - ob)) > 0.5:
+                keys = ["%d:%d" % (x.step.index, A.steps[x.step.index - 1].parts.index(x)) for x in (a, b)]
+                out.append((k, keys, "%s(%d번)와 %s(%d번)는 %d번에 결합돼 있었는데 %d번 이동에서 띄우는 거리가 %g·%g 로 달라 떨어져 보임 — move 에 hover 를 같게 적는다" % (a.n, a.step.index, b.n, b.step.index, k - 1, k, ha, hb)))
+    return out
+
+def group_broken(A):
+    """기록된 그룹(extra["moveGroup"] 같은 이름)이 풀리면 올린다 — [(번호, 부품 키 목록, 설명)] (사용자 지시 2026-11-14: 그룹이 된 것은 기록하고, 분리되면 경고).
+    ① 같은 그룹이 이동하는 번호에 띄우는 거리·방향이 부품마다 다르다(한쪽만 떨어져 보인다)
+    ② 이동 전후 그룹 안 부품끼리의 상대 자세(위치·회전)가 바뀐다(모양이 흐트러졌다)
+    ③ 그룹의 일부만 따로 이동하는 번호가 있다(나머지는 그대로)"""
+    import stepchecks
+    out = []; groups = {}
+    for q in A.parts:
+        g = (q.extra or {}).get("moveGroup")
+        if isinstance(g, str) and g: groups.setdefault(g, []).append(q)
+    key = lambda x: "%d:%d" % (x.step.index, A.steps[x.step.index - 1].parts.index(x))
+    for g, ms in groups.items():
+        if len(ms) < 2: continue
+        ev = {}   # 부품 → 이동 번호 집합
+        for q in ms: ev[id(q)] = {int(m["at"]) for m in ((q.extra.get("moves")) or ([q.extra["move"]] if "move" in q.extra else []))}
+        allk = set().union(*ev.values())
+        for k in sorted(allk):
+            part = [q for q in ms if k in ev[id(q)]]; rest = [q for q in ms if k not in ev[id(q)]]
+            if rest:   # ③
+                out.append((k, [key(x) for x in ms], "그룹 '%s'의 %s 만 %d번에 따로 움직임 — %s 는 그대로라 결합이 풀림" % (g, "·".join(sorted({x.n for x in part})), k, "·".join(sorted({x.n for x in rest})))))
+                continue
+            offs = {}
+            for q in part:   # ① 화면 규칙과 같은 띄움(move.hover → noGuide 면 자기 hover → 22)
+                m = [m for m in ((q.extra.get("moves")) or [q.extra["move"]]) if int(m["at"]) == k][0]
+                if not m.get("dir"): continue
+                u = np.array(m["dir"], float); u = u / (np.linalg.norm(u) or 1.0)
+                hv = float(m.get("hover") or (q.extra.get("hover") if q.extra.get("noGuide") else None) or 22); offs[id(q)] = (u * hv, hv, q)
+            vs = list(offs.values())
+            if vs and any(float(np.linalg.norm(v[0] - vs[0][0])) > 0.5 for v in vs[1:]):
+                out.append((k, [key(v[2]) for v in vs], "그룹 '%s'가 %d번에 부품마다 띄우는 거리가 %s 로 달라 떨어져 보임 — move 에 hover 를 같게 적는다" % (g, k, "·".join("%s %g" % (v[2].n, v[1]) for v in vs))))
+            try:   # ②
+                a, b = part[0], None
+                pa0, Ra0 = stepchecks.pose_at(A, a, k - 1); pa1, Ra1 = stepchecks.pose_at(A, a, k)
+                for b in part[1:]:
+                    pb0, Rb0 = stepchecks.pose_at(A, b, k - 1); pb1, Rb1 = stepchecks.pose_at(A, b, k)
+                    d0 = Ra0.T @ (pb0 - pa0); d1 = Ra1.T @ (pb1 - pa1); r0 = Ra0.T @ Rb0; r1 = Ra1.T @ Rb1
+                    if float(np.linalg.norm(d0 - d1)) > 0.5 or float(np.abs(r0 - r1).max()) > 0.01:
+                        out.append((k, [key(a), key(b)], "그룹 '%s'의 %s·%s 가 %d번 이동 뒤 서로의 자리·방향이 달라져 결합이 풀림" % (g, a.n, b.n, k)))
+            except Exception: pass
+        # ④ 그룹은 새 결합으로 커질 뿐 풀리지 않는다(사용자 지시 2026-11-14: 또 결합이 되면 그룹이 수정) — 이동 번호부터 끝 번호까지 매 번호,
+        #    그룹 부품이 모두 한 결합 덩어리(돌기↔구멍으로 이어진 연결 성분) 안에 있어야 한다. 덩어리가 커지는 것은 정상, 그룹 부품이 덩어리에서 떨어지면 풀림.
+        k0 = min(allk) if allk else 0; seen = False
+        for k in range(k0, len(A.steps) + 1):
+            if k < 2: continue
+            vis = [q for q in ms if q.step.index <= k and not _hidden_at(q, k)]
+            if len(vis) < 2: continue
+            try: pairs, byid = _mate_pairs(A, k)
+            except Exception: break
+            par = {}
+            def find(x):
+                while par.setdefault(x, x) != x: par[x] = par[par[x]]; x = par[x]
+                return x
+            for pr in pairs:
+                i, j = list(pr); par[find(i)] = find(j)
+            roots = {}
+            for q in vis: roots.setdefault(find(id(q)), []).append(q)
+            if len(roots) > 1:
+                parts_ = sorted(roots.values(), key=len)
+                out.append((k, [key(x) for x in ms], "그룹 '%s'이 %d번에 풀림 — %s 가 나머지(%s)와 결합이 끊어짐" % (g, k, "·".join(sorted({x.n for x in parts_[0]})), "·".join(sorted({x.n for x in parts_[-1]})))))
+                break   # 한 번 풀리면 뒤 번호는 같은 경고를 반복하지 않는다
+    return out
+
 def collect(name):
     import asmlib, guidecheck
     A = _load(name); out = {}
@@ -318,7 +407,7 @@ def collect(name):
     except Exception as e_:
         print("violations: 막힌 구멍 점검을 못 붙임 —", str(e_)[:100], file=sys.stderr)
     try:   # 분리(사용자 지시 2026-11-10): 결합된 부품이 합치기 이동에서 따로 남거나 떨어지면 ⛓ 로 올린다
-        for k, keys, msg in split_bad(A): add(k, "split", keys, msg)
+        for k, keys, msg in split_bad(A) + move_hover_bad(A) + group_broken(A): add(k, "split", keys, msg)
     except Exception as e_:
         print("violations: 분리 점검을 못 붙임 —", str(e_)[:100], file=sys.stderr)
     return out

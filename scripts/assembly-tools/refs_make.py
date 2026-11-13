@@ -321,6 +321,18 @@ BOOKS = {
         },
         "extra": [],
     },
+    "battlerobot": {   # 1권 10차시 배틀로봇 PDF 91~96쪽 — 책 번호 1~29 + 완성. 91쪽은 위에 완성품·LIST, 그림 1·2는 맨 아랫줄. 92~95쪽 6칸씩(3~26), 96쪽 27·28·29 + 완성(4칸)
+        "volume": 1,
+        "pages": {
+            91: [(0, (180, 610, 1005, 1215), "교재 91쪽 맨 앞 완성품 사진 — 배틀로봇: 앞 긴 경사판·위 메인보드·양옆 빨강 바퀴 방향은 여기서 확인"), (1, box("L", 3), ""), (2, box("R", 3), "")],
+            92: [(3 + i, box(*g), "") for i, g in enumerate(GRID)],
+            93: [(9 + i, box(*g), "") for i, g in enumerate(GRID)],
+            94: [(15 + i, box(*g), "") for i, g in enumerate(GRID)],
+            95: [(21 + i, box(*g), "") for i, g in enumerate(GRID)],
+            96: [(27 + i, box(*g), "") for i, g in enumerate(GRID[:3])] + [(99, box("R", 2), "완성")],
+        },
+        "extra": [],
+    },
     "rollingbot": {   # 1권 9차시 롤링봇 PDF 82~87쪽 — 책 번호 1~31 + 완성. 82쪽은 위에 완성품·LIST, 그림 1·2는 맨 아랫줄. 83~86쪽 6칸씩(3~26), 87쪽 27~31 + 완성(6칸)
         "volume": 1,
         "pages": {

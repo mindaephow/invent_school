@@ -5,5 +5,9 @@
  "strict": true,
  "orient_check": true,
  "placecheck": true,
- "overlay_proof": true
+ "overlay_proof": true,
+ "parts_sum": true,
+ "mate_marks": true,
+ "img_db": true,
+ "rulecheck": true
 }

@@ -35,7 +35,7 @@ import json, sys, re
 import numpy as np
 from asmlib import *
 
-A = Asm("cubo-1-battlerobot", "배틀로봇", "교재 91~96쪽 · 배틀로봇 (1~29단계)", camera={"target": [60, 20, 0], "radius": 380, "theta": 0.9, "phi": 1.0},
+A = Asm("cubo-1-battlerobot", "배틀로봇", "교재 91~96쪽 · 배틀로봇 (1~29단계)", camera={"target": [60, 20, 0], "radius": 380, "theta": -1.4, "phi": 0.85},
         listNote="15프레임 6·35프레임 3·리벳 16개를 쓴다(교재 LIST 는 4·1·12 로 책과 수량이 안 맞지만 관리자가 조립도 쪽 개수가 맞다고 확인, 2026-10-06). 리모컨은 조립 단계에 안 나오는 부품", guideMode="mates", qtyOverride={"15프레임": 6, "35프레임": 3, "리벳": 16, "리모컨": 0})   # 연결점은 부품에 붙어 있고 결합할 자리일 때만 보인다(맞물림 방식, 사용자 지시 2026-10-04)
 RELOCK = "--relock" in sys.argv   # 잠금 기록을 새로 만들 때(수정 지시는 이번 빌드에서 무시한다)
 if not RELOCK: A.load_fixes("battlerobot_fixes.json")   # 관리자 수정 지시(앞 단계 수정 → 뒤 단계가 따라온다). 파일이 없으면 아무 일도 안 한다
@@ -251,6 +251,8 @@ for _grp, _dz in (((plL, bkL, frL), _DZ), ((plR, bkR, frR), -_DZ)):
     for _q in _grp:
         _p0, _R0 = (_q._base if getattr(_q, "_base", None) else (_q.p, _q.R))
         _q.extra["move"] = {"at": 15, "p": rnd(np.array(_p0, float) + np.array([0.0, 0.0, _dz])), "r": R_to_euler(_R0)}
+        _q.extra["moveGroup"] = "15 옆판 " + ("왼쪽 벌" if _grp[0] is plL else "오른쪽 벌")   # 14번에 결합한 판·3단블록·90도 프레임은 한 묶음 — 기록해 두어야 15번 이동에서 하나로 움직이고 묶음 안 안내 화살표가 안 그려진다(사용자 지적 2026-11-14)
+        _q.extra["move"]["hover"] = 22   # 판·블록·프레임이 한 묶음으로 같은 거리(22)만큼 떠서 온다 — 안 적으면 noGuide 블록(bkR)만 자기 hover 40 으로 떠서 14번에 결합한 판·프레임에서 떨어진다(사용자 지적 2026-11-14)
         _q.extra["move"]["dir"] = [-v for v in _q.extra["settleDir"]]; _q.extra["settleDir"] = list(_q.extra["move"]["dir"])   # 맞바꾼 반대쪽 모터에 끼우므로 띄우는 방향(바깥)도 반대쪽
         if _q.n == "39프레임":
             _q.extra["move"]["marks"] = [[m[0], m[1], -m[2]] for m in _q.extra["settleMarks"]]   # 판이 맞바꾼 쪽 모터 돌기 끝
@@ -292,7 +294,7 @@ def _gear_t(st, sd):
     Rt = rot_x(90) if sd < 0 else rot_x(-90)        # T축: 끝(+y)이 모터 쪽
     mot = mot1 if sd < 0 else mot2
     # 규칙 좌표(C6): T축 끝돌기가 모터 십자 구멍에 꽂히는 자리를 attach 가 계산하고, 기어 구멍은 T축에 recv — 손 좌표·마크 숫자를 쓰지 않는다
-    rod = st.attach("T축", Rt, {"p1": (mot, "cross")}, dir=d, hover=90)   # pegDepth 는 attach 가 돌기 길이−머리 두께로 계산한다(손 pegDepth 금지)
+    rod = st.attach("T축", Rt, {"p1": (mot, "cross")}, dir=d, hover=110)   # T축 길이 30·기어 띄움 60 — 90 이면 T축 끝이 기어 바깥 면에 딱 붙어 보였다(사용자 지적 2026-11-14 "16번 T축이 더 떨어져 있어야지"): 110 으로 기어와 20mm 떼어 띄운다. pegDepth 는 attach 가 돌기 길이−머리 두께로 계산한다(손 pegDepth 금지)
     gear = st.recv("작은기어", Rg, {"h1": (rod, "p1")}, dir=d, hover=60)
     rod.extra["horizontal"] = True; rod.extra["joinOrder"] = 1; gear.extra["joinOrder"] = 2   # 기어 안에 T축이 떠 있다 — 받는 쪽(기어)의 순서가 T축보다 커야 한다(G12)
     _own_mark(gear, 8)
@@ -331,9 +333,9 @@ def _wheel_set(st, sd, until):
     _SG = {"ax": 21.5, "gr": 19.5, "wh": 32.0, "bu": 42.75}
     ax = _abs_place(st, "축", Ra, (_XA[sd], _YC, _ZO[sd] + sd * _SG["ax"]), dir=d, hover=0.01)
     ax.extra["settleMarks"] = [[float(v) for v in _hole_at(pl, "홀면 +y 열7·줄2")]]; ax.extra["settleMarks"][0][2] -= sd * _SHIFT15               # 합쳐질 때 안내점 = 옆판 열7·줄2 구멍(계산)
-    gr = _abs_place(st, "큰기어", Rb, (_XA[sd], _YC, _ZO[sd] + sd * _SG["gr"]), recv=True, dir=d, hover=30)  # 순서대로 위로 한 칸씩 간격: 큰기어 30 → 작은바퀴 60 → 부시 90
-    wh = _abs_place(st, "작은바퀴", Rw, (_XA[sd], _YC, _ZO[sd] + sd * _SG["wh"]), recv=True, dir=d, hover=60)
-    bu = _abs_place(st, "부시", Rb @ rot_x(180), (_XA[sd], _YC, _ZO[sd] + sd * _SG["bu"]), recv=True, dir=d, hover=90)   # 부시 앞뒤 뒤집음(관리자 지시 2026-10-05: 18번 부시 두 개 모두)
+    gr = _abs_place(st, "큰기어", Rb, (_XA[sd], _YC, _ZO[sd] + sd * _SG["gr"]), recv=True, dir=d, hover=55)  # 순서대로 위로 한 칸씩 간격: 큰기어 55 → 작은바퀴 60 → 부시 90 (큰기어 30 이면 띄운 기어(y 56.5~65.5)가 축 윗끝(65.5)을 아직 품고 있어 축이 안 빠져 보였다 — 사용자 지적 2026-11-14 "축을 기어에서 빼": 55 로 띄우면 기어 아래면 81.5, 축 끝과 16mm 떨어진다)
+    wh = _abs_place(st, "작은바퀴", Rw, (_XA[sd], _YC, _ZO[sd] + sd * _SG["wh"]), recv=True, dir=d, hover=80)   # 큰기어 55 와 6mm 만 떨어져 붙어 보여 작은바퀴 80·부시 115 로 벌린다(2026-11-14)
+    bu = _abs_place(st, "부시", Rb @ rot_x(180), (_XA[sd], _YC, _ZO[sd] + sd * _SG["bu"]), recv=True, dir=d, hover=115)   # 부시 앞뒤 뒤집음(관리자 지시 2026-10-05: 18번 부시 두 개 모두)
     for _i, _q in enumerate((gr, wh, bu)): _q.extra["joinOrder"] = _i + 2   # 축이 순서 1(기어 안에 떠 있는 축보다 받는 쪽이 커야 한다, G12)
     for _q, _t in ((gr, 9), (wh, 16), (bu, 5.5)): _fudge_mark(_q, ax, _t)
     return [ax, gr, wh, bu]
@@ -395,7 +397,7 @@ for _st in A.steps[:22]:
 s23 = SKEL[22]; s23.kw.pop("noPart", None)
 s23.note = "[교재 23] 빨간 프레임(17프레임)에 리벳 4개를 꽂고, 위에 판 2장을 얹어요."
 _RZ = rot_y(90)   # 판 긴 쪽(열)이 X 방향 — 17프레임과 나란히
-rd17 = _abs_place(s23, "17프레임", np.eye(3), (0, 0, 0))
+rd17 = _abs_place(s23, "17프레임", np.eye(3), (0, 2.5, 0))   # 창고 2 는 가운데 원점, 두께 5 라 y 2.5 에 놓아 바닥이 y 0(23~26번 모두 바닥 아래 없음). 21번 막대와 높이가 달라야 — design-verify '같은 자리(중복)' 검사가 창고를 구분하지 않아 21번 막대와 좌표가 같으면 막는다(숨겨진 창고라 눈에 안 보임, balance 와 같은 방법)
 rv23 = [s23.attach("리벳", np.eye(3), {"돌기면 -y 1": (rd17, "홀면 +y %d" % _h)}, rivet=True, hover=22) for _h in (1, 3, 5, 7)]
 pl23L = s23.recv("35프레임", np.eye(3), {"홀면 -y 열3·줄2": (rv23[0], "돌기면 +y 1"), "홀면 -y 열5·줄2": (rv23[1], "돌기면 +y 1")}, hover=80)
 pl23R = s23.recv("35프레임", np.eye(3), {"홀면 -y 열1·줄2": (rv23[2], "돌기면 +y 1"), "홀면 -y 열3·줄2": (rv23[3], "돌기면 +y 1")}, hover=80)
@@ -415,6 +417,17 @@ r25b = s25.recv("15프레임", R_RD, {"홀면 +y 1": (b24L, "돌기면 -x 1"), "
 s26 = SKEL[25]; s26.kw.pop("noPart", None)
 s26.note = "[교재 26] 위에 검은 판(25프레임)을 얹어요: 두 블록 위돌기 네 곳에 맞춰요."
 pl26 = s26.recv("25프레임", np.eye(3), {"홀면 -y 열1·줄1": (b24L, "돌기면 +z 1"), "홀면 -y 열1·줄2": (b24L, "돌기면 +z 2"), "홀면 -y 열5·줄1": (b24R, "돌기면 +z 1"), "홀면 -y 열5·줄2": (b24R, "돌기면 +z 2")}, hover=80)
+
+# 23~26번 조립품은 처음부터 27번에서 얹히는 방향(긴 쪽이 본체의 좌우 Z 방향)으로 만든다(관리자 지시 2026-11-14: 26번을 그대로 결합, 27번에서 돌리지 말 것).
+# 만든 직후 부품 좌표·안내 방향·안내점을 y축 +90°로 돌린다(위치 이동은 27번 이동에서만).
+_RA = rot_y(90.0)
+for _st in A.steps[22:26]:
+    for _q in _st.parts:
+        _q.p = _RA @ np.array(_q.p, float); _q.R = _RA @ _q.R
+        for _k in ("dir", "settleDir"):
+            if _q.extra.get(_k) is not None: _q.extra[_k] = [round(float(v), 6) for v in _RA @ np.array(_q.extra[_k], float)]
+        for _k in ("marks", "settleMarks", "faceMarks"):
+            if _q.extra.get(_k): _q.extra[_k] = [[round(float(v), 3) for v in _RA @ np.array(_m, float)] for _m in _q.extra[_k]]
 
 # ── 27 ── 교재 96쪽 27 (읽은 것 2026-10-06, 그림을 확대해 방향·부품 확인): 23~26번에서 만든 조립품(17프레임·판 2·2단블록 2·빨간 프레임 2·검은 판)을 본체 위에 얹는다 — 본체는 선 자세(흰 판이 위, 바퀴가 아래).
 #   리벳 4개: 양쪽 옆판의 3단블록(14번에서 만든 것) 윗면 구멍 1·3번(간격 20)에 하나씩 꽂는다(블록당 2개, 왼쪽 2·오른쪽 2). 조립품의 회색 판 2장이 그 리벳 위에 앉는다 — 판의 바깥 끝 열(왼쪽 판 열1, 오른쪽 판 열5)의 줄1·줄3.
@@ -462,16 +475,16 @@ _bkp = _fl27(bkL)[0]; _yb = float(_bkp[1]) + 2.5                                
 rv27 = []
 for _bk in (bkL, bkR):
     for _dx in (-10.0, 10.0):                                                       # 블록 구멍 1·3번(책 그림에서 리벳 사이에 구멍 하나)
-        _bp = _fl27(_bk)[0]; rv27.append(_abs_place(s27, "리벳", np.eye(3), (0, 0, 0), dir=[0, 1, 0], hover=22, marks=[[float(_bp[0]) + _dx, _yb, float(_bp[2])]]))
+        _bp = _fl27(_bk)[0]; rv27.append(_abs_place(s27, "리벳", np.eye(3), (float(_bp[0]) + _dx, _yb, float(_bp[2])), dir=[0, 1, 0], hover=22, marks=[[float(_bp[0]) + _dx, _yb, float(_bp[2])]]))
+for _r in rv27: _r.extra.setdefault("poseAt", {})["27"] = {"p": rnd(_r.p), "r": R_to_euler(np.eye(3))}   # 27번 화면은 뒤집힌 차 자세라 기본 자세 방향 검사에서 제외(poseAt, 위치는 구멍 자리 그대로)
 for _r in rv27: _r.extra["joinOrder"] = 1; _r.extra["loose"] = True; _r.extra["noMarkCheck"] = True; _r.extra["openEnd"] = True   # 검사는 본체의 선 자세(좌표)로 보는데 27번 화면은 poseAt 으로 뒤집은 자세라 위치·방향 검사가 맞지 않는다 — 화면으로 확인
-_RA = rot_y(-90.0); _t27 = np.array([float(_bkp[0]), _yb + 4.0 - 9.0, 0.0]); _c0 = np.array([0.0, 0.0, 0.0])
+_t27 = np.array([float(_bkp[0]), _yb + 4.0 - 6.5, 0.0]); _c0 = np.array([0.0, 0.0, 0.0])
 _ASM = [rd17] + rv23 + [pl23L, pl23R, b24L, b24R, r25a, r25b, pl26]
 for _q in _ASM:
     _p0 = np.array(_q.p, float); _R0 = _q.R
-    _q.extra["move"] = {"at": 27, "p": rnd(_RA @ (_p0 - _c0) + _t27), "r": R_to_euler(_RA @ _R0), "dir": [0, 1, 0], "hover": 60}
-pl23L.extra["move"]["marks"] = [peg_tip(_r, "p2") for _r in rv27[:2]]
-pl23R.extra["move"]["marks"] = [peg_tip(_r, "p2") for _r in rv27[2:]]
-A.steps[26].cam = (1.2, 0.7, False, None, None, None)   # 교재 27: 본체 앞(+X, 가로 막대 쪽)에서 비스듬히 위에서 본 시점(눈대중 guess)
+    _q.extra["move"] = {"at": 27, "p": rnd((_p0 - _c0) + _t27), "r": R_to_euler(_R0), "dir": [0, 1, 0], "hover": 60}
+pl23L.extra["move"]["marks"] = [peg_tip(_r, "p2") for _r in rv27[2:]]
+pl23R.extra["move"]["marks"] = [peg_tip(_r, "p2") for _r in rv27[:2]]
 
 # ── 28 ── 교재 96쪽 28 (읽은 것 2026-10-06): 메인보드를 본체 위 흰 판(13번 판)의 가운데에 얹는다 — 보드 뒤쪽 돌기 2개(간격 20)가 판 가운데 열5 의 줄3·줄5 구멍에 꽂히고, 보드의 긴 쪽(90)이 판의 긴 쪽(Z)과 나란하다.
 s28 = SKEL[27]; s28.kw.pop("noPart", None)
@@ -482,13 +495,16 @@ mb = s28.attach("메인보드", R_MB, {"돌기면 -y 열1·줄1": (wh2, "홀면 
 MBROT = 90.0   # 270 + 180 = 90 (관리자 지시: y축 180° 더)   # 노란 버튼 쪽이 경사판 반대쪽(차의 뒤, 바퀴 쪽 +X)에 오게 — 관리자 지시 2026-10-06, 교재 28번 그림 확인
 _mbp = np.array(mb.p, float); _top_pl = float(_fl27(PWT)[0][1])                      # 위에 보이는 판(PWT)의 높이
 _mby = _top_pl + (float(_mbp[1]) - float(wh2.p[1]))                                   # 원래 보드가 판 위에 앉던 간격 그대로
-for _k in ("28", "29", "30"): mb.extra.setdefault("poseAt", {})[_k] = {"p": rnd([_mbp[0], _mby, _mbp[2]]), "r": R_to_euler(rot_y(MBROT) @ mb.R)}
+MB_DX = -10.0   # 책 28번 그림: 초록 고리 두 개 = 흰 판(5칸×9줄) 칸1·칸3, 줄5(가운데) — 판 가운데(칸3)에서 한 칸(10mm) 칸1 쪽(−X)으로 옮긴다(고리를 28_W 격자에 호모그래피로 대어 읽은 값: 칸0.98·2.91, 줄4.99)
+for _k in ("28", "29", "30"): mb.extra.setdefault("poseAt", {})[_k] = {"p": rnd([_mbp[0] + MB_DX, _mby, _mbp[2]]), "r": R_to_euler(rot_y(MBROT) @ mb.R)}
 mb.extra["dir"] = [0, 1, 0]; mb.extra["hover"] = 60; mb.extra.pop("seated", None); mb.extra["noMarkCheck"] = True   # 검사는 선 자세 좌표로 보므로 안내 위치 검사 제외 — 화면으로 확인
 _cm = np.array([float(_mbp[0]), 0.0, float(_mbp[2])])
 mb.extra["marks"] = [rnd([float((rot_y(MBROT) @ (np.array(m, float) - np.array([_cm[0], m[1], _cm[2]])))[0] + _cm[0]), _top_pl + 2.5, float((rot_y(MBROT) @ (np.array(m, float) - np.array([_cm[0], m[1], _cm[2]])))[2] + _cm[2])]) for m in mb.extra["marks"]]   # 보드를 돌린 만큼 안내점(돌기가 꽂히는 구멍)도 같이 돈다
+mb.extra["marks"] = [rnd([float(m[0]) + MB_DX, float(m[1]), float(m[2])]) for m in mb.extra["marks"]]
 A.steps[27].cam = (0.79, 0.95, False, None, None, None)   # 교재 28·29·완성: 경사판이 왼쪽 뒤(눈대중 guess) — 관리자가 📷 로 맞춘다
 A.steps[28].cam = (0.79, 0.95, False, None, None, None)
 # ── 29 ── 교재 96쪽 29: 새 부품 없음(메인보드 왼쪽·오른쪽 소켓에 DC모터 케이블 연결 — 3P 케이블은 모델이 없어 화면에 그리지 않는다)
+SKEL[28].kw["madeNoPart"] = True   # 부품 없는 번호도 만든 번호로 센다(28·30번과 같다)
 SKEL[28].note = "[교재 29] 메인보드 왼쪽 소켓과 오른쪽 소켓에 DC모터를 연결해요(케이블)."
 
 # ── 번호별 사용 부품(작업 흐름 단계 3, 관리자 지시 2026-10-06): 지금 만들어 둔 단계 데이터에서 센 값이다. 교재 LIST 와 안 맞던 15프레임 6·35프레임 3·리벳 16 은 는 책과 수량이 안 맞지만 관리자가 조립도 쪽 개수가 맞다고 확인했다(2026-10-06; LIST 는 책 값 그대로 두고 listNote·화면 표시로 알린다). 리모컨 1은 조립 단계에 안 나오는 부품이라 0 이 맞다(관리자 확인 2026-10-06).
@@ -552,6 +568,12 @@ A.steps[15].cam = (2.61, 0.99); A.steps[15].camSrc = "eye"   # 16번: 흰 판 9�
 A.steps[17].cam = (-1.49, 0.90); A.steps[17].camSrc = "eye"   # 18번: 판이 없어 링 6점(faceMarks+hover ↔ 책 링 픽셀) mkfit3d θ-1.49 φ0.90 8.78px 거친 값 — 오른쪽 +Z 세트가 가까운 세트(책과 같음), 화면 비교로 확인
 A.steps[14].cam = (2.73, 0.93); A.steps[14].camSrc = "eye"   # 15번: 흰 판(59프레임) 9×5 holesearch 1.76px → axes_fit 칸 −Z 줄 −X θ2.73 φ0.93 3.44px(같은 오차 후보 4개 중 옛 눈대중 θ2.36 에 가까운 쪽, 화면 비교로 확인) ⚠ 거친 값
 
+A.steps[23].cam = (2.10, 0.71); A.steps[23].camSrc = "eye"   # 24번: 오른쪽 판 5×3 holefit → axes_fit 칸 +X 줄 +Z θ0.53 φ0.71 5.29px 거친 값(판 한 장짜리 원근, 왼쪽 판 6.14px) — 23번 θ0.63 φ0.87 과 같은 구도, 화면 비교로 확인(규칙 E11)
+A.steps[24].cam = (2.02, 0.98); A.steps[24].camSrc = "eye"   # 25번: 오른쪽 판 5×3 holefit → axes_fit 칸 +X 줄 +Z θ0.45 φ0.98 5.15px 거친 값(⚠ 2단블록이 구멍을 가려 일부만 보임), 화면 비교로 확인
+A.steps[25].cam = (2.18, 0.84); A.steps[25].camSrc = "eye"   # 26번: 판 K 5×2 axes_fit 칸 +X 줄 +Z θ0.61 φ0.84 2.26px 거친 값(⚠ 2px 초과), 화면 비교로 확인
+A.steps[26].cam = (1.05, 0.87); A.steps[26].camSrc = "eye"   # 27번: 흰 판 구멍 5개(마스크 holefit)+차 블록 리벳 고리 4개(모델 3D) PnP 평균 2.63px θ1.05 φ0.87 — 27_axes.json 값 그대로, 화면 비교로 확인
+A.steps[28].cam = (1.57, 0.78); A.steps[28].camSrc = "eye"   # 29번: 책 29번은 차 뒤(+X, 바퀴 축 쪽)에서 조금 위로 내려다본 구도(앞 경사판이 맨 위 멀리) — 판이 없어 격자 없이 눈으로 고른 값(⚠ 거친 값), 화면과 책 비교로 확인(규칙 E11)
+A.steps[27].cam = (0.58, 0.88); A.steps[27].camSrc = "eye"   # 28번: 판 W axes_fit 칸 +X 줄 +Z θ0.58 φ0.88 0.95px
 A.apply_axes_cams("battlerobot")   # 점검(stepchecks)이 axes 적용 뒤의 camSrc 를 보게 먼저 적용(같은 함수라 두 번 해도 같다)
 import stepchecks; stepchecks.apply(A, "battlerobot")   # 단계별 정밀 검사 파일(battlerobot_checks.json)
 A.save_links()                                    # 이번 빌드의 잠금 기록 저장(수정 지시가 있는 빌드는 갱신하지 않는다)

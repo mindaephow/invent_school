@@ -135,5 +135,9 @@
   40,
   41
  ],
- "strict": true
+ "strict": true,
+ "parts_sum": true,
+ "mate_marks": true,
+ "img_db": true,
+ "rulecheck": true
 }

@@ -221,6 +221,15 @@ def main():
                 print("       %s %s — %s" % (s, t, why))
                 if s == "❌": print("         → 해결: %s" % FIX.get(t.split()[0], "규칙 문서(05_조립.md)를 읽고 그 항목을 규칙대로 한다"))
     print("합계: ❌ %d번 / ⚠ %d번 / ✅ %d번" % (nb, sum(1 for it in res.values() if not any(s == "❌" for s, _, _ in it) and any(s == "⚠" for s, _, _ in it)), sum(1 for it in res.values() if all(s == "✅" for s, _, _ in it))))
+    try:   # 조립 보기 화면이 번호별 ⚠ 를 보이도록 _rule_status.json 에 적는다(사용자 지시 2026-11-14) — 전체 점검일 때만, 실패해도 본 작업을 막지 않는다
+        if only is None:
+            import rule_status, json as _j
+            _all = {}
+            try: _all = (_j.load(open(rule_status.FILE, encoding="utf-8")).get("rulecheck") or {}).get("assemblies", {})
+            except Exception: pass
+            _all[name] = {"ts": int(__import__("time").time() * 1000), "steps": {str(k): [[s, t, w] for s, t, w in it if s != "✅"] for k, it in res.items() if any(s != "✅" for s, _, _ in it)}}
+            rule_status.put("rulecheck", {"assemblies": _all})
+    except Exception: pass
     sys.exit(1 if nb else 0)
 
 if __name__ == "__main__":
