@@ -31,6 +31,13 @@ def main():
         import observe
         _miss = observe.check(name, step)
         if _miss: sys.exit("❌ 관찰 증거가 모자라 비교 증거를 기록하지 않는다 — `python observe.py add …` 로 책 확대와 화면을 나란히 본 기록을 먼저 남긴다(큐보 부품결합규칙.md H 절):\n   - " + "\n   - ".join(_miss))
+    try:   # 필수 산출물(격자·홀라인 그림·카메라·읽기 표 …)이 빠졌으면 비교 증거를 받지 않는다 — 정의는 rulecheck.py 한 곳(D14). 그림DB 는 증거 뒤에 올리는 관찰 그림 때문에 제외한다.
+        import rulecheck as _rcr, asmpath as _ap
+        if _rcr.load(_ap.ap(name, "_rules.json"), {}).get("holeline_img"):
+            _pm = [(t_, w_) for t_, w_ in _rcr.missing_artifacts(name, step) if not t_.startswith("그림DB")]
+            if _pm: sys.exit(chr(10).join(["❌ 필수 산출물이 빠져 비교 증거를 기록하지 않는다(D14) — 먼저 만든다:"] + ["   - %s: %s" % (t_, w_) for t_, w_ in _pm]))
+    except SystemExit: raise
+    except Exception as _e_: print("필수 산출물 점검을 못 했다:", str(_e_)[:100])
     if not os.path.isfile(shot): sys.exit("❌ 화면 캡처 파일이 없다: " + shot)
     if time.time() - os.path.getmtime(shot) > 45 * 60: sys.exit("❌ 화면 캡처가 45분보다 오래됐다 — 지금 화면을 새로 찍어 쓴다")
     im = Image.open(shot).convert("RGB")

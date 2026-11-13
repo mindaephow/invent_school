@@ -96,6 +96,10 @@ _warn()
 # ── 알고 있는 정보 리마인드(사용자 지시 2026-10-13 "새 번호에 들어가면 이미지 작업부터 하지 말고, 이미 알고 있는 정보를 먼저 파악하자" — 드롭체커 28번) ──
 # 이미지 작업(격자·모서리·홀라인) 전에 앞 번호까지 만든 것·쓴 부품·남은 부품·사용자가 바로잡은 것을 먼저 보여 준다. 읽기만 하고 아무것도 쓰지 않는다. 못 읽어도 번호 시작은 막지 않는다.
 def _remind():
+    try:   # 다른 조립도에서 같은 부품이 새로 들어간 번호의 이미지 작업(격자·카메라·그림·풀이)을 먼저 본다(D15)
+        import similar_steps as _ss
+        print("═══ 이전 조립도에서 같은 부품이 들어간 번호 — 격자·카메라·그림을 먼저 참고한다 (%s %d번, D15) ═══" % (name, k)); _ss.show(name, k, 3)
+    except Exception as _e_: print("(참고 번호 검색 실패: %s)" % str(_e_)[:80])
     try:
         print("═══ 이미 알고 있는 정보 — 이미지 작업 전에 읽는다 (%s %d번) ═══" % (name, k))
         a_ = load(os.path.join(here, name + "_asm.json"), {"steps": []})["steps"]; import asmpath as _ap1; lst = _ap1.list_counts(name)
@@ -175,14 +179,13 @@ if k > 1:
     try: _pst = int((load(os.path.join(here, name + "_read.json"), {}).get(str(k - 1)) or {}).get("단계") or 9)
     except Exception: _pst = 9
     if _pst < 9: _gate.append(("앞 번호 %d 작업 순서" % (k - 1), "번호 하나 순서 %d/9단계에서 멈춰 있다" % _pst, "읽기 표 '단계' 를 올려 가며 9단계(끝)까지 한다 — 큐보 부품결합규칙.md 0절"))
-# 앞 번호의 이미지 작업이 규칙 순서대로 다 됐는지(큐보 부품결합규칙.md B8): 번호마다 그림 목록(0 교재 원본·1 방향선·2 축선·3 격자·4 확대 눈금·5 hf 홀라인 확인·11~ 관찰 3장 이상)이 있어야 다음 번호를 시작한다. 어느 단계를 건너뛰었는지 그림 목록으로 알려 준다. <이름>_rules.json 의 "img_set_from": N 이 있는 조립도만, 그 번호부터 막는다(DB 에 올라갔는지는 위 img_db 가 본다).
-_isf = load(os.path.join(here, name + "_rules.json"), {}).get("img_set_from")
-if k > 1 and _isf and (k - 1) >= int(_isf):
-    _idx = [r for r in load(os.path.join(here, "refs", name, "index.json"), []) if int(r.get("step", -1)) == k - 1]
-    _have = {int(r.get("idx", -1)) for r in _idx}
-    _NAME = {0: "교재 원본", 1: "방향선", 2: "축선(NN_2)", 3: "격자(NN_3)", 4: "확대 눈금(crop_ticks)", 5: "홀라인 확인(hf)"}
-    _miss_i = [_NAME[i] for i in _NAME if i not in _have]; _obs = len([i for i in _have if i >= 11])
-    if _miss_i or _obs < 3: _gate.append(("앞 번호 %d 이미지 작업 순서" % (k - 1), "빠진 그림: %s%s" % (", ".join(_miss_i) or "없음", ("" if _obs >= 3 else " · 관찰 그림 %d장(3장 이상 필요)" % _obs)), "빠진 그림을 만드는 단계(책 확대 읽기 → crop_ticks → holefit → axes_fit·refs_rect → observe)부터 한다 — 규칙 순서를 건너뛴 것(큐보 부품결합규칙.md B5·B8)"))
+# 앞 번호의 필수 산출물(격자·양쪽 홀라인·홀라인 그림·링 대조·카메라·읽기 표·그림DB)이 다 있는지 — 정의는 rulecheck.py 한 곳(D14). 옛 img_set_from(그림 idx 0~5 고정 목록)은 없앴다.
+if k > 1 and load(os.path.join(here, name + "_rules.json"), {}).get("holeline_img"):
+    try:
+        import rulecheck as _rcn
+        _pm = _rcn.missing_artifacts(name, k - 1)
+        if _pm: _gate.append(("앞 번호 %d 필수 산출물" % (k - 1), "; ".join("%s: %s" % (t_, w_[:100]) for t_, w_ in _pm), "빠진 산출물을 규칙 순서(D14: crop_ticks → holefit → axes_fit → refs_rect → DB 업로드)대로 만든다 — python rulecheck.py %s %d" % (name, k - 1)))
+    except Exception as _e_: print("앞 번호 산출물 점검 실패:", str(_e_)[:80])
 if k > 1:   # 앞 번호: 사용자 ✓ 또는 지금 내용과 같은 지문의 비교 증거(record_check)가 있어야 다음 번호를 시작한다
     _prev = asm[k - 2]
     if _prev.get("noPart") or not (_prev.get("parts") or _prev.get("moveMade") or _prev.get("madeNoPart")): _gate.append(("앞 번호 %d" % (k - 1), "아직 작성 전(부품 없음)", "앞 번호부터 끝낸다 — 번호는 순서대로"))

@@ -28,3 +28,10 @@ if dr:
     ims = [cv2.resize(rd(f)[30:, 40:], (300, 250)) for f in six]
     for im, n in zip(ims, ["top", "bottom", "front", "back", "left", "right"]): cv2.putText(im, n, (5, 18), cv2.FONT_HERSHEY_SIMPLEX, .6, (0, 0, 255), 2)
     add("6방향", "위·아래·앞·뒤·좌·우", dr[0], cv2.resize(book, (900, int(900 * H / W))), np.vstack([np.hstack(ims[:3]), np.hstack(ims[3:])]))
+
+# 끝 점검(D14): 이 도구는 관찰·올리기만 다루므로, 이 번호에 아직 빠진 필수 산출물(격자·홀라인 그림 …)을 매번 끝에 보여 준다 — 이 도구 하나만 돌리고 번호를 끝낸 줄 알지 않게.
+try:
+    import rulecheck as _rcq
+    _mq = _rcq.missing_artifacts(name, step)
+    print("빠진 필수 산출물:", "; ".join("%s — %s" % (t_, w_[:80]) for t_, w_ in _mq) if _mq else "없음")
+except Exception as _e_: print("필수 산출물 점검을 못 했다:", str(_e_)[:80])

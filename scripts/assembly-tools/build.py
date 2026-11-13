@@ -5,6 +5,15 @@
 # 실수를 발견하면 lessons.py 의 LESSONS 에 규칙을 적고 가능하면 asmlib/검사로 옮긴다 — 이 스크립트가 마지막에 그 목록을 보여 준다.
 import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import re, subprocess, sys, os, json
+import atexit
+def _end_summary():   # 끝 요약(D14·B3-4): 출력을 grep 으로 걸러 읽었더라도 마지막 이 블록은 항상 나온다 — 빠진 산출물·❌ 번호를 한 번에 본다
+    g = globals(); L = []
+    if g.get("_art_miss"): L.append("필수 산출물이 빠진 번호 %d개: %s" % (len(g["_art_miss"]), dict(sorted(g["_art_miss"].items()))))
+    if g.get("_badn"): L.append("규칙 점검 ❌ 번호 %d개: %s" % (len(g["_badn"]), g["_badn"][:30]))
+    if L:
+        print(); print("══ 끝 요약 — 위 출력을 걸러 읽었어도 이 블록은 전부 읽는다 ══")
+        for x_ in L: print("  · " + x_)
+atexit.register(_end_summary)
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 name = sys.argv[1]; write = "--write" in sys.argv
 # 우회 옵션 전부 삭제(관리자 지시 2026-10-11): 쓸 수 있는 옵션은 --write 하나뿐이다. --unverified·--wip·--accept-contract·--allow-steps·--sync-approved·--iron-later·--grid-skip 등
@@ -172,29 +181,31 @@ _idxf = os.path.join("refs", name, "index.json")
 _idx = json.load(open(_idxf, encoding="utf-8")) if os.path.exists(_idxf) else []
 _have = {}
 for _r in _idx: _have.setdefault(_r["step"], {})[_r["idx"]] = _r.get("note", "")
-_nogrid = []
 _rdf0 = name + "_read.json"
 _rd0 = json.load(open(_rdf0, encoding="utf-8")) if os.path.exists(_rdf0) else {}
 # 아직 시작하지 않은 번호는 검사하지 않는다: 격자 그림(1·2)이나 읽기 표가 있는 가장 뒤 번호까지만 본다(그 앞 번호가 비면 막는다). 번호를 순서대로 만드는 규칙(A1)과 같다.
 _worked = [k for k in range(1, len(asm) + 1) if (1 in _have.get(k, {}) and 2 in _have.get(k, {})) or any(str((_rd0.get(str(k)) or {}).get(f, "")).strip() for f in ("면", "링"))]
 _upto = max(_worked) if _worked else 0
-for _k, _st in enumerate(asm, 1):
-    if _k > _upto: continue
-    if not _st.get("parts") or _k in _skip: continue
-    _h = _have.get(_k, {})
-    _plate = any(("프레임" in str(_p.get("n", "")) and "브라켓" not in str(_p.get("n", ""))) for _p in _st.get("parts", [])) or any("프레임" in str(_p.get("n", "")) for _p in _st.get("parts", []))
-    ok = (1 in _h and 2 in _h)   # 2026-10-08: 판이 없다는 이유의 원본 1장 예외 폐지(격자는 큰기어 구멍·판 구멍 등 보이는 구멍으로 항상 만든다)   # 프레임(판)이 있는 단계는 반드시 회전·방향 표시·격자(idx 2) — 원본 한 장으로 때우지 못한다
-    if not ok: _nogrid.append(_k)
-print("책 이미지 작업(방향 표시·격자) 단계별 그림:", (f"{len([1 for k, st in enumerate(asm, 1) if st.get('parts')]) - len(_nogrid)}단계 있음" + (f" — ❌ 격자가 없는 단계 {_nogrid}" if _nogrid else "")))
 _lb_saved = int((json.load(open(name + "_gate.json", encoding="utf-8")) if os.path.exists(name + "_gate.json") else {}).get("last_built", 0))
 try:   # 저장된 조립도에서 새 부품 없이 합치는 번호(moveMade·madeNoPart)도 '이미 저장한 번호'다 — stepchecks 의 마지막 번호 정의와 같게(부품만 세면 27번 같은 합치기 번호가 늘 새 번호로 취급돼 막힌다)
     _sv = json.load(open(asmpath.resolve(name + "_asm.json"), encoding="utf-8"))["steps"]
     _lb_saved = max([_lb_saved] + [i_ for i_, s_ in enumerate(_sv, 1) if s_.get("parts") or s_.get("moveMade") or s_.get("madeNoPart")])
 except Exception: pass   # 이미 저장한 번호(<= last_built)를 고치는 저장은 격자·읽기 표 게이트로 막지 않는다(사용자 지시 2026-11-10: 앞 번호 격자가 비었다고 26번 수정 저장이 막히면 안 된다). 새로 더하는 번호(> last_built)는 그대로 막는다.
-_nogrid_all = list(_nogrid); _nogrid = [k_ for k_ in _nogrid if k_ > _lb_saved]
-if _nogrid_all and not _nogrid: print("   (이미 저장한 번호 %s 는 격자가 없지만 고치는 저장이라 막지 않는다 — 격자는 따로 만들어야 한다)" % _nogrid_all)
+# ───── 필수 산출물 게이트(D14) — 정의는 rulecheck.py 한 곳(ARTIFACTS: 격자·양쪽 홀라인·홀라인 그림·링 대조·카메라·읽기 표·그림DB). ─────
+# 옛 "이미 저장한 번호는 막지 않는다" 예외는 없앴다(2026-11-13: 저장된 조립도를 다시 만드는 동안 모든 번호가 예외라 13~22번 홀라인 그림이 빠진 채 끝났다).
+# 작업 범위(number_start 가 적은 번호) 안에서 증거가 없거나 낡은 번호는 필수 산출물이 모두 있어야 --write 가 된다. 격자를 "못 만든다/불필요하다"고 혼자 정하는 --grid-skip 도 없다.
+_nogrid = []; _art_miss = {}
+try:
+    import rulecheck as _rcg
+    for _k, _its in _rcg.check(name)[0].items():
+        if _k > _UP0: continue
+        _m = [t_ for s_, t_, w_ in _its if s_ == "❌" and _rcg.is_artifact(t_)]
+        if _m: _art_miss[_k] = _m
+        if _m and any(s_ == "❌" and t_ == "증거" for s_, t_, w_ in _its): _nogrid.append(_k)
+except Exception as _e_: print("필수 산출물 점검을 못 했다:", str(_e_)[:100])
+print("필수 산출물(격자·홀라인 그림·카메라·읽기 표·그림DB) 빠진 번호:", _art_miss if _art_miss else "없음")
 if write and _nogrid:
-    sys.exit("❌ 책 이미지 작업(방향에 맞춰 돌린 그림 위의 격자 1차·2차)이 없는 단계가 있어 --write 를 하지 않는다: " + str(_nogrid) + "\n   큐보 부품결합규칙.md 규칙(1번 규칙·D 절)대로 그 단계의 격자를 먼저 만든다(refs_make → refs_rect). 이 검사는 건너뛸 수 없다.")
+    sys.exit("❌ 작업 중인 번호의 필수 산출물이 빠져 --write 를 하지 않는다: " + str({k_: _art_miss[k_] for k_ in _nogrid}) + " — 큐보 부품결합규칙.md D14 순서(crop_ticks → holefit → axes_fit → refs_rect → DB 업로드)대로 만든다. 이 검사는 건너뛸 수 없다.")
 
 # ───── 철칙 순서 게이트(관리자 지시 2026-10-08, 우회 불가): 부품이 있는 번호마다 refs/<이름>/NN_lv.json(잘라내기→방향 표시→회전)이 있어야 한다 — 원본 위에서 격자를 먼저 맞춘 번호는 막는다(옛 조립도·--sync 이전 번호는 면제 목록 IRON_EXEMPT).
 IRON_EXEMPT = {"dog": {}}   # 철칙 이전에 만든 번호를 새 순서로 다시 만들 때까지 예외로 둘 목록(이름 → {번호}). 비워 두면 전 번호 필수

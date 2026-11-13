@@ -12,3 +12,12 @@ for it in items:
     if r:
         f = r[0]["file"]; os.makedirs(os.path.dirname(os.path.join(dst, f)), exist_ok=True); shutil.copy(os.path.join(HERE, "refs", name, f), os.path.join(dst, f)); want.append([int(s), int(i)])
 json.dump(want, open(os.path.join(dst, "staged.json"), "w")); print(json.dumps(want))
+
+# 끝 점검(D14): 올릴 그림만 다루므로, 아직 만들지 않은 필수 산출물(격자·홀라인 그림 …)이 있는 번호를 끝에 보여 준다 — 이 도구 하나만 돌리고 끝난 줄 알지 않게.
+try:
+    import rulecheck as _rcq
+    _res, _ = _rcq.check(name)
+    _mm = {k_: [t_ for s_, t_, w_ in it_ if s_ == "❌" and _rcq.is_artifact(t_) and not t_.startswith("그림DB")] for k_, it_ in _res.items()}
+    _mm = {k_: v_ for k_, v_ in _mm.items() if v_}
+    print("빠진 필수 산출물(번호: 항목):", _mm if _mm else "없음")
+except Exception as _e_: print("필수 산출물 점검을 못 했다:", str(_e_)[:80])

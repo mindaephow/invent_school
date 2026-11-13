@@ -8,5 +8,6 @@
  "orient_check": true,
  "placecheck": true,
  "img_db": true,
- "rulecheck": true
+ "rulecheck": true,
+ "holeline_img": true
 }

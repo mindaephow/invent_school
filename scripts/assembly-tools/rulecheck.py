@@ -22,6 +22,17 @@ FIX = {
     "읽기": "<이름>_read.json 의 그 번호 면·링·부품을 책에서 읽은 값으로 채운다.",
 }
 
+# 필수 산출물(D14) — 번호를 끝내려면 모두 ✅(또는 사유 있는 ⚠)여야 하는 항목. number_start(앞 번호 게이트)·record_check(증거 받기 전)·build(--write 게이트·끝 요약)·quick_obs 가 이 정의 하나만 쓴다.
+ARTIFACTS = ("격자", "양쪽 홀라인", "홀라인 그림", "링 대조", "카메라", "읽기 표", "그림DB")   # 증거·점검 칩은 산출물이 아니라 산출물 위에서 남기는 확인이라 뺀다
+
+def is_artifact(item):
+    return any(item == a or item.startswith(a + " ") for a in ARTIFACTS)   # "격자 08_B.json" 처럼 뒤에 파일 이름이 붙은 항목도 포함
+
+def missing_artifacts(name, k, res=None):
+    """번호 k 의 빠진 필수 산출물 [(항목, 이유)] — ❌ 인 것만(⚠ 는 사유가 적힌 미달이라 빠진 것이 아니다)."""
+    res = res if res is not None else check(name, only=[k])[0]
+    return [(t, why) for s, t, why in res.get(k, []) if s == "❌" and is_artifact(t)]
+
 def first_bad(name):
     """규칙 미달(❌)이 있는 가장 앞 번호와 항목 목록 — number_start 가 \"먼저 해결할 일\"로 보여 준다. 없으면 None."""
     res, strict = check(name)
@@ -61,6 +72,10 @@ def check(name, only=None):
         m = _re.search(r'''Asm\(\s*["']([^"']+)["']''', src); done = set(userdone.user_done(m.group(1))) if m else set()
     except (SystemExit, Exception): pass
     R = os.path.join(here, "refs", name); out = {}
+    _imgidx = {}   # 번호 → 그림 목록 idx 집합(refs/<이름>/index.json) — 홀라인 그림(1·2번) 확인용
+    try:
+        for _r in load(os.path.join(R, "index.json"), []): _imgidx.setdefault(int(_r["step"]), set()).add(int(_r["idx"]))
+    except Exception: pass
     bad = "❌" if strict else "⚠"
     for k, st in enumerate(asm, 1):
         if only and k not in only: continue
@@ -164,6 +179,9 @@ def check(name, only=None):
         except Exception as _e: items.append(("⚠", "화살표 끝점", "점검 실패: %s" % _e))
         r = read.get(str(k), {}); miss = [f for f in ("면", "링", "부품") if not str(r.get(f, "")).strip()]
         items.append(("✅", "읽기 표", "채워짐") if not miss else (bad, "읽기 표", "빈 칸: " + ", ".join(miss)))
+        if rules.get("holeline_img") and fs:   # D14 홀라인 그림 — 격자(fits)가 있으면 격자·축선 그림(1·2번, refs_rect)을 만들어 DB 에 올려야 끝난 것이다(2026-11-13 배틀로봇 13~22번이 이 그림 없이 ✅ 로 보고됨)
+            _need = [i for i in (1, 2) if i not in _imgidx.get(k, set())]
+            items.append(("✅", "홀라인 그림", "격자·축선 그림 1·2번 있음") if not _need else (bad, "홀라인 그림", "격자(fits)는 있는데 격자·축선 그림 %s번이 없음 — python refs_rect.py %s %d 로 만들고 DB 에 올린다(D14)" % ("·".join(map(str, _need)), name, k)))
         if rules.get("img_db"):   # I 그림 DB — 만든 그림은 만든 자리에서 올린다(큐보 부품결합규칙.md I1). 점검이 실패하면 ✅ 로 두지 않는다.
             if _dbmiss is None: items.append(("⚠", "그림DB", "DB 그림 비교를 못 했다(dbimgcheck 실패) — python dbimgcheck.py %s 로 직접 본다" % name))
             elif k in _dbmiss: items.append((bad, "그림DB", "로컬 그림이 DB 에 없음: %s — 올리고(viewer_snippets.md 3) 화면을 새로 불러와 🖼 장수를 확인한다" % ", ".join(sorted(_dbmiss[k]))))
