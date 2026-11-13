@@ -52,6 +52,10 @@ def _worked_upto():
     w = [k for k in range(1, 200) if {1, 2} <= hv.get(k, set()) or any(str((rd.get(str(k)) or {}).get(f, "")).strip() for f in ("면", "링"))]
     return max(w) if w else 0
 _UP0 = _worked_upto()
+try:   # number_start 가 적은 "지금까지 작업한 번호"(손 좌표 삭제로 뒤 번호가 다시 만들 일이 된 조립도) — 그 뒤 번호의 문제는 세지 않는다
+    _wf0 = os.path.join("refs", name, "_worked_upto.json")
+    if os.path.exists(_wf0): _UP0 = min(_UP0, int(json.load(open(_wf0, encoding="utf-8")).get("upto", 0)) + 1)   # +1 = 지금 하는 번호 바로 다음까지 미리 본다
+except Exception: pass
 _cnt = {}; _cur = None
 for line in (out0 + chr(10) + out).splitlines():
     s = line.strip()
@@ -71,7 +75,10 @@ for line in (out0 + chr(10) + out).splitlines():
             if any(k_ <= _UP0 for k_ in _mm) or not _mm: bad.append(s)
             else: print("⚠ " + s + " (뒤 번호 %s단계 — 아직 시작하지 않아 막지 않음)" % ",".join(str(k_) for k_ in sorted(set(_mm))))
         else: print("⚠ " + s + " (참고 — <이름>_rules.json 에 \"mate_marks\": true 를 넣으면 이 조립도는 막는다)")
-    if s.startswith("[경고]") or "[경고]" in s: bad.append(s)
+    if s.startswith("[경고]") or "[경고]" in s:
+        _wm = re.search(r"(\d+)단계", s)
+        if _wm and int(_wm.group(1)) > _UP0: print("⚠ " + s + " (뒤 번호 %s단계 — 아직 시작하지 않아 막지 않음)" % _wm.group(1))
+        else: bad.append(s)
     if s.startswith("LIST") and "불일치" in s: bad.append(s)
 if bad:
     print("\n❌ 문제 있음 — 고친 뒤 다시 돌릴 것:"); [print("  ", b) for b in bad]
@@ -267,7 +274,7 @@ try:
     _ef = name + "_entry.js"; _es = re.sub(r"      prepDone: .*\n", "", open(_ef, encoding="utf-8").read())
     if _rl.get("parts_sum") and os.path.exists(list_f):
         import collections as _co2
-        _lst = json.load(open(list_f, encoding="utf-8")); _tot = _co2.Counter(); _all_used = True
+        _lst = asmpath.list_counts(name); _tot = _co2.Counter(); _all_used = True   # LIST + 관리자 확정 수량(qtyOverride, 사용자 2026-11-13 — 배틀로봇 부품정리가 영영 미완이던 원인)
         for _st in _asm0:
             _mu = re.search(r"▣ 사용 부품:\s*(.*)", _st.get("note") or "")
             if not _mu: _all_used = False; continue

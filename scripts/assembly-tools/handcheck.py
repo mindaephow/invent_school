@@ -26,6 +26,12 @@ def scan(path):
     step_of = {}                                   # 줄 번호 → 몇 번 단계인지(sK. 이름에서)
     first_place = True
     for node in ast.walk(tree):
+        # _abs_place(단계, 부품, 자세, (x, y, z)) — 앞 부품 옆 상대 잠금 없이 절대 좌표로 놓는 함수라 손 좌표의 통로다(배틀로봇 2번 받는 블록 (49.5,−65.3) 이 3번 겹침의 원인이었는데 이 점검이 못 셌다, 2026-11-13)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "_abs_place" and len(node.args) >= 4:
+            _p4 = node.args[3]
+            if any(isinstance(n_, ast.Constant) and isinstance(n_.value, (int, float)) for n_ in ast.walk(_p4)):
+                out["place"].append((node.lineno, "", ast.get_source_segment(src, node.args[1]), "_abs_place " + ast.get_source_segment(src, _p4)))
+            continue
         if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute): continue
         f = node.func.attr; line = node.lineno
         who = ast.get_source_segment(src, node.args[0]) if node.args else ""

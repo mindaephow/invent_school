@@ -41,7 +41,13 @@ def start():
 
 def main():
     if "--시작" in sys.argv and len(sys.argv) > 2 and not sys.argv[1].startswith("--") and arg("--아이디"):
-        return start()
+        start()
+        # 규칙 00-1: 작업을 시작할 때 📷·❄·✓ 를 백업하고 모두 푼다(사용자 지시 2026-11-13)
+        subprocess.run([sys.executable, os.path.join(HERE, "release_start.py"), sys.argv[1]])
+        # 그다음 1번 게이트(02·03·04 앞 과정)에 막히는지 바로 보여 준다 — 막히면 멈추지 않고 원인을 고쳐 푼다(00-1 ②)
+        r = subprocess.run([sys.executable, os.path.join(HERE, "number_start.py"), sys.argv[1], "1"], capture_output=True, text=True, encoding="utf-8", errors="replace", env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+        print("1번 시작 게이트:", "통과" if "❌ 앞 과정" not in r.stdout else "❌ 막힘 — number_start.py %s 1 로 원인을 보고 고친다(규칙 00-1 ②)" % sys.argv[1])
+        return
     if len(sys.argv) < 2 or sys.argv[1].startswith("--") or not (arg("--아이디") and arg("--어디까지") and arg("--다음")):
         sys.exit(__doc__)
     r = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=HERE, capture_output=True, text=True)

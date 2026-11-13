@@ -8,6 +8,12 @@ import json, os, re, sys
 sys.stdout.reconfigure(encoding="utf-8")
 here = os.path.dirname(os.path.abspath(__file__))
 name, k = sys.argv[1], int(sys.argv[2]); NN = "%02d" % k
+# 지금까지 작업한 번호(build 가 이 번호까지만 막는다 — 규칙 A1: 아직 시작하지 않은 뒤 번호의 문제는 세지 않는다). 시작 때(release_start) 0 으로 되돌아간다.
+try:
+    import json as _wj; _wf = os.path.join(os.path.dirname(os.path.abspath(__file__)), "refs", name, "_worked_upto.json"); os.makedirs(os.path.dirname(_wf), exist_ok=True)
+    _wp = _wj.load(open(_wf, encoding="utf-8")).get("upto", 0) if os.path.exists(_wf) else 0
+    if k > _wp: _wj.dump({"upto": k}, open(_wf, "w", encoding="utf-8"))
+except Exception: pass
 try:   # 조립도 파일 수정 게이트(ladder-gate.js)가 보는 도장: 이 번호 시작(앞 번호 기록 읽기)을 했다는 표시, 90분 유효(2026-11-11 사용자 지시 — 앞 번호 기록을 안 쓰고 눈대중으로 고친 사고)
     import json as _j, time as _t; _r = os.path.normpath(os.path.join(here, "..", "..")); _j.dump({"name": name, "step": k, "ts": int(_t.time() * 1000)}, open(os.path.join(_r, ".claude", "number_start_stamp.json"), "w", encoding="utf-8"))
 except Exception: pass
@@ -53,7 +59,7 @@ def _warn():
 def _session_check():
     import urllib.request
     up = None
-    for port in (3178,):
+    for port in (3178, 3177, 3179, 3000):   # 포트는 3178 이어야 하는 게 아니다(사용자 2026-11-13) — 떠 있는 쪽을 쓴다
         try: urllib.request.urlopen("http://localhost:%d/design.html" % port, timeout=4).read(1); up = port; break
         except Exception: pass
     root = os.path.abspath(os.path.join(here, "..", ".."))
@@ -78,7 +84,7 @@ def _session_check():
         _age = (_t.time() * 1000 - _rs.get("autocheckAlive", {}).get("ts", 0)) / 60000
         print("  %s 감시 칩: 상시검사 훅 %s" % ("✅" if _age < 30 else "⚠", ("동작 확인(%d분 전)" % _age) if _age < 30 else "이 세션에서 도는 흔적 없음 — 이 세션을 invent_school 폴더에서 시작하지 않았거나 첫 호출이다(한 번 더 돌려 보고, 그래도 없으면 invent_school 폴더에서 새 세션을 연다)"))
     except Exception as _e: print("  ⚠ 감시 칩 점검 실패:", _e)
-    print("  %s 개발 서버: %s" % ("✅" if up else "❌", ("localhost:%d 응답" % up) if up else "응답 없음 → 서버를 켠다(preview_start invent-school-dev, 포트 3178)"))
+    print("  %s 개발 서버: %s" % ("✅" if up else "❌", ("localhost:%d 응답" % up) if up else "응답 없음 → 서버를 켠다(preview_start invent-school-dev, 어느 포트든 상관없음)"))
     print("  %s .env.local(SUPABASE 키): %s" % ("✅" if keys else "❌", "있음" if keys else "없음 → 사용자에게 달라고 한다(CLAUDE.md)"))
     print("  %s DB 읽기(사용자 ✓): %s" % ("✅" if db is not None else "❌", ("읽음 — ✓ 번호 %s" % db) if db is not None else "못 읽음 → ✓ 확인은 통과시키지 않는다(키를 한 줄로 요청하고, 키 없이 되는 작업은 계속한다 — 큐보 부품결합규칙.md B6)"))
     print("  ⚠ 로그인: 스크립트가 확인할 수 없다. 화면 비교(05 5-5)·❄/📷 확인에는 선생님 계정 로그인이 필요하므로 **로그인이 안 돼 있으면 한 줄로 알리되 묻고 기다리지 않는다 — 로그인이 필요 없는 작업(격자·읽기 표·증거 정리)은 계속하고 화면 비교만 로그인 뒤로 미룬다(규칙 J5)**(비밀번호는 대신 입력하지 않는다). 브라우저 pane 에서 로그인 화면이 보이면 아직이다.")
@@ -92,7 +98,7 @@ _warn()
 def _remind():
     try:
         print("═══ 이미 알고 있는 정보 — 이미지 작업 전에 읽는다 (%s %d번) ═══" % (name, k))
-        a_ = load(os.path.join(here, name + "_asm.json"), {"steps": []})["steps"]; lst = load(os.path.join(here, name + "_list.json"), {})
+        a_ = load(os.path.join(here, name + "_asm.json"), {"steps": []})["steps"]; import asmpath as _ap1; lst = _ap1.list_counts(name)
         # ① 쓴 부품 / 남은 부품 (LIST 대비, 앞 번호까지)
         used = {}
         for st_ in a_[:k - 1]:
@@ -116,6 +122,7 @@ def _remind():
         _pf = os.path.join(here, "refs", name, "fits", "%02d_P.json" % (k - 1))
         if os.path.exists(_pf):   # 29번에서 배운 것: 판이 가려져 holefit 가 안 되면 앞 번호 책 그림과 판 무늬를 맞춘다(눈으로 안 된다고 건너뛰지 말고 도구를 먼저 돌린다)
             print('  ⑥ 판이 이번 번호에서 가려졌으면(앞 번호 %d 판 격자 있음): holefit → python plate_match.py %s %d %d P --검증 "c,r,h,x,y;…" (앞 번호에서 놓아 3D 가 확정된 리벳 끝·블록 돌기·판 모서리 5개 이상의 칸·높이·픽셀) → infer_grid --anchor → (한 줄 부품 line_fit · 판 없음 mkfit3d · 몸체에 가려짐 0-3·0-4) → 전부 시도해도 미달이면 판단과정에 ⚠ 로 적고 다음으로 간다. 순서·기준은 큐보 부품결합규칙.md C3·D12, 명령 사용법은 05_조립.md 0-1~0-4. 유추 격자는 규칙 점검이 사용자 ✓ 를 요구한다.' % (k - 1, name, k - 1, k))
+        if k > 1: print("  ⑧ 격자·카메라는 앞 번호 모델로 먼저 푼다(C3 ⓪): 책에 구멍이 선명한 앞 번호 부품(큰 판 등)을 holesearch → python anchor_pnp.py %s %d <라벨> <spec.json> (앞 번호 부품 구멍 픽셀을 앵커로 더하면 거울·옆면 해를 가른다). 새로 떠 있는 부품의 링 점으로 먼저 풀지 않는다." % (name, k))
         print("  ⑦ 진행 상태 문서: 큐보/조립도/<N>권/%s/진행기록.md (앞 번호 절) — 번호 하나로 안 풀리면 큐보 부품결합규칙.md C3(순서)·D12(기준)." % name)
     except Exception as ex_:
         print("  (리마인드를 읽지 못했다: %s — 번호 시작은 계속한다)" % ex_)
@@ -143,7 +150,7 @@ if _miss_used: _gate.append(("03 부품 체크", "▣ 사용 부품이 없는 �
 # 03 부품 정리 합계 점검(큐보 부품결합규칙.md A2, 2026-11-02): 번호별 ▣ 사용 부품 합계가 교재 LIST 와 부품별로 같아야 번호를 시작한다. 이미 만든 조립도가 갑자기 막히지 않게 <이름>_rules.json 에 "parts_sum": true 를 켠 조립도만 막는다.
 if load(os.path.join(here, name + "_rules.json"), {}).get("parts_sum") and not _miss_used:
     import collections as _co
-    _lst0 = load(os.path.join(here, name + "_list.json"), {}); _tot0 = _co.Counter()
+    import asmpath as _ap0; _lst0 = _ap0.list_counts(name); _tot0 = _co.Counter()   # LIST + 관리자 확정 수량(qtyOverride)
     for _s0 in asm:
         _m0 = re.search(r"▣ 사용 부품:\s*(.*)", _s0.get("note") or "")
         for _p0 in strip_paren(_m0.group(1)).split(","):
@@ -191,7 +198,7 @@ if k > 1:   # 앞 번호: 사용자 ✓ 또는 지금 내용과 같은 지문의
                 _ok = k - 1 in (userdone.user_done(_mid0.group(1)) or ())
             except (SystemExit, Exception): pass
         if not _ok: _gate.append(("앞 번호 %d" % (k - 1), "사용자 ✓ 도, 지금 내용과 같은 비교 증거(record_check)도 없음", "화면에서 책과 나란히 비교하고 record_check.py 로 증거를 남긴다(05 5-5)"))
-if not _SERVER: _gate.append(("세션 시작 체크", "개발 서버(3178)가 응답하지 않음", "서버를 켜고(preview_start invent-school-dev) 사용자에게 로그인을 요청한다"))
+if not _SERVER: _gate.append(("세션 시작 체크", "개발 서버(3178·3177·3179·3000)가 응답하지 않음", "서버를 켜고(preview_start invent-school-dev) 사용자에게 로그인을 요청한다"))
 try:   # 규칙 점검(rulecheck.py) — 앞 번호에 규칙 미달(❌)이 있으면 그것부터 해결해야 다음 번호를 시작한다(사용자 지시 2026-10-12: 도망가지 않고 스스로 문제를 찾아 해결)
     import rulecheck; _fb = rulecheck.first_bad(name)
     if _fb and _fb[0] < k:

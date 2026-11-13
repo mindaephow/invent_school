@@ -57,6 +57,17 @@ def ap(name, rest):
     return os.path.join(DIRS[name], name + rest)
 
 
+def list_counts(name):
+    """교재 LIST 수량(`_list.json`)에 관리자가 확정한 수량(`_entry.js` 의 qtyOverride)을 덮어 쓴 것 — 부품 합계 대조는 모두 이 값을 쓴다(사용자 2026-11-13, 배틀로봇 15프레임 6·35프레임 3·리벳 16)."""
+    import json, re
+    f = ap(name, "_list.json")
+    lst = json.load(open(f, encoding="utf-8")) if os.path.exists(f) else {}
+    e = ap(name, "_entry.js")
+    m = re.search(r"qtyOverride: (\{[^}]*\})", open(e, encoding="utf-8").read()) if os.path.exists(e) else None
+    if m: lst.update(json.loads(m.group(1)))
+    return lst
+
+
 def resolve(p):
     if _RE is None or not isinstance(p, (str, os.PathLike)):
         return p

@@ -1,0 +1,1 @@
+{"global": {"X": [50.4, 22.0], "Y": [2.9, -54.9], "Z": [-48.9, 25.2]}, "fit": {"from": "08_B.json(8번 카메라 재사용: 13번도 같은 본체 자세·시점)", "err_px": 8.31, "points": 35, "theta": 0.67, "phi": 1.09, "origin_world": [-1.8, 44.2, 0.0], "reused_from": 8}, "no_rotate": true}

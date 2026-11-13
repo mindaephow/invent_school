@@ -79,8 +79,11 @@ def add(name, step, kind, point, bookp, screenp, verdict, note):
     b = cv2.resize(b, (int(b.shape[1] * h / b.shape[0]), h)); s = cv2.resize(s, (int(s.shape[1] * h / s.shape[0]), h))
     for im, t in ((b, "책"), (s, "화면")): cv2.putText(im, t, (8, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
     side = np.full((h, b.shape[1] + s.shape[1] + 8, 3), 255, np.uint8); side[:, :b.shape[1]] = b; side[:, b.shape[1] + 8:] = s
-    data = _load(name); ob = [o for o in data.get(str(step), []) if not (o["kind"] == kind and o["point"] == point)]
-    k = len(ob) + 1
+    data = _load(name); _all = data.get(str(step), []); ob = [o for o in _all if not (o["kind"] == kind and o["point"] == point)]
+    # 파일 번호: 같은 지점을 다시 기록하면 그 지점의 옛 번호를 다시 쓰고, 새 지점이면 다른 기록이 안 쓰는 가장 작은 번호를 쓴다(개수+1 로 매기면 덮어쓴 뒤 번호가 겹쳐 서로 다른 관찰이 한 파일을 가리켰다 — 배틀로봇 8번, 2026-11-13)
+    _num = lambda o: int(os.path.basename(o["img"]).split("_")[1].split(".")[0])
+    _used = {_num(o) for o in ob}; _old = [_num(o) for o in _all if o["kind"] == kind and o["point"] == point]
+    k = _old[0] if _old and _old[0] not in _used else next(i_ for i_ in range(1, 100) if i_ not in _used)
     od = os.path.join(HERE, "refs", name, "obs"); os.makedirs(od, exist_ok=True)
     out = os.path.join(od, "%02d_%d.png" % (step, k)); cv2.imencode(".png", side)[1].tofile(out)
     ob.append({"kind": kind, "point": point, "verdict": verdict, "note": note.strip(), "img": "obs/%02d_%d.png" % (step, k), "time": time.strftime("%Y-%m-%d %H:%M:%S")})

@@ -4,6 +4,7 @@
 #       store ▣ 다른 창고에 있는 부품이 이 번호 화면에 보임(hidecheck.stray_loc) · overlap ✕ 겹침 · gap ↔ 틈 · orient ↻ 방향(cubo_joint_check 가 메시지와 함께 부품 키 LAST 를 내준다).
 # 항목: {"type", "keys": ["만든번호:부품순서"…], "msg"} — 키는 화면 부품 키와 같다(moveMade 키와 같은 모양).
 import asmpath
+import json
 import sys, os, re, runpy
 import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -215,7 +216,10 @@ def collect(name):
         for m_ in re.finditer(r"겹침\s+(\d+)\.(\d+)\s+(\S+)\s+<>\s+(\d+)\.(\d+)\s+(\S+)", _o):
             ka, ia, na, kb, ib, nb = int(m_.group(1)), int(m_.group(2)), m_.group(3), int(m_.group(4)), int(m_.group(5)), m_.group(6)
             gear = ("기어" in na) or ("기어" in nb)
-            add(max(_at(ka, ia), _at(kb, ib)), "overlap", ["%d:%d" % (ka, ia), "%d:%d" % (kb, ib)], "%s ↔ %s 몸통이 겹침(뚫고 들어감)%s" % (na, nb, " — 기어는 상자 근사라 모서리 오탐일 수 있음, 중심 거리로 확인" if gear else ""))
+            _kk = max(_at(ka, ia), _at(kb, ib))
+            # 그 번호 화면에서 창고에 보관 중(hideAt)인 부품은 안 보이는 부품이라 겹침으로 세지 않는다(배틀로봇 5번: 보관 중인 315프레임이 다른 창고의 135도 프레임과 겹친다고 나왔다, 2026-11-13)
+            if _hidden_at(A.steps[ka - 1].parts[ia], _kk) or _hidden_at(A.steps[kb - 1].parts[ib], _kk): continue
+            add(_kk, "overlap", ["%d:%d" % (ka, ia), "%d:%d" % (kb, ib)], "%s ↔ %s 몸통이 겹침(뚫고 들어감)%s" % (na, nb, " — 기어는 상자 근사라 모서리 오탐일 수 있음, 중심 거리로 확인" if gear else ""))
     except Exception as e_:
         print("violations: 몸통 겹침을 못 붙임 —", str(e_)[:100], file=sys.stderr)
     try:   # 중심: 번호를 끝낸 모습(그 번호 화면에 보이는 부품 전체)의 x·z 범위 중심이 원점(화면 가운데)에서 CENTER_TOL 넘게 벗어나면 ⊕ (사용자 지시 2026-11-09, A4)
@@ -251,7 +255,14 @@ def collect(name):
         import glob as _g
         A.apply_axes_cams(A.id.split('-', 2)[-1])   # 빌드(export_steps)와 같은 자동 적용을 먼저 해서, 정말 못 쓴 번호만 걸린다
         for k in range(1, len(A.steps) + 1):
-            if getattr(A.steps[k - 1], "camSrc", None) != "fit" and _g.glob(os.path.join(HERE, "refs", name, "fits", "%02d_*.json" % k)):
+            _cs = getattr(A.steps[k - 1], "camSrc", None)
+            if _cs == "eye":   # 오차가 커서 자동 적용(apply_axes_cams)이 안 되는 번호라도, 코드 카메라가 축 파일(NN_axes.json)의 theta·phi 와 같으면 맞춘 값을 쓴 것이다
+                try:
+                    _ax = json.load(open(os.path.join(HERE, "refs", name, "%02d_axes.json" % k), encoding="utf-8")).get("fit") or {}; _cm = A.steps[k - 1].cam or ()
+                    if _ax.get("roll") is not None and abs(float(_ax["roll"])) > 8: continue   # 롤이 커서(뷰어 카메라로 같은 그림이 안 나오는) 번호는 책과 비슷한 방위로 고른 눈 카메라를 인정한다(E11)
+                    if _ax.get("theta") is not None and len(_cm) >= 2 and abs(float(_cm[0]) - float(_ax["theta"])) < 0.015 and abs(float(_cm[1]) - float(_ax["phi"])) < 0.015: continue
+                except Exception: pass
+            if _cs != "fit" and _g.glob(os.path.join(HERE, "refs", name, "fits", "%02d_*.json" % k)):
                 add(k, "cam", [], "책 그림으로 맞춘 격자(fits)가 있는데 카메라가 짐작값이다 — axes_fit 결과 theta·phi 를 쓴다")
     except Exception as e_:
         print("violations: 카메라 점검을 못 붙임 —", str(e_)[:100], file=sys.stderr)

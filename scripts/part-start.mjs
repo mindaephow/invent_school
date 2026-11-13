@@ -11,8 +11,9 @@ const line = (s = '') => console.log(s)
 line('═══ 3D 부품 시작 점검 ═══')
 
 // ① 개발 서버
-try { const r = await fetch('http://localhost:3178/index.html', { signal: AbortSignal.timeout(3000) }); line(`① 개발 서버 http://localhost:3178 : ${r.ok ? '응답함' : '응답 이상 ' + r.status}`) }
-catch { line('① 개발 서버 http://localhost:3178 : ❌ 응답 없음 → preview_start invent-school-dev (저장소 CLAUDE.md 1번)') }
+let _up = null
+for (const p of [3178, 3177, 3179, 3000]) { try { const r = await fetch(`http://localhost:${p}/index.html`, { signal: AbortSignal.timeout(3000) }); if (r.ok) { _up = p; break } } catch {} }
+line(_up ? `① 개발 서버 http://localhost:${_up} : 응답함` : '① 개발 서버 (3178·3177·3179·3000) : ❌ 응답 없음 → preview_start invent-school-dev (저장소 CLAUDE.md 1번)')
 line('   로그인: 브라우저 pane 에서 index.html → 부품 관리 탭이 보이면 로그인된 것. 로그인 화면이면 사용자에게 로그인을 요청한다(비밀번호는 대신 입력하지 않는다).')
 
 // ② .env.local  ③ DB

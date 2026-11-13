@@ -668,7 +668,7 @@ class Step:
             if pid in pts:   # 좌표로 가리킨 결합이 실제로 어느 구멍이었는지 기록
                 key, pt = pts[pid]
                 s.A.rec["attach"][key] = {"host": host.name, "hole": faces.name_of(host.conn, "홀", h["id"]), "point": pt}
-            d = mypeg["dir"]; surf = h["pos"] - d * (h["len"] / 2)   # 돌기가 들어가는 면(구멍 입구) 가운데
+            d = mypeg["dir"]; surf = h["pos"] - d * ((h["len"] or 0.0) / 2)   # 돌기가 들어가는 면(구멍 입구) 가운데 — 길이 없는 구멍(모터 십자 구멍 등 len=None)은 중심만 쓴다(배틀로봇 16번)
             if p is None:
                 p = surf if rivet else (surf + d * mypeg["len"] / 2) - mypeg["pos"]   # tmp 는 p=0 이라 mypeg["pos"] 가 곧 R·(로컬 위치)
                 d0 = d
