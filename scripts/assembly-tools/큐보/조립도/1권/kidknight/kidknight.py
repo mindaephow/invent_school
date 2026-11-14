@@ -78,7 +78,7 @@ b25 = s2.recv("25프레임", R_B25, {"홀면 -y 열1·줄2": (rv2[0], "돌기면
 def _addhide(pt, steps_, label):                                  # 부품을 그 단계들에서 안 보이게(창고에 보관)
     ex = pt.extra; ex["hideAt"] = sorted(set(ex.get("hideAt", [])) | set(steps_)); st_ = ex.setdefault("store", {})
     for k_ in steps_: st_[str(k_)] = label
-ZH = 200.0                                                       # 머리(3~8번)는 몸통(1~2번)과 따로 만드는 부분이라 z 방향 옆자리(+200)에서 만든다 — 14번에서 몸통 위로 옮겨 붙인다
+ZH = 1.0                                                         # (원점에서 1mm — design-verify '같은 자리(중복)' 검사가 창고를 구분하지 않아 7번 59프레임이 1번 판과 같은 좌표면 막는다, 양팔저울과 같은 방법) 머리(3~8번)는 몸통(1~2번)과 따로 만드는 부분(새 창고)이라 A4 대로 화면 가운데(원점)에서 시작한다(몸통은 3~13번에서 숨김) — 14번에서 몸통 위로 옮겨 붙인다
 R_BLK = np.array([[0, 1, 0], [1, 0, 0], [0, 0, -1]], float)      # 3단블록을 세운 자세: −x 끝돌기가 아래(바닥 구멍에 꽂힘), 큰 구멍 면(모델 +y)이 +X, 옆 돌기는 ±Z
 R_W = np.array([[0, 1, 0], [0, 0, 1], [1, 0, 0]], float)         # 세운 벽 판: 열 → +Z, 줄 → 위(+Y), 블록 쪽 구멍면(모델 −y)이 −X
 R_RIV = rot_z(-90)                                               # 가로로 꽂힌 리벳: 모델 +y 가 +X
@@ -91,7 +91,8 @@ s3 = SKEL[2]; s3.kw.pop("noPart", None)
 s3.note = "[교재 3] 검은 판 두 장(39프레임·29프레임)을 나란히 놓고 두 판 가장자리의 양 끝 구멍 네 곳에 리벳을 꽂아요. 그 위에 검은 판(29프레임)을 경계에 걸쳐 얹어요."
 B39 = s3.place("39프레임", R_BOT, (10, 2.5, ZH))                  # 먼 쪽 3줄: 줄1·2·3 = x 0·10·20
 B29 = s3.place("29프레임", R_BOT, (-15, 2.5, ZH))                 # 가까운 쪽 2줄: 줄1·2 = x −20·−10
-rv3 = [s3.attach("리벳", np.eye(3), {"돌기면 -y 1": (_h, "홀면 -y 열%d·줄%d" % _cr)}, rivet=True, seated=True) for _h, _cr in ((B39, (1, 1)), (B39, (9, 1)), (B29, (1, 2)), (B29, (9, 2)))]
+rv3 = [s3.attach("리벳", np.eye(3), {"돌기면 -y 1": (_h, "홀면 -y 열%d·줄%d" % _cr)}, rivet=True) for _h, _cr in ((B39, (1, 1)), (B39, (9, 1)), (B29, (1, 2)), (B29, (9, 2)))]
+for _q in rv3: _q.extra["joinOrder"] = 1                          # 리벳은 항상 결합 전(G1) — 판(joinOrder 2)보다 먼저
 T29 = s3.recv("29프레임", R_TOPW, {"홀면 -y 열1·줄1": (rv3[0], "돌기면 +y 1"), "홀면 -y 열9·줄1": (rv3[1], "돌기면 +y 1"), "홀면 -y 열1·줄2": (rv3[2], "돌기면 +y 1"), "홀면 -y 열9·줄2": (rv3[3], "돌기면 +y 1")}, joinOrder=2, hover=_PLATE_HOVER)
 
 # ── 4 ── 교재 101쪽 4 (창고 3 에서 따로 만든다, 읽은 것 2026-10-06): 벽 — 검은 39프레임(3줄×9열) 위 양 끝(열1·열9)의 줄1·줄3 구멍에 리벳 4개를 꽂아 두고, 그 위에 3단블록 2개를 눕혀 얹는다(블록 큰 구멍 바깥 두 곳이 리벳에 끼워진다).
@@ -100,15 +101,14 @@ for _pt in s3.parts: _addhide(_pt, [4], "3번까지 만든 바닥")             
 s4 = SKEL[3]; s4.kw.pop("noPart", None)
 s4.note = "[교재 4] 벽을 따로 만들어요: 검은 판(39프레임)에 리벳 4개를 꽂고, 그 위에 3단블록 2개를 눕혀 얹어요(블록 큰 구멍 바깥 두 곳이 리벳에 끼워져요)."
 W39 = s4.place("39프레임", R_W, (27.5, 20, ZH))                               # 바닥 먼 가장자리(x 25) 바깥에 선 벽 — 블록(두께 10)이 바닥 줄3(x 20)에 서고 프레임이 블록 면에 딱 붙는 자리 x 27.5(규칙 13, 손 값 29 는 1.5mm 어긋남): 줄1·2·3 = 높이 10·20·30
-rvw = {(_c, _r): s4.attach("리벳", R_RIV, {"돌기면 +y 1": (W39, "홀면 -y 열%d·줄%d" % (_c, _r))}, rivet=True, seated=True) for _c in (1, 9) for _r in (1, 3)}
-bw1 = s4.recv("3단블록", R_BLK, {"홀면 +y 1": (rvw[(1, 1)], "돌기면 -y 1"), "홀면 +y 3": (rvw[(1, 3)], "돌기면 -y 1")})
-bw2 = s4.recv("3단블록", R_BLK, {"홀면 +y 1": (rvw[(9, 1)], "돌기면 -y 1"), "홀면 +y 3": (rvw[(9, 3)], "돌기면 -y 1")})
+rvw = {(_c, _r): s4.attach("리벳", R_RIV, {"돌기면 +y 1": (W39, "홀면 -y 열%d·줄%d" % (_c, _r))}, rivet=True) for _c in (1, 9) for _r in (1, 3)}
+for _q in rvw.values(): _q.extra["joinOrder"] = 1                                # 리벳은 항상 결합 전(G1) — 블록(joinOrder 2)보다 먼저
+bw1 = s4.recv("3단블록", R_BLK, {"홀면 +y 1": (rvw[(1, 1)], "돌기면 -y 1"), "홀면 +y 3": (rvw[(1, 3)], "돌기면 -y 1")}, joinOrder=2, hover=_PLATE_HOVER, thick=2)
+bw2 = s4.recv("3단블록", R_BLK, {"홀면 +y 1": (rvw[(9, 1)], "돌기면 -y 1"), "홀면 +y 3": (rvw[(9, 3)], "돌기면 -y 1")}, joinOrder=2, hover=_PLATE_HOVER, thick=2)
 for _q in (W39, *rvw.values(), bw1, bw2):
-    to_side(_q, rot_z(-90), np.array(W39.p, float), np.array([0.0, 2.5, ZH + 150.0]), 5, (0, 1, 0))
-bw1.extra["settleMarks"] = [[20.0, 5.0, ZH - 40]]; bw2.extra["settleMarks"] = [[20.0, 5.0, ZH + 40]]   # 5번: 블록 아래 끝돌기가 바닥 먼 줄(39프레임 줄3) 열1·열9 구멍에 들어간다
-for _q in rvw.values():                                                       # 5번: 벽에 꽂혀 있는 리벳(seated)도 벽과 함께 떠서 내려온다 — 안 그러면 리벳만 제자리에 남아 "추가된 리벳"처럼 보인다(관리자 지시 2026-10-06)
-    _p0 = np.array(_q._base[0] if getattr(_q, "_base", None) else _q.p, float); _R0 = _q._base[1] if getattr(_q, "_base", None) else _q.R
-    _q.extra.setdefault("poseAt", {})["5"] = {"p": rnd(_p0 + np.array([0.0, 22.0, 0.0])), "r": R_to_euler(_R0)}
+    to_side(_q, rot_z(-90), np.array(W39.p, float), np.array([0.0, 2.5, ZH]), 5, (0, 1, 0))
+bw1.extra["settleMarks"] = [[20.0, 5.0, ZH - 40]]; bw2.extra["settleMarks"] = [[20.0, 5.0, ZH + 40]]; bw1.extra["settleRecv"] = bw2.extra["settleRecv"] = False   # 5번(soccer 3번과 같은 방식): 블록이 자기 끝돌기를 바닥 구멍에 꽂는 쪽이라 안내점은 바닥 구멍 입구(받는 쪽 아님). 5번: 블록 아래 끝돌기가 바닥 먼 줄(39프레임 줄3) 열1·열9 구멍에 들어간다
+
 
 # ── 5 ── 교재 101쪽 5: 4번에서 만든 벽(판+블록 2)을 세워, 블록 아래 끝돌기를 바닥 먼 가장자리 줄의 양 끝 구멍(열1·열9)에 끼운다(새 부품 없음)
 s5 = SKEL[4]; s5.kw.pop("noPart", None)
@@ -131,14 +131,14 @@ T59 = s7.recv("59프레임", R_TOPW, {"홀면 -y 열1·줄1": (bw1, "돌기면 +
 s8 = SKEL[7]; s8.kw.pop("noPart", None)
 s8.note = "[교재 8] 머리를 완성해요: 흰 판 위에 눈블록 2개를 꽂고, 회색 ㄱ자 프레임 2개와 빨간 프레임(15프레임)을 리벳으로 고정해요. 리벳 하나는 가운데 아래쪽 구멍에 꽂아 두어요."
 def _top(c, r): return (T59, "홀면 +y 열%d·줄%d" % (c, r))
-rv8 = {_cr: s8.attach("리벳", np.eye(3), {"돌기면 -y 1": _top(*_cr)}, rivet=True, seated=True) for _cr in ((2, 1), (4, 1), (2, 3), (8, 1), (6, 1), (8, 3), (3, 5), (7, 5), (5, 4))}
+rv8 = {_cr: s8.attach("리벳", np.eye(3), {"돌기면 -y 1": _top(*_cr)}, rivet=True) for _cr in ((2, 1), (4, 1), (2, 3), (8, 1), (6, 1), (8, 3), (3, 5), (7, 5), (5, 4))}
 R_L1 = R_TOPW                                                     # 왼쪽 ㄱ자: 한 팔(모델 x 방향 h1·h4·h5)이 +Z(열 증가), 다른 팔(모델 z 방향 h1·h2·h3)이 −X(줄 증가), 구멍 입구가 아래(모델 −y)
 R_L2 = np.array([[0, 0, -1], [0, -1, 0], [-1, 0, 0]], float)       # 오른쪽 ㄱ자: x 방향 팔이 −Z(열 감소), z 방향 팔이 −X(줄 증가), 구멍 입구가 아래(모델 +y)
 eyeA = s8.attach("눈블록", rot_x(180), {"p1": _top(4, 3)})
 eyeB = s8.attach("눈블록", rot_x(180), {"p1": _top(6, 3)})
-frA = s8.recv("90도 프레임", R_L1, {"홀면 -y 열1·줄1": (rv8[(2, 1)], "돌기면 +y 1"), "홀면 -y 열3·줄1": (rv8[(4, 1)], "돌기면 +y 1"), "홀면 -y 열1·줄3": (rv8[(2, 3)], "돌기면 +y 1")}, hover=_PLATE_HOVER)
-frB = s8.recv("90도 프레임", R_L2, {"홀면 +y 열1·줄1": (rv8[(8, 1)], "돌기면 +y 1"), "홀면 +y 열3·줄1": (rv8[(6, 1)], "돌기면 +y 1"), "홀면 +y 열1·줄3": (rv8[(8, 3)], "돌기면 +y 1")}, hover=_PLATE_HOVER)
-frR = s8.recv("15프레임", R_TOPW, {"홀면 -y 1": (rv8[(3, 5)], "돌기면 +y 1"), "홀면 -y 5": (rv8[(7, 5)], "돌기면 +y 1")}, hover=_PLATE_HOVER)
+frA = s8.recv("90도 프레임", R_L1, {"홀면 -y 열1·줄1": (rv8[(2, 1)], "돌기면 +y 1"), "홀면 -y 열3·줄1": (rv8[(4, 1)], "돌기면 +y 1"), "홀면 -y 열1·줄3": (rv8[(2, 3)], "돌기면 +y 1")}, hover=_PLATE_HOVER, joinOrder=2)
+frB = s8.recv("90도 프레임", R_L2, {"홀면 +y 열1·줄1": (rv8[(8, 1)], "돌기면 +y 1"), "홀면 +y 열3·줄1": (rv8[(6, 1)], "돌기면 +y 1"), "홀면 +y 열1·줄3": (rv8[(8, 3)], "돌기면 +y 1")}, hover=_PLATE_HOVER, joinOrder=2)
+frR = s8.recv("15프레임", R_TOPW, {"홀면 -y 1": (rv8[(3, 5)], "돌기면 +y 1"), "홀면 -y 5": (rv8[(7, 5)], "돌기면 +y 1")}, hover=_PLATE_HOVER, joinOrder=2)
 rv8[(5, 4)].extra["openEnd"] = True                                   # 열5·줄4 리벳은 교재가 일부러 한쪽 끝만 꽂아 둔다(위에 아무것도 얹지 않음)
 for _q in rv8.values(): _q.extra["joinOrder"] = 1
 for _q in (eyeA, eyeB, frA, frB, frR): _q.extra["joinOrder"] = 2
@@ -169,8 +169,8 @@ s12.note = "[교재 12] 2단블록 두 개의 바깥 돌기 위에 35프레임�
 for _d in leg:
     _x0 = _d["x0"]
     _d["gear"] = s9.place("큰기어", R_P, (_x0 + 60.0, YC, ZL - 8.0))   # 책 9번: 기어는 가만히 있고 T축 둘만 앞·뒤에서 떠 있다(기어를 40 띄우면 앞 T축이 이미 꽂힌 것처럼 보인다 — 2026-11-03)
-    _d["t2"] = s9.place("T축", R_P, (_x0 + 60.0, YC, ZL + 1.5), dir=[0, 0, -1], hover=60, pegDepth=15, marks=[[_x0 + 60.0, YC, ZL - 12.5]], horizontal=True)   # 뒤에서 앞으로: 가운데 구멍
-    _d["t1"] = s9.place("T축", R_T1, (_x0 + 70.0, YC, ZL - 17.5), dir=[0, 0, 1], hover=60, pegDepth=15, marks=[[_x0 + 70.0, YC, ZL - 3.5]], horizontal=True)   # 앞에서 뒤로: 오른쪽 팔 구멍
+    _d["t2"] = s9.place("T축", R_P, (_x0 + 60.0, YC, ZL + 1.5), dir=[0, 0, -1], hover=60, pegDepth=29, marks=[[_x0 + 60.0, YC, ZL - 12.5]], horizontal=True)   # 뒤에서 앞으로: 가운데 구멍
+    _d["t1"] = s9.place("T축", R_T1, (_x0 + 70.0, YC, ZL - 17.5), dir=[0, 0, 1], hover=60, pegDepth=29, marks=[[_x0 + 70.0, YC, ZL - 3.5]], horizontal=True)   # 앞에서 뒤로: 오른쪽 팔 구멍
     _d["pl"] = s10.place("315프레임", R_P, (_x0, YC, ZL), seated=True, recv=True, marks=[[_x0 + 60.0, YC, ZL + 2.5]])      # 교재 10 그림은 판이 T축에 이미 끼워진 모양
     _d["bu"] = s10.place("부시", R_P, (_x0 + 60.0, YC, ZL + 5.25), dir=[0, 0, 1], hover=40, recv=True, marks=[[_x0 + 60.0, YC, ZL + 16.5]])   # 부시는 판 앞면에 붙는다(T축 끝은 35프레임 구멍 쪽으로 더 나온다)
     _d["b1"] = s11.attach("2단블록", np.eye(3), {"돌기면 -z 1": (_d["pl"], "홀면 +y 열14·줄1"), "돌기면 -z 2": (_d["pl"], "홀면 +y 열15·줄1")}, hover=40)
@@ -255,6 +255,13 @@ for _k in (3, 4, 5, 6, 7): A.steps[_k - 1].cam = (-2.36, 0.95, False, None, None
 
 A.steps[0].cam = (-1.89, 1.27, False, None, None, None); A.steps[0].camSrc = "eye"   # 교재 100쪽 1: axes_fit 01_axes.json(err 1.07px, 점 45, roll 5.1°, fov 80·주점 이동)
 A.steps[1].cam = (-2.31, 0.70, False, None, None, None); A.steps[1].camSrc = "eye"   # 교재 100쪽 2: axes_fit 02_axes.json(err 1.00px)
+A.steps[2].cam = (-2.00, 0.91, False, None, None, None); A.steps[2].camSrc = "eye"   # 교재 101쪽 3: axes_fit 03_axes.json(err 0.85px, 위 29프레임 B 격자 18점, roll -10.3°)
+A.steps[3].cam = (-2.03, 0.78, False, None, None, None); A.steps[3].camSrc = "eye"   # 교재 101쪽 4: axes_fit 04_axes.json(err 1.72px, 39프레임 P 격자 27점, roll 0.9°)
+A.steps[4].cam = (-2.15, 0.73, False, None, None, None); A.steps[4].camSrc = "eye"   # 교재 101쪽 5: axes_fit 05_axes.json(err 0.78px, 바닥 9×5 격자 45점, roll -4.1°)
+A.steps[5].cam = (-2.15, 0.85, False, None, None, None); A.steps[5].camSrc = "eye"   # 교재 101쪽 6: ⚠ 06_axes.json(18점 한 평면)은 카메라가 옆으로 눕는 거울 해라 화면과 책이 안 맞아(2026-11-14 확인) 5번과 같은 방향으로 눈으로 맞춤 — 평면 아닌 점을 더해 다시 풀 것
+A.steps[6].cam = (-2.22, 1.10, False, None, None, None); A.steps[6].camSrc = "eye"   # 교재 7: axes_fit 07_axes.json(59프레임 9×5 W 격자 45점, 0.99px)
+A.steps[7].cam = (-2.16, 0.69, False, None, None, None); A.steps[7].camSrc = "eye"   # 교재 8: mkfit3d 08_axes.json(리벳 머리 8점 3D PnP, 0.56px)
+A.steps[8].cam = (-2.32, 2.27, False, None, None, None); A.steps[8].camSrc = "eye"   # 교재 9: mkfit3d 09_axes.json(큰기어 구멍 5점, 1.70px) ⚠ 한 평면이라 거울 해 가능 — 화면 비교로 확인
 
 # ── 15 ── 교재 103쪽 15 (읽은 것 2026-10-06, 그림을 확대해 센 값): 14번과 같은 모양을 반대쪽 끝에서 한다 — 둘째 다리 세트(13-2)의 판이 몸통·머리의 반대쪽 끝(−Z)에 닿는다.
 #   초록 원: 판 열1·열5 의 줄1·줄3(머리 끝 블록 2개의 바깥 돌기 4개), 판 열8·열12 의 줄2(모터 바깥 면 돌기 2개). 큰기어 쪽(열12~15)은 비워 둔다. 그림은 −Z 쪽에서 본다(머리 오른쪽·모터 왼쪽).

@@ -1,6 +1,6 @@
 # 번호 하나의 "화면 ↔ 책 그림 나란히 비교"를 했다는 증거를 남긴다(관리자 지시 2026-10-11).
 #   python record_check.py <이름> <번호> <화면캡처.png> "<비교 결과 한 줄 — 센 개수·맞은 곳·다른 곳을 구체적으로>"
-# 하는 일: 화면 캡처와 책 그림(refs/<이름>/NN.jpg)을 나란히 붙인 refs/<이름>/cmp/NN.png 를 만들고, 그 번호의 지금 내용 지문·비교 결과·시각을 <이름>_evidence.json 에 적는다.
+# 하는 일: 화면 캡처와 책 그림(refs/<이름>/NN.jpg)을 나란히 붙인 refs/<이름>/cmp/NN.jpg 를 만들고, 그 번호의 지금 내용 지문·비교 결과·시각을 <이름>_evidence.json 에 적는다.
 # build.py 의 번호별 점검은 이 증거(지문이 지금 내용과 같은 것)가 있어야 그 번호의 눈으로 하는 확인 3개(화면 확대·칸 수 대조·카메라 대조)를 통과시킨다.
 # 번호 내용이 바뀌면 지문이 달라져 증거가 무효가 되므로 다시 비교해야 한다. 사용자는 나중에 cmp 이미지를 열어 검토한다.
 import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
@@ -52,10 +52,11 @@ def main():
     a = b.resize((int(b.width * h / b.height), h)); c = im.resize((int(im.width * h / im.height), h))
     side = Image.new("RGB", (a.width + c.width + 6, h), "white"); side.paste(a, (0, 0)); side.paste(c, (a.width + 6, 0))
     out_dir = os.path.join(here, "refs", name, "cmp"); os.makedirs(out_dir, exist_ok=True)
-    out = os.path.join(out_dir, "%02d.png" % step); side.save(out)
+    from PIL import ImageFile as _IF; _IF.MAXBLOCK = 1 << 26   # optimize=True 가 복잡한 그림에서 "broken data stream" 으로 실패하는 것을 막는다
+    out = os.path.join(out_dir, "%02d.jpg" % step); side.save(out, "JPEG", quality=90, subsampling=0, optimize=True)   # 비교 그림도 JPEG(용량, 사용자 지시 2026-11-14)
     ef = os.path.join(here, name + "_evidence.json")
     ev = json.load(open(ef, encoding="utf-8")) if os.path.exists(ef) else {}
-    ev[str(step)] = {"fp": fp, "shape": stepfp.shape_fp(asm[step - 1], stepfp.anchor(asm)), "note": note, "time": time.strftime("%Y-%m-%d %H:%M:%S"), "cmp": "refs/%s/cmp/%02d.png" % (name, step)}
+    ev[str(step)] = {"fp": fp, "shape": stepfp.shape_fp(asm[step - 1], stepfp.anchor(asm)), "note": note, "time": time.strftime("%Y-%m-%d %H:%M:%S"), "cmp": "refs/%s/cmp/%02d.jpg" % (name, step)}
     json.dump(ev, open(ef, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     print("✅ %d번 비교 증거 기록: %s" % (step, out)); print("   지문", fp, "| 결과:", note)
     # 왼쪽 점검 칩 자동 연동(사용자 지시 2026-11-10 — "번호마다 이미지 작업을 하고도 칩이 한 번도 자동으로 안 채워졌다"): 증거를 남기는 순간 verify_step 을 돌려 칩 기록(<이름>_verify.json·DB)을 채운다

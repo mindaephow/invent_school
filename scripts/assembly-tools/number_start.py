@@ -12,6 +12,9 @@ name, k = sys.argv[1], int(sys.argv[2]); NN = "%02d" % k
 try:
     import json as _wj; _wf = os.path.join(os.path.dirname(os.path.abspath(__file__)), "refs", name, "_worked_upto.json"); os.makedirs(os.path.dirname(_wf), exist_ok=True)
     _wp = _wj.load(open(_wf, encoding="utf-8")).get("upto", 0) if os.path.exists(_wf) else 0
+    if _wp == 0:   # 이 조립도 작업이 아직 시작 전(작업 범위 0) = 시작 환경: 📷·❄·✓ 를 백업하고 모두 푼다(규칙 00-1, 사용자 지시 2026-11-15 "시작하기 전에 자동으로"). 작업 도중(범위>0)에는 안 돈다
+        import subprocess as _sp; _rr = _sp.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "release_start.py"), name], capture_output=True, text=True, encoding="utf-8", errors="replace", env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+        print("═══ 시작 환경 자동 실행(규칙 00-1: 📷·❄·✓ 백업 후 풀기) ═══"); [print("  " + _l) for _l in (_rr.stdout or _rr.stderr).splitlines()]
     if k > _wp: _wj.dump({"upto": k}, open(_wf, "w", encoding="utf-8"))
 except Exception: pass
 try:   # 조립도 파일 수정 게이트(ladder-gate.js)가 보는 도장: 이 번호 시작(앞 번호 기록 읽기)을 했다는 표시, 90분 유효(2026-11-11 사용자 지시 — 앞 번호 기록을 안 쓰고 눈대중으로 고친 사고)
@@ -84,6 +87,17 @@ def _session_check():
         _age = (_t.time() * 1000 - _rs.get("autocheckAlive", {}).get("ts", 0)) / 60000
         print("  %s 감시 칩: 상시검사 훅 %s" % ("✅" if _age < 30 else "⚠", ("동작 확인(%d분 전)" % _age) if _age < 30 else "이 세션에서 도는 흔적 없음 — 이 세션을 invent_school 폴더에서 시작하지 않았거나 첫 호출이다(한 번 더 돌려 보고, 그래도 없으면 invent_school 폴더에서 새 세션을 연다)"))
     except Exception as _e: print("  ⚠ 감시 칩 점검 실패:", _e)
+    try:   # 빌드 쓰기 오류 기록(asmpath 가 파일 잠김으로 쓰기가 막힐 때 .open_retry.log 에 남긴다, 사용자 지시 2026-11-15) — 기록이 있으면 미루지 말고 지금 원인을 보고 고친다
+        _lg = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".open_retry.log")
+        import rule_status as _rs; _rs.sync_writelock()
+        _ls = [l for l in open(_lg, encoding="utf-8").read().splitlines() if "[시작]" in l] if os.path.exists(_lg) else []
+        if _ls:
+            _fail = sum(1 for l in open(_lg, encoding="utf-8") if "[끝내 실패]" in l)
+            print("  ⚠ 빌드 쓰기 잠김 기록 %d건(끝내 실패 %d건) — 마지막: %s" % (len(_ls), _fail, _ls[-1][:200]))
+            print("     → 미루지 말고 지금 .open_retry.log 의 잡은 프로세스·스냅샷 차이를 읽고 원인을 고친 뒤, 고쳤으면 로그를 비운다(: > .open_retry.log)")
+        else: print("  ✅ 빌드 쓰기 잠김 기록 없음")
+    except Exception as _e: print("  ⚠ 쓰기 잠김 기록 점검 실패:", _e)
+
     print("  %s 개발 서버: %s" % ("✅" if up else "❌", ("localhost:%d 응답" % up) if up else "응답 없음 → 서버를 켠다(preview_start invent-school-dev, 어느 포트든 상관없음)"))
     print("  %s .env.local(SUPABASE 키): %s" % ("✅" if keys else "❌", "있음" if keys else "없음 → 사용자에게 달라고 한다(CLAUDE.md)"))
     print("  %s DB 읽기(사용자 ✓): %s" % ("✅" if db is not None else "❌", ("읽음 — ✓ 번호 %s" % db) if db is not None else "못 읽음 → ✓ 확인은 통과시키지 않는다(키를 한 줄로 요청하고, 키 없이 되는 작업은 계속한다 — 큐보 부품결합규칙.md B6)"))

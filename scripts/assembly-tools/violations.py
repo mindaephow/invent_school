@@ -118,11 +118,21 @@ def occupied_holes(A, k, lat=1.5, ov=0.5):
                 out.append((mine, "%s %s 구멍에 %s 돌기가 이미 들어 있는데 또 결합함(막힌 구멍)" % (h.n, hc["id"], " + ".join("%s.%s" % (q.n, pid) for q, pid in ins))))
     return out
 
-def _mate_pairs(A, k, lat=1.5, ov=0.5):
+def _drawn_pose(A, q, k):
+    """뷰어가 k번에 실제로 그리는 자세 — guidecheck 와 같은 규칙: 그 번호만의 자세(poseAt)가 있으면 그것, 옆자리(side) 묶음이면 옆자리 자세, 아니면 최종 자세."""
+    import stepchecks
+    from asmlib import euler_to_R
+    p, R = stepchecks.pose_at(A, q, k); ex = q.extra or {}
+    pa = (ex.get("poseAt") or {}).get(str(k)); sd = ex.get("side")
+    if pa and q.step.index <= k: return np.array(pa["p"], float), euler_to_R(pa["r"])
+    if sd and q.step.index <= k < sd["until"]: return np.array(sd["p"], float), euler_to_R(sd["r"])
+    return p, R
+
+def _mate_pairs(A, k, lat=1.5, ov=0.5, drawn=False):
     """k번 화면(최종 자세)에서 돌기가 다른 부품의 구멍 안에 들어가 결합된 쌍들 {frozenset({id(돌기 부품), id(구멍 부품)})} 와 id → 부품. occupied_holes 와 같은 기준."""
     import stepchecks
     allp = [q for j in range(1, k + 1) for q in A.steps[j - 1].parts if q.conn and not _hidden_at(q, k)]
-    pose = {id(q): stepchecks.pose_at(A, q, k) for q in allp}
+    pose = {id(q): (_drawn_pose(A, q, k) if drawn else stepchecks.pose_at(A, q, k)) for q in allp}
     def wr(q, c):
         p, R = pose[id(q)]; return p + R @ np.array(c["pos"], float), R @ np.array(c["dir"], float)
     holes = []
@@ -169,6 +179,18 @@ def split_bad(A):
             a, b = byid[ids[0]], byid[ids[1]]
             keys = ["%d:%d" % (x.step.index, A.steps[x.step.index - 1].parts.index(x)) for x in (a, b)]
             out.append((k, keys, "%s(%d번)와 %s(%d번)는 %d번에 결합돼 있었는데 %d번 이동으로 떨어짐 — 같이 옮겨야 한다" % (a.n, a.step.index, b.n, b.step.index, k - 1, k)))
+    seen = {(o[0], tuple(o[1])) for o in out}
+    for k in range(2, len(A.steps) + 1):   # ③ 이유와 상관없이: 앞 번호 화면에서 꽂혀 있던 쌍이 이번 번호 화면에서 떨어져 그려지면 분리(5번 리벳이 벽에서 빠져 떠 있던 사고, 2026-11-14)
+        try:
+            prev, _ = _mate_pairs(A, k - 1, drawn=True); now, byid = _mate_pairs(A, k, drawn=True)
+        except Exception: continue
+        for pr in sorted(prev - now, key=lambda s_: sorted(map(str, s_))):
+            ids = list(pr)
+            if not all(i in byid for i in ids): continue
+            a, b = byid[ids[0]], byid[ids[1]]
+            keys = ["%d:%d" % (x.step.index, A.steps[x.step.index - 1].parts.index(x)) for x in (a, b)]
+            if (k, tuple(keys)) in seen: continue
+            out.append((k, keys, "%s(%d번)와 %s(%d번)는 %d번 화면에서 꽂혀 있었는데 %d번 화면에서 떨어져 그려진다 — 분리됨" % (a.n, a.step.index, b.n, b.step.index, k - 1, k)))
     return out
 
 def move_hover_bad(A):

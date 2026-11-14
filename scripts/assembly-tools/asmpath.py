@@ -90,8 +90,59 @@ if not getattr(builtins, "_asmpath_installed", False):
     _io_open_code = getattr(io, "open_code", None)
     _stat = os.stat
 
+    class _SkipSame(io.StringIO):
+        """<이름>_asm.json 은 빌드·점검 도구가 실행될 때마다 다시 쓰는데, 내용이 같아도 수정 시각이 바뀌면 Claude 앱이 돌리는 git status 가 그 파일을 다시 해시하며(메모리 매핑) 몇 초 잠가 다음 쓰기가 OSError 22 로 실패했다(2026-11-14 시험으로 확인). 닫을 때 기존 내용과 같으면 디스크에 쓰지 않는다."""
+        def __init__(self, path, enc):
+            super().__init__(); self._path = path; self._enc = enc or "utf-8"; self._done = False
+        def close(self):
+            if not self._done:
+                self._done = True; new = self.getvalue()
+                try: old = _open(self._path, "r", encoding=self._enc).read() if os.path.exists(self._path) else None
+                except Exception: old = None
+                if old != new:
+                    with _open(self._path, "w", encoding=self._enc) as _fh: _fh.write(new)
+            super().close()
+
+    def _lock_log(_msg):
+        try: _open(os.path.join(TOOLS, ".open_retry.log"), "a", encoding="utf-8").write(_msg.rstrip("\n") + "\n")
+        except Exception: pass
+        try: import rule_status as _rs; _rs.sync_writelock()
+        except Exception: pass
+
     def _op(file, *a, **k):
-        return _open(resolve(file), *a, **k)
+        _p = resolve(file); _mode = str(a[0] if a else k.get("mode", "r"))
+        if not any(c in _mode for c in "wax+"): return _open(_p, *a, **k)
+        if _mode in ("w", "wt") and isinstance(_p, str) and _p.endswith("_asm.json"): return _SkipSame(_p, k.get("encoding"))
+        import time as _t, errno as _e   # 쓰기로 열 때 윈도우가 다른 프로세스의 일시 잠금으로 EINVAL(22)·EACCES·EBUSY 를 내면 잠깐 기다렸다 다시 연다(빌드의 kidknight_asm.json 간헐 OSError 22, 2026-11-14). 끝까지 안 되면 그대로 올리고 기록을 남긴다
+        _T = (_e.EINVAL, _e.EACCES, _e.EBUSY); _a0 = None; _t0 = _t.time(); _hd = lambda: __import__("time").strftime("%H:%M:%S")
+        for _i in range(12):
+            try:
+                _f = _open(_p, *a, **k)
+            except OSError as _x:
+                if _x.errno not in _T: raise
+                if _i == 0:   # 처음 실패한 순간: 파일 상태·잡은 프로세스(Restart Manager)·전체 프로세스 스냅샷 A 를 남긴다 — 매핑은 핸들이 없어 RM 에 안 보이므로 스냅샷 차이(lock_diag)로 범인을 좁힌다
+                    _st = ""
+                    try: _s = os.stat(_p); _st = " 파일 %dB 수정 %s 접근 %s" % (_s.st_size, _t.strftime("%H:%M:%S", _t.localtime(_s.st_mtime)), _t.strftime("%H:%M:%S", _t.localtime(_s.st_atime)))
+                    except Exception: pass
+                    try: import who_holds as _wh; _rm = _wh.holders([os.path.abspath(_p)])
+                    except Exception as _we: _rm = "조회 실패 %s" % _we
+                    _lock_log("%s [시작] %s errno=%s pid=%d%s | Restart Manager 잡은 프로세스: %s" % (_hd(), _p, _x.errno, os.getpid(), _st, _rm))
+                    try: import lock_diag as _ld; _a0 = _ld.snap()
+                    except Exception as _se: _lock_log("%s   스냅샷 A 실패: %s" % (_hd(), _se))
+                else:
+                    try: import who_holds as _wh; _rm2 = _wh.holders([os.path.abspath(_p)])
+                    except Exception: _rm2 = "?"
+                    _lock_log("%s   재시도 %d errno=%s RM=%s" % (_hd(), _i + 1, _x.errno, _rm2))
+                if _i == 11:
+                    _lock_log("%s [끝내 실패] %d번·%.1f초 %s" % (_hd(), _i + 1, _t.time() - _t0, _p)); raise
+                _t.sleep(0.5); continue
+            if _i > 0:   # 재시도 끝에 열림: 해소된 순간 스냅샷 B 와 A 의 차이를 적는다(읽은 바이트·CPU 가 늘어난 프로세스, 새로 생기거나 사라진 프로세스)
+                _lock_log("%s [해소] %d번째 시도에 열림, 막힌 시간 %.1f초" % (_hd(), _i + 1, _t.time() - _t0))
+                try:
+                    import lock_diag as _ld
+                    if _a0: _b = _ld.snap(); [_lock_log("      " + _l) for _l in _ld.diff(_a0, _b, me=os.getpid())]
+                except Exception as _se: _lock_log("%s   스냅샷 B 실패: %s" % (_hd(), _se))
+            return _f
     builtins.open = _op
     io.open = _op
     if _io_open_code:

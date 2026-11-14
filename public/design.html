@@ -2016,7 +2016,17 @@
     for (const cols of ['step,idx,ctid,xmin,updated_at', 'step,idx,ctid,updated_at', 'step,idx,ctid']) {
       try { const r = await fetch(`${SUPABASE_URL}/rest/v1/ivs_assembly_refs?select=${cols}${ord}&${q}${inSteps}`, { headers }); if (r.ok) { vers = await r.json(); break; } } catch (e) { /* 다음 방법 */ }
     }
-    const fetchSteps = async (list) => { const r = await fetch(`${SUPABASE_URL}/rest/v1/ivs_assembly_refs?select=${sel}${ord}&${q}&step=in.(${list.join(',')})`, { headers }); if (!r.ok) throw new Error('불러오기 실패 (' + r.status + ')'); return r.json(); };
+    // 그림은 Storage(비공개 버킷 assembly-refs)에 있고 표에는 'storage:<경로>' 만 있다(예전 base64 데이터 주소는 그대로 쓴다) — 여기서 그림 데이터로 바꿔 아래 코드는 그대로 쓴다
+    const resolveImg = async (row) => {
+      if (!row || typeof row.img !== 'string' || !row.img.startsWith('storage:')) return row;
+      const path = row.img.slice(8).split('/').map(encodeURIComponent).join('/');
+      const r = await fetch(`${SUPABASE_URL}/storage/v1/object/authenticated/assembly-refs/${path}`, { headers });
+      if (!r.ok) throw new Error('그림 파일 불러오기 실패 (' + r.status + ') ' + row.img);
+      const blob = await r.blob();
+      row.img = await new Promise((ok, no) => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.onerror = no; fr.readAsDataURL(blob); });
+      return row;
+    };
+    const fetchSteps = async (list) => { const r = await fetch(`${SUPABASE_URL}/rest/v1/ivs_assembly_refs?select=${sel}${ord}&${q}&step=in.(${list.join(',')})`, { headers }); if (!r.ok) throw new Error('불러오기 실패 (' + r.status + ')'); const rows = await r.json(); for (let i = 0; i < rows.length; i += 6) await Promise.all(rows.slice(i, i + 6).map(resolveImg)); return rows; };
     if (!vers || !C) return fetchSteps(steps);
     const out = [], needSteps = new Set(), keyOf = (v) => 'asm-ref:' + assemblyId + ':' + v.step + ':' + v.idx;
     const sigOf = rowSig;
@@ -2267,6 +2277,7 @@
   const RULE_CHIPS = [{ id: 'overlap', name: '겹침', types: ['overlap'] }, { id: 'link', name: '연결점', types: ['mark', 'hand', 'link', 'float'] }, { id: 'bond', name: '결합 규칙', types: ['bond'] }, { id: 'gap', name: '틈', types: ['gap'] }, { id: 'protrude', name: '돌출', types: ['protrude'] }, { id: 'orient', name: '방향', types: ['orient'] }, { id: 'store', name: '창고', types: ['store'] }, { id: 'cam', name: '카메라 방향', types: ['cam'] }, { id: 'fake', name: '가짜 안내점', types: ['fake'] }, { id: 'axle', name: '축 위치', types: ['axle'] }, { id: 'occupied', name: '막힌홀', types: ['occupied'] }, { id: 'nohole', name: '모터 구멍', types: ['nohole'] }, { id: 'split', name: '분리', types: ['split'] }, { id: 'floor', name: '바닥 아래', types: ['floor'] }, { id: 'center', name: '중심 위치', types: ['center'] }];   // auto: 위반 건수 대신 '자동'(번호를 열 때마다 fitCenter 가 화면 가운데로 맞춤)
   // 칩에 마우스를 올리면 무슨 검사인지 보여 주는 설명(사용자 지시 2026-11-09). [이름, 하는 일, 걸리면 화면에서]
   const RULE_DESC = {
+    writelock: ['빌드 쓰기 잠김', '빌드가 조립도 파일을 쓰려는데 다른 프로세스(주로 Claude 앱의 git 조회)가 파일을 잡아 막힌 일을 기록(scripts/assembly-tools/.open_retry.log)에서 읽어요.', '빨간 칩이면 잡은 프로세스·스냅샷 차이가 기록에 있어요 — Claude 가 그 기록으로 원인을 고친 뒤 기록을 비우면 초록으로 돌아와요.'],
     ponytail: ['포니테일 사다리', '파일을 고치기 전에 "필요한가·이미 있는 곳·재사용"을 찾아 기록했는지 보는 규칙이에요. 기록은 90분 동안 유효하고, 없으면 고치기 전에 막혀요.', '남은 시간이 칩에 나와요. 기록이 없으면 빨갛게 바뀌어요.'],
     overlap: ['겹침', '부품 부피가 서로 교집합이 되는 물리적 침범(몸통·프레임이 서로 뚫고 들어간 것, 돌기가 구멍 없는 곳을 뚫은 것)을 찾아요. 어떻게 잇는지가 규칙과 다른 것은 겹침이 아니라 결합 규칙 칩이 맡아요.', '걸린 부품이 주황색으로 칠해지고 위반 상자(✕)에 떠요.'],
     bond: ['결합 규칙', '프레임·돌기 결합 방법이 K1 규칙과 다른 것을 찾아요(규칙 1: 프레임끼리는 리벳·블록으로 잇는다 · 규칙 4 · 규칙 5~7 · 규칙 16). 부품이 서로 뚫고 들어간 겹침과는 달라요.', '걸린 부품이 보라색(⧉)으로 칠해지고 위반 상자에 떠요.'],
@@ -2296,7 +2307,7 @@
     bar.innerHTML = st.pt + RULE_CHIPS.map(c => {
       const off = ruleOff.has(c.id), n = lastViolRaw.filter(v => c.types.includes(v.type)).length + (c.id === 'floor' && floorBad && !lastViolRaw.some(v => v.type === 'floor') ? 1 : 0);
       return '<button type="button" data-rule="' + c.id + '" class="' + (off ? 'off' : (n ? 'bad' : '')) + '" data-tip="' + c.id + '" data-on="' + (off ? 0 : 1) + '">' + (off ? '○ ' : '<span style="color:#16a34a">●</span> ') + c.name + (off ? ' 꺼짐' : (c.auto ? ' 자동' : ' ' + n)) + '</button>';
-    }).join('') + st.ac;
+    }).join('') + st.ac + st.wl;
   }
   // Claude 쪽 상시 감시(포니테일 사다리·상시검사)는 public/_rule_status.json 을 읽어 보여 준다 — 켜고 끄는 칩이 아니라 지금 돌고 있는지만 표시
   let ruleStatus = {};
@@ -2305,7 +2316,8 @@
     const left = pt ? Math.round((pt.ttlMin * 60000 - (now - pt.ts)) / 60000) : -1;
     const chip = (cls, txt, tip) => '<button type="button" class="' + cls + '" data-status="1" data-tip="' + tip + '">' + txt + '</button>';
     return { pt: chip(left > 0 ? '' : 'bad', (left > 0 ? '<span style="color:#16a34a">●</span> 포니테일 ' + left + '분' : '○ 포니테일 기록 없음'), 'ponytail'),
-      ac: chip(ac ? (ac.ok ? '' : 'bad') : (ruleStatus.autocheckHook ? '' : 'bad'), ac ? (ac.ok ? '<span style="color:#16a34a">●</span> 상시검사 이상 없음' : '● 상시검사 ' + String(ac.msg).slice(0, 24)) : (ruleStatus.autocheckHook ? '<span style="color:#16a34a">●</span> 상시검사 감시 중' : '○ 상시검사 훅 없음'), 'autocheck') };
+      ac: chip(ac ? (ac.ok ? '' : 'bad') : (ruleStatus.autocheckHook ? '' : 'bad'), ac ? (ac.ok ? '<span style="color:#16a34a">●</span> 상시검사 이상 없음' : '● 상시검사 ' + String(ac.msg).slice(0, 24)) : (ruleStatus.autocheckHook ? '<span style="color:#16a34a">●</span> 상시검사 감시 중' : '○ 상시검사 훅 없음'), 'autocheck'),
+      wl: (() => { const w = ruleStatus.writelock; return w && w.n > 0 ? chip('bad', '● 빌드 쓰기 잠김 ' + w.n + '건' + (w.fail ? '(실패 ' + w.fail + ')' : ''), 'writelock') : chip('', '<span style="color:#16a34a">●</span> 빌드 쓰기 정상', 'writelock'); })() };
   }
   async function pollRuleStatus() {
     try { const r = await fetch('/_rule_status.json', { cache: 'no-store' }); ruleStatus = r.ok ? await r.json() : {}; } catch (e) { ruleStatus = {}; }
@@ -6253,6 +6265,17 @@
       },
       async cached(assemblyId, steps){ return await window.__ivsAsmRefsCached(assemblyId, steps); },   // 저장본이 있으면 서버 확인 없이 바로
       async save(assemblyId, step, idx, img, note){
+        // 그림 파일은 Storage(비공개 버킷 assembly-refs)에 올리고 표에는 경로('storage:...')만 적는다 — DB 용량을 먹지 않게(사용자 지시 2026-11-14)
+        if (typeof img === 'string' && img.startsWith('data:')) {
+          const mime = (img.match(/^data:([^;,]+)/) || [, 'image/jpeg'])[1], ext = mime === 'image/png' ? 'png' : 'jpg';
+          const path = assemblyId + '/' + String(step).padStart(2, '0') + '_' + idx + '.' + ext;
+          const blob = await (await fetch(img)).blob();
+          const up = await fetch(SUPABASE_URL + '/storage/v1/object/assembly-refs/' + path.split('/').map(encodeURIComponent).join('/'), {
+            method: 'POST', headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + accessToken, 'Content-Type': mime, 'x-upsert': 'true' }, body: blob
+          });
+          if (!up.ok) throw new Error('그림 파일 저장 실패 (' + up.status + ') ' + (await up.text()).slice(0, 120));
+          img = 'storage:' + path;
+        }
         const res = await fetch(SUPABASE_URL + '/rest/v1/ivs_assembly_refs?on_conflict=assembly_id,step,idx', {
           method: 'POST', headers: this._h({ Prefer: 'resolution=merge-duplicates,return=minimal' }),
           body: JSON.stringify([{ assembly_id: assemblyId, step, idx, img, note: note || '', updated_at: new Date().toISOString() }])

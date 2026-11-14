@@ -85,14 +85,16 @@ def add(name, step, kind, point, bookp, screenp, verdict, note):
     _used = {_num(o) for o in ob}; _old = [_num(o) for o in _all if o["kind"] == kind and o["point"] == point]
     k = _old[0] if _old and _old[0] not in _used else next(i_ for i_ in range(1, 100) if i_ not in _used)
     od = os.path.join(HERE, "refs", name, "obs"); os.makedirs(od, exist_ok=True)
-    out = os.path.join(od, "%02d_%d.png" % (step, k)); cv2.imencode(".png", side)[1].tofile(out)
-    ob.append({"kind": kind, "point": point, "verdict": verdict, "note": note.strip(), "img": "obs/%02d_%d.png" % (step, k), "time": time.strftime("%Y-%m-%d %H:%M:%S")})
+    out = os.path.join(od, "%02d_%d.jpg" % (step, k))   # 관찰 그림은 JPEG(품질 90·색 압축 없음) — PNG 는 용량이 6배라 쓰지 않는다(사용자 지시 2026-11-14)
+    from PIL import Image as _PI, ImageFile as _IF; _IF.MAXBLOCK = 1 << 26   # optimize=True 가 복잡한 그림에서 "broken data stream" 으로 실패하는 것을 막는다
+    _PI.fromarray(cv2.cvtColor(side, cv2.COLOR_BGR2RGB)).save(out, "JPEG", quality=90, subsampling=0, optimize=True)
+    ob.append({"kind": kind, "point": point, "verdict": verdict, "note": note.strip(), "img": "obs/%02d_%d.jpg" % (step, k), "time": time.strftime("%Y-%m-%d %H:%M:%S")})
     data[str(step)] = ob; json.dump(data, open(os.path.join(HERE, name + "_obs.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     ip = os.path.join(HERE, "refs", name, "index.json"); idx = json.load(open(ip, encoding="utf-8"))
     idx = [r for r in idx if not (r["step"] == step and r["idx"] == 10 + k)]
-    idx.append({"step": step, "idx": 10 + k, "file": "obs/%02d_%d.png" % (step, k), "note": "관찰(%s) %s — 왼쪽 책 · 오른쪽 화면 — 판정: %s. %s" % (kind, point, verdict, note.strip())})
+    idx.append({"step": step, "idx": 10 + k, "file": "obs/%02d_%d.jpg" % (step, k), "note": "관찰(%s) %s — 왼쪽 책 · 오른쪽 화면 — 판정: %s. %s" % (kind, point, verdict, note.strip())})
     idx.sort(key=lambda r: (r["step"], r["idx"])); json.dump(idx, open(ip, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-    print("✅ 관찰 기록: %s [%s] %s → %s (%s)" % (step, kind, point, verdict, out)); print("   DB 에 올린다: refs/%s/obs/%02d_%d.png (index idx %d)" % (name, step, k, 10 + k))
+    print("✅ 관찰 기록: %s [%s] %s → %s (%s)" % (step, kind, point, verdict, out)); print("   Storage 에 올린다: refs/%s/obs/%02d_%d.jpg (index idx %d)" % (name, step, k, 10 + k))
 
 def main():
     a = sys.argv[1:]
