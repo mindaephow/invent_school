@@ -798,7 +798,7 @@
   // 자동 검사 경고 = 하단 칩과 같은 기준: 화면에 지금 놓인 부품의 몸통 겹침(bridge.xray). 예전 미리 계산 목록은 판을 세운 자세를 몰라 오경고가 나서 없앴다(사용자 지시 2026-11-11).
   const warnCache = {};   // 번호 → 그 번호를 마지막으로 열었을 때의 겹침 경고(열지 않은 번호 버튼에도 ⚠ 를 보이려고, 사용자 지시 2026-11-13)
   const warnsOf = (i) => { const b = bridge(), xr = i === step && b && b.xray ? b.xray(lastLabels) : null; if (xr) warnCache[i] = xr.overlaps.map((q) => ({ key: i + '|' + q.a + '|' + q.b, part: q.a, text: q.a + '이(가) ' + q.b + ' 와 겹쳐 있어요' })); return warnCache[i] || []; };
-  const VIOL_ICON = { floor: '▼', overlap: '✕', gap: '↔', link: '◎', orient: '↻', hand: '✋', center: '⊕', cam: '◉', split: '⛓' };
+  const VIOL_ICON = { floor: '▼', overlap: '✕', bond: '⧉', gap: '↔', link: '◎', orient: '↻', hand: '✋', center: '⊕', cam: '◉', split: '⛓' };
   function violMark(i) { const V = (def.violations && def.violations[i]) || []; return V.length ? ' ' + [...new Set(V.map((v) => VIOL_ICON[v.type] || '!'))].join('') : ''; }   // 위반이 있는 번호 버튼에 종류 기호를 붙인다
   function warnMark(i) {
     const w = warnsOf(i); if (!w.length) return (((def.violations && def.violations[i]) || []).some((x) => x.type === 'overlap')) ? ' ⚠' : '';   // 열어 보지 않은 번호도 하단 '겹침' 칩과 같은 저장 데이터(def.violations)로 ⚠ 를 보인다(사용자 지시 2026-11-13)

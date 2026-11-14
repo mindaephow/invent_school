@@ -97,7 +97,7 @@ if _ov: print("\n⚠⚠ 몸통 겹침 %d건 — 부품이 서로 뚫고 들어�
 print("\n✅ 문제 0건 (겹침 경고는 위 목록에서 오탐인지 직접 확인)" if not _ov else "\n⚠ 문제 0건이지만 몸통 겹침 확인 전")
 # ───── 단계 계약 검사(계획이 조용히 사라지지 않게) ─────
 # <이름>_contract.json = 단계마다 부품 이름별 개수 + 부품 없는 단계 표시. 스크립트를 고친 뒤 이 값과 다르면 종료한다(30·31번 코드가 다른 수정에 지워졌는데 검사 0건이던 사고).
-# ✓ 완료 단계의 계약이 바뀌면 막고(고치려면 사용자가 ✓ 를 풀어야 함), ✓ 없는 단계는 자동으로 새 값을 받는다(--accept-contract 는 삭제됨). 설명에 "(채우는 중)"이 남은 단계도 막는다.
+# ✓ 완료 단계의 계약이 바뀌면 막고(고치려면 시작 때 00-1 로 풀거나, 시작 뒤 새로 건 ✓ 는 사용자가 풀어야 함), ✓ 없는 단계는 자동으로 새 값을 받는다(--accept-contract 는 삭제됨). 설명에 "(채우는 중)"이 남은 단계도 막는다.
 _asm0 = json.load(open(files[0], encoding="utf-8"))["steps"]
 cur_contract = {}
 for _k, _st in enumerate(_asm0, 1):
@@ -138,7 +138,7 @@ _ap = {k: h for k, h in _ap.items() if int(k) in _USER_DONE}
 _chg = [int(k) for k, h in _ap.items() if int(k) <= len(_asm0) and _fp(_asm0[int(k) - 1]) != h]
 if _chg:
     print(chr(10) + "❌ 사용자가 ✅ 완료로 체크한 단계의 내용이 바뀜: " + str(sorted(_chg)))
-    print("   되돌릴 것. 고쳐야 하는 단계라면 사용자에게 그 단계의 ✓ 를 풀어 달라고 보고한다(다른 방법은 없다).")
+    print("   되돌릴 것. 시작 때 `handoff --시작`(규칙 00-1)을 안 돌렸으면 먼저 그것을 돌린다(✓ 를 백업하고 푼다 — 묻지 않는다). 시작 뒤 사용자가 새로 건 ✓ 번호라면 그 번호만 사용자에게 풀어 달라고 보고한다.")
     sys.exit(1)
 for _k in sorted(_USER_DONE):
     if str(_k) not in _ap and _k <= len(_asm0): _ap[str(_k)] = _fp(_asm0[_k - 1])
@@ -205,6 +205,7 @@ try:
 except Exception as _e_: print("필수 산출물 점검을 못 했다:", str(_e_)[:100])
 print("필수 산출물(격자·홀라인 그림·카메라·읽기 표·그림DB) 빠진 번호:", _art_miss if _art_miss else "없음")
 if write and _nogrid:
+    import subprocess as _sp_; _sp_.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "prep_badge.py"), name])   # 사전작업(부품정리·창고정리) 배지는 번호 산출물과 상관없이 올린다
     sys.exit("❌ 작업 중인 번호의 필수 산출물이 빠져 --write 를 하지 않는다: " + str({k_: _art_miss[k_] for k_ in _nogrid}) + " — 큐보 부품결합규칙.md D14 순서(crop_ticks → holefit → axes_fit → refs_rect → DB 업로드)대로 만든다. 이 검사는 건너뛸 수 없다.")
 
 # ───── 철칙 순서 게이트(관리자 지시 2026-10-08, 우회 불가): 부품이 있는 번호마다 refs/<이름>/NN_lv.json(잘라내기→방향 표시→회전)이 있어야 한다 — 원본 위에서 격자를 먼저 맞춘 번호는 막는다(옛 조립도·--sync 이전 번호는 면제 목록 IRON_EXEMPT).
@@ -315,7 +316,7 @@ try:
 except Exception as _e_:
     _lockbad = {}; print("완료 번호의 위반 검사를 못 했다:", str(_e_)[:100])
 if _lockbad:
-    sys.exit("❌ ✓ 완료로 잠긴 번호에 규칙 위반이 있다(번호: 건수) " + str(_lockbad) + " — 위반이 있으면 잠글 수 없다. 사용자에게 ✓ 를 풀어도 되는지 묻고, 풀고 고친 뒤 위반 0 을 확인하고 다시 잠근다.")
+    sys.exit("❌ ✓ 완료로 잠긴 번호에 규칙 위반이 있다(번호: 건수) " + str(_lockbad) + " — 위반이 있으면 잠글 수 없다. 시작 절차(00-1)를 안 돌렸으면 먼저 돌려 푼다. 시작 뒤 사용자가 새로 건 ✓ 면 풀어도 되는지 묻고, 풀고 고친 뒤 위반 0 을 확인하고 다시 잠근다.")
 if write:  # (규칙 확인은 위에서 이미 검사)
     _m = re.search(r'id: "(cubo-\d+-[A-Za-z0-9_]+)"', open(name + "_entry.js", encoding="utf-8").read())   # 항목 파일의 id(2권은 cubo-2-...). 없으면 1권 규칙
     rc, out = run([sys.executable, "emit.py", name + "_entry.js", _m.group(1) if _m else "cubo-1-" + name]); print(out.strip())

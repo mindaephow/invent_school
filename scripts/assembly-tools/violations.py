@@ -1,7 +1,7 @@
 # 규칙 위반을 번호별로 모아 화면이 종류마다 다른 색·기호로 칠하게 한다(사용자 지시 2026-11-08). 읽기만 한다.
 #   python violations.py <이름>      번호별 위반 목록을 보여 준다(build.py 는 collect() 로 def.violations 를 만든다)
 # 종류: floor ▼ 바닥 아래(asmlib.floor_check) · mark ⌖ 안내점이 부품 자기 연결점에 안 맞음(guidecheck: recv 누락·링이 자기 구멍 아님·화살표 끝/꼬리가 구멍·돌기 끝에서 뜸) · link ◎ 그 밖의 안내 문제(안내점·방향 없음 등)
-#       store ▣ 다른 창고에 있는 부품이 이 번호 화면에 보임(hidecheck.stray_loc) · overlap ✕ 겹침 · gap ↔ 틈 · orient ↻ 방향(cubo_joint_check 가 메시지와 함께 부품 키 LAST 를 내준다).
+#       store ▣ 다른 창고에 있는 부품이 이 번호 화면에 보임(hidecheck.stray_loc) · overlap ✕ 겹침(부피 교집합만) · bond ⧉ 결합 규칙(K1 규칙1·4·5~7·16) · gap ↔ 틈 · orient ↻ 방향(cubo_joint_check 가 메시지와 함께 부품 키 LAST 를 내준다).
 # 항목: {"type", "keys": ["만든번호:부품순서"…], "msg"} — 키는 화면 부품 키와 같다(moveMade 키와 같은 모양).
 import asmpath
 import json
@@ -288,11 +288,11 @@ def collect(name):
                 keys = ["%d:%d" % (k, i) for i, p in enumerate(A.steps[k - 1].parts) if p.n == nm.group(1)]
         _mark = re.search(r"자기 구멍|자기 자리가 아니다|구멍 축 위에 없|돌기 끝에서 .{0,12}떨어|recv 표시가 없|돌기 끝에 찍힌", msg)   # 안내점·링·화살표 끝이 부품 자기 연결점(구멍·돌기)에 안 맞는 것은 따로 칠한다(2026-11-08)
         add(k, "mark" if _mark else "link", keys, msg)
-    try:   # 겹침·틈·방향: cubo_joint_check 가 메시지와 함께 화면 부품 키를 내준다(LAST) — 틈·피치는 ↔, 방향은 ↻, 나머지(겹침·구조)는 ✕
+    try:   # 겹침·틈·방향: cubo_joint_check 가 메시지와 함께 화면 부품 키를 내준다(LAST) — 틈·피치는 ↔, 방향은 ↻, 물리적 겹침은 ✕, 결합 규칙 위반(규칙1·4·5~7·16)은 ⧉
         import cubo_joint_check as cj
         for k in range(1, len(A.steps) + 1):
             for msg in cj.check(A, k):
-                t = "orient" if msg.startswith("규칙10") else "gap" if re.search(r"틈|피치", msg) else "overlap"
+                t = "orient" if msg.startswith("규칙10") else "gap" if re.search(r"틈|피치", msg) else "overlap" if "겹침" in msg else "bond"   # 겹침 = 부품이 물리적으로 교집합일 때만(사용자 지시 2026-11-14) — 규칙1·4·5~7·16 은 결합 규칙 위반(bond)
                 add(k, t, cj.LAST.get(msg, []), msg)
     except Exception as e_:
         print("violations: 겹침·틈·방향 점검을 못 붙임 —", str(e_)[:100], file=sys.stderr)

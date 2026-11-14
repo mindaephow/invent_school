@@ -398,7 +398,7 @@ export function registerCuboAssemblyTools(server, getSupabase) {
       'check_workspace',
       {
         title: '작업 공간(창고) 규칙 검사',
-        description: '큐보 스튜디오 작업 공간 규칙(안내서 6-5)을 검사한다: 모든 단계에 slot(작업 창고 0~5)이 있는지, 자리가 바뀌는 단계에 history(불러온/보관한 곳)가 있는지, 숨기는 부품에 store(보관 설명)·storeThumb(사진)이 있는지, "(채우는 중)" 뼈대·부품이 사라진 빈 단계가 없는지. 그리고 사용자가 ✅ 완료/🛠 수정중으로 체크한 단계(ivs_assembly_status)를 알려 준다 - 완료 단계는 사용자가 말하기 전에 고치지 말 것. 조립도 작업을 시작할 때와 끝낼 때 돌린다.',
+        description: '큐보 스튜디오 작업 공간 규칙(안내서 6-5)을 검사한다: 모든 단계에 slot(작업 창고 0~5)이 있는지, 자리가 바뀌는 단계에 history(불러온/보관한 곳)가 있는지, 숨기는 부품에 store(보관 설명)·storeThumb(사진)이 있는지, "(채우는 중)" 뼈대·부품이 사라진 빈 단계가 없는지. 그리고 사용자가 ✅ 완료/🛠 수정중으로 체크한 단계(ivs_assembly_status)를 알려 준다 - 완료 단계는 작업 도중 사용자가 새로 건 것만 말하기 전에 고치지 말 것(조립도 작업을 시작할 때는 규칙 00-1 로 `handoff --시작` 이 먼저 푼다). 조립도 작업을 시작할 때와 끝낼 때 돌린다.',
         inputSchema: { assemblyId: z.string().describe('list_assemblies 의 id. 예: cubo-1-airplane') },
       },
       async ({ assemblyId }) => {

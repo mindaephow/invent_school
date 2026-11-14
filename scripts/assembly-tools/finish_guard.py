@@ -8,7 +8,7 @@ import asmpath
 import sys, os, json, re, subprocess
 sys.stdout.reconfigure(encoding="utf-8"); sys.stderr.reconfigure(encoding="utf-8")
 HERE = os.path.dirname(os.path.abspath(__file__)); G = os.path.join(HERE, ".finish_goal"); S = os.path.join(HERE, ".finish_goal_state.json")
-OFF = os.path.join(HERE, ".finish_off"); ACTIVE = os.path.join(HERE, ".active_assembly")
+OFF = os.path.join(HERE, ".finish_off"); ACTIVE = os.path.join(HERE, ".active_assembly"); UNTIL = os.path.join(HERE, ".finish_until")   # 사용자가 시킨 끝 번호("N번까지")
 def bad_count(name):
     p = subprocess.run([sys.executable, os.path.join(HERE, "rulecheck.py"), name], capture_output=True, text=True, encoding="utf-8", env=dict(os.environ, PYTHONIOENCODING="utf-8"))
     m = re.search(r"합계: ❌ (\d+)번", p.stdout)
@@ -18,8 +18,10 @@ def main():
     if a[:1] == ["on"] and len(a) > 1:
         if os.path.exists(OFF): os.remove(OFF)
         open(G, "w", encoding="utf-8").write(a[1]); json.dump({"last": 10**6, "stalls": 0}, open(S, "w")); print("목표 켬:", a[1]); return
+    if a[:1] == ["until"] and len(a) > 1:   # python finish_guard.py until N — "N번까지" 지시: 작업 범위가 N 에 닿고 ❌ 가 0 일 때만 목표가 끝난다(꼬마기사 2026-11-14: 1번도 못 끝낸 채 ❌ 0 이라 멈춘 사고)
+        open(UNTIL, "w", encoding="utf-8").write(a[1]); print("끝 번호:", a[1]); return
     if a[:1] == ["off"]:
-        for f in (G, S):
+        for f in (G, S, UNTIL):
             if os.path.exists(f): os.remove(f)
         open(OFF, "w", encoding="utf-8").write("질문 답만 — set_active.py 나 finish_guard.py on 으로 다시 켠다"); print("목표 끔"); return
     if not os.path.exists(G):
@@ -28,6 +30,13 @@ def main():
     name = open(G, encoding="utf-8").read().strip(); n = bad_count(name)
     if n is None: print("⚠ rulecheck 결과를 못 읽어 막지 않는다", file=sys.stderr); return
     if n == 0:
+        try: until = int(open(UNTIL, encoding="utf-8").read().strip()) if os.path.exists(UNTIL) else 0
+        except Exception: until = 0
+        try: upto = json.load(open(os.path.join(HERE, "refs", name, "_worked_upto.json"), encoding="utf-8")).get("upto", 0)
+        except Exception: upto = 0
+        if until and upto < until:   # ❌ 가 0 인 것은 아직 시작 안 한 번호를 안 세서다 — 시킨 끝 번호까지 안 갔으면 끝이 아니다
+            print("❌ %s 는 지시받은 %d번까지 가지 않았다(지금 %d번까지 시작) — 턴을 끝내지 않는다(B7). 막혀도 보고하지 말고 규칙 순서(C3 사다리)대로 다음 시도를 한다. 못 푼 것은 읽기 표 판단과정에 ⚠ 로 적고 다음 번호로 간다." % (name, until, upto), file=sys.stderr)
+            sys.exit(2)
         os.remove(G); print("✅ %s 규칙 점검 ❌ 0 — 목표 끝" % name); return
     st = json.load(open(S)) if os.path.exists(S) else {"last": 10**6, "stalls": 0}
     st["stalls"] = 0 if n < st["last"] else st["stalls"] + 1; st["last"] = n; json.dump(st, open(S, "w"))

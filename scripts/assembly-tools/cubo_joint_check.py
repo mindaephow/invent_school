@@ -127,7 +127,7 @@ def check(A, k):
     # 규칙 1 (프레임과 프레임을 잇는 부품은 리벳·블록 — 볼트·너트는 규칙 14·15): 새 부품의 돌기가 서로 다른 프레임 둘 이상의 구멍에 들어가 있으면 그 부품이 잇는 것
     for c_ in [o for o in vs if o.new and pf[id(o)] and "프레임" not in o.n]:
         fr = sorted({a.n + "#" + str(id(a)) for a in vs if a is not c_ and "프레임" in a.n and any(inside(pg, ho) for pg in pf[id(c_)] for ho in hf[id(a)])})
-        if len(fr) >= 2 and not (c_.n == "리벳" or "블록" in c_.n or c_.n in ("8볼트", "12볼트", "너트", "축", "메인보드")):   # 축은 구멍을 지나가는 막대(G21)라 프레임을 잇는 부품이 아니다 / 메인보드는 프레임마다 따로 꽂히는 부품(사용자 2026-11-10, 축구로봇 23번)
+        if len(fr) >= 2 and not (c_.n == "리벳" or "블록" in c_.n or c_.n in ("8볼트", "12볼트", "너트", "축", "메인보드", "DC모터")):   # 축은 구멍을 지나가는 막대(G21)라 프레임을 잇는 부품이 아니다 / 메인보드·DC모터는 프레임마다 따로 꽂히는 부품(사용자 2026-11-10 축구로봇 23번, DC모터는 2026-11-14 꼬마기사 1번)
             _em(out, "규칙1 %s 가 프레임 %d장을 이음(프레임끼리는 리벳·블록으로 잇는다)" % (c_.n, len(fr)), c_)
     # 규칙 4 (블록·모터 돌기는 프레임에 끼워질 때 프레임의 먼 쪽 면 밖으로 나가지 않는다 — 돌기 끝이 구멍 반대편 면을 0.5mm 넘으면 위반)
     for b_ in [o for o in vs if o.new and (("블록" in o.n) or o.n in PEGGED)]:

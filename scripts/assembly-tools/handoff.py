@@ -42,6 +42,9 @@ def start():
 def main():
     if "--시작" in sys.argv and len(sys.argv) > 2 and not sys.argv[1].startswith("--") and arg("--아이디"):
         start()
+        # 시작하면 작업 중인 조립도로 켠다 — 안 켜면 끝까지 가 지킴이(finish_guard)·범위 훅이 이 조립도를 몰라 중간에 멈춰 보고하게 된다(꼬마기사 2026-11-14)
+        subprocess.run([sys.executable, os.path.join(HERE, "set_active.py"), sys.argv[1]])
+        if arg("--끝"): subprocess.run([sys.executable, os.path.join(HERE, "finish_guard.py"), "until", arg("--끝")])   # "N번까지" 지시면 --끝 N (finish_guard 가 N번까지 안 가면 멈추지 못하게 한다)
         # 규칙 00-1: 작업을 시작할 때 📷·❄·✓ 를 백업하고 모두 푼다(사용자 지시 2026-11-13)
         subprocess.run([sys.executable, os.path.join(HERE, "release_start.py"), sys.argv[1]])
         # 그다음 1번 게이트(02·03·04 앞 과정)에 막히는지 바로 보여 준다 — 막히면 멈추지 않고 원인을 고쳐 푼다(00-1 ②)

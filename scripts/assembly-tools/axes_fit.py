@@ -60,6 +60,14 @@ def main():
             continue
         r = fit(obj, img, W, H, fov)
         if r: cands.append((r, fov))
+    # 주점 탐색(2026-11-14 꼬마기사 1번): 책 그림이 잘려 한가운데가 주점이 아니면 오차가 크다(7.5px) — 한가운데로 2px 안에 안 맞을 때만 주점·시야각을 훑어 본다(pnp.fit 의 cx,cy)
+    if not f.get("xyz") and min([c[0][0] for c in cands] or [99]) > 2:
+        for fov in (30, 40, 50, 60, 70, 80):
+            for dx in range(-500, 501, 100):
+                for dy in range(-500, 501, 100):
+                    try: r = fit(obj, img, W, H, fov, W / 2 + dx, H / 2 + dy)
+                    except Exception: continue
+                    if r: cands.append((r, fov))
     # 평면 위 점(판 구멍)만으로 푸는 PnP 는 위에서 내려다보는 해와 아래에서 올려다보는 거울 해가 거의 같은 오차로 나온다(드롭체커 27번: 0.88 vs 0.90px).
     #   오차만 보면 거울 해(phi>1.55)나 카메라가 뒤집힌 해(up_y<0)가 뽑힐 수 있어서, 위에서 내려다보고 위쪽이 위인 해(phi≤1.55·up_y>0)를 먼저 고른다(2026-10-13).
     def _ok(c):
@@ -77,7 +85,7 @@ def main():
     for k, v in (("X", [pitch, 0, 0]), ("Y", [0, pitch, 0]), ("Z", [0, 0, pitch])):
         w = P(v) - o; s = 55.0 / max(abs(w[0]), abs(w[1]), 1e-6) if k != "Y" else 55.0 / max(abs(w[1]), 1e-6)
         d[k] = [round(float(w[0] * s), 1), round(float(w[1] * s), 1)]
-    out = {"global": d, "fit": {"from": "%02d_%s.json" % (step, label), "err_px": round(float(e), 2), "points": len(obj), "theta": round(math.radians(az), 2), "phi": round(math.radians(90 - el), 2), "cols": cd, "rows": rd}}
+    out = {"global": d, "fit": {"from": "%02d_%s.json" % (step, label), "err_px": round(float(e), 2), "points": len(obj), "theta": round(math.radians(az), 2), "phi": round(math.radians(90 - el), 2), "cols": cd, "rows": rd, "fov": fov, "cx": round(float(K[0][2]), 1), "cy": round(float(K[1][2]), 1)}}
     out["rotate_to"] = cd[-1]   # 구멍 줄(칸 방향)이 놓인 세계 축 — refs_rect 가 그림을 이 축선과 같은 방향으로 작은 각도만 돌린다(규칙 E3). 안 적으면 격자 줄과 축선이 어긋나 보인다(사용자 지적 2026-11-10: 홀라인·xyz축 그림)
     if rd[-1] == "Y": out["column_axis"] = "Y"   # 서 있는 판은 가운데 열이 Z 가 아니라 Y 선을 따른다(refs_rect 머리말)
     json.dump(out, open(os.path.join(D, "%02d_axes.json" % step), "w", encoding="utf-8"), ensure_ascii=False)

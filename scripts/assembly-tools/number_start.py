@@ -144,6 +144,9 @@ parts = "" if (not used or used.startswith("없음")) else ", ".join(x.strip() f
 # ⓪ 앞 과정 점검(사용자 지시 2026-10-12 "앞순서에 안한게 있으면 하고 넘어가야 하게끔") — 02·03·04 와 앞 번호 확인이 끝나지 않았으면 여기서 멈춘다.
 #    읽기 표·규칙 파일도 만들지 않고, 격자·구멍 점 같은 번호 작업은 시작할 수 없다. 끝낸 뒤 다시 돌린다.
 _gate = []
+try: _act0 = open(os.path.join(here, ".active_assembly"), encoding="utf-8").read().strip()
+except Exception: _act0 = ""
+if _act0 != name: _gate.append(("00-1 시작 절차", "이 조립도(%s)로 시작 절차를 안 했다(작업 중 조립도: %s) — 📷·❄·✓ 가 안 풀렸고 끝까지 가 지킴이도 이 조립도를 모른다" % (name, _act0 or "없음"), "묻지 말고 python handoff.py %s --아이디 <계정> --시작 부터 돌린다(규칙 00-1 — 확인만 하는 작업이어도 같다)" % name))
 _R0 = os.path.join(here, "refs", name)
 _miss_img = [i for i in range(0, len(asm) + 1) if i and not os.path.exists(os.path.join(_R0, "%02d.jpg" % i))]
 if not os.path.exists(os.path.join(_R0, "00.jpg")): _miss_img.insert(0, 0)
