@@ -95,7 +95,21 @@ def main():
     except Exception: pass   # 화면 가로축이 수평에서 기운 정도 — 뷰어 카메라는 기울이지(roll) 못하니 0 에 가까워야 한다
     print("카메라 roll %.1f°(0 에 가까워야 뷰어 카메라로 같은 그림이 나온다)" % _roll)
     print("오차 %.2fpx (%d점) theta %.2f phi %.2f  X%s Y%s Z%s" % (e, len(obj), out["fit"]["theta"], out["fit"]["phi"], d["X"], d["Y"], d["Z"]))
-    if out["fit"]["phi"] > 1.55: print("⚠ phi 가 1.55(≈90°)를 넘는다 = 판 아래에서 올려다보는 해 — 거울로 맞은 것이다. 책은 위에서 내려다보니 줄방향(또는 칸방향)을 반대로 준다.")
+    _stand = abs(float(np.cross(cvec, rvec)[1])) < 0.5 and not f.get("xyz")   # 서 있는 판(격자 평면이 세로) — 거울 해는 "판 앞에서 본 해 / 판 뒤에서 본 해"라 phi 로는 못 가르고, 아래에서 올려다보는 그림(phi>1.55)도 있을 수 있다
+    if out["fit"]["phi"] > 1.55 and not _stand: print("⚠ phi 가 1.55(≈90°)를 넘는다 = 판 아래에서 올려다보는 해 — 거울로 맞은 것이다. 책은 위에서 내려다보니 줄방향(또는 칸방향)을 반대로 준다.")
+    try:   # 한 평면 점의 두 해를 모두 보여 준다(2026-11-15 꼬마기사 9번: 서 있는 판의 거울 해를 손으로 IPPE 를 돌려 갈랐다) — 고르는 것은 평면 밖 단서(판 앞면이 보이는가·T축 끝·돌기 끝이 화면 어느 쪽으로 나오는가)
+        from pnp import planar_pair
+        _pp = planar_pair(obj, img, K)
+        if len(_pp) == 2:
+            _tp = lambda rv_, tv_: (lambda a_: (math.radians(a_[0]), math.radians(90 - a_[1])))(angles(cam_from(rv_, tv_)[0], (0, 0, 0)))
+            _alt = [(e_,) + _tp(rv_, tv_) for e_, rv_, tv_ in _pp if abs(_tp(rv_, tv_)[0] - math.radians(az)) > 0.02 or abs(_tp(rv_, tv_)[1] - math.radians(90 - el)) > 0.02]
+            if _alt:
+                out["fit"]["mirror_other"] = {"theta": round(_alt[0][1], 2), "phi": round(_alt[0][2], 2), "err_px": round(_alt[0][0], 2)}
+                json.dump(out, open(os.path.join(D, "%02d_axes.json" % step), "w", encoding="utf-8"), ensure_ascii=False)
+                _amb = _alt[0][0] <= max(2.0, 2 * e)   # 다른 해도 통과 기준(2px) 안이거나 지금 해와 비슷하게 맞는다 = 오차로는 못 가른다
+                print("%s 거울 해(같은 점에 %.2fpx 로 맞는 다른 카메라): theta %.2f phi %.2f — %s" % ("⚠" if _amb else "참고", _alt[0][0], _alt[0][1], _alt[0][2],
+                      "오차로는 못 가른다. 평면 밖 단서 점으로 가른다: mkfit3d.py 의 spec \"check\"(T축 끝·돌기 끝·앞 번호 부품 구멍의 3D↔책 픽셀)" if _amb else "오차 차이가 커서 지금 해를 골랐다"))
+    except Exception as _e: print("(거울 해 비교를 못 했다: %s)" % str(_e)[:80])
     if e > 2: print("⚠ 오차가 2px 를 넘는다 — 칸·줄 방향(거울)이나 격자 점을 다시 본다. 이 값을 쓰지 않는다.")
 
 main()

@@ -2,20 +2,92 @@
 #   1) partlib 로 부품 연결점(conn.json·dims.json) 생성  2) 스크립트 실행(<이름>.py → <이름>_asm.json·<이름>_entry.js)
 #   3) check_local.js 의 모든 검사(단계별 정밀·겹침·검증 절차·LIST·안내 화살표) → 문제가 있으면 종료 코드 1
 #   4) --write 이면 문제 0건일 때만 public/design-assemblies.js 에 넣는다(emit.py)
+#   --write 없이 돌리면 검사만 한다 — 도는 동안 바뀐 파일(<이름>_asm.json·_entry.js·_rules.json·conn.json …)은 끝날 때 전부 처음 내용으로 되돌린다(C1: 쓰는 것은 --write 뿐).
 # 실수를 발견하면 lessons.py 의 LESSONS 에 규칙을 적고 가능하면 asmlib/검사로 옮긴다 — 이 스크립트가 마지막에 그 목록을 보여 준다.
 import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import re, subprocess, sys, os, json
 import atexit
-def _end_summary():   # 끝 요약(D14·B3-4): 출력을 grep 으로 걸러 읽었더라도 마지막 이 블록은 항상 나온다 — 빠진 산출물·❌ 번호를 한 번에 본다
-    g = globals(); L = []
+_exit_why = []   # 끝낸 이유(sys.exit 에 준 글·종료 코드) — 끝 요약이 "왜 멈췄나"를 한 줄로 다시 보여 준다
+_sys_exit = sys.exit
+def _exit(code=None):
+    _exit_why.append(code); _sys_exit(code)
+sys.exit = _exit
+_exc = []
+_hook0 = sys.excepthook
+def _hook(t_, v_, tb_):
+    _exc.append("%s: %s" % (t_.__name__, v_)); _hook0(t_, v_, tb_)
+sys.excepthook = _hook
+def _end_summary():   # 끝 요약(D14·B3-4): 출력이 길어 중간을 걸러 읽었더라도 마지막 이 블록만 보면 "저장됐나·왜 멈췄나·남은 것"을 안다 — 항상 나온다
+    g = globals(); L = []; why = _exit_why[-1] if _exit_why else None
+    if _exc: L.append("결과: ❌ 예외로 중단(저장 안 됨) — %s%s" % (_exc[-1][:200], " · 파일 쓰기 잠김(OSError 22/13)이면 잠시 뒤 다시 돌린다(.open_retry.log 에 기록)" if "OSError" in _exc[-1] or "PermissionError" in _exc[-1] else ""))
+    elif isinstance(why, str): L.append("결과: ❌ 중단%s — %s" % ("(저장 안 됨)" if g.get("write") else "", why[:300]))
+    elif why not in (None, 0): L.append("결과: ❌ 중단(종료 코드 %s)%s — 위 '❌ 문제 있음'·'단계 계약 위반' 목록을 본다" % (why, "(저장 안 됨)" if g.get("write") else ""))
+    elif g.get("write"): L.append("결과: %s" % ("✅ 저장함(public/design-assemblies.js)" if g.get("_emit_rc") == 0 else "❌ 저장 실패 — emit.py 출력을 본다"))
+    else: L.append("결과: 검사만 끝(저장은 --write)")
+    if not g.get("write") and _SNAP:
+        try:
+            b_, n_, c_ = _snap_restore()
+            L.append("읽기 전용: 파일을 남기지 않았다(되돌린 파일 %d개, 지운 새 파일 %d개)%s" % (len(b_), len(n_), " · ⚠ 못 되돌린 파일 %d개: %s" % (len(c_), ", ".join(os.path.basename(x_) for x_ in c_[:5])) if c_ else ""))
+        except Exception as e_: L.append("⚠ 읽기 전용 되돌리기를 못 함: %s" % str(e_)[:120])
+    if g.get("_bl"): L.append("번호별 점검 막힌 항목 %d개: %s%s" % (len(g["_bl"]), " / ".join(str(x_)[:70] for x_ in g["_bl"][:3]), " …" if len(g["_bl"]) > 3 else ""))
     if g.get("_art_miss"): L.append("필수 산출물이 빠진 번호 %d개: %s" % (len(g["_art_miss"]), dict(sorted(g["_art_miss"].items()))))
     if g.get("_badn"): L.append("규칙 점검 ❌ 번호 %d개: %s" % (len(g["_badn"]), g["_badn"][:30]))
-    if L:
-        print(); print("══ 끝 요약 — 위 출력을 걸러 읽었어도 이 블록은 전부 읽는다 ══")
-        for x_ in L: print("  · " + x_)
+    if g.get("_n_"): L.append("규칙 위반 표시 %d번 (%s) — python violations.py %s" % (g["_n_"], ", ".join(g.get("_ts_") or []), g.get("name", "")))
+    print(); print("══ 끝 요약 — 위 출력을 걸러 읽었어도 이 블록은 전부 읽는다 ══")
+    for x_ in L: print("  · " + x_)
 atexit.register(_end_summary)
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 name = sys.argv[1]; write = "--write" in sys.argv
+# ── 읽기 전용 실행(사용자 지시 2026-11-15): --write 가 없으면 아무 파일도 남기지 않는다. 검사는 조립 스크립트가 만든 파일을 읽어야 하므로 도는 동안은 쓰게 두고,
+#    시작 때 조립도 폴더·도구 폴더의 "도구가 만드는 파일"(.json·.js) 상태를 적어 두었다가 끝날 때(오류로 끝나도) 바뀐 파일은 처음 내용으로, 새로 생긴 파일은 지워서 되돌린다.
+#    사람이 고치는 파일(조립 스크립트 .py·문서 .md·읽기 표·증거·관찰·점검 기록)은 건드리지 않는다 — 빌드가 도는 사이 고친 내용을 되돌리면 안 된다.
+_SNAP_HAND = ("_read.json", "_evidence.json", "_verify.json", "_obs.json", "_via.json", "_flags.json", "_approvals.json", "_orient.json", "_list.json", "_def.json")
+_SNAP_TOOLS = ("conn.json", "dims.json", "heads.json")   # 도구 폴더에서는 partlib 가 다시 만드는 이 셋만
+_SNAP = {}; _SNAP_BIG = 8 * 1024 * 1024
+def _snap_dirs():
+    here_ = os.getcwd(); out = [(here_, False)]
+    try: out.append((os.path.dirname(os.path.abspath(asmpath.resolve(name + ".py"))), True))
+    except Exception: pass
+    return out
+def _snap_walk():
+    for d_, deep_ in _snap_dirs():
+        if not os.path.isdir(d_): continue
+        for root_, dirs_, files_ in os.walk(d_):
+            if not deep_: dirs_[:] = []
+            else: dirs_[:] = [x_ for x_ in dirs_ if x_ not in ("__pycache__",)]
+            for f_ in files_:
+                if not f_.lower().endswith((".json", ".js")) or f_.endswith(_SNAP_HAND) or (not deep_ and f_ not in _SNAP_TOOLS): continue
+                p_ = os.path.normpath(os.path.join(root_, f_))
+                try: st_ = os.stat(p_)
+                except OSError: continue
+                yield p_, st_
+def _snap_take():
+    for p_, st_ in _snap_walk():
+        keep_ = st_.st_size <= _SNAP_BIG and not p_.lower().endswith((".jpg", ".jpeg", ".png", ".pdf", ".stl", ".pyc"))   # 그림·모델은 빌드가 쓰지 않는다 — 바뀌면 알리기만 한다
+        try: _SNAP[p_] = (st_.st_mtime_ns, st_.st_size, open(p_, "rb").read() if keep_ else None)
+        except OSError: pass
+def _snap_restore():
+    back_, gone_, cant_ = [], [], []
+    for p_, st_ in list(_snap_walk()):
+        if p_ not in _SNAP:
+            try: os.remove(p_); gone_.append(p_)
+            except OSError: cant_.append(p_)
+            continue
+        mt_, sz_, data_ = _SNAP[p_]
+        if st_.st_mtime_ns == mt_ and st_.st_size == sz_: continue
+        if data_ is None: cant_.append(p_); continue
+        try:
+            if open(p_, "rb").read() != data_:
+                open(p_, "wb").write(data_); back_.append(p_)
+        except OSError: cant_.append(p_)
+    for p_, (mt_, sz_, data_) in _SNAP.items():   # 도는 동안 지워진 파일
+        if not os.path.exists(p_) and data_ is not None:
+            try: open(p_, "wb").write(data_); back_.append(p_)
+            except OSError: cant_.append(p_)
+    return back_, gone_, cant_
+if not write:
+    try: _snap_take()
+    except Exception as _e: print("⚠ 읽기 전용 준비(파일 상태 적기)를 못 함:", str(_e)[:100])
 # 우회 옵션 전부 삭제(관리자 지시 2026-10-11): 쓸 수 있는 옵션은 --write 하나뿐이다. --unverified·--wip·--accept-contract·--allow-steps·--sync-approved·--iron-later·--grid-skip 등
 # 번호별 확인을 건너뛰게 하던 옵션을 Claude 가 말없이 써서 7~15번을 몰아 만든 일이 있었다. 확인의 근거는 사용자가 화면에서 누른 ✓ 완료(DB)뿐이다(userdone.py).
 _bad_opts = [a_ for a_ in sys.argv[2:] if a_ != "--write"]
@@ -37,7 +109,7 @@ except Exception as _e:
     print("⚠ 기본 검사 항목 자동 추가를 못 함:", str(_e)[:100])
 run([sys.executable, "partlib.py"], show=False)
 rc, out0 = run([sys.executable, asmpath.ap(name, ".py")])
-if rc: sys.exit("스크립트 실행 실패")
+if rc: sys.exit("스크립트 실행 실패 — " + (next((l_.strip() for l_ in reversed(out0.splitlines()) if l_.strip()), "")[:200]) + " (조립 스크립트 %s.py 가 오류로 끝났다. 위 Traceback 의 조립도 줄 번호를 본다. 옛 구멍 번호(hN_M) KeyError 면 convert_hole_ids.py 로 바꾸지 않은 조립도다)" % name)
 import userdone
 _m0 = re.search(r'id: "(cubo-\d+-[A-Za-z0-9_]+)"', open(name + "_entry.js", encoding="utf-8").read())
 _aid = _m0.group(1) if _m0 else "cubo-1-" + name
@@ -198,7 +270,7 @@ _nogrid = []; _art_miss = {}
 try:
     import rulecheck as _rcg
     for _k, _its in _rcg.check(name)[0].items():
-        if _k > _UP0: continue
+        if _k > (_UP0 - 1 if os.path.exists(os.path.join("refs", name, "_worked_upto.json")) else _UP0): continue   # _UP0 는 '지금 번호 +1(미리 보기)'이라 산출물 게이트는 지금 번호까지만 — 안 그러면 11번을 저장하려는데 12번 격자·카메라가 없다고 막힌다(2026-11-15)
         _m = [t_ for s_, t_, w_ in _its if s_ == "❌" and _rcg.is_artifact(t_)]
         if _m: _art_miss[_k] = _m
         if _m and any(s_ == "❌" and t_ == "증거" for s_, t_, w_ in _its): _nogrid.append(_k)
@@ -306,20 +378,25 @@ except Exception as _e_:
 # 규칙 위반 화면 표시(사용자 지시 2026-11-08): 번호별 위반을 모아 항목 파일에 def.violations 로 넣는다 — 화면이 종류마다 다른 색·기호로 칠한다(violations.py). 번호 지문(✓ 보호)에는 들어가지 않는다.
 try:
     import violations as _vi
-    _n_, _ts_, _ = _vi.write_entry(name)
+    _vd = _vi.collect(name)
+    _n_, _ts_, _ = _vi.write_entry(name, _vd)
     print("규칙 위반 표시: %d번 (%s)" % (_n_, ", ".join(_ts_) or "없음"))
+    if not write:
+        for _k in sorted(_vd, key=int):
+            if int(_k) > max(_upto, _UP0): continue   # 작업한 번호까지만(A1)
+            for _v in _vd[_k]: print("   %s번 %s 부품 %d개 — %s" % (_k, _v["type"], len(_v["keys"]), _v["msg"]))
 except Exception as _e_:
     print("규칙 위반 표시를 만들지 못함:", str(_e_)[:120])
 # ✓ 완료(잠금)한 번호에 규칙 위반이 있으면 사용자가 원해도 막는다(사용자 지시 2026-11-08: 위반이 있는 조립도는 잠글 수 없다). ✓ 를 풀고 위반을 고쳐야 한다.
 try:
-    _lockbad = {int(_k): len(_v) for _k, _v in _vi.collect(name).items() if int(_k) in _USER_DONE}
+    _lockbad = {int(_k): len(_v) for _k, _v in _vd.items() if int(_k) in _USER_DONE}
 except Exception as _e_:
     _lockbad = {}; print("완료 번호의 위반 검사를 못 했다:", str(_e_)[:100])
 if _lockbad:
     sys.exit("❌ ✓ 완료로 잠긴 번호에 규칙 위반이 있다(번호: 건수) " + str(_lockbad) + " — 위반이 있으면 잠글 수 없다. 시작 절차(00-1)를 안 돌렸으면 먼저 돌려 푼다. 시작 뒤 사용자가 새로 건 ✓ 면 풀어도 되는지 묻고, 풀고 고친 뒤 위반 0 을 확인하고 다시 잠근다.")
 if write:  # (규칙 확인은 위에서 이미 검사)
     _m = re.search(r'id: "(cubo-\d+-[A-Za-z0-9_]+)"', open(name + "_entry.js", encoding="utf-8").read())   # 항목 파일의 id(2권은 cubo-2-...). 없으면 1권 규칙
-    rc, out = run([sys.executable, "emit.py", name + "_entry.js", _m.group(1) if _m else "cubo-1-" + name]); print(out.strip())
+    rc, out = run([sys.executable, "emit.py", name + "_entry.js", _m.group(1) if _m else "cubo-1-" + name]); print(out.strip()); _emit_rc = rc
     if rc == 0: json.dump({"last_built": max([_k for _k, _st in enumerate(asm, 1) if _st.get("parts") or _st.get("moveMade") or _st.get("madeNoPart")] or [0])}, open(name + "_gate.json", "w", encoding="utf-8"))
 # 검사 파일 감시(CCTV, gate_watch.py): 규칙을 지키는 검사 도구가 사용자가 마지막으로 확인한 상태에서 바뀌었으면 매번 여기서 한 줄로 보인다(막지는 않는다).
 try: print(subprocess.run([sys.executable, "gate_watch.py", "--brief"], capture_output=True, text=True, encoding="utf-8").stdout.strip())

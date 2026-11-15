@@ -8,6 +8,14 @@ import json, os, re, sys
 sys.stdout.reconfigure(encoding="utf-8")
 here = os.path.dirname(os.path.abspath(__file__))
 name, k = sys.argv[1], int(sys.argv[2]); NN = "%02d" % k
+try:   # 옛 구멍 번호(hN_M) 자동 변환(사용자 지시 2026-11-15): 부품 DB 번호로 바뀌기 전에 만든 조립도는 스크립트가 KeyError 로 멈춘다 — 차시를 시작하면 백업하고 같은 위치의 새 번호로 바꾼다. 막지 않는다.
+    import convert_hole_ids as _ch
+    if _ch.needs(asmpath.resolve(name + ".py")):
+        _k0, _dn, _er, _bk = _ch.auto(name); _left = _ch.needs(asmpath.resolve(name + ".py"))
+        print("═══ 옛 구멍 번호 자동 변환 ═══"); print("  옛 번호 %d곳 중 %d곳을 같은 위치의 새 번호로 바꿨다(백업: %s)" % (_k0, _dn, os.path.relpath(_bk, here) if os.path.isabs(_bk) else _bk))
+        if _er or _left: print("  ⚠ 아직 남은 옛 번호 %d곳 — 스크립트가 멈추는 곳: %s" % (_left, _er or "없음(실행 안 되는 줄에만 남음)")); print("    그 줄의 번호를 부품 DB 번호로 손으로 바꾼다(같은 구멍 찾기: python convert_hole_ids.py %s 가 못 정한 줄을 보여 준다, 구멍 위치는 pegprobe·get_part_connectors)" % name)
+        else: print("  ✅ 스크립트가 끝까지 돈다")
+except Exception as _e_: print("⚠ 구멍 번호 변환 필요 여부를 못 봤다 — python convert_hole_ids.py %s 로 직접 본다: %s" % (name, str(_e_)[:100]))
 # 지금까지 작업한 번호(build 가 이 번호까지만 막는다 — 규칙 A1: 아직 시작하지 않은 뒤 번호의 문제는 세지 않는다). 시작 때(release_start) 0 으로 되돌아간다.
 try:
     import json as _wj; _wf = os.path.join(os.path.dirname(os.path.abspath(__file__)), "refs", name, "_worked_upto.json"); os.makedirs(os.path.dirname(_wf), exist_ok=True)
@@ -30,6 +38,7 @@ def _flow():
     try:
         rp = os.path.join(here, "큐보", "규칙", "큐보 부품결합규칙.md")
         t = open(rp, encoding="utf-8").read(); a = t.index("<!-- 가-흐름 -->") + len("<!-- 가-흐름 -->"); b = t.index("<!-- /가-흐름 -->")
+        if "<!-- 한화면 -->" in t: print("═══ 번호 하나 — 한 화면 순서 ═══"); print(t[t.index("<!-- 한화면 -->") + len("<!-- 한화면 -->"):t.index("<!-- /한화면 -->")].strip()); print()   # 열 줄 순서(2026-11-15) — 아래 흐름은 칸마다의 자세한 길
         print("═══ 가 한 장 흐름 (규칙 파일 가 절 맨 위 — 막히면 보고하지 말고 이 사슬의 다음 칸으로) ═══"); print(t[a:b].strip())
     except Exception as e_: print("⚠ 가 한 장 흐름을 못 읽음:", e_)
 _flow()

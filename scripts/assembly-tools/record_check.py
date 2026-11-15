@@ -56,7 +56,7 @@ def main():
     out = os.path.join(out_dir, "%02d.jpg" % step); side.save(out, "JPEG", quality=90, subsampling=0, optimize=True)   # 비교 그림도 JPEG(용량, 사용자 지시 2026-11-14)
     ef = os.path.join(here, name + "_evidence.json")
     ev = json.load(open(ef, encoding="utf-8")) if os.path.exists(ef) else {}
-    ev[str(step)] = {"fp": fp, "shape": stepfp.shape_fp(asm[step - 1], stepfp.anchor(asm)), "note": note, "time": time.strftime("%Y-%m-%d %H:%M:%S"), "cmp": "refs/%s/cmp/%02d.jpg" % (name, step)}
+    ev[str(step)] = {"fp": fp, "shape": stepfp.shape_fp(asm[step - 1], stepfp.anchor(asm), step, asm), "note": note, "time": time.strftime("%Y-%m-%d %H:%M:%S"), "cmp": "refs/%s/cmp/%02d.jpg" % (name, step)}
     json.dump(ev, open(ef, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     print("✅ %d번 비교 증거 기록: %s" % (step, out)); print("   지문", fp, "| 결과:", note)
     # 왼쪽 점검 칩 자동 연동(사용자 지시 2026-11-10 — "번호마다 이미지 작업을 하고도 칩이 한 번도 자동으로 안 채워졌다"): 증거를 남기는 순간 verify_step 을 돌려 칩 기록(<이름>_verify.json·DB)을 채운다

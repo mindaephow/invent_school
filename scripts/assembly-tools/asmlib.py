@@ -447,6 +447,7 @@ class Step:
         for pt in g.parts:
             p, R = pt._base if pt._base else (pt.p, pt.R)
             ex = {"hideAt": hide, "store": store, "slot": int(slot), "noGuide": True, "copyOf": "%d:%d" % (pt.step.index, pt.step.parts.index(pt))}   # noGuide: 복사본은 안내 화살표가 없다
+            ex.update({k: pt.extra[k] for k in ("horizontal", "headDown") if k in pt.extra})   # 자세 성격(눕힌 T축 등)은 복사본도 같다 — 안 따라가면 "접시 머리가 위로" 검사가 복사본에서 걸린다(2026-11-15 꼬마기사 12번)
             out.append(s._add(Part(pt.n, R, np.array(p, float) + sh, s, ex)))
         return Group(store, out)
     def move_built(s, R, pivot=None, shift=(0, 0, 0), floor=False):
@@ -723,6 +724,10 @@ class Step:
     def recv(s, n, R, links, dir=None, hover=None, p=None, keep_dropped_check=True, against=None, **extra):
         """움직이는 쪽이 구멍을 받는 쪽(프레임이 블록 끝 돌기에 얹히는 경우).
         links 가 dict {내 구멍 id: (고정 부품, 돌기 id)} 면 위치 p 를 계산하고, [(고정 부품, 돌기 id), ...] 목록이면 p 를 직접 줘야 한다."""
+        _hpose = extra.pop("hostPose", False)   # True 면 받는 부품(돌기 쪽)을 이 번호 시점의 옮긴 자세(stepchecks.pose_at)로 읽는다 — 앞 번호에서 move 로 옮겨 놓은 부품에 끼울 때(손값 p= 대신, C6). 기울임(poseAt)은 반영하지 않는다
+        def _hw(h):
+            if not _hpose: return h
+            import copy, stepchecks; _c = copy.copy(h); _c.p, _c.R = stepchecks.pose_at(s.A, h, s.index); return _c
         _ffh = extra.pop("faceFromHole", False)   # True 면 리벳에 끼우는 받는 부품의 링(faceMarks·thick)을 구멍 연결점에서 계산한다 — 이 조립도만 켠다(다른 조립도 안내를 안 바꾸려고 2026-11-10)
         R = np.array(R, float); tmp = Part(n, R, (0, 0, 0), s)
         raw = list(links.items()) if isinstance(links, dict) else [(None, x) for x in links]
@@ -743,7 +748,7 @@ class Step:
         if p is not None and not MAGNET_OFF and ("프레임" in n or "블록" in n):   # 결합은 항상 자석처럼 붙는다(사용자 2026-11-03: 큐보 모든 결합이 그 방식) — 손으로 준 p 는 어느 구멍인지 찾는 데만 쓰고, 위치는 규칙(돌기 면과 구멍 면이 딱 맞닿음)으로 다시 계산한다
             _hint = Part(n, R, p, s); _np = []
             for pid, (host, gid) in pairs:
-                g = host.peg(gid)
+                g = _hw(host).peg(gid)
                 if pid is None:
                     _h, _dist = _hint.hole_near(g["pos"], axis=g["dir"]); pid = _h["id"] if _h else None
                 _np.append((pid, (host, gid)))
@@ -754,7 +759,7 @@ class Step:
                     _f = _sys._getframe(1); HAND_LOG.append({"file": _f.f_code.co_filename, "line": _f.f_lineno, "n": n, "ids": [x[0] for x in _np], "was_dict": isinstance(links, dict)})
         marks = []; _face = []; _thick = None; d0 = None; calc = p is None
         for pid, (host, gid) in pairs:
-            g = host.peg(gid); d = g["dir"]; tip = g["pos"] + d * g["len"] / 2
+            g = _hw(host).peg(gid); d = g["dir"]; tip = g["pos"] + d * g["len"] / 2
             if calc:
                 myh = tmp.hole(pid); base = g["pos"] - d * g["len"] / 2
                 if against is not None and host.n.endswith("축") and dir is not None:   # 통과 부품(축)에 끼우는 받는 부품이 다른 부품(against)의 면에 닿을 때까지 밀어 넣는다(부시가 블록 바깥면에 붙는 자리, 2026-11-09). 값은 against 부품의 크기·내 두께에서 계산한다 — 손값 p= 아님(C6)

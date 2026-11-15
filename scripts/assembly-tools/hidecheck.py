@@ -42,6 +42,67 @@ def stray_loc(steps):
         for m, pis in seen.items(): out.append((k, m, pis))
     return out
 
+def twin_ranges(steps):
+    """책 "N~M번 2개 만들기" 범위 -> [(N, M)]. 번호 설명의 "▣ 사용 부품" 줄 끝 표시로 읽는다: "(N~M번 2개 만들기)" 는 그 범위, "(2벌)"·"(2개분)" 은 이어진 번호끼리 한 범위."""
+    import re
+    tagged = set(); out = []
+    for k, s in enumerate(steps, 1):
+        m = re.search(r"▣ 사용 부품:.*", s.get("note") or "")
+        if not m: continue
+        r = re.search(r"\((\d+)\s*~\s*(\d+)번\s*2개 만들기\)", m.group(0))
+        if r: tagged.update(range(int(r.group(1)), min(int(r.group(2)), len(steps)) + 1))
+        elif re.search(r"\((?:2벌|2개분|2개 만들기)\)", m.group(0)): tagged.add(k)
+    for k in sorted(tagged):
+        if out and out[-1][1] == k - 1: out[-1][1] = k
+        else: out.append([k, k])
+    return [tuple(r) for r in out]
+
+def _twin_shifts(parts, tol=0.6):
+    """이 번호의 부품(복사본 제외)이 "같은 묶음 둘이 나란히"(한쪽을 v 만큼 평행이동하면 다른 쪽과 이름·자세가 전부 겹침)인 v 후보들."""
+    import numpy as np
+    P = [p for p in parts if not p.get("copyOf") and p.get("p") is not None]
+    if len(P) < 2 or len(P) % 2: return []
+    key = lambda p: (p.get("n"), tuple(round(float(x), 2) for x in (p.get("r") or (0, 0, 0))))
+    pos = [np.array(p["p"], float) for p in P]; out = []
+    for j in range(1, len(P)):
+        if key(P[j]) != key(P[0]): continue
+        v = pos[j] - pos[0]
+        if np.linalg.norm(v) < 1 or any(np.linalg.norm(v - w) < tol or np.linalg.norm(v + w) < tol for w in out): continue
+        used = set(); ok = True
+        for a in range(len(P)):
+            if a in used: continue
+            b = next((b for b in range(len(P)) if b != a and b not in used and key(P[b]) == key(P[a])
+                      and min(np.linalg.norm(pos[b] - pos[a] - v), np.linalg.norm(pos[a] - pos[b] - v)) < tol), None)
+            if b is None: ok = False; break
+            used |= {a, b}
+        if ok: out.append(v)
+    return out
+
+def twin_built(steps):
+    """"2개 만들기" 둘째 벌을 복사(copy_to_slot)하지 않고 같은 번호에 새로 만들어 나란히 놓은 곳(A3) -> [(번호, [부품 순서], 글)].
+    판정: 2개 만들기 범위에서 부품이 있는 번호 전부가 ① 모델 부품 수(복사본 제외) ≥ ▣ 사용 부품 수 이고 ② 같은 v 로 "같은 묶음 둘이 나란히"일 때.
+    한 벌 안에 같은 부품이 둘 있는 번호(양팔저울 25번 15프레임 2)는 ① 이나 "범위 전부가 같은 v" 에서 걸러진다. 거울로 만든 둘째 벌(드롭체커)은 평행이동이 아니라 안 걸린다(F9)."""
+    import re, numpy as np
+    out = []
+    for n, m in twin_ranges(steps):
+        ks = [k for k in range(n, m + 1) if any(not p.get("copyOf") for p in steps[k - 1].get("parts") or [])]
+        if not ks: continue
+        common = None; ok = True
+        for k in ks:
+            real = [p for p in steps[k - 1]["parts"] if not p.get("copyOf")]
+            mu = re.search(r"▣ 사용 부품:\s*(.*)", steps[k - 1].get("note") or "")
+            used = sum(int(x) for x in re.findall(r"\s(\d+)\s*(?:,|$)", re.sub(r"\([^)]*\)", "", mu.group(1)).strip() + ",")) if mu else 0
+            vs = _twin_shifts(real)
+            if not vs or (used and len(real) < used): ok = False; break
+            common = vs if common is None else [v for v in common if any(np.linalg.norm(v - w) < 0.6 or np.linalg.norm(v + w) < 0.6 for w in vs)]
+            if not common: ok = False; break
+        if ok and common:
+            v = common[0]
+            for k in ks:
+                out.append((k, [i for i, p in enumerate(steps[k - 1]["parts"]) if not p.get("copyOf")],
+                            "%d~%d번 2개 만들기인데 둘째 벌을 새로 만들어 나란히 놓음(간격 x %+.0f·y %+.0f·z %+.0f) — 한 벌만 만들고 둘째 벌은 copy_to_slot 으로 다른 창고에 복사한다(A3)" % (n, m, v[0], v[1], v[2])))
+    return out
+
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     name = sys.argv[1] if len(sys.argv) > 1 else "all"
@@ -51,7 +112,9 @@ def main():
         try: steps = json.load(open(f, encoding="utf-8"))["steps"]
         except Exception: continue
         bad, loc2 = stray_prev(steps), stray_loc(steps); nm = os.path.basename(f).replace("_asm.json", "")
-        total += len(bad) + len(loc2)
+        tw = twin_built(steps)
+        total += len(bad) + len(loc2) + len(tw)
+        for k, _pis, msg in tw: print("%s: %d번 %s" % (nm, k, msg))
         if loc2: print("%s: 다른 창고에 있는데 이 번호 화면에 보이는 부품 %d곳 %s" % (nm, len(loc2), [(k, "%d번의 %d개" % (m, len(p))) for k, m, p in loc2][:12]))
         if bad or name != "all": print("%s: 앞 창고 부품이 숨겨지지 않은 번호 %d곳 %s" % (nm, len(bad), [(k, "%d~%d번" % (v[0], v[-1])) for k, v in bad][:10]))
     print("합계 %d곳" % total); sys.exit(1 if total else 0)

@@ -145,6 +145,9 @@ def _mate_pairs(A, k, lat=1.5, ov=0.5, drawn=False):
             ln = float(c.get("len") or 0)
             if ln <= 0: continue
             pos, d = wr(q, c); d = d / (np.linalg.norm(d) or 1.0)
+            cd = np.array(c["dir"], float); cd = cd / (np.linalg.norm(cd) or 1.0); sz = q.conn.get("size")
+            if sz and abs(float(np.dot(np.array(c["pos"], float), cd))) < 1e-6 and abs(float(np.abs(cd) @ np.array(sz, float)) - ln) < 0.5:
+                pos = pos - d * (ln / 2.0)   # T축처럼 "축 전체"를 돌기 하나로 기록한 부품(길이=부품 길이, 시작=상자 가운데): 모델은 가운데 기준이라 실제 구간은 −len/2~+len/2
             for h, hp, hd, hl in holes:
                 if h is q or abs(abs(float(np.dot(d, hd))) - 1) > 0.02: continue
                 w = pos - hp; t0 = float(np.dot(w, hd))
@@ -295,6 +298,8 @@ def collect(name):
         import hidecheck, json as _j
         for k, m, pis in hidecheck.stray_loc(_j.load(open(asmpath.resolve(name + "_asm.json"), encoding="utf-8"))["steps"]):
             add(k, "store", ["%d:%d" % (m, pi) for pi in pis], "%d번의 부품 %d개가 다른 창고에 있는데 보임(hideMade 에 없음)" % (m, len(pis)))
+        for k, pis, msg in hidecheck.twin_built(_j.load(open(asmpath.resolve(name + "_asm.json"), encoding="utf-8"))["steps"]):   # "2개 만들기" 둘째 벌을 복사하지 않고 나란히 새로 만든 번호(A3, 2026-11-15 꼬마기사 9~12번 — 사용자가 직접 잡은 것을 상시 감시로)
+            add(k, "store", ["%d:%d" % (k, pi) for pi in pis], msg)
     except Exception as e_:
         print("violations: 창고 점검을 못 붙임 —", str(e_)[:100], file=sys.stderr)
     bad, _n, _sk = guidecheck.run(name)
@@ -434,10 +439,10 @@ def collect(name):
         print("violations: 분리 점검을 못 붙임 —", str(e_)[:100], file=sys.stderr)
     return out
 
-def write_entry(name):
+def write_entry(name, vd=None):
     """모은 위반을 항목 파일(<이름>_entry.js)의 def.violations 로 쓴다(번호 지문에 안 들어간다). 바뀐 것이 없으면 쓰지 않는다. -> (위반 번호 수, 종류들, 바뀜 여부)"""
     import json
-    vd = collect(name); ef = os.path.join(os.path.dirname(asmpath.resolve(name + "_entry.js")), name + "_entry.js") if False else asmpath.resolve(name + "_entry.js")
+    vd = collect(name) if vd is None else vd; ef = os.path.join(os.path.dirname(asmpath.resolve(name + "_entry.js")), name + "_entry.js") if False else asmpath.resolve(name + "_entry.js")
     old = open(ef, encoding="utf-8").read()
     new = re.sub(r"      violations: .*\n", "", old)
     if vd: new = new.replace("      steps: [", "      violations: %s,\n      steps: [" % json.dumps(vd, ensure_ascii=False), 1)
