@@ -23,7 +23,47 @@ except ImportError:   # Pillow 가 없는 PC(2026-10-13): OpenCV 로 같은 동�
 sys.stdout.reconfigure(encoding="utf-8")
 import stepfp
 
+def resign(argv):
+    """python record_check.py --재서명 <이름> <번호> [이전 _asm.json] [--검사만]
+    코드·플래그·설명만 바뀌고 그 번호 화면의 조립(부품 위치·회전·안내점·띄움)이 그대로일 때, 화면을 다시 찍지 않고 증거 지문만 새로 서명한다.
+    비교 기준 = 증거에 저장된 조립 값(geo). 옛 증거(geo 없음)는 증거를 남겼던 때의 _asm.json 을 준다(생략하면 git HEAD) — 그 파일의 지문이 증거와 같아야 기준으로 받는다.
+    허용 오차(stepfp.GEO_TOL_MM·GEO_TOL_DEG)를 넘거나 부품 수·안내점 수가 다르면 서명하지 않는다 — 그때는 화면과 책을 다시 비교해 증거를 새로 남긴다."""
+    dry = "--검사만" in argv; argv = [a for a in argv if a != "--검사만"]
+    if len(argv) not in (2, 3) or not argv[1].isdigit(): sys.exit(resign.__doc__)
+    name, step = argv[0], int(argv[1]); here = os.path.dirname(os.path.abspath(__file__))
+    asm = json.load(open(os.path.join(here, name + "_asm.json"), encoding="utf-8"))["steps"]
+    ef = os.path.join(here, name + "_evidence.json"); evd = json.load(open(ef, encoding="utf-8")) if os.path.exists(ef) else {}
+    ev = evd.get(str(step))
+    if not ev or step < 1 or step > len(asm): sys.exit("❌ %d번에는 비교 증거가 없다 — 재서명이 아니라 증거를 새로 남긴다" % step)
+    st = asm[step - 1]
+    if stepfp.same(ev, st, asm): print("✅ %d번 증거는 지금 내용과 이미 같다 — 재서명할 것이 없다" % step); return
+    if ev.get("geo"): base, src = ev["geo"], "증거에 저장된 조립 값"
+    else:
+        if len(argv) == 3: old = json.load(open(argv[2], encoding="utf-8")); src = "이전 파일 " + os.path.basename(argv[2])
+        else:
+            import subprocess
+            rel = os.path.relpath(str(asmpath.resolve(name + "_asm.json")), here).replace(os.sep, "/")
+            r = subprocess.run(["git", "-C", here, "show", "HEAD:./" + rel], capture_output=True)
+            if r.returncode != 0: sys.exit("❌ 이전 _asm.json 을 git HEAD 에서 못 읽었다 — 증거를 남겼던 때의 _asm.json 경로를 준다")
+            old = json.loads(r.stdout.decode("utf-8")); src = "git HEAD 의 _asm.json"
+        old = old["steps"] if isinstance(old, dict) else old
+        if step > len(old) or not stepfp.same(ev, old[step - 1], old): sys.exit("❌ %s 의 %d번은 증거를 남겼던 내용이 아니다(지문이 증거와 다르다) — 기준으로 쓸 수 없다. 증거를 남겼던 때의 파일을 주거나 증거를 새로 남긴다" % (src, step))
+        base = stepfp.geo(old[step - 1], stepfp.anchor(old), step, old)
+    now = stepfp.geo(st, stepfp.anchor(asm), step, asm)
+    ok, mp, mr, bad = stepfp.geo_diff(base, now)
+    print("%d번 조립 비교(기준: %s) — 항목 %d개, 가장 큰 위치 차 %.3f mm · 회전 차 %.3f° (허용 %.1f mm · %.1f°)" % (step, src, len(now), mp, mr, stepfp.GEO_TOL_MM, stepfp.GEO_TOL_DEG))
+    if not ok:
+        for b in bad[:20]: print("   ✗", b)
+        sys.exit("❌ 조립이 달라졌다(%d곳) — 재서명하지 않는다. 화면과 책을 다시 비교해 증거를 새로 남긴다" % len(bad))
+    if dry: print("✅ 조립이 같다 — --검사만 이라 서명하지 않았다"); return
+    log = {"time": time.strftime("%Y-%m-%d %H:%M:%S"), "기준": src, "이전지문": ev.get("fp"), "항목": len(now), "위치차_mm": mp, "회전차_deg": mr, "허용": [stepfp.GEO_TOL_MM, stepfp.GEO_TOL_DEG]}
+    ev["fp"] = stepfp.fp(st); ev["shape"] = stepfp.shape_fp(st, stepfp.anchor(asm), step, asm); ev["geo"] = base   # 기준 값은 처음 눈으로 확인한 때의 것을 그대로 둔다 — 재서명을 거듭해도 오차가 쌓이지 않는다
+    ev.setdefault("재서명", []).append(log)
+    json.dump(evd, open(ef, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    print("✅ %d번 증거 재서명(조립 동일 확인) — 지문 %s → %s, 비교 결과는 증거의 '재서명' 에 남겼다" % (step, log["이전지문"], ev["fp"]))
+
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "--재서명": return resign(sys.argv[2:])
     if len(sys.argv) != 5: sys.exit(__doc__)
     name, step, shot, note = sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4].strip()
     here = os.path.dirname(os.path.abspath(__file__))
@@ -56,7 +96,7 @@ def main():
     out = os.path.join(out_dir, "%02d.jpg" % step); side.save(out, "JPEG", quality=90, subsampling=0, optimize=True)   # 비교 그림도 JPEG(용량, 사용자 지시 2026-11-14)
     ef = os.path.join(here, name + "_evidence.json")
     ev = json.load(open(ef, encoding="utf-8")) if os.path.exists(ef) else {}
-    ev[str(step)] = {"fp": fp, "shape": stepfp.shape_fp(asm[step - 1], stepfp.anchor(asm), step, asm), "note": note, "time": time.strftime("%Y-%m-%d %H:%M:%S"), "cmp": "refs/%s/cmp/%02d.jpg" % (name, step)}
+    ev[str(step)] = {"fp": fp, "shape": stepfp.shape_fp(asm[step - 1], stepfp.anchor(asm), step, asm), "note": note, "time": time.strftime("%Y-%m-%d %H:%M:%S"), "cmp": "refs/%s/cmp/%02d.jpg" % (name, step), "geo": stepfp.geo(asm[step - 1], stepfp.anchor(asm), step, asm)}   # geo: 이 번호 화면의 조립 값 — 나중에 코드만 바뀌면 --재서명 이 이 값과 숫자로 비교한다
     json.dump(ev, open(ef, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     print("✅ %d번 비교 증거 기록: %s" % (step, out)); print("   지문", fp, "| 결과:", note)
     # 왼쪽 점검 칩 자동 연동(사용자 지시 2026-11-10 — "번호마다 이미지 작업을 하고도 칩이 한 번도 자동으로 안 채워졌다"): 증거를 남기는 순간 verify_step 을 돌려 칩 기록(<이름>_verify.json·DB)을 채운다

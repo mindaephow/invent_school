@@ -798,7 +798,24 @@
   // 자동 검사 경고 = 하단 칩과 같은 기준: 화면에 지금 놓인 부품의 몸통 겹침(bridge.xray). 예전 미리 계산 목록은 판을 세운 자세를 몰라 오경고가 나서 없앴다(사용자 지시 2026-11-11).
   const warnCache = {};   // 번호 → 그 번호를 마지막으로 열었을 때의 겹침 경고(열지 않은 번호 버튼에도 ⚠ 를 보이려고, 사용자 지시 2026-11-13)
   const warnsOf = (i) => { const b = bridge(), xr = i === step && b && b.xray ? b.xray(lastLabels) : null; if (xr) warnCache[i] = xr.overlaps.map((q) => ({ key: i + '|' + q.a + '|' + q.b, part: q.a, text: q.a + '이(가) ' + q.b + ' 와 겹쳐 있어요' })); return warnCache[i] || []; };
-  const VIOL_ICON = { floor: '▼', overlap: '✕', bond: '⧉', gap: '↔', link: '◎', orient: '↻', hand: '✋', center: '⊕', cam: '◉', split: '⛓' };
+  // 도구-화면 불일치: 도구(violations.py tool_pose → def.toolPose)가 "화면이 이렇게 그린다"고 본 자세와 화면이 실제로 놓는 결합 자리(final, 없으면 pos)·회전이 5mm·15° 넘게 다른 부품을 찾는다.
+  //   도구가 다른 좌표로 재면 겹침·바닥·중심 검사가 화면과 어긋나도 모른다(꼬마기사 20번 중심 오탐). 눈에 띄게 어긋날 때만 잡는다(구도는 시계 한 칸의 절반까지 같은 것으로 본다).
+  const TOOL_MM = 5, TOOL_DEG = 15;
+  function toolMismatch(list, step) {
+    if (!def.toolPose) { window.__ivsToolMismatch = null; return []; }
+    const tp = {}; for (let s2 = 1; s2 <= step; s2++) Object.assign(tp, def.toolPose[s2] || {});
+    const idx = [], worst = { mm: 0, deg: 0 }; let seen = 0;
+    list.forEach((d, i) => {
+      const t = tp[d.key]; if (!t || !d.rot) return; seen++;
+      const p = d.final || d.pos, mm = Math.hypot(p[0] - t[0], p[1] - t[1], p[2] - t[2]);
+      const A = eulerToMat(d.rot), B = eulerToMat(t.slice(3)); let tr = 0; for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) tr += A[r][c] * B[r][c];
+      const deg = Math.acos(Math.max(-1, Math.min(1, (tr - 1) / 2))) * 180 / Math.PI;
+      if (mm > TOOL_MM || deg > TOOL_DEG) { idx.push(i); worst.mm = Math.max(worst.mm, mm); worst.deg = Math.max(worst.deg, deg); }
+    });
+    window.__ivsToolMismatch = { step, n: idx.length, compared: seen, parts: list.length, mm: worst.mm, deg: worst.deg, keys: idx.map((i) => list[i].key) };   // 번호 작업이 화면을 볼 때 숫자로 읽는다
+    return idx.length ? [{ type: 'mismatch', msg: '도구가 잰 자세와 화면 자세가 다른 부품 ' + idx.length + '개(가장 큰 차 ' + worst.mm.toFixed(0) + 'mm · ' + worst.deg.toFixed(0) + '°) — 이 번호의 겹침·바닥·중심 검사 결과를 믿기 전에 도구를 본다', idx }] : [];
+  }
+  const VIOL_ICON = { floor: '▼', overlap: '✕', bond: '⧉', gap: '↔', link: '◎', orient: '↻', hand: '✋', center: '⊕', cam: '◉', split: '⛓', mismatch: '≠' };
   function violMark(i) { const V = (def.violations && def.violations[i]) || []; return V.length ? ' ' + [...new Set(V.map((v) => VIOL_ICON[v.type] || '!'))].join('') : ''; }   // 위반이 있는 번호 버튼에 종류 기호를 붙인다
   function warnMark(i) {
     const w = warnsOf(i); if (!w.length) return (((def.violations && def.violations[i]) || []).some((x) => x.type === 'overlap')) ? ' ⚠' : '';   // 열어 보지 않은 번호도 하단 '겹침' 칩과 같은 저장 데이터(def.violations)로 ⚠ 를 보인다(사용자 지시 2026-11-13)
@@ -1446,7 +1463,7 @@
     pushSlotThumbs();
     if (b.setViewSlot) b.setViewSlot(viewSlot !== null && viewSlot !== slotOfStep(step) ? viewSlot : null, viewLabel, viewThumb);
     b.show(list.map(({ isNew, name, final, order, pre: _pre, ...d }) => d), targets, orders, def.guideMode === 'mates' ? mateComponents(list).concat(ghostComps) : []);
-    if (b.setViolations) { const V = (def.violations && def.violations[step]) || []; b.setViolations(V.map((v) => ({ type: v.type, msg: v.msg, idx: (v.keys || []).map((k) => list.findIndex((x) => x.key === k)).filter((i) => i >= 0) }))); }   // 규칙 위반: 종류별 색·기호로 칠한다(build.py 가 def.violations 를 만든다)
+    if (b.setViolations) { const V = (def.violations && def.violations[step]) || []; b.setViolations(V.map((v) => ({ type: v.type, msg: v.msg, idx: (v.keys || []).map((k) => list.findIndex((x) => x.key === k)).filter((i) => i >= 0) })).concat(toolMismatch(list, step))); }   // 규칙 위반: 종류별 색·기호로 칠한다(build.py 가 def.violations 를 만든다)
     // 지금 단계에 보이는 부품(끼우기 직전 위치 포함)에 카메라를 맞춘다 — 처음부터 너무 멀리서 보이지 않게
     // 이번 단계에 끼우는 부품과 그 끼워지는 자리를 화면 가운데에 크게 보여준다(나머지 부품은 배경)
     const focus = list.filter((d) => d.isNew).map((d) => d.pos).concat(guides.filter((g) => g.to).map((g) => g.to)); // 맞물림 방식 안내는 좌표가 없다(연결점이 부품에 붙어 있다)

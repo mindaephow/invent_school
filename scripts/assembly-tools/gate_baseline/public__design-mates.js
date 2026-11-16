@@ -86,15 +86,18 @@
     list.slice(0, si + 1).forEach((s, k) => (s.parts || []).forEach((pt, i) => upto.push({ key: `${k + 1}.${i} ${pt.n}`, n: pt.n, p: posAfterMove(pt, si + 1), r: rotAfterMove(pt, si + 1), ref: pt, step: k + 1 })))
     const res = M.check(upto, conn)
     const worlds = upto.map((u) => ({ u, w: worldOf(u) }))
+    // 그 번호만의 자세(poseAt — 기울이거나 눕혀 보여 주는 번호)가 있으면 화면이 그리는 자세로도 잰다(안내점이 만든 자리 기준인 조립도와 화면 자세 기준인 조립도 둘 다 있어 어느 한쪽에서 맞으면 통과)
+    const hasPa = upto.some((u) => u.ref.poseAt && u.ref.poseAt[si + 1])
+    const worldsPa = hasPa ? upto.map((u) => { const pa = u.ref.poseAt && u.ref.poseAt[si + 1]; return { u, w: worldOf(pa ? { ...u, p: pa.p, r: pa.r } : u) } }) : null
     ;(st.parts || []).forEach((pt, i) => {
       const me = upto.find((u) => u.ref === pt)
       if (conn[pt.n] && me && !pt.loose && !(st.stage && st.stage < 6) && !res.mated.some((m) => m.part === me.key || m.into === me.key)) issues.push(`${si + 1}단계 ${pt.n}: 어떤 구멍·돌기에도 끼워지지 않음(허공에 떠 있음)`)
       // 안내 위치: 고정된 쪽의 실제 구멍 축/돌기 끝과 맞는지(옆자리 조립품·분리 표시는 제외)
       if (pt.dir && pt.marks && !pt.side && !pt.explode && !pt.noMarkCheck) { // noMarkCheck: 안내점이 '화면에 보이는 자리'(올려 둔 자리)에 있는 부품 — 검사용 자리(옮긴 뒤 자리)와 달라 위치 검사를 건너뛴다(롤링봇 22번 축)
         pt.marks.forEach((m) => {
-          const ok = worlds.some(({ u, w }) => w && u.ref !== pt && ((pt.recv || pt.pegTarget)
+          const ok = (worldsPa ? [worlds, worldsPa] : [worlds]).some((wl) => wl.some(({ u, w }) => w && u.ref !== pt && ((pt.recv || pt.pegTarget)
             ? w.pegs.some((pg) => { const tip = [pg.pos[0] + pg.dir[0] * pg.len / 2, pg.pos[1] + pg.dir[1] * pg.len / 2, pg.pos[2] + pg.dir[2] * pg.len / 2]; if (Math.hypot(...sub(tip, m)) <= 3) return true; const base = [pg.pos[0] - pg.dir[0] * pg.len / 2, pg.pos[1] - pg.dir[1] * pg.len / 2, pg.pos[2] - pg.dir[2] * pg.len / 2]; return pg.len >= 30 && Math.hypot(...sub(base, m)) <= 3 }) // 축처럼 길게 꽂히는 돌기는 양 끝 어느 쪽에서도 끼울 수 있다(부시는 아래 끝에서)
-            : w.holes.some((h) => { const rel = sub(m, h.pos); const along = dot(rel, h.dir); return Math.hypot(...sub(rel, h.dir.map((x) => x * along))) <= 1.8 && Math.abs(along) <= h.len / 2 + 3 })))
+            : w.holes.some((h) => { const rel = sub(m, h.pos); const along = dot(rel, h.dir); return Math.hypot(...sub(rel, h.dir.map((x) => x * along))) <= 1.8 && Math.abs(along) <= h.len / 2 + 3 }))))
           if (!ok) issues.push(`${si + 1}단계 ${pt.n}: 안내 위치 [${m}]에 ${(pt.recv || pt.pegTarget) ? '고정된 돌기 끝' : '받는 구멍'}이 없음(위치 어긋남)`)
         })
       }

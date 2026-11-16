@@ -8,6 +8,16 @@ import json, os, re, sys
 sys.stdout.reconfigure(encoding="utf-8")
 here = os.path.dirname(os.path.abspath(__file__))
 name, k = sys.argv[1], int(sys.argv[2]); NN = "%02d" % k
+# ── 한화면 순서와 상황 색인: 규칙 파일(큐보 부품결합규칙.md)의 <!-- 한화면 -->·<!-- 상황색인 --> 블록을 그대로 보여 준다(규칙 원본은 그 파일 한 곳 — 여기에 다시 적지 않는다)
+#    번호마다 읽는 것은 이 두 블록이다. 규칙 본문은 색인이 가리키는 규칙 번호만 연다. `python number_start.py <이름> <번호> --색인` 은 두 블록만 보여 주고 끝낸다(막혔을 때 다시 볼 때).
+def _flow():
+    try:
+        rp = os.path.join(here, "큐보", "규칙", "큐보 부품결합규칙.md"); t = open(rp, encoding="utf-8").read()
+        for mk, title in (("한화면", "번호 하나 — 한 화면 순서"), ("상황색인", "상황 색인 (막히거나 책과 다르면 증상을 찾아 그 규칙만 연다 — 규칙 파일 0절)")):
+            print("═══ %s ═══" % title); print(t[t.index("<!-- %s -->" % mk) + len("<!-- %s -->" % mk):t.index("<!-- /%s -->" % mk)].strip()); print()
+    except Exception as e_: print("⚠ 한화면·상황 색인을 못 읽음(큐보 부품결합규칙.md 0절을 직접 연다):", e_)
+_flow()
+if "--색인" in sys.argv: sys.exit(0)
 try:   # 옛 구멍 번호(hN_M) 자동 변환(사용자 지시 2026-11-15): 부품 DB 번호로 바뀌기 전에 만든 조립도는 스크립트가 KeyError 로 멈춘다 — 차시를 시작하면 백업하고 같은 위치의 새 번호로 바꾼다. 막지 않는다.
     import convert_hole_ids as _ch
     if _ch.needs(asmpath.resolve(name + ".py")):
@@ -33,15 +43,6 @@ def load(p, default):
     return json.load(open(p, encoding="utf-8")) if os.path.exists(p) else default
 def save(p, d): json.dump(d, open(p, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 
-# ── 가 한 장 흐름: 규칙 파일(큐보 부품결합규칙.md)의 <!-- 가-흐름 --> 블록을 그대로 보여 준다(규칙 원본은 그 파일 한 곳 — 여기에 다시 적지 않는다, 2026-11-07)
-def _flow():
-    try:
-        rp = os.path.join(here, "큐보", "규칙", "큐보 부품결합규칙.md")
-        t = open(rp, encoding="utf-8").read(); a = t.index("<!-- 가-흐름 -->") + len("<!-- 가-흐름 -->"); b = t.index("<!-- /가-흐름 -->")
-        if "<!-- 한화면 -->" in t: print("═══ 번호 하나 — 한 화면 순서 ═══"); print(t[t.index("<!-- 한화면 -->") + len("<!-- 한화면 -->"):t.index("<!-- /한화면 -->")].strip()); print()   # 열 줄 순서(2026-11-15) — 아래 흐름은 칸마다의 자세한 길
-        print("═══ 가 한 장 흐름 (규칙 파일 가 절 맨 위 — 막히면 보고하지 말고 이 사슬의 다음 칸으로) ═══"); print(t[a:b].strip())
-    except Exception as e_: print("⚠ 가 한 장 흐름을 못 읽음:", e_)
-_flow()
 # ── 이번 번호에서 조심할 것(사용자 지시 2026-10-14 "정보를 모르는 게 아니라 사용을 안 한다") — mistake_types.json(요청차이 분석)의 반복 실수 유형과, 이 번호의 부품·위치에 맞는 경고를 맨 앞에 보여 준다.
 def _warn():
     try:
@@ -110,8 +111,8 @@ def _session_check():
     print("  %s 개발 서버: %s" % ("✅" if up else "❌", ("localhost:%d 응답" % up) if up else "응답 없음 → 서버를 켠다(preview_start invent-school-dev, 어느 포트든 상관없음)"))
     print("  %s .env.local(SUPABASE 키): %s" % ("✅" if keys else "❌", "있음" if keys else "없음 → 사용자에게 달라고 한다(CLAUDE.md)"))
     print("  %s DB 읽기(사용자 ✓): %s" % ("✅" if db is not None else "❌", ("읽음 — ✓ 번호 %s" % db) if db is not None else "못 읽음 → ✓ 확인은 통과시키지 않는다(키를 한 줄로 요청하고, 키 없이 되는 작업은 계속한다 — 큐보 부품결합규칙.md B6)"))
-    print("  ⚠ 로그인: 스크립트가 확인할 수 없다. 화면 비교(05 5-5)·❄/📷 확인에는 선생님 계정 로그인이 필요하므로 **로그인이 안 돼 있으면 한 줄로 알리되 묻고 기다리지 않는다 — 로그인이 필요 없는 작업(격자·읽기 표·증거 정리)은 계속하고 화면 비교만 로그인 뒤로 미룬다(규칙 J5)**(비밀번호는 대신 입력하지 않는다). 브라우저 pane 에서 로그인 화면이 보이면 아직이다.")
-    print("  ⚠ 읽을 것: 큐보/규칙/큐보 부품결합규칙.md 처음부터(맨 위 0번 체크리스트) → 큐보/규칙/05_조립.md 실행 순서 → 큐보/조립도/<권>권/<이름>/진행기록.md → user_diffs/요청차이.md (이번 번호에서 지킬 규칙 3개를 첫 보고 한 줄에)")
+    print("  ⚠ 로그인: 스크립트가 확인할 수 없다 — 안 돼 있으면 한 줄로 알리고, 로그인이 필요 없는 작업은 계속한다(J5)")
+    print("  ⚠ 읽을 것: 맨 위 한화면 순서·상황 색인 → 큐보/조립도/<권>권/<이름>/진행기록.md → user_diffs/요청차이.md (지킬 규칙 3개를 첫 보고 한 줄에. 규칙 파일 전체는 조립도를 시작할 때 한 번)")
     return up
 _SERVER = _session_check()
 _warn()
@@ -147,10 +148,8 @@ def _remind():
             print("  ④ 사용자가 최근 바로잡은 것(user_diffs/요청차이.md 끝 4개):"); [print("       " + h_[:110]) for h_ in heads]
         print("  ⑤ 놓을 자리는 모델로 먼저 좁힌다: python pegprobe.py %s 빈구멍 <칸> <줄> · 위돌기 · 빈돌기 <부품> — 그다음에 책 그림으로 후보 중 어느 것인지 가린다(이미지 격자는 카메라·화면 비교용)." % name)
         _pf = os.path.join(here, "refs", name, "fits", "%02d_P.json" % (k - 1))
-        if os.path.exists(_pf):   # 29번에서 배운 것: 판이 가려져 holefit 가 안 되면 앞 번호 책 그림과 판 무늬를 맞춘다(눈으로 안 된다고 건너뛰지 말고 도구를 먼저 돌린다)
-            print('  ⑥ 판이 이번 번호에서 가려졌으면(앞 번호 %d 판 격자 있음): holefit → python plate_match.py %s %d %d P --검증 "c,r,h,x,y;…" (앞 번호에서 놓아 3D 가 확정된 리벳 끝·블록 돌기·판 모서리 5개 이상의 칸·높이·픽셀) → infer_grid --anchor → (한 줄 부품 line_fit · 판 없음 mkfit3d · 몸체에 가려짐 0-3·0-4) → 전부 시도해도 미달이면 판단과정에 ⚠ 로 적고 다음으로 간다. 순서·기준은 큐보 부품결합규칙.md C3·D12, 명령 사용법은 05_조립.md 0-1~0-4. 유추 격자는 규칙 점검이 사용자 ✓ 를 요구한다.' % (k - 1, name, k - 1, k))
-        if k > 1: print("  ⑧ 격자·카메라는 앞 번호 모델로 먼저 푼다(C3 ⓪): 책에 구멍이 선명한 앞 번호 부품(큰 판 등)을 holesearch → python anchor_pnp.py %s %d <라벨> <spec.json> (앞 번호 부품 구멍 픽셀을 앵커로 더하면 거울·옆면 해를 가른다). 새로 떠 있는 부품의 링 점으로 먼저 풀지 않는다." % (name, k))
-        print("  ⑦ 진행 상태 문서: 큐보/조립도/<N>권/%s/진행기록.md (앞 번호 절) — 번호 하나로 안 풀리면 큐보 부품결합규칙.md C3(순서)·D12(기준)." % name)
+        if os.path.exists(_pf): print("  ⑥ 앞 번호 %d 에 판 격자가 있다 — 이번 번호에서 판이 가려졌으면 C3 사다리 ③(plate_match)부터 쓴다" % (k - 1))
+        if k > 1: print("  ⑦ 격자·카메라는 앞 번호 모델로 먼저 푼다: C3 ⓪(anchor_pnp)")
     except Exception as ex_:
         print("  (리마인드를 읽지 못했다: %s — 번호 시작은 계속한다)" % ex_)
 _remind()
@@ -276,7 +275,7 @@ import subprocess as _sp
 _db = _sp.run([sys.executable, os.path.join(here, "dbimgcheck.py"), name, str(k)], capture_output=True, text=True, encoding="utf-8", env=dict(os.environ, PYTHONIOENCODING="utf-8"))
 _db_ok = _db.stdout.startswith("조립도") and not any(l.startswith("❌ 안 올림") and "없음" not in l for l in _db.stdout.splitlines())
 state.append(("그림 DB 업로드(🖼)", _db_ok, "만든 그림은 바로 올린다: refs_upload(viewer_snippets.md 3) → python dbimgcheck.py %s %d → navigate 로 새로 불러와 🖼 장수 확인(I1·J2)" % (name, k) + ("" if _db.stdout.startswith("조립도") else " — ⚠ 점검 실패: " + (_db.stdout + _db.stderr).strip()[:100])))
-print("═══ %s %d번 시작 ═══   (큐보/규칙/큐보 부품결합규칙.md 를 처음부터 다시 읽고, 이번 번호에서 지킬 규칙 3개를 첫 보고에 적는다)" % (name, k))
+print("═══ %s %d번 시작 ═══   (막히면 맨 위 상황 색인에서 증상을 찾는다 — 다시 보기: python number_start.py %s %d --색인)" % (name, k, name, k))
 print("교재:", note.split("\n")[0][:80]); print("사용 부품(03):", used or "(적혀 있지 않음 — 03 을 먼저 한다)")
 print("읽기 표 %d번 칸: %s" % (k, made)); print("스크립트에 stepchecks.apply:", "있음" if has_sc else "❌ 없음 — 넣지 않으면 --write 가 거부된다")
 slot = st.get("slot"); pslot = asm[k - 2].get("slot") if k > 1 else None
@@ -333,7 +332,7 @@ print("─ 다음에 할 일 (05 순서) ─")
 todo = [t for t, ok, h in state if not ok]
 order = ["책 그림 크롭", "가위·회전값(_lv.json)", "구멍 점(fits)", "방향(_axes.json, fit 포함)", "격자 그림(NN_2)", "그림 DB 업로드(🖼)"]
 for i, t in enumerate([o for o in order if o in todo], 1): print("  %d. %s" % (i, t))
-print("  → 4 방향대로 위치해 비교(앞 번호 조립을 이 번호 카메라·방향에 놓고 책과 나란히, 다른 곳 숫자로 찾기) → 5 어디와 어디가 결합 → 6 어떤 구멍·돌기(양쪽 id·피치) → 7 읽기 표 빈 칸 → 놓기(attach·recv) → python build.py %s --write → 8 화면 6방향·관찰 → python record_check.py %s %d <캡처.png> \"<비교 결과>\"  (순서는 큐보 부품결합규칙.md 0절, 건너뛰지 않는다)" % (name, name, k))
+print("  → 그다음은 맨 위 한화면 순서 4~9번(결합 쌍 → 구멍·돌기 id → 읽기 표 → 놓기 C6 → build → 6방향 비교 → build --write → 증거)")
 try:
     import observe as _ob
     _need = _ob._need(name, k)

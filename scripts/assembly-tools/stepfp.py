@@ -73,3 +73,74 @@ def same(ev, st, steps):
     if not ev.get("shape"): return False
     idx = step_index(st, steps); anc = anchor(steps)
     return ev["shape"] in {shape_fp(st, anc, idx, steps), shape_fp(st, anc, idx), shape_fp(st, anc)}
+
+
+# ── 조립이 같은지 숫자로 비교(동일 확인 재서명, record_check.py --재서명) ──
+# 코드·플래그·설명만 바뀌고 그 번호 화면의 부품 위치·회전·안내점이 그대로면 증거를 다시 찍지 않고 지문만 새로 서명한다.
+# 지문은 한 글자만 달라도 바뀌므로, 재서명은 지문이 아니라 아래 값(geo)을 허용 오차 안에서 비교해 같을 때만 한다.
+GEO_TOL_MM, GEO_TOL_DEG = 0.5, 0.5   # 부품 자리·회전·안내점: 결합(돌기↔구멍)이 그대로인지 보는 값이라 좁게 둔다(맞물림 검사의 축 어긋남 한계 1.2mm 보다 작게)
+GEO_TOL_VIEW_MM, GEO_TOL_VIEW_DEG = 5.0, 15.0   # 보는 방향·구도(카메라 방향, 결합 전에 띄운 거리·방향): 시계 한 칸(30°)의 절반까지는 같은 구도로 본다(사용자 2026-11-15)
+_GEO_PT = _ABS_PT + ("by",)
+
+def geo(st, anc, idx, steps):
+    """idx 번 화면의 조립 값 {라벨: {p, r, marks…, dir, hover}} — 이 번호 부품(자리·옆자리·옮김·그 번호까지의 poseAt)·다른 번호 부품이 이 화면에서 갖는 자리(_incoming)·moveMade. 자리는 기준점(1번 첫 부품)을 뺀 값."""
+    out = {}
+    def sub(pt): return [round(float(a) - float(b), 4) for a, b in zip(pt, anc)]
+    def put(key, d):
+        e = {}
+        if d.get("p") is not None: e["p"] = sub(d["p"])
+        if d.get("r") is not None: e["r"] = [float(v) for v in d["r"]]
+        for k in _GEO_PT:
+            v = d.get(k)
+            if v: e[k] = [sub(m) for m in v] if isinstance(v[0], (list, tuple)) else [[float(x) for x in v]]
+        if d.get("dir") is not None: e["dir"] = [float(v) for v in d["dir"]]
+        if d.get("hover") is not None: e["hover"] = float(d["hover"])
+        out[key] = e
+    for i, p in enumerate(st.get("parts") or []):
+        if not isinstance(p, dict): continue
+        key = "%d:%d %s" % (idx, i, p.get("n")); put(key, p)
+        if isinstance(p.get("side"), dict): put(key + " side", p["side"])
+        for m in ([p["move"]] if isinstance(p.get("move"), dict) else []) + [m for m in (p.get("moves") or []) if isinstance(m, dict)]:
+            if str(m.get("at", 0)).isdigit() and int(m["at"]) <= idx: put("%s move@%s" % (key, m["at"]), m)
+        for k, v in (p.get("poseAt") or {}).items():
+            if isinstance(v, dict) and not v.get("final") and str(k).isdigit() and int(k) <= idx: put("%s poseAt@%s" % (key, k), v)
+        if isinstance(p.get("explode"), dict) and p["explode"].get("offset") is not None: out[key + " explode"] = {"by": [[float(x) for x in p["explode"]["offset"]]]}
+    if isinstance(st.get("cam"), dict) and st["cam"].get("theta") is not None and st["cam"].get("phi") is not None: out["카메라"] = {"cam": [float(st["cam"]["theta"]), float(st["cam"]["phi"])]}
+    for k_, t_, p_, r_ in _incoming(steps, idx): put("들어옴 %s %s" % (k_, t_), {"p": p_, "r": r_})
+    for k_, e_ in (st.get("moveMade") or {}).items():
+        if isinstance(e_, dict): put("moveMade %s" % k_, e_)
+    return out
+
+def geo_diff(a, b, tol_mm=GEO_TOL_MM, tol_deg=GEO_TOL_DEG, view_mm=GEO_TOL_VIEW_MM, view_deg=GEO_TOL_VIEW_DEG):
+    """두 geo 가 허용 오차 안에서 같은가 → (같음, 가장 큰 위치 차 mm, 가장 큰 회전 차 °, 다른 곳 목록)."""
+    import math
+    import numpy as np
+    from asmlib import euler_to_R
+    bad = []; mp = 0.0; mr = 0.0
+    for k in sorted(set(a) | set(b)):
+        if k not in a or k not in b: bad.append("%s: %s" % (k, "새로 생김" if k not in a else "없어짐")); continue
+        x, y = a[k], b[k]
+        for f in sorted(set(x) | set(y)):
+            if f not in x or f not in y: bad.append("%s.%s: 한쪽에만 있음" % (k, f)); continue
+            if f == "r":
+                R = np.array(euler_to_R(x[f]), float).T @ np.array(euler_to_R(y[f]), float)
+                d = math.degrees(math.acos(max(-1.0, min(1.0, (float(np.trace(R)) - 1) / 2)))); mr = max(mr, d)
+                if d > tol_deg: bad.append("%s.r: %.2f° 다름" % (k, d))
+            elif f == "cam":
+                u, v = ([math.sin(c[1]) * math.cos(c[0]), math.cos(c[1]), math.sin(c[1]) * math.sin(c[0])] for c in (x[f], y[f]))
+                d = math.degrees(math.acos(max(-1.0, min(1.0, sum(p_ * q_ for p_, q_ in zip(u, v))))))
+                if d > view_deg: bad.append("%s: 보는 방향이 %.1f° 다름" % (k, d))
+            elif f == "dir":
+                u, v = np.array(x[f], float), np.array(y[f], float); nu, nv = np.linalg.norm(u), np.linalg.norm(v)
+                d = math.degrees(math.acos(max(-1.0, min(1.0, float(u @ v) / (nu * nv))))) if nu and nv else (0.0 if nu == nv else 180.0)
+                if d > view_deg: bad.append("%s.dir: %.2f° 다름" % (k, d))
+            elif f == "hover":
+                d = abs(x[f] - y[f])
+                if d > view_mm: bad.append("%s.hover: %.2f mm 다름" % (k, d))
+            else:
+                pa, pb = (x[f], y[f]) if f != "p" else ([x[f]], [y[f]])
+                if len(pa) != len(pb): bad.append("%s.%s: 점 개수 %d → %d" % (k, f, len(pa), len(pb))); continue
+                for u, v in zip(pa, pb):
+                    d = float(np.linalg.norm(np.array(u, float) - np.array(v, float))); mp = max(mp, d)
+                    if d > tol_mm: bad.append("%s.%s: %.2f mm 다름" % (k, f, d))
+    return (not bad), round(mp, 3), round(mr, 3), bad

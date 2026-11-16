@@ -19,6 +19,29 @@ def main():
     ax = {"+X": (1, 0, 0), "-X": (-1, 0, 0), "+Y": (0, 1, 0), "-Y": (0, -1, 0), "+Z": (0, 0, 1), "-Z": (0, 0, -1)}
     if cd not in ax or rd not in ax or abs(sum(a * b for a, b in zip(ax[cd], ax[rd]))) == 1: sys.exit("칸방향·줄방향은 서로 다른 축이어야 한다(+X -X +Y -Y +Z -Z)")
     cvec = np.array(ax[cd], float); rvec = np.array(ax[rd], float)
+    # 칸·줄 방향이 그 번호 모델의 판 긴 축과 맞는지 대조한다(규칙 E2·C8 — 배틀로봇 1번: 칸 +X 로 줄 줄 알았는데 모델 판의 긴 변은 Z 라 카메라가 책과 90° 달랐다). 확실한 불일치만 막는다.
+    try:
+        import asmlib
+        _D = [_q for _st in json.load(open(asmpath.ap(name, "_asm.json"), encoding="utf-8"))["steps"][:step] for _q in _st.get("parts", [])]   # 번호 칸에는 그 번호에 새로 놓은 부품만 있다 — 앞 번호까지 쌓인 부품 전부로 본다
+        _dims = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "dims.json"), encoding="utf-8"))
+        _long = set()
+        for _p in _D:
+            _dm = _dims.get(_p.get("n"))
+            if not _dm or "r" not in _p: continue
+            _r = _p["r"]   # 이 번호 시점의 자세: 나중 번호에서 옮기는 값(move·poseAt)은 그 번호가 되기 전엔 쓰지 않는다
+            if (_p.get("move") or {}).get("at", 10 ** 6) <= step and "r" in _p["move"]: _r = _p["move"]["r"]
+            _pa = [int(k_) for k_ in (_p.get("poseAt") or {}) if int(k_) <= step]
+            if _pa and "r" in _p["poseAt"][str(max(_pa))]: _r = _p["poseAt"][str(max(_pa))]["r"]
+            _s = sorted([_dm[0], _dm[2]], reverse=True)   # 판 눕힌 면(가로 x 세로) 길이 — 두께(y)는 뺀다
+            if abs(_s[0] - max(cols, rows) * pitch) < 1 and _s[1] <= min(cols, rows) * pitch + 1 and _s[1] >= 30 - 1:   # 격자가 판 여러 장(예: 315프레임 둘 = 15×6)이어도 긴 변 길이로 잡는다
+                _v = asmlib.euler_to_R(_r) @ np.array([1.0, 0, 0] if _dm[0] >= _dm[2] else [0, 0, 1.0])
+                _k = int(np.argmax(np.abs(_v)))
+                if abs(abs(_v[_k]) - 1) < 1e-3: _long.add("XYZ"[_k])
+        if len(_long) == 1 and cols != rows:
+            _L = next(iter(_long)); _axis = cd[-1] if cols > rows else rd[-1]
+            if _axis != _L: sys.exit("❌ 칸·줄 방향이 모델과 안 맞는다: 이 번호 모델의 판(%d×%d) 긴 변은 %s 축인데 긴 쪽(%s)을 %s 로 줬다 — 긴 변 방향을 %s 로 다시 준다(거울 후보는 오차가 같으니 블록이 놓인 쪽(앞 판)으로 가른다). 파일은 쓰지 않았다." % (max(cols, rows), min(cols, rows), _L, "칸" if cols > rows else "줄", _axis, _L))
+    except SystemExit: raise
+    except Exception as _e: print("(판 긴 축 대조를 못 했다: %s)" % _e)
     obj, img = [], []
     for c, r, x, y in f["pts"]:
         u, v = (c - 1) - (cols - 1) / 2.0, (r - 1) - (rows - 1) / 2.0
@@ -37,6 +60,14 @@ def main():
             continue
         r = fit(obj, img, W, H, fov)
         if r: cands.append((r, fov))
+    # 주점 탐색(2026-11-14 꼬마기사 1번): 책 그림이 잘려 한가운데가 주점이 아니면 오차가 크다(7.5px) — 한가운데로 2px 안에 안 맞을 때만 주점·시야각을 훑어 본다(pnp.fit 의 cx,cy)
+    if not f.get("xyz") and min([c[0][0] for c in cands] or [99]) > 2:
+        for fov in (30, 40, 50, 60, 70, 80):
+            for dx in range(-500, 501, 100):
+                for dy in range(-500, 501, 100):
+                    try: r = fit(obj, img, W, H, fov, W / 2 + dx, H / 2 + dy)
+                    except Exception: continue
+                    if r: cands.append((r, fov))
     # 평면 위 점(판 구멍)만으로 푸는 PnP 는 위에서 내려다보는 해와 아래에서 올려다보는 거울 해가 거의 같은 오차로 나온다(드롭체커 27번: 0.88 vs 0.90px).
     #   오차만 보면 거울 해(phi>1.55)나 카메라가 뒤집힌 해(up_y<0)가 뽑힐 수 있어서, 위에서 내려다보고 위쪽이 위인 해(phi≤1.55·up_y>0)를 먼저 고른다(2026-10-13).
     def _ok(c):
@@ -54,12 +85,31 @@ def main():
     for k, v in (("X", [pitch, 0, 0]), ("Y", [0, pitch, 0]), ("Z", [0, 0, pitch])):
         w = P(v) - o; s = 55.0 / max(abs(w[0]), abs(w[1]), 1e-6) if k != "Y" else 55.0 / max(abs(w[1]), 1e-6)
         d[k] = [round(float(w[0] * s), 1), round(float(w[1] * s), 1)]
-    out = {"global": d, "fit": {"from": "%02d_%s.json" % (step, label), "err_px": round(float(e), 2), "points": len(obj), "theta": round(math.radians(az), 2), "phi": round(math.radians(90 - el), 2), "cols": cd, "rows": rd}}
+    out = {"global": d, "fit": {"from": "%02d_%s.json" % (step, label), "err_px": round(float(e), 2), "points": len(obj), "theta": round(math.radians(az), 2), "phi": round(math.radians(90 - el), 2), "cols": cd, "rows": rd, "fov": fov, "cx": round(float(K[0][2]), 1), "cy": round(float(K[1][2]), 1)}}
+    out["rotate_to"] = cd[-1]   # 구멍 줄(칸 방향)이 놓인 세계 축 — refs_rect 가 그림을 이 축선과 같은 방향으로 작은 각도만 돌린다(규칙 E3). 안 적으면 격자 줄과 축선이 어긋나 보인다(사용자 지적 2026-11-10: 홀라인·xyz축 그림)
+    if rd[-1] == "Y": out["column_axis"] = "Y"   # 서 있는 판은 가운데 열이 Z 가 아니라 Y 선을 따른다(refs_rect 머리말)
     json.dump(out, open(os.path.join(D, "%02d_axes.json" % step), "w", encoding="utf-8"), ensure_ascii=False)
-    _roll = math.degrees(math.asin(max(-1, min(1, float(right[1])))))   # 화면 가로축이 수평에서 기운 정도 — 뷰어 카메라는 기울이지(roll) 못하니 0 에 가까워야 한다
+    _roll = math.degrees(math.asin(max(-1, min(1, float(right[1])))))
+    try:   # 롤은 뷰어 카메라로 만들 수 없으니 축 파일에도 적는다(롤이 큰 번호는 책과 비슷한 방위의 눈 카메라를 쓸 수 있다 — violations cam 이 인정)
+        out["fit"]["roll"] = round(_roll, 1); json.dump(out, open(os.path.join(D, "%02d_axes.json" % step), "w", encoding="utf-8"), ensure_ascii=False)
+    except Exception: pass   # 화면 가로축이 수평에서 기운 정도 — 뷰어 카메라는 기울이지(roll) 못하니 0 에 가까워야 한다
     print("카메라 roll %.1f°(0 에 가까워야 뷰어 카메라로 같은 그림이 나온다)" % _roll)
     print("오차 %.2fpx (%d점) theta %.2f phi %.2f  X%s Y%s Z%s" % (e, len(obj), out["fit"]["theta"], out["fit"]["phi"], d["X"], d["Y"], d["Z"]))
-    if out["fit"]["phi"] > 1.55: print("⚠ phi 가 1.55(≈90°)를 넘는다 = 판 아래에서 올려다보는 해 — 거울로 맞은 것이다. 책은 위에서 내려다보니 줄방향(또는 칸방향)을 반대로 준다.")
+    _stand = abs(float(np.cross(cvec, rvec)[1])) < 0.5 and not f.get("xyz")   # 서 있는 판(격자 평면이 세로) — 거울 해는 "판 앞에서 본 해 / 판 뒤에서 본 해"라 phi 로는 못 가르고, 아래에서 올려다보는 그림(phi>1.55)도 있을 수 있다
+    if out["fit"]["phi"] > 1.55 and not _stand: print("⚠ phi 가 1.55(≈90°)를 넘는다 = 판 아래에서 올려다보는 해 — 거울로 맞은 것이다. 책은 위에서 내려다보니 줄방향(또는 칸방향)을 반대로 준다.")
+    try:   # 한 평면 점의 두 해를 모두 보여 준다(2026-11-15 꼬마기사 9번: 서 있는 판의 거울 해를 손으로 IPPE 를 돌려 갈랐다) — 고르는 것은 평면 밖 단서(판 앞면이 보이는가·T축 끝·돌기 끝이 화면 어느 쪽으로 나오는가)
+        from pnp import planar_pair
+        _pp = planar_pair(obj, img, K)
+        if len(_pp) == 2:
+            _tp = lambda rv_, tv_: (lambda a_: (math.radians(a_[0]), math.radians(90 - a_[1])))(angles(cam_from(rv_, tv_)[0], (0, 0, 0)))
+            _alt = [(e_,) + _tp(rv_, tv_) for e_, rv_, tv_ in _pp if abs(_tp(rv_, tv_)[0] - math.radians(az)) > 0.02 or abs(_tp(rv_, tv_)[1] - math.radians(90 - el)) > 0.02]
+            if _alt:
+                out["fit"]["mirror_other"] = {"theta": round(_alt[0][1], 2), "phi": round(_alt[0][2], 2), "err_px": round(_alt[0][0], 2)}
+                json.dump(out, open(os.path.join(D, "%02d_axes.json" % step), "w", encoding="utf-8"), ensure_ascii=False)
+                _amb = _alt[0][0] <= max(2.0, 2 * e)   # 다른 해도 통과 기준(2px) 안이거나 지금 해와 비슷하게 맞는다 = 오차로는 못 가른다
+                print("%s 거울 해(같은 점에 %.2fpx 로 맞는 다른 카메라): theta %.2f phi %.2f — %s" % ("⚠" if _amb else "참고", _alt[0][0], _alt[0][1], _alt[0][2],
+                      "오차로는 못 가른다. 평면 밖 단서 점으로 가른다: mkfit3d.py 의 spec \"check\"(T축 끝·돌기 끝·앞 번호 부품 구멍의 3D↔책 픽셀)" if _amb else "오차 차이가 커서 지금 해를 골랐다"))
+    except Exception as _e: print("(거울 해 비교를 못 했다: %s)" % str(_e)[:80])
     if e > 2: print("⚠ 오차가 2px 를 넘는다 — 칸·줄 방향(거울)이나 격자 점을 다시 본다. 이 값을 쓰지 않는다.")
 
 main()

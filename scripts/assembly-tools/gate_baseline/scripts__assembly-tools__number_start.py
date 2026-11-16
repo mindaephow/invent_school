@@ -8,19 +8,41 @@ import json, os, re, sys
 sys.stdout.reconfigure(encoding="utf-8")
 here = os.path.dirname(os.path.abspath(__file__))
 name, k = sys.argv[1], int(sys.argv[2]); NN = "%02d" % k
+# ── 한화면 순서와 상황 색인: 규칙 파일(큐보 부품결합규칙.md)의 <!-- 한화면 -->·<!-- 상황색인 --> 블록을 그대로 보여 준다(규칙 원본은 그 파일 한 곳 — 여기에 다시 적지 않는다)
+#    번호마다 읽는 것은 이 두 블록이다. 규칙 본문은 색인이 가리키는 규칙 번호만 연다. `python number_start.py <이름> <번호> --색인` 은 두 블록만 보여 주고 끝낸다(막혔을 때 다시 볼 때).
+def _flow():
+    try:
+        rp = os.path.join(here, "큐보", "규칙", "큐보 부품결합규칙.md"); t = open(rp, encoding="utf-8").read()
+        for mk, title in (("한화면", "번호 하나 — 한 화면 순서"), ("상황색인", "상황 색인 (막히거나 책과 다르면 증상을 찾아 그 규칙만 연다 — 규칙 파일 0절)")):
+            print("═══ %s ═══" % title); print(t[t.index("<!-- %s -->" % mk) + len("<!-- %s -->" % mk):t.index("<!-- /%s -->" % mk)].strip()); print()
+    except Exception as e_: print("⚠ 한화면·상황 색인을 못 읽음(큐보 부품결합규칙.md 0절을 직접 연다):", e_)
+_flow()
+if "--색인" in sys.argv: sys.exit(0)
+try:   # 옛 구멍 번호(hN_M) 자동 변환(사용자 지시 2026-11-15): 부품 DB 번호로 바뀌기 전에 만든 조립도는 스크립트가 KeyError 로 멈춘다 — 차시를 시작하면 백업하고 같은 위치의 새 번호로 바꾼다. 막지 않는다.
+    import convert_hole_ids as _ch
+    if _ch.needs(asmpath.resolve(name + ".py")):
+        _k0, _dn, _er, _bk = _ch.auto(name); _left = _ch.needs(asmpath.resolve(name + ".py"))
+        print("═══ 옛 구멍 번호 자동 변환 ═══"); print("  옛 번호 %d곳 중 %d곳을 같은 위치의 새 번호로 바꿨다(백업: %s)" % (_k0, _dn, os.path.relpath(_bk, here) if os.path.isabs(_bk) else _bk))
+        if _er or _left: print("  ⚠ 아직 남은 옛 번호 %d곳 — 스크립트가 멈추는 곳: %s" % (_left, _er or "없음(실행 안 되는 줄에만 남음)")); print("    그 줄의 번호를 부품 DB 번호로 손으로 바꾼다(같은 구멍 찾기: python convert_hole_ids.py %s 가 못 정한 줄을 보여 준다, 구멍 위치는 pegprobe·get_part_connectors)" % name)
+        else: print("  ✅ 스크립트가 끝까지 돈다")
+except Exception as _e_: print("⚠ 구멍 번호 변환 필요 여부를 못 봤다 — python convert_hole_ids.py %s 로 직접 본다: %s" % (name, str(_e_)[:100]))
+# 지금까지 작업한 번호(build 가 이 번호까지만 막는다 — 규칙 A1: 아직 시작하지 않은 뒤 번호의 문제는 세지 않는다). 시작 때(release_start) 0 으로 되돌아간다.
+try:
+    import json as _wj; _wf = os.path.join(os.path.dirname(os.path.abspath(__file__)), "refs", name, "_worked_upto.json"); os.makedirs(os.path.dirname(_wf), exist_ok=True)
+    _wp = _wj.load(open(_wf, encoding="utf-8")).get("upto", 0) if os.path.exists(_wf) else 0
+    if _wp == 0:   # 이 조립도 작업이 아직 시작 전(작업 범위 0) = 시작 환경: 📷·❄·✓ 를 백업하고 모두 푼다(규칙 00-1, 사용자 지시 2026-11-15 "시작하기 전에 자동으로"). 작업 도중(범위>0)에는 안 돈다
+        import subprocess as _sp; _rr = _sp.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "release_start.py"), name], capture_output=True, text=True, encoding="utf-8", errors="replace", env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+        print("═══ 시작 환경 자동 실행(규칙 00-1: 📷·❄·✓ 백업 후 풀기) ═══"); [print("  " + _l) for _l in (_rr.stdout or _rr.stderr).splitlines()]
+    if k > _wp: _wj.dump({"upto": k}, open(_wf, "w", encoding="utf-8"))
+except Exception: pass
+try:   # 조립도 파일 수정 게이트(ladder-gate.js)가 보는 도장: 이 번호 시작(앞 번호 기록 읽기)을 했다는 표시, 90분 유효(2026-11-11 사용자 지시 — 앞 번호 기록을 안 쓰고 눈대중으로 고친 사고)
+    import json as _j, time as _t; _r = os.path.normpath(os.path.join(here, "..", "..")); _j.dump({"name": name, "step": k, "ts": int(_t.time() * 1000)}, open(os.path.join(_r, ".claude", "number_start_stamp.json"), "w", encoding="utf-8"))
+except Exception: pass
 CONT = "--연속" in sys.argv   # 반자동 연속 진행(사용자 지시 2026-10-14): 앞 과정 미완이어도 막지 않고 표시만 하고 계속한다. 표시는 <이름>_flags.json 에 쌓여 마지막 검토 목록이 된다.
 def load(p, default):
     return json.load(open(p, encoding="utf-8")) if os.path.exists(p) else default
 def save(p, d): json.dump(d, open(p, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 
-# ── 가 한 장 흐름: 규칙 파일(큐보 부품결합규칙.md)의 <!-- 가-흐름 --> 블록을 그대로 보여 준다(규칙 원본은 그 파일 한 곳 — 여기에 다시 적지 않는다, 2026-11-07)
-def _flow():
-    try:
-        rp = os.path.join(here, "큐보", "규칙", "큐보 부품결합규칙.md")
-        t = open(rp, encoding="utf-8").read(); a = t.index("<!-- 가-흐름 -->") + len("<!-- 가-흐름 -->"); b = t.index("<!-- /가-흐름 -->")
-        print("═══ 가 한 장 흐름 (규칙 파일 가 절 맨 위 — 막히면 보고하지 말고 이 사슬의 다음 칸으로) ═══"); print(t[a:b].strip())
-    except Exception as e_: print("⚠ 가 한 장 흐름을 못 읽음:", e_)
-_flow()
 # ── 이번 번호에서 조심할 것(사용자 지시 2026-10-14 "정보를 모르는 게 아니라 사용을 안 한다") — mistake_types.json(요청차이 분석)의 반복 실수 유형과, 이 번호의 부품·위치에 맞는 경고를 맨 앞에 보여 준다.
 def _warn():
     try:
@@ -36,6 +58,8 @@ def _warn():
         for n_ in sorted(set(names)):
             s_ = (ps.get("자세") or {}).get(n_)
             if s_: sit.append("%s: 지금까지 %d건 중 %d건(%d%%)을 사용자가 자세를 고쳤다(돌린 각도 %s) → 방향 근거를 책 그림에서 먼저 읽고 놓은 뒤 좌표로 대조한다. (통계 %s)" % (n_, s_["비교"], s_["고침"], 100 * s_["고침"] // max(1, s_["비교"]), ", ".join("%d°×%d" % (a_, c_) for a_, c_ in s_["각도"][:3]), ps.get("만든때", "?")))
+        _vf = load(os.path.join(here, name + "_verify.json"), {}); _unv = [i_ for i_ in range(1, k) if i_ <= len(a_) and (a_[i_ - 1].get("parts")) and str(i_) not in _vf]
+        if _unv: sit.append("❌ 앞 번호 %s 는 verify_step.py 점검 기록이 없다(왼쪽 점검 칩이 회색) → python verify_step.py %s <번호> 로 채우고, 끝낸 번호는 화면 칩을 읽어 보고한다(규칙 0번 다-3)" % (", ".join(map(str, _unv)), name))
         if k > 1: sit.append("앞 번호(%d번)까지 만든 모델과 바로 뒤 번호의 책 그림에서 먼저 읽는다 — 책 한 장만 보고 정하지 않는다." % (k - 1))
         sit.append("사용자가 저장한 ❄·📷 기록이 있으면 그 값이 기준이다(덮어쓰지 않는다).")
         print("  이번 번호(%d번)에 해당하는 것:" % k)
@@ -48,7 +72,7 @@ def _warn():
 def _session_check():
     import urllib.request
     up = None
-    for port in (3178,):
+    for port in (3178, 3177, 3179, 3000):   # 포트는 3178 이어야 하는 게 아니다(사용자 2026-11-13) — 떠 있는 쪽을 쓴다
         try: urllib.request.urlopen("http://localhost:%d/design.html" % port, timeout=4).read(1); up = port; break
         except Exception: pass
     root = os.path.abspath(os.path.join(here, "..", ".."))
@@ -61,11 +85,34 @@ def _session_check():
             db = sorted(userdone.user_done(_m.group(1)) or ())
         except (SystemExit, Exception): db = None
     print("═══ 세션 시작 체크 (번호 작업 전에 읽는다) ═══")
-    print("  %s 개발 서버: %s" % ("✅" if up else "❌", ("localhost:%d 응답" % up) if up else "응답 없음 → 서버를 켠다(preview_start invent-school-dev, 포트 3178)"))
+    # 화면 하단 규칙 바(칩)가 보여 주는 상시 감시를 먼저 점검한다(사용자 지시 2026-11-09): 훅 연결·설치 표시·이 세션에서 실제로 도는지
+    try:
+        import json as _j, time as _t, subprocess as _sp
+        _rs = _j.load(open(os.path.join(root, "public", "_rule_status.json"), encoding="utf-8"))
+        _cfg = open(os.path.join(root, ".claude", "settings.json"), encoding="utf-8").read() if os.path.exists(os.path.join(root, ".claude", "settings.json")) else ""
+        _miss = [n_ for n_ in ("ladder-gate.js", "autocheck.py", "scope_guard.py", "finish_guard.py") if n_ not in _cfg]
+        if _miss or "autocheckHook" not in _rs:
+            _sp.run([sys.executable, os.path.join(here, "setup_new_pc.py"), "--only-ponytail"], capture_output=True)   # 멱등 — 빠진 훅 연결·설치 표시를 채운다
+            print("  ⚠ 감시 칩: 훅 연결/설치 표시가 빠져 setup_new_pc --only-ponytail 로 채웠다(빠진 것: %s) → Claude 를 invent_school 폴더에서 다시 열어야 적용" % (", ".join(_miss) or "설치 표시"))
+        _age = (_t.time() * 1000 - _rs.get("autocheckAlive", {}).get("ts", 0)) / 60000
+        print("  %s 감시 칩: 상시검사 훅 %s" % ("✅" if _age < 30 else "⚠", ("동작 확인(%d분 전)" % _age) if _age < 30 else "이 세션에서 도는 흔적 없음 — 이 세션을 invent_school 폴더에서 시작하지 않았거나 첫 호출이다(한 번 더 돌려 보고, 그래도 없으면 invent_school 폴더에서 새 세션을 연다)"))
+    except Exception as _e: print("  ⚠ 감시 칩 점검 실패:", _e)
+    try:   # 빌드 쓰기 오류 기록(asmpath 가 파일 잠김으로 쓰기가 막힐 때 .open_retry.log 에 남긴다, 사용자 지시 2026-11-15) — 기록이 있으면 미루지 말고 지금 원인을 보고 고친다
+        _lg = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".open_retry.log")
+        import rule_status as _rs; _rs.sync_writelock()
+        _ls = [l for l in open(_lg, encoding="utf-8").read().splitlines() if "[시작]" in l] if os.path.exists(_lg) else []
+        if _ls:
+            _fail = sum(1 for l in open(_lg, encoding="utf-8") if "[끝내 실패]" in l)
+            print("  ⚠ 빌드 쓰기 잠김 기록 %d건(끝내 실패 %d건) — 마지막: %s" % (len(_ls), _fail, _ls[-1][:200]))
+            print("     → 미루지 말고 지금 .open_retry.log 의 잡은 프로세스·스냅샷 차이를 읽고 원인을 고친 뒤, 고쳤으면 로그를 비운다(: > .open_retry.log)")
+        else: print("  ✅ 빌드 쓰기 잠김 기록 없음")
+    except Exception as _e: print("  ⚠ 쓰기 잠김 기록 점검 실패:", _e)
+
+    print("  %s 개발 서버: %s" % ("✅" if up else "❌", ("localhost:%d 응답" % up) if up else "응답 없음 → 서버를 켠다(preview_start invent-school-dev, 어느 포트든 상관없음)"))
     print("  %s .env.local(SUPABASE 키): %s" % ("✅" if keys else "❌", "있음" if keys else "없음 → 사용자에게 달라고 한다(CLAUDE.md)"))
     print("  %s DB 읽기(사용자 ✓): %s" % ("✅" if db is not None else "❌", ("읽음 — ✓ 번호 %s" % db) if db is not None else "못 읽음 → ✓ 확인은 통과시키지 않는다(키를 한 줄로 요청하고, 키 없이 되는 작업은 계속한다 — 큐보 부품결합규칙.md B6)"))
-    print("  ⚠ 로그인: 스크립트가 확인할 수 없다. 화면 비교(05 5-5)·❄/📷 확인에는 선생님 계정 로그인이 필요하므로 **로그인이 안 돼 있으면 한 줄로 알리되 묻고 기다리지 않는다 — 로그인이 필요 없는 작업(격자·읽기 표·증거 정리)은 계속하고 화면 비교만 로그인 뒤로 미룬다(규칙 J5)**(비밀번호는 대신 입력하지 않는다). 브라우저 pane 에서 로그인 화면이 보이면 아직이다.")
-    print("  ⚠ 읽을 것: 큐보/규칙/큐보 부품결합규칙.md 처음부터(맨 위 0번 체크리스트) → 큐보/규칙/05_조립.md 실행 순서 → 큐보/조립도/<권>권/<이름>/진행기록.md → user_diffs/요청차이.md (이번 번호에서 지킬 규칙 3개를 첫 보고 한 줄에)")
+    print("  ⚠ 로그인: 스크립트가 확인할 수 없다 — 안 돼 있으면 한 줄로 알리고, 로그인이 필요 없는 작업은 계속한다(J5)")
+    print("  ⚠ 읽을 것: 맨 위 한화면 순서·상황 색인 → 큐보/조립도/<권>권/<이름>/진행기록.md → user_diffs/요청차이.md (지킬 규칙 3개를 첫 보고 한 줄에. 규칙 파일 전체는 조립도를 시작할 때 한 번)")
     return up
 _SERVER = _session_check()
 _warn()
@@ -73,9 +120,13 @@ _warn()
 # ── 알고 있는 정보 리마인드(사용자 지시 2026-10-13 "새 번호에 들어가면 이미지 작업부터 하지 말고, 이미 알고 있는 정보를 먼저 파악하자" — 드롭체커 28번) ──
 # 이미지 작업(격자·모서리·홀라인) 전에 앞 번호까지 만든 것·쓴 부품·남은 부품·사용자가 바로잡은 것을 먼저 보여 준다. 읽기만 하고 아무것도 쓰지 않는다. 못 읽어도 번호 시작은 막지 않는다.
 def _remind():
+    try:   # 다른 조립도에서 같은 부품이 새로 들어간 번호의 이미지 작업(격자·카메라·그림·풀이)을 먼저 본다(D15)
+        import similar_steps as _ss
+        print("═══ 이전 조립도에서 같은 부품이 들어간 번호 — 격자·카메라·그림을 먼저 참고한다 (%s %d번, D15) ═══" % (name, k)); _ss.show(name, k)
+    except Exception as _e_: print("(참고 번호 검색 실패: %s)" % str(_e_)[:80])
     try:
         print("═══ 이미 알고 있는 정보 — 이미지 작업 전에 읽는다 (%s %d번) ═══" % (name, k))
-        a_ = load(os.path.join(here, name + "_asm.json"), {"steps": []})["steps"]; lst = load(os.path.join(here, name + "_list.json"), {})
+        a_ = load(os.path.join(here, name + "_asm.json"), {"steps": []})["steps"]; import asmpath as _ap1; lst = _ap1.list_counts(name)
         # ① 쓴 부품 / 남은 부품 (LIST 대비, 앞 번호까지)
         used = {}
         for st_ in a_[:k - 1]:
@@ -97,9 +148,8 @@ def _remind():
             print("  ④ 사용자가 최근 바로잡은 것(user_diffs/요청차이.md 끝 4개):"); [print("       " + h_[:110]) for h_ in heads]
         print("  ⑤ 놓을 자리는 모델로 먼저 좁힌다: python pegprobe.py %s 빈구멍 <칸> <줄> · 위돌기 · 빈돌기 <부품> — 그다음에 책 그림으로 후보 중 어느 것인지 가린다(이미지 격자는 카메라·화면 비교용)." % name)
         _pf = os.path.join(here, "refs", name, "fits", "%02d_P.json" % (k - 1))
-        if os.path.exists(_pf):   # 29번에서 배운 것: 판이 가려져 holefit 가 안 되면 앞 번호 책 그림과 판 무늬를 맞춘다(눈으로 안 된다고 건너뛰지 말고 도구를 먼저 돌린다)
-            print('  ⑥ 판이 이번 번호에서 가려졌으면(앞 번호 %d 판 격자 있음): holefit → python plate_match.py %s %d %d P --검증 "c,r,h,x,y;…" (앞 번호에서 놓아 3D 가 확정된 리벳 끝·블록 돌기·판 모서리 5개 이상의 칸·높이·픽셀) → infer_grid --anchor → (한 줄 부품 line_fit · 판 없음 mkfit3d · 몸체에 가려짐 0-3·0-4) → 전부 시도해도 미달이면 판단과정에 ⚠ 로 적고 다음으로 간다. 순서·기준은 큐보 부품결합규칙.md C3·D12, 명령 사용법은 05_조립.md 0-1~0-4. 유추 격자는 규칙 점검이 사용자 ✓ 를 요구한다.' % (k - 1, name, k - 1, k))
-        print("  ⑦ 진행 상태 문서: 큐보/조립도/<N>권/%s/진행기록.md (앞 번호 절) — 번호 하나로 안 풀리면 큐보 부품결합규칙.md C3(순서)·D12(기준)." % name)
+        if os.path.exists(_pf): print("  ⑥ 앞 번호 %d 에 판 격자가 있다 — 이번 번호에서 판이 가려졌으면 C3 사다리 ③(plate_match)부터 쓴다" % (k - 1))
+        if k > 1: print("  ⑦ 격자·카메라는 앞 번호 모델로 먼저 푼다: C3 ⓪(anchor_pnp)")
     except Exception as ex_:
         print("  (리마인드를 읽지 못했다: %s — 번호 시작은 계속한다)" % ex_)
 _remind()
@@ -116,6 +166,9 @@ parts = "" if (not used or used.startswith("없음")) else ", ".join(x.strip() f
 # ⓪ 앞 과정 점검(사용자 지시 2026-10-12 "앞순서에 안한게 있으면 하고 넘어가야 하게끔") — 02·03·04 와 앞 번호 확인이 끝나지 않았으면 여기서 멈춘다.
 #    읽기 표·규칙 파일도 만들지 않고, 격자·구멍 점 같은 번호 작업은 시작할 수 없다. 끝낸 뒤 다시 돌린다.
 _gate = []
+try: _act0 = open(os.path.join(here, ".active_assembly"), encoding="utf-8").read().strip()
+except Exception: _act0 = ""
+if _act0 != name: _gate.append(("00-1 시작 절차", "이 조립도(%s)로 시작 절차를 안 했다(작업 중 조립도: %s) — 📷·❄·✓ 가 안 풀렸고 끝까지 가 지킴이도 이 조립도를 모른다" % (name, _act0 or "없음"), "묻지 말고 python handoff.py %s --아이디 <계정> --시작 부터 돌린다(규칙 00-1 — 확인만 하는 작업이어도 같다)" % name))
 _R0 = os.path.join(here, "refs", name)
 _miss_img = [i for i in range(0, len(asm) + 1) if i and not os.path.exists(os.path.join(_R0, "%02d.jpg" % i))]
 if not os.path.exists(os.path.join(_R0, "00.jpg")): _miss_img.insert(0, 0)
@@ -126,7 +179,7 @@ if _miss_used: _gate.append(("03 부품 체크", "▣ 사용 부품이 없는 �
 # 03 부품 정리 합계 점검(큐보 부품결합규칙.md A2, 2026-11-02): 번호별 ▣ 사용 부품 합계가 교재 LIST 와 부품별로 같아야 번호를 시작한다. 이미 만든 조립도가 갑자기 막히지 않게 <이름>_rules.json 에 "parts_sum": true 를 켠 조립도만 막는다.
 if load(os.path.join(here, name + "_rules.json"), {}).get("parts_sum") and not _miss_used:
     import collections as _co
-    _lst0 = load(os.path.join(here, name + "_list.json"), {}); _tot0 = _co.Counter()
+    import asmpath as _ap0; _lst0 = _ap0.list_counts(name); _tot0 = _co.Counter()   # LIST + 관리자 확정 수량(qtyOverride)
     for _s0 in asm:
         _m0 = re.search(r"▣ 사용 부품:\s*(.*)", _s0.get("note") or "")
         for _p0 in strip_paren(_m0.group(1)).split(","):
@@ -151,17 +204,16 @@ if k > 1:
     try: _pst = int((load(os.path.join(here, name + "_read.json"), {}).get(str(k - 1)) or {}).get("단계") or 9)
     except Exception: _pst = 9
     if _pst < 9: _gate.append(("앞 번호 %d 작업 순서" % (k - 1), "번호 하나 순서 %d/9단계에서 멈춰 있다" % _pst, "읽기 표 '단계' 를 올려 가며 9단계(끝)까지 한다 — 큐보 부품결합규칙.md 0절"))
-# 앞 번호의 이미지 작업이 규칙 순서대로 다 됐는지(큐보 부품결합규칙.md B8): 번호마다 그림 목록(0 교재 원본·1 방향선·2 축선·3 격자·4 확대 눈금·5 hf 홀라인 확인·11~ 관찰 3장 이상)이 있어야 다음 번호를 시작한다. 어느 단계를 건너뛰었는지 그림 목록으로 알려 준다. <이름>_rules.json 의 "img_set_from": N 이 있는 조립도만, 그 번호부터 막는다(DB 에 올라갔는지는 위 img_db 가 본다).
-_isf = load(os.path.join(here, name + "_rules.json"), {}).get("img_set_from")
-if k > 1 and _isf and (k - 1) >= int(_isf):
-    _idx = [r for r in load(os.path.join(here, "refs", name, "index.json"), []) if int(r.get("step", -1)) == k - 1]
-    _have = {int(r.get("idx", -1)) for r in _idx}
-    _NAME = {0: "교재 원본", 1: "방향선", 2: "축선(NN_2)", 3: "격자(NN_3)", 4: "확대 눈금(crop_ticks)", 5: "홀라인 확인(hf)"}
-    _miss_i = [_NAME[i] for i in _NAME if i not in _have]; _obs = len([i for i in _have if i >= 11])
-    if _miss_i or _obs < 3: _gate.append(("앞 번호 %d 이미지 작업 순서" % (k - 1), "빠진 그림: %s%s" % (", ".join(_miss_i) or "없음", ("" if _obs >= 3 else " · 관찰 그림 %d장(3장 이상 필요)" % _obs)), "빠진 그림을 만드는 단계(책 확대 읽기 → crop_ticks → holefit → axes_fit·refs_rect → observe)부터 한다 — 규칙 순서를 건너뛴 것(큐보 부품결합규칙.md B5·B8)"))
+# 앞 번호의 필수 산출물(격자·양쪽 홀라인·홀라인 그림·링 대조·카메라·읽기 표·그림DB)이 다 있는지 — 정의는 rulecheck.py 한 곳(D14). 옛 img_set_from(그림 idx 0~5 고정 목록)은 없앴다.
+if k > 1 and load(os.path.join(here, name + "_rules.json"), {}).get("holeline_img"):
+    try:
+        import rulecheck as _rcn
+        _pm = _rcn.missing_artifacts(name, k - 1)
+        if _pm: _gate.append(("앞 번호 %d 필수 산출물" % (k - 1), "; ".join("%s: %s" % (t_, w_[:100]) for t_, w_ in _pm), "빠진 산출물을 규칙 순서(D14: crop_ticks → holefit → axes_fit → refs_rect → DB 업로드)대로 만든다 — python rulecheck.py %s %d" % (name, k - 1)))
+    except Exception as _e_: print("앞 번호 산출물 점검 실패:", str(_e_)[:80])
 if k > 1:   # 앞 번호: 사용자 ✓ 또는 지금 내용과 같은 지문의 비교 증거(record_check)가 있어야 다음 번호를 시작한다
     _prev = asm[k - 2]
-    if _prev.get("noPart") or not (_prev.get("parts") or _prev.get("moveMade")): _gate.append(("앞 번호 %d" % (k - 1), "아직 작성 전(부품 없음)", "앞 번호부터 끝낸다 — 번호는 순서대로"))
+    if _prev.get("noPart") or not (_prev.get("parts") or _prev.get("moveMade") or _prev.get("madeNoPart")): _gate.append(("앞 번호 %d" % (k - 1), "아직 작성 전(부품 없음)", "앞 번호부터 끝낸다 — 번호는 순서대로"))
     else:   # 부품이 있는 번호, 또는 앞 번호 부품을 옮기기만 하는(합치는) 번호
         _ok = False
         try:
@@ -174,7 +226,7 @@ if k > 1:   # 앞 번호: 사용자 ✓ 또는 지금 내용과 같은 지문의
                 _ok = k - 1 in (userdone.user_done(_mid0.group(1)) or ())
             except (SystemExit, Exception): pass
         if not _ok: _gate.append(("앞 번호 %d" % (k - 1), "사용자 ✓ 도, 지금 내용과 같은 비교 증거(record_check)도 없음", "화면에서 책과 나란히 비교하고 record_check.py 로 증거를 남긴다(05 5-5)"))
-if not _SERVER: _gate.append(("세션 시작 체크", "개발 서버(3178)가 응답하지 않음", "서버를 켜고(preview_start invent-school-dev) 사용자에게 로그인을 요청한다"))
+if not _SERVER: _gate.append(("세션 시작 체크", "개발 서버(3178·3177·3179·3000)가 응답하지 않음", "서버를 켜고(preview_start invent-school-dev) 사용자에게 로그인을 요청한다"))
 try:   # 규칙 점검(rulecheck.py) — 앞 번호에 규칙 미달(❌)이 있으면 그것부터 해결해야 다음 번호를 시작한다(사용자 지시 2026-10-12: 도망가지 않고 스스로 문제를 찾아 해결)
     import rulecheck; _fb = rulecheck.first_bad(name)
     if _fb and _fb[0] < k:
@@ -223,7 +275,7 @@ import subprocess as _sp
 _db = _sp.run([sys.executable, os.path.join(here, "dbimgcheck.py"), name, str(k)], capture_output=True, text=True, encoding="utf-8", env=dict(os.environ, PYTHONIOENCODING="utf-8"))
 _db_ok = _db.stdout.startswith("조립도") and not any(l.startswith("❌ 안 올림") and "없음" not in l for l in _db.stdout.splitlines())
 state.append(("그림 DB 업로드(🖼)", _db_ok, "만든 그림은 바로 올린다: refs_upload(viewer_snippets.md 3) → python dbimgcheck.py %s %d → navigate 로 새로 불러와 🖼 장수 확인(I1·J2)" % (name, k) + ("" if _db.stdout.startswith("조립도") else " — ⚠ 점검 실패: " + (_db.stdout + _db.stderr).strip()[:100])))
-print("═══ %s %d번 시작 ═══   (큐보/규칙/큐보 부품결합규칙.md 를 처음부터 다시 읽고, 이번 번호에서 지킬 규칙 3개를 첫 보고에 적는다)" % (name, k))
+print("═══ %s %d번 시작 ═══   (막히면 맨 위 상황 색인에서 증상을 찾는다 — 다시 보기: python number_start.py %s %d --색인)" % (name, k, name, k))
 print("교재:", note.split("\n")[0][:80]); print("사용 부품(03):", used or "(적혀 있지 않음 — 03 을 먼저 한다)")
 print("읽기 표 %d번 칸: %s" % (k, made)); print("스크립트에 stepchecks.apply:", "있음" if has_sc else "❌ 없음 — 넣지 않으면 --write 가 거부된다")
 slot = st.get("slot"); pslot = asm[k - 2].get("slot") if k > 1 else None
@@ -280,7 +332,7 @@ print("─ 다음에 할 일 (05 순서) ─")
 todo = [t for t, ok, h in state if not ok]
 order = ["책 그림 크롭", "가위·회전값(_lv.json)", "구멍 점(fits)", "방향(_axes.json, fit 포함)", "격자 그림(NN_2)", "그림 DB 업로드(🖼)"]
 for i, t in enumerate([o for o in order if o in todo], 1): print("  %d. %s" % (i, t))
-print("  → 4 방향대로 위치해 비교(앞 번호 조립을 이 번호 카메라·방향에 놓고 책과 나란히, 다른 곳 숫자로 찾기) → 5 어디와 어디가 결합 → 6 어떤 구멍·돌기(양쪽 id·피치) → 7 읽기 표 빈 칸 → 놓기(attach·recv) → python build.py %s --write → 8 화면 6방향·관찰 → python record_check.py %s %d <캡처.png> \"<비교 결과>\"  (순서는 큐보 부품결합규칙.md 0절, 건너뛰지 않는다)" % (name, name, k))
+print("  → 그다음은 맨 위 한화면 순서 4~9번(결합 쌍 → 구멍·돌기 id → 읽기 표 → 놓기 C6 → build → 6방향 비교 → build --write → 증거)")
 try:
     import observe as _ob
     _need = _ob._need(name, k)

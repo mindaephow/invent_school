@@ -3,7 +3,7 @@
 # 배경: 뷰어(design-assembly.js mateGuides)는 "완성(제자리) 자세에서 돌기가 구멍에 들어간 쌍"에만 화살표를 그린다. 맞물림 조건(design-mates.js check)은 세 가지다.
 #   ① 방향: 돌기 방향 = 구멍 들어가는 방향(관통 구멍은 반대도 허용)  ② 축 어긋남 ≤ 1.2mm  ③ 깊이: 돌기 끝이 구멍 안으로 ≥1mm, 돌기 뿌리가 구멍 끝을 넘지 않음
 # 이 도구는 번호의 marks 마다 그 자리의 구멍(또는 받는 쪽이면 돌기 끝)을 찾아, 새 부품의 모든 돌기를 위 세 조건에 대 보고 어느 조건에서 걸리는지 말한다.
-# 읽는 좌표는 그 번호(k번) 시점의 자세다(stepchecks.pose_at) — 뒤 번호에서 옮긴 것은 되돌려 읽는다.
+# 읽는 좌표는 그 번호(k번) 화면이 그리는 자세다(violations._drawn_pose: 그 번호 poseAt → 옆자리 → 옮긴 자세) — 뒤 번호에서 옮긴 것은 되돌려 읽는다.
 import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import os, runpy, sys
 import numpy as np
@@ -30,9 +30,9 @@ def test(pg, h):
 
 # 모든 부품을 k번 시점 자세로 놓고 읽는다(stepchecks.pose_at): 옆자리(창고 2) 부품은 옆자리 자세, 뒤 번호에서 조립품 전체를 옮기거나 세운 것은 그 전 자세.
 # 안내점(marks)은 그 번호 시점 좌표라서 스크립트 끝 위치로 읽으면 어긋나 보인다 (2026-11-06 토끼 13번 옆자리 오탐, 양팔저울 1번 3번-뒤 이동 오탐)
-import stepchecks
+import violations
 for q in A.parts:
-    if q.step.index <= k: q.p, q.R = stepchecks.pose_at(A, q, k)
+    if q.step.index <= k: q.p, q.R = (np.array(v, float) for v in violations._drawn_pose(A, q, k))
 hide = A.steps[k - 1].kw.get("hideMade") or {}
 parts = [q for q in A.parts if q.step.index == k]
 if not parts: sys.exit("❌ %s %d번에 부품이 없다" % (name, k))

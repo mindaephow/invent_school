@@ -24,7 +24,7 @@ def axle_bad(A, tol=1.5):
         for k in range(1, len(A.steps) + 1):
             for q in A.parts: q.p, q.R = _orig[id(q)][0].copy(), _orig[id(q)][1].copy()
             for q in A.parts:
-                if q.step.index <= k: q.p, q.R = stepchecks.pose_at(A, q, k)
+                if q.step.index <= k: q.p, q.R = (np.array(v, float) for v in _drawn_pose(A, q, k))   # 화면이 그리는 자세(그 번호 poseAt 포함 — 기어를 돌린 T축 등)
             for i, q in enumerate(A.steps[k - 1].parts):
                 for host, gid, pid in getattr(q, "_axle_links", []):
                     g = host.peg(gid); d = np.array(g["dir"], float); d = d / np.linalg.norm(d)
@@ -107,7 +107,7 @@ def occupied_holes(A, k, lat=1.5, ov=0.5):
                 if abs(abs(float(np.dot(d, hd))) - 1) > 0.02: continue
                 w = pos - hp; t0 = float(np.dot(w, hd)); lt = np.linalg.norm(w - t0 * hd)
                 if lt > lat: continue
-                t1 = t0 + float(np.dot(d, hd)) * ln; a, b = sorted((t0, t1))
+                _hf = float(np.dot(d, hd)) * ln / 2; a, b = sorted((t0 - _hf, t0 + _hf))   # 돌기 pos 는 길이의 가운데(K3) → 구간은 pos ± len/2
                 if q.n not in _SHAFTY and min(b, hl) - max(a, -hl) > ov: ins.append((q, pid))   # 축·모터 돌기는 구멍 안 축 결합이 정상이라 뺀다
             if len({id(q) for q, _ in ins}) >= 2:
                 mine = sorted({cur[id(q)] for q, _ in ins if id(q) in cur})
@@ -128,6 +128,29 @@ def _drawn_pose(A, q, k):
     if sd and q.step.index <= k < sd["until"]: return np.array(sd["p"], float), euler_to_R(sd["r"])
     return p, R
 
+def screen_pose(A, q, k):
+    """뷰어가 k번 화면에 그리는 세계 자세(결합된 자리) — _drawn_pose 에 조립도 전체 변환(xform, k ≥ at)과 그 번호 화면 전체 띄움(meta lift)을 건 값. 도구가 "화면이 이렇게 그린다"고 믿는 자세의 한 곳이다."""
+    p, R = _drawn_pose(A, q, k); p = np.array(p, float); R = np.array(R, float)
+    xf = A.meta.get("xform")
+    if xf and k >= int(xf["at"]) and not (q.extra or {}).get("noXform"): M = np.array(xf["m"], float); p = M @ p + np.array(xf["t"], float); R = M @ R
+    lf = float(((A.meta.get("lift") or {}).get(str(k))) or 0)
+    if lf: p = p + np.array([0.0, lf, 0.0])
+    return p, R
+
+def tool_pose(A):
+    """번호별 '도구가 본 화면 자세' {번호: {부품 키: [x, y, z, rx, ry, rz]}} — 앞 번호와 달라진 부품만 적는다(화면은 1번부터 차례로 덮어 읽는다). 화면(design-assembly.js)이 실제로 그리는 자세와 대조해 5mm·15° 넘게 다르면 '도구-화면' 칩에 뜬다."""
+    from asmlib import R_to_euler
+    last = {}; out = {}
+    for k in range(1, len(A.steps) + 1):
+        for j in range(1, k + 1):
+            for i, q in enumerate(A.steps[j - 1].parts):
+                p, R = screen_pose(A, q, k); v = [round(float(x), 1) for x in p] + [round(float(x), 1) for x in R_to_euler(R)]
+                key = "%d:%d" % (j, i)
+                if last.get(key) != v: last[key] = v; out.setdefault(str(k), {})[key] = v
+    return out
+
+LAST_TOOLPOSE = {}   # collect() 가 마지막으로 계산한 tool_pose — write_entry 가 같은 조립도의 def.toolPose 로 쓴다
+
 def _mate_pairs(A, k, lat=1.5, ov=0.5, drawn=False):
     """k번 화면(최종 자세)에서 돌기가 다른 부품의 구멍 안에 들어가 결합된 쌍들 {frozenset({id(돌기 부품), id(구멍 부품)})} 와 id → 부품. occupied_holes 와 같은 기준."""
     import stepchecks
@@ -145,14 +168,11 @@ def _mate_pairs(A, k, lat=1.5, ov=0.5, drawn=False):
             ln = float(c.get("len") or 0)
             if ln <= 0: continue
             pos, d = wr(q, c); d = d / (np.linalg.norm(d) or 1.0)
-            cd = np.array(c["dir"], float); cd = cd / (np.linalg.norm(cd) or 1.0); sz = q.conn.get("size")
-            if sz and abs(float(np.dot(np.array(c["pos"], float), cd))) < 1e-6 and abs(float(np.abs(cd) @ np.array(sz, float)) - ln) < 0.5:
-                pos = pos - d * (ln / 2.0)   # T축처럼 "축 전체"를 돌기 하나로 기록한 부품(길이=부품 길이, 시작=상자 가운데): 모델은 가운데 기준이라 실제 구간은 −len/2~+len/2
             for h, hp, hd, hl in holes:
                 if h is q or abs(abs(float(np.dot(d, hd))) - 1) > 0.02: continue
                 w = pos - hp; t0 = float(np.dot(w, hd))
                 if abs(t0) > ln + hl + 1 or float(np.linalg.norm(w - t0 * hd)) > lat: continue
-                t1 = t0 + float(np.dot(d, hd)) * ln; a, b = sorted((t0, t1))
+                _hf = float(np.dot(d, hd)) * ln / 2; a, b = sorted((t0 - _hf, t0 + _hf))   # 돌기 pos 는 길이의 가운데(K3) → 구간은 pos ± len/2
                 if min(b, hl) - max(a, -hl) > ov: pairs.add(frozenset((id(q), id(h))))
     return pairs, {id(q): q for q in allp}
 
@@ -256,10 +276,21 @@ def group_broken(A):
             try:   # ②
                 a, b = part[0], None
                 pa0, Ra0 = stepchecks.pose_at(A, a, k - 1); pa1, Ra1 = stepchecks.pose_at(A, a, k)
+                par0 = {}   # 이동 전(k-1번)에 아직 결합 안 된 부품 쌍은 이동에서 처음 만나는 것이라 자세가 달라져도 정상(그룹 = 이미 결합된 것)
+                def f0(x):
+                    while par0.setdefault(x, x) != x: par0[x] = par0[par0[x]]; x = par0[x]
+                    return x
+                try:
+                    for pr in _mate_pairs(A, k - 1)[0]:
+                        i, j = list(pr); par0[f0(i)] = f0(j)
+                except Exception: par0 = None
                 for b in part[1:]:
+                    if par0 is not None and f0(id(a)) != f0(id(b)): continue
                     pb0, Rb0 = stepchecks.pose_at(A, b, k - 1); pb1, Rb1 = stepchecks.pose_at(A, b, k)
                     d0 = Ra0.T @ (pb0 - pa0); d1 = Ra1.T @ (pb1 - pa1); r0 = Ra0.T @ Rb0; r1 = Ra1.T @ Rb1
-                    if float(np.linalg.norm(d0 - d1)) > 0.5 or float(np.abs(r0 - r1).max()) > 0.01:
+                    rel = r0.T @ r1   # 경첩 회전: 결합한 채 한 축(판 법선 등)만 돌아 각도가 바뀐 것은 분리가 아니다(사용자 지시 2026-11-16, 21번 빨간 판이 모서리 리벳을 축으로 돎) — 상대 회전이 좌표축 하나를 중심으로 한 순수 회전이면 위치·방향 변화를 흐트러짐으로 세지 않는다
+                    hinge = float(np.abs(rel - np.eye(3)).max()) > 0.01 and any(abs(float(rel[i][i]) - 1.0) < 0.01 for i in range(3))
+                    if not hinge and (float(np.linalg.norm(d0 - d1)) > 0.5 or float(np.abs(r0 - r1).max()) > 0.01):
                         out.append((k, [key(a), key(b)], "그룹 '%s'의 %s·%s 가 %d번 이동 뒤 서로의 자리·방향이 달라져 결합이 풀림" % (g, a.n, b.n, k)))
             except Exception: pass
         # ④ 그룹은 새 결합으로 커질 뿐 풀리지 않는다(사용자 지시 2026-11-14: 또 결합이 되면 그룹이 수정) — 이동 번호부터 끝 번호까지 매 번호,
@@ -285,11 +316,80 @@ def group_broken(A):
                 break   # 한 번 풀리면 뒤 번호는 같은 경고를 반복하지 않는다
     return out
 
+def shaft_gaps(A, k, lo=0.3, hi=5.0, lat=1.5):
+    """축(T축·축)에 꿴 부품끼리는 면이 맞닿는다(K0 '면과 면은 자석처럼 붙는다') — k번 화면(결합된 자리)에서 덜 끼운 틈을 찾는다. [(부품 키 목록, 설명)]
+    ① 축에만 달린 부품(다른 돌기·구멍 결합이 없는 기어·부시·바퀴·판)이 축 위 양쪽 이웃 어느 것과도 맞닿지 않고 가까운 쪽이 lo 넘게 hi 미만으로 떠 있다(그 사이를 다른 부품이 채우면 정상 — 사이에 낀 판·다른 T축 머리).
+       블록·리벳으로 따로 붙은 부품은 그 결합이 자리를 정하므로 이웃과 떨어져 있어도 보지 않는다
+    ② T축 머리가 처음 만나는 기어·프레임 면에서 lo 넘게 떠 있다(머리 안쪽 면이 면에 닿거나, 홀 테두리에 들어가 밑동이 면과 같으면 정상)
+    hi(5mm = 프레임 한 장 두께)는 '일부러 띄운 칸'과 '덜 끼움'을 가르는 임의값이다. 셋 중 하나가 k번에 새로 놓였거나 한쪽만 옮겨져 새로 만난 것만 본다. 몸통 겹침은 check_local.js 가 따로 잰다."""
+    import stepchecks, obb
+    from asmlib import head_thickness
+    dims = stepchecks._dims(); out = []
+    hide = A.steps[k - 1].kw.get("hideMade") or {}
+    allp = [q for j in range(1, k + 1) if str(j) not in hide for q in A.steps[j - 1].parts if q.conn and q.n in dims and not _hidden_at(q, k)]
+    pose = {id(q): stepchecks.pose_at(A, q, k) for q in allp}
+    def moved(q):   # k번에 앞 번호와 다른 자리로 옮겨졌나
+        if q.step.index == k: return False
+        p0, R0 = stepchecks.pose_at(A, q, k - 1); p1, R1 = pose[id(q)]
+        return float(np.abs(np.array(p0, float) - p1).max()) > 0.05 or float(np.abs(np.array(R0, float) - R1).max()) > 1e-3
+    def fresh(*qs): return any(q.step.index == k for q in qs) or (any(moved(q) for q in qs) and not all(moved(q) for q in qs))   # 새로 놓였거나, 한쪽만 옮겨져 새로 만난 짝(묶음째 같이 옮긴 것은 앞 번호에서 이미 봤다)
+    key = lambda q: "%d:%d" % (q.step.index, A.steps[q.step.index - 1].parts.index(q))
+    pairs, byid = _mate_pairs(A, k); done = set()
+    def box(q): p, R = pose[id(q)]; return obb.corners(p, R, np.array(dims[q.n], float) / 2)
+    for s in allp:
+        if s.n not in ("T축", "축") or not s.conn.get("pegs"): continue
+        g = s.conn["pegs"][0]; ln = float(g.get("len") or 0); p, R = pose[id(s)]
+        c = p + R @ np.array(g["pos"], float); d = R @ np.array(g["dir"], float); d = d / (np.linalg.norm(d) or 1.0)
+        u = np.cross(d, [1.0, 0, 0] if abs(d[0]) < 0.9 else [0, 1.0, 0]); u = u / np.linalg.norm(u); v = np.cross(d, u); c0 = float(c @ d)
+        stack = []
+        for o in allp:
+            if o is s or o.n in ("T축", "축", "리벳") or "브라켓" in o.n: continue   # 브라켓은 L 자라 상자로 면을 못 잰다(rivet_gaps 와 같다)
+            op, oR = pose[id(o)]; hit = False
+            for h in o.conn.get("holes", []):
+                hd = oR @ np.array(h["dir"], float)
+                if abs(abs(float(hd @ d)) - 1) > 0.02: continue
+                w = op + oR @ np.array(h["pos"], float) - c
+                if float(np.linalg.norm(w - float(w @ d) * d)) <= lat: hit = True; break
+            if not hit: continue
+            a, b = obb.span(box(o), d); a -= c0; b -= c0
+            if b < -ln / 2 - hi or a > ln / 2 + 0.5: continue   # 축이 닿지 않는 먼 부품
+            stack.append((a, b, o))
+        stack.sort(key=lambda x: x[0])
+        def filled(o1, o2, lo_, hi_):   # 두 면 사이(lo_~hi_, 축 방향)를 다른 부품이 채우고 있나 — 축 방향 구간을 덮고, 옆으로는 두 부품 모두와 겹친다
+            def rect(q): cs = box(q); return obb.span(cs, u), obb.span(cs, v)
+            def ov(r1, r2): return all(min(x[1], y[1]) - max(x[0], y[0]) > 0.5 for x, y in zip(r1, r2))
+            r1, r2 = rect(o1), rect(o2)
+            for q in allp:
+                if q is o1 or q is o2 or q is s: continue
+                qa, qb = obb.span(box(q), d)
+                if qa - c0 <= lo_ + lo and qb - c0 >= hi_ - lo and ov(rect(q), r1) and ov(rect(q), r2): return True
+            return False
+        for i_, (a1, b1, o1) in enumerate(stack):
+            if any(id(o1) in pr and not any(byid[j].n in ("T축", "축") for j in pr if j != id(o1) and j in byid) for pr in pairs): continue   # 축 말고 다른 결합이 있는 부품
+            nb = ([(a1 - stack[i_ - 1][1], stack[i_ - 1][2], stack[i_ - 1][1], a1)] if i_ else []) + ([(stack[i_ + 1][0] - b1, stack[i_ + 1][2], b1, stack[i_ + 1][0])] if i_ + 1 < len(stack) else [])
+            if not nb or any(x[0] <= lo for x in nb): continue   # 이웃이 없거나 한쪽이라도 맞닿음(겹침은 check_local.js 가 따로 잰다)
+            gp, o2, lo_, hi_ = min(nb, key=lambda x: x[0])
+            if gp >= hi or not fresh(o1, o2, s): continue
+            if all((x.extra or {}).get("copyOf") for x in (o1, o2)): continue   # 복사본(둘째 벌)은 원본 번호에서 본다
+            if filled(o1, o2, lo_, hi_): continue
+            if (id(o1), id(o2)) in done or (id(o2), id(o1)) in done: continue
+            done.add((id(o1), id(o2)))
+            out.append(([key(o1), key(o2), key(s)], "%s 에 꿴 %s↔%s 틈 %.1fmm — 면이 맞닿게 결합에서 계산해 놓는다(recv against·place_rest)" % (s.n, o1.n, o2.n, gp)))
+        ht = head_thickness(s.n)
+        if ht and stack and not (s.extra or {}).get("copyOf"):
+            a1, b1, o1 = next((x for x in stack if x[1] > -ln / 2 + ht), stack[0])   # 머리 쪽에서 처음 만나는 부품
+            if ("기어" in o1.n or "프레임" in o1.n) and fresh(s, o1):
+                off = a1 - (-ln / 2 + (0 if o1.n == "큰기어" else ht))   # 머리 안쪽 면 → 처음 만나는 면까지. 큰기어는 홀 테두리가 있어 머리가 테두리 안으로 들어가 바깥 면과 같아지므로(K0) 머리 바깥 끝 → 기어 면
+                if lo < off < hi: out.append(([key(s), key(o1)], "%s 머리가 %s 면에서 %.1fmm 떠 있음 — 끝까지 끼운다(attach 가 머리 자리를 계산)" % (s.n, o1.n, off)))
+    return out
+
 def collect(name):
     import asmlib, guidecheck
     A = _load(name); out = {}
-    def add(k, type_, keys, msg):
-        out.setdefault(str(k), []).append({"type": type_, "keys": sorted(set(keys)), "msg": msg[:120]})
+    try: LAST_TOOLPOSE.clear(); LAST_TOOLPOSE[name] = tool_pose(A)
+    except Exception as e_: print("violations: 도구-화면 대조용 자세를 못 만듦 —", str(e_)[:100], file=sys.stderr)
+    def add(k, type_, keys, msg, soft=False):   # soft: 단계 적용 중인 검사(자석 결합 — 손 배치·축 틈). 화면 칩에는 뜨고, ✓ 잠금·--write 는 <이름>_rules.json 의 "magnet": true 인 조립도만 막는다(build.py)
+        out.setdefault(str(k), []).append(dict({"type": type_, "keys": sorted(set(keys)), "msg": msg[:120]}, **({"soft": True} if soft else {})))
     fl = {}
     for k, nm, y, where, key in asmlib.floor_check(A, keys=True): fl.setdefault((k, where), []).append((nm, y, key))
     for (k, where), v in fl.items():
@@ -359,7 +459,9 @@ def collect(name):
                     if mv: m = max(mv, key=lambda q: int(q["at"])); pose = (m["p"], _al.euler_to_R(m["r"]))
                     sd = (pt.extra or {}).get("side")
                     if sd and k < int(sd.get("until") or 0): pose = (sd["p"], _al.euler_to_R(sd["r"]))   # 옆자리에서 따로 조립하는 번호(합쳐지는 번호 전)는 화면이 그리는 옆자리 자세로 잰다
-                    h = np.abs(np.array(pose[1], float)) @ (np.array(sz, float) / 2); c = np.array(pose[0], float)
+                    _xf = A.meta.get("xform"); _Rp = np.array(pose[1], float); c = np.array(pose[0], float)
+                    if _xf and k >= int(_xf["at"]): _Mx = np.array(_xf["m"], float); c = _Mx @ c + np.array(_xf["t"], float); _Rp = _Mx @ _Rp   # xform(세우기, 16번부터)은 화면이 그리는 서 있는 세계 좌표로 잰다 — 변환 전 좌표로 재면 20번 같은 창고 2 번호가 x +150 벗어난 것으로 오탐된다
+                    h = np.abs(_Rp) @ (np.array(sz, float) / 2)
                     lo = np.minimum(lo, [c[0] - h[0], c[2] - h[2]]); hi = np.maximum(hi, [c[0] + h[0], c[2] + h[2]])
                     if j == k: mine.append("%d:%d" % (j, i))
             if hi[0] < lo[0]: continue
@@ -377,6 +479,7 @@ def collect(name):
                     _ax = json.load(open(os.path.join(HERE, "refs", name, "%02d_axes.json" % k), encoding="utf-8")).get("fit") or {}; _cm = A.steps[k - 1].cam or ()
                     if _ax.get("roll") is not None and abs(float(_ax["roll"])) > 8: continue   # 롤이 커서(뷰어 카메라로 같은 그림이 안 나오는) 번호는 책과 비슷한 방위로 고른 눈 카메라를 인정한다(E11)
                     if _ax.get("theta") is not None and len(_cm) >= 2 and abs(float(_cm[0]) - float(_ax["theta"])) < 0.015 and abs(float(_cm[1]) - float(_ax["phi"])) < 0.015: continue
+                    if _ax.get("theta") is not None and len(_cm) >= 2 and abs(float(_cm[0]) - float(_ax["theta"])) < 0.015 and abs(float(_cm[1]) - (3.14159265 - float(_ax["phi"]))) < 0.015 and float(_cm[1]) <= 1.5708: continue   # 구멍이 한 평면이면 맞춘 해가 거울 둘(phi, π−phi)이다 — 바닥 아래(phi>π/2) 해는 쓰지 않으니 위쪽 거울 해도 맞춘 값으로 인정한다(kidknight 9번, 사용자 "바닥에서 보여주는 경우는 없다")
                 except Exception: pass
             if _cs != "fit" and _g.glob(os.path.join(HERE, "refs", name, "fits", "%02d_*.json" % k)):
                 add(k, "cam", [], "책 그림으로 맞춘 격자(fits)가 있는데 카메라가 짐작값이다 — axes_fit 결과 theta·phi 를 쓴다")
@@ -396,6 +499,17 @@ def collect(name):
             add(k, "hand", keys, "%s 연결점이 아닌 숫자를 씀(%s) — 부품 리스트의 구멍·돌기 연결점에서 계산해야 한다" % (m_.group(3), what))
     except Exception as e_:
         print("violations: 손값 점검을 못 붙임 —", str(e_)[:100], file=sys.stderr)
+    try:   # 자석 결합(사용자 지시 2026-11-16): 좌표를 직접 줘서 놓은 부품(place·Part 직접 생성·recv p= — 식으로 적어도 같다, 앵커 제외)은 ✋, 축에 꿴 부품끼리 덜 끼운 틈·T축 머리 뜸은 ↔
+        _how = {"place": "place(좌표)", "Part": "Part(...) 직접 생성", "recv p=": "recv 에 p="}
+        for k, i, q, how in asmlib.hand_placed(A):
+            if (q.extra or {}).get("copyOf"): continue
+            add(k, "hand", ["%d:%d" % (k, i)], "%s 자리를 좌표로 직접 줌(%s) — 결합(attach·recv·place_next·place_rest)에서 계산해 놓는다" % (q.n, _how[how]), soft=True)
+        for k in range(1, len(A.steps) + 1):
+            try: sg = shaft_gaps(A, k)
+            except Exception: continue   # 옛 형식 조립도는 자세를 못 구하면 건너뛴다
+            for keys, msg in sg: add(k, "gap", keys, msg, soft=True)
+    except Exception as e_:
+        print("violations: 자석 결합 점검을 못 붙임 —", str(e_)[:100], file=sys.stderr)
     try:   # 상시 감시로 옮긴 번호별 점검(사용자 지시 2026-11-09): 리벳 틈·볼트 머리/너트 돌출·부시 방향 — stepchecks 가 계산한 값을 그대로 화면 종류로 올린다(새 계산 없음). 볼트·너트 결합·메인보드는 조립도별 켜는 검사라 뺀다
         import stepchecks as sc
         for k in range(1, len(A.steps) + 1):
@@ -445,6 +559,7 @@ def write_entry(name, vd=None):
     vd = collect(name) if vd is None else vd; ef = os.path.join(os.path.dirname(asmpath.resolve(name + "_entry.js")), name + "_entry.js") if False else asmpath.resolve(name + "_entry.js")
     old = open(ef, encoding="utf-8").read()
     new = re.sub(r"      violations: .*\n", "", old)
+    if name in LAST_TOOLPOSE: new = re.sub(r"      toolPose: .*\n", "", new).replace("      steps: [", "      toolPose: %s,\n      steps: [" % json.dumps(LAST_TOOLPOSE[name], separators=(",", ":")), 1)   # 도구가 본 화면 자세(화면이 대조한다) — 번호 지문에는 안 들어간다
     if vd: new = new.replace("      steps: [", "      violations: %s,\n      steps: [" % json.dumps(vd, ensure_ascii=False), 1)
     if new != old: open(ef, "w", encoding="utf-8").write(new)
     return len(vd), sorted({v["type"] for l_ in vd.values() for v in l_}), new != old
@@ -459,5 +574,5 @@ if __name__ == "__main__":
         print("위반 표시 반영: %d번 (%s)" % (n_, ", ".join(ts_) or "없음"), "· 항목 파일 바뀜" if ch_ else "· 변화 없음"); print((r_.stdout or r_.stderr).strip()[-200:]); sys.exit(0)
     r = collect(sys.argv[1])
     for k in sorted(r, key=int):
-        for v in r[k]: print("%s번 %s %s 부품 %d개 — %s" % (k, v["type"], "", len(v["keys"]), v["msg"]))
+        for v in r[k]: print("%s번 %s %s 부품 %d개 — %s" % (k, v["type"], "(단계 적용)" if v.get("soft") else "", len(v["keys"]), v["msg"]))
     print("위반 번호 %d개" % len(r))

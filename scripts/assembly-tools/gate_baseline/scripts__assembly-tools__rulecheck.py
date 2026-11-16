@@ -10,7 +10,7 @@
 # 예외 승인: <이름>_approvals.json 에 {"<번호>": {"fits": "이유", "camera": "이유", "사용자 말씀": "사용자가 한 말 그대로"}} — "사용자 말씀" 이 없으면 인정하지 않는다. Claude 는 이 파일에 적지 않는다.
 # 모든 조립도를 같은 기준으로 ❌ 로 막는다(옛 조립도 구분 삭제 2026-11-04).
 import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
-import json, os, re, sys
+import json, os, re, sys, glob
 sys.stdout.reconfigure(encoding="utf-8")
 here = os.path.dirname(os.path.abspath(__file__))
 
@@ -21,6 +21,17 @@ FIX = {
     "증명": "python overlay_check.py <이름> <번호> 로 모델을 책 그림 위에 같은 카메라로 겹쳐 NN_3.jpg 를 만들고(점 오차 px), 부품 상자가 책 부품 위에 올라갔는지 눈으로 본 뒤 읽기 표 판단과정에 한 줄 적고 DB 에 올린다.",
     "읽기": "<이름>_read.json 의 그 번호 면·링·부품을 책에서 읽은 값으로 채운다.",
 }
+
+# 필수 산출물(D14) — 번호를 끝내려면 모두 ✅(또는 사유 있는 ⚠)여야 하는 항목. number_start(앞 번호 게이트)·record_check(증거 받기 전)·build(--write 게이트·끝 요약)·quick_obs 가 이 정의 하나만 쓴다.
+ARTIFACTS = ("격자", "양쪽 홀라인", "홀라인 그림", "링 대조", "카메라", "읽기 표", "그림DB")   # 증거·점검 칩은 산출물이 아니라 산출물 위에서 남기는 확인이라 뺀다
+
+def is_artifact(item):
+    return any(item == a or item.startswith(a + " ") for a in ARTIFACTS)   # "격자 08_B.json" 처럼 뒤에 파일 이름이 붙은 항목도 포함
+
+def missing_artifacts(name, k, res=None):
+    """번호 k 의 빠진 필수 산출물 [(항목, 이유)] — ❌ 인 것만(⚠ 는 사유가 적힌 미달이라 빠진 것이 아니다)."""
+    res = res if res is not None else check(name, only=[k])[0]
+    return [(t, why) for s, t, why in res.get(k, []) if s == "❌" and is_artifact(t)]
 
 def first_bad(name):
     """규칙 미달(❌)이 있는 가장 앞 번호와 항목 목록 — number_start 가 \"먼저 해결할 일\"로 보여 준다. 없으면 None."""
@@ -50,6 +61,7 @@ def check(name, only=None):
     approvals = load(os.path.join(here, name + "_approvals.json"), {})
     evid = load(os.path.join(here, name + "_evidence.json"), {})
     read = load(os.path.join(here, name + "_read.json"), {})
+    verif = load(os.path.join(here, name + "_verify.json"), {})   # 왼쪽 점검 칩 기록(verify_step.py, record_check.py 가 자동으로 돌린다)
     try:
         import stepfp; fp = stepfp.fp; same_ev = lambda e, st: stepfp.same(e, st, asm)
     except Exception: fp = lambda st: None; same_ev = lambda e, st: False
@@ -57,14 +69,19 @@ def check(name, only=None):
     try:
         import userdone, re as _re
         src = open(os.path.join(here, name + ".py"), encoding="utf-8").read()
-        m = _re.search(r'Asm\("([^"]+)"', src); done = set(userdone.user_done(m.group(1))) if m else set()
+        m = _re.search(r'''Asm\(\s*["']([^"']+)["']''', src); done = set(userdone.user_done(m.group(1))) if m else set()
     except (SystemExit, Exception): pass
     R = os.path.join(here, "refs", name); out = {}
+    _imgidx = {}   # 번호 → 그림 목록 idx 집합(refs/<이름>/index.json) — 홀라인 그림(1·2번) 확인용
+    try:
+        for _r in load(os.path.join(R, "index.json"), []): _imgidx.setdefault(int(_r["step"]), set()).add(int(_r["idx"]))
+    except Exception: pass
     bad = "❌" if strict else "⚠"
     for k, st in enumerate(asm, 1):
         if only and k not in only: continue
         parts = st.get("parts") or []
-        if st.get("noPart") or not (parts or st.get("moveMade")): continue
+        _worked = bool(st.get("madeNoPart")) and (str(k) in evid or any(re.match(r"%02d_[A-Za-z0-9]+\.json$" % k, x) for x in (os.listdir(os.path.join(R, "fits")) if os.path.isdir(os.path.join(R, "fits")) else [])))   # 합치는 번호(새 부품 없음)도 작업을 시작했으면(격자·증거 있음) 같은 점검 대상 — 안 시작한 번호는 새로 막지 않는다(2026-11-09 3륜바이크 4·7번 증거 ❌ 가 verify_step 에서 안 풀림)
+        if st.get("noPart") or not (parts or st.get("moveMade") or _worked): continue
         items = []   # (기호, 항목, 이유)
         ap = approvals.get(str(k), {}) if isinstance(approvals.get(str(k), {}), dict) else {}
         if len(str(ap.get("사용자 말씀", "")).strip()) < 5: ap = {}   # 사용자 말씀(인용) 없는 승인은 인정하지 않는다
@@ -89,7 +106,9 @@ def check(name, only=None):
                 if fj.get("tool") == "infer3d":   # 판이 없는 번호(블록·막대만 있는 번호)의 격자(2026-10-31 사용자 "문제가 해결 안 되게 만든 규칙은 바꿔라"): 격자를 만들 판이 없어 mkfit3d.py 가 모델에서 3D 가 확정된 점(돌기 끝·구멍·리벳 끝)을 책 픽셀과 짝지어 PnP 로 푼다. holefit 가 아니라는 이유로 막던 것을 infer 앵커와 같은 기준으로 인정한다(3D 점 ≥6·평균 ≤2.5·최대 ≤4.5px) — 통과해도 사용자 확인 권장 ⚠.
                     n3 = len(fj.get("xyz3d") or []); mean = fj.get("err_px"); mx = fj.get("max_err_px")
                     good = (n3 >= 6 and mean is not None and mean <= 2.5 and mx is not None and mx <= 4.5)
-                    why = ("3D 점 PnP 격자(mkfit3d.py): 3D 확정 점 %d개 평균 %s·최대 %s px — 사용자 확인 권장" % (n3, mean, mx)) if good else ("3D 점 PnP 격자 근거 부족(3D 점 %d개·평균 %s·최대 %s px — 점 ≥6·평균 ≤2.5·최대 ≤4.5 필요)" % (n3, mean, mx))
+                    soft = (not good) and (not needs_grid) and n3 >= 4 and mean is not None and mx is not None   # 판(프레임)이 없는 번호는 같은 평면에서 잴 수 있는 점이 4~5개뿐일 수 있다 — ❌ 가 아니라 ⚠(화면 비교로 확인, 사용자 지시 2026-11-08)
+                    if soft: good = True
+                    why = ("3D 점 PnP 격자(mkfit3d.py): 3D 확정 점 %d개 평균 %s·최대 %s px — 사용자 확인 권장%s" % (n3, mean, mx, "(판 없는 번호라 점 %d개뿐 — 화면 비교로 확인)" % n3 if soft else "")) if good else ("3D 점 PnP 격자 근거 부족(3D 점 %d개·평균 %s·최대 %s px — 점 ≥6·평균 ≤2.5·최대 ≤4.5 필요)" % (n3, mean, mx))
                     items.append(("⚠" if good else bad, "격자 " + fn, why)); continue
                 if fj.get("tool") == "line-fit":   # 한 줄 부품(1×N 막대) 격자(2026-10-31 사용자 "한 줄 부품이 많은데 통과 못 하게 만든 규칙부터 잘못"): holefit 는 한 줄이면 호모그래피를 못 구한다 → line_fit.py 가 같은 번호 판 격자의 카메라로 막대 위치를 풀어 만든다. 기준은 infer 앵커와 같은 값(읽은 구멍 ≥6·평균 ≤2.5·최대 ≤4.5px·기준 격자 ≤2.5px) — 통과해도 사용자 확인 권장 ⚠.
                     ev = fj.get("evidence") or {}; mean = fj.get("err_px"); mx = fj.get("max_err_px")
@@ -134,7 +153,8 @@ def check(name, only=None):
                 items.append(("✅" if _sil >= 0.85 else bad, "카메라", "실루엣 겹침 IoU %.3f(기준 ≥0.85, 자동 — 점을 읽지 않음)" % _sil))
             elif guess or (e is not None and e > 2.0):
                 why = "카메라 값이 추정이거나 점이 4개 미만(점 %s, 오차 %s)" % (pts, e) if guess else "카메라 맞춘 오차 %.2fpx > 2.0px(축 계산 기준)" % e
-                items.append(("⚠", "카메라", "승인됨(사용자): " + str(ap["camera"]) + " — " + why) if ap.get("camera") else (bad, "카메라", why))
+                if not guess and pts >= 4: items.append(("⚠", "카메라", why + " — 사진 구도 맞추기(규칙 E11, 사용자 지시 2026-11-11): px 오차로 막지 않는다. 구도만 비슷하면 되고 화면 비교(record_check 증거)로 확인"))
+                else: items.append(("⚠", "카메라", "승인됨(사용자): " + str(ap["camera"]) + " — " + why) if ap.get("camera") else (bad, "카메라", why))
             else: items.append(("✅", "카메라", "오차 %.2fpx, 점 %d개" % (e, pts)))
         # E 증거 ───────────────
         ev = evid.get(str(k))
@@ -159,10 +179,26 @@ def check(name, only=None):
         except Exception as _e: items.append(("⚠", "화살표 끝점", "점검 실패: %s" % _e))
         r = read.get(str(k), {}); miss = [f for f in ("면", "링", "부품") if not str(r.get(f, "")).strip()]
         items.append(("✅", "읽기 표", "채워짐") if not miss else (bad, "읽기 표", "빈 칸: " + ", ".join(miss)))
+        if rules.get("holeline_img") and fs:   # D14 홀라인 그림 — 격자(fits)가 있으면 격자·축선 그림(1·2번, refs_rect)을 만들어 DB 에 올려야 끝난 것이다(2026-11-13 배틀로봇 13~22번이 이 그림 없이 ✅ 로 보고됨)
+            _need = [i for i in (1, 2) if i not in _imgidx.get(k, set())]
+            items.append(("✅", "홀라인 그림", "격자·축선 그림 1·2번 있음") if not _need else (bad, "홀라인 그림", "격자(fits)는 있는데 격자·축선 그림 %s번이 없음 — python refs_rect.py %s %d 로 만들고 DB 에 올린다(D14)" % ("·".join(map(str, _need)), name, k)))
         if rules.get("img_db"):   # I 그림 DB — 만든 그림은 만든 자리에서 올린다(큐보 부품결합규칙.md I1). 점검이 실패하면 ✅ 로 두지 않는다.
             if _dbmiss is None: items.append(("⚠", "그림DB", "DB 그림 비교를 못 했다(dbimgcheck 실패) — python dbimgcheck.py %s 로 직접 본다" % name))
             elif k in _dbmiss: items.append((bad, "그림DB", "로컬 그림이 DB 에 없음: %s — 올리고(viewer_snippets.md 3) 화면을 새로 불러와 🖼 장수를 확인한다" % ", ".join(sorted(_dbmiss[k]))))
             else: items.append(("✅", "그림DB", "로컬 그림이 모두 DB 에 있음"))
+        if rules.get("ring_cells") and glob.glob(os.path.join(R, "fits", "%02d_*.json" % k)):   # 책 링 ↔ 칸·줄 대조(cellmap.py, 사용자 지시 2026-11-10): 격자는 카메라만 풀려는 것이 아니라 링이 몇 칸·몇 줄 구멍인지 정해 모델의 결합 구멍과 맞추려는 것이다(D2·D4·D8)
+            items.append(("✅", "링 대조", "책 링↔칸·줄 대조 그림 있음(NN_4)") if os.path.exists(os.path.join(R, "%02d_4.jpg" % k)) else (bad, "링 대조", "책 링↔칸·줄 대조 그림(NN_4.jpg)이 없음 — python cellmap.py %s %d 로 만들어 읽기 표 '링'·모델 결합 구멍과 맞춘다(record_check.py 가 자동으로 돌린다)" % (name, k)))
+        if rules.get("both_holelines") and k >= int(rules.get("both_holelines_from", 1)) and glob.glob(os.path.join(R, "fits", "%02d_*.json" % k)):   # 양쪽 홀라인(규칙 0번 체크리스트 3, D2, 사용자 지시 2026-11-10): 받는 쪽·끼우는 쪽 구멍 격자를 모두 만든다 — 한쪽뿐이면 ❌, 못 만든 이유를 판단과정에 "⚠ 양쪽" 으로 적으면 ⚠
+            _nf = len(glob.glob(os.path.join(R, "fits", "%02d_*.json" % k)))
+            _why = str((read.get(str(k)) or {}).get("판단과정", ""))
+            if _nf >= 2: items.append(("✅", "양쪽 홀라인", "격자 %d개" % _nf))
+            elif "⚠ 양쪽" in _why: items.append(("⚠", "양쪽 홀라인", "격자 1개뿐 — 판단과정에 사유 있음"))
+            else: items.append((bad, "양쪽 홀라인", "격자가 1개뿐 — 받는 쪽과 끼우는 쪽 둘 다 crop_ticks→holefit 로 만든다(D2). 가려져 못 만들면 시도·수치를 읽기 표 판단과정에 '⚠ 양쪽 …' 으로 적는다"))
+        if rules.get("chips_verify"):   # 왼쪽 점검 칩(규칙 가-0 다-3, 사용자 지시 2026-11-10) — 칩 기록이 없거나 번호를 고친 뒤 안 돌렸으면 ❌: 그 번호는 끝난 것이 아니다
+            _vr = verif.get(str(k)) if isinstance(verif, dict) else None
+            if not _vr: items.append((bad, "점검 칩", "verify_step 기록 없음(왼쪽 칩이 회색) — python verify_step.py %s %d (record_check.py 가 자동으로 돌린다)" % (name, k)))
+            elif fp(st) is not None and _vr.get("지문") != fp(st): items.append((bad, "점검 칩", "점검 뒤 번호 내용이 바뀜(낡음) — python verify_step.py %s %d 를 다시 돌린다" % (name, k)))
+            else: items.append(("✅" if _vr.get("상태") == "통과" else "⚠", "점검 칩", "상태 %s — %s" % (_vr.get("상태"), ", ".join("%s %s" % (a, {"ok": "✅", "warn": "⚠", "fail": "❌"}.get(b, b)) for a, b in (_vr.get("항목") or {}).items() if b != "ok") or "전부 ✅")))
         if rules.get("overlay_proof"):   # P 증명 — 책 그림 위 겹침 그림(NN_3.jpg)
             items.append(("✅", "증명", "겹침 그림 있음(NN_3.jpg)") if os.path.exists(os.path.join(R, "%02d_3.jpg" % k)) else (bad, "증명", "책 그림 위 겹침 그림(NN_3.jpg)이 없음 — overlay_check.py 로 만든다"))
         if k in done:   # 사용자가 화면에서 직접 ✓ 한 번호는 사용자 승인으로 본다(❌ → ⚠)
@@ -185,6 +221,15 @@ def main():
                 print("       %s %s — %s" % (s, t, why))
                 if s == "❌": print("         → 해결: %s" % FIX.get(t.split()[0], "규칙 문서(05_조립.md)를 읽고 그 항목을 규칙대로 한다"))
     print("합계: ❌ %d번 / ⚠ %d번 / ✅ %d번" % (nb, sum(1 for it in res.values() if not any(s == "❌" for s, _, _ in it) and any(s == "⚠" for s, _, _ in it)), sum(1 for it in res.values() if all(s == "✅" for s, _, _ in it))))
+    try:   # 조립 보기 화면이 번호별 ⚠ 를 보이도록 _rule_status.json 에 적는다(사용자 지시 2026-11-14) — 전체 점검일 때만, 실패해도 본 작업을 막지 않는다
+        if only is None:
+            import rule_status, json as _j
+            _all = {}
+            try: _all = (_j.load(open(rule_status.FILE, encoding="utf-8")).get("rulecheck") or {}).get("assemblies", {})
+            except Exception: pass
+            _all[name] = {"ts": int(__import__("time").time() * 1000), "steps": {str(k): [[s, t, w] for s, t, w in it if s != "✅"] for k, it in res.items() if any(s != "✅" for s, _, _ in it)}}
+            rule_status.put("rulecheck", {"assemblies": _all})
+    except Exception: pass
     sys.exit(1 if nb else 0)
 
 if __name__ == "__main__":

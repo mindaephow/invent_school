@@ -35,7 +35,14 @@ def _pose(pt, k):   # k번에서의 자세: 옆자리에서 만드는 중이면 
     return (np.array(b[0], float), np.array(b[1], float)) if b else (np.array(pt.p, float), np.array(pt.R, float))
 
 def pose_at(A, q, k):
-    """k번 시점의 부품 q 자세 — 앞 번호 부품을 k번 이전에 옮긴 것(moveMade·move)만 반영하고, k번 뒤에 옮긴 것은 되돌려 읽는다."""
+    """k번 시점의 부품 q 자세 — 앞 번호 부품을 k번 이전에 옮긴 것(moveMade·move)만 반영하고, k번 뒤에 옮긴 것은 되돌려 읽는다.
+    lift({from, at, by}): 뷰어(design-assembly.js)와 같게 from ≤ k < at 인 동안은 그 자세에 by 를 더한 자리에 보인다(롤링봇 팔: 29번 합치기 전까지 올려 둔 자리)."""
+    p, R = _pose_moved(A, q, k)
+    lf = q.extra.get("lift")
+    if lf and int(lf.get("from") or 0) <= k < int(lf.get("at")): p = np.array(p, float) + np.array(lf.get("by") or [0, 0, 0], float)
+    return p, R
+
+def _pose_moved(A, q, k):
     from asmlib import euler_to_R
     key = "%d:%d" % (q.step.index, q.step.parts.index(q))
     for j in range(k, 0, -1):
@@ -144,8 +151,8 @@ def rivet_gaps(A, k):
         for j in range(k, 0, -1):
             e = (A.steps[j - 1].kw.get("moveMade") or {}).get(key)
             if e: return np.array(e["p"], float), np.array(euler_to_R(e["r"]), float)
-        return _pose(q, k)
-    pool = [(q, *pose_k(q)) for k2, st2 in enumerate(A.steps, 1) if k2 <= k and str(k2) not in hide for q in st2.parts if q.n in dims and q.n != "리벳"]
+        return pose_at(A, q, k)   # 옛 방식 extra["move"](그 번호부터 옮긴 자세)도 반영
+    pool = [(q, *pose_k(q)) for k2, st2 in enumerate(A.steps, 1) if k2 <= k and str(k2) not in hide for q in st2.parts if q.n in dims and q.n != "리벳" and k not in [int(x) for x in (q.extra.get("hideAt") or [])]]   # hideAt 으로 숨긴(다른 창고에 보관 중인) 부품은 호스트가 아니다
     def host(pt, skip=None):   # 점이 든 부품 — 부품 자기 좌표 상자(obb)로 재다(기울어진 부품도 맞게, 2026-11-01)
         for q, p, R in pool:
             if q is skip: continue
@@ -187,7 +194,7 @@ def mainboard_dir(A, k, txt):
 
 def apply(A, name):
     here = os.path.dirname(os.path.abspath(__file__))
-    lst = json.load(open(os.path.join(here, name + "_list.json"), encoding="utf-8")) if os.path.exists(os.path.join(here, name + "_list.json")) else {}
+    import asmpath as _apl; lst = _apl.list_counts(name)   # LIST + 관리자 확정 수량(qtyOverride)
     lst.pop("리모컨", None)   # 리모컨은 조립도에 넣지 않는다(사용자 지시 2026-10-14) — LIST 대조에서 뺀다
     rd = json.load(open(os.path.join(here, name + "_read.json"), encoding="utf-8")) if os.path.exists(os.path.join(here, name + "_read.json")) else {}
     rl = json.load(open(os.path.join(here, name + "_rules.json"), encoding="utf-8")) if os.path.exists(os.path.join(here, name + "_rules.json")) else {}
@@ -224,6 +231,13 @@ def apply(A, name):
         _ori = str(r.get("부품방향", "")).strip()   # 부품 방향·제자리 판정(관리자 지시 2026-10-09): 새 부품의 위·바깥 면, 칸1 끝, 줄 방향, 부품 사이 좌우 관계, 그룹이 들어오는 방향·앉는 자세를 책 격자에서 읽어 적는다
         _oex = k in rl.get("orient_exempt", [])   # 면제 번호는 새 순서로 다시 점검할 때까지 통과로 친다(rules 의 orient_exempt 에서 지우면 점검 대상)
         items.append((bool(rl.get("orient_check")) and not _oex, (len(_ori) >= 20 and not _ori.startswith("미")) or _oex or not rl.get("orient_check"), "부품 방향·제자리 판정(읽기 표 '부품방향')" + (" — 면제(재점검 대기)" if _oex and rl.get("orient_check") else "")))
+        if rl.get("holeid_check"):   # 연계 규칙(사용자 지시 2026-11-08, 규칙 D2): 구멍을 받는 쪽으로 끼우는 부품(막대·판)은 읽기 표 '링' 칸에 그 부품 구멍 번호(h2·h4…)를 적어야 한다 — 막대 링을 "양 끝 구멍"으로 짐작해 한 구멍씩 어긋난 사고(로봇팽이 10번) 방지
+            _hid = sorted({h for p in st.parts for h in getattr(p, "_hole_ids", [])}, key=lambda h: int(h[1:]) if h[1:].isdigit() else 0)
+            if _hid:
+                import re as _re
+                _have = set(_re.findall(r"h\d+", str(r.get("링", ""))))
+                _miss = [h for h in _hid if h not in _have]
+                items.append((True, not _miss, "끼우는 부품 구멍 번호를 읽기 표 '링' 칸에 적음 (%s)" % ("·".join(_hid) if not _miss else "빠짐: " + "·".join(_miss))))
         if any(p.n == "리벳" for p in st.parts):   # 리벳으로 프레임과 프레임을 이으면 딱 붙는다(기본 규칙, 사용자 2026-10-24): 틈 0.3 초과(떠 있음)·겹침 1.0 초과면 막는다
             _rg = rivet_gaps(A, k)
             items.append((k not in _done, not _rg, "리벳 결합 프레임이 딱 붙음(틈 0)" + ("" if not _rg else " — 틈 %s" % ", ".join("%s(%s↔%s) %.1fmm" % x for x in _rg[:3]))))
@@ -249,7 +263,7 @@ def apply(A, name):
         for _txt, _okc in _eye:
             items.append((not _cur, _ud and _okc, _txt + (" (사용자 ✓ 완료)" if k in _done else (" (비교 증거 있음)" if _evok else ""))))
         # 단계별 점검(사용자 지시 2026-11-02 "순서가 바뀌었으면 점검도 바뀌어야"): 읽기 표 '단계' 가 N 이면 N 단계 이하에 속한 점검만 필수이고 그 뒤 단계 점검은 표시만 한다. 9 에 닿아야 다음 번호가 시작된다(number_start).
-        _STG = (("책 그림 격자", 3), ("책 그림 원본", 3), ("카메라 방향 파악", 4), ("읽기 표(면", 5), ("부품 방향", 6), ("읽기 표의 부품", 7), ("쓴 부품 합계", 7), ("리벳 결합", 7), ("볼트·너트", 7), ("메인보드", 7), ("부시 방향", 7), ("앞·뒤 번호", 8), ("화면 확대", 8), ("책 그림과 나란히", 8), ("카메라 책과 대조", 8), ("카메라가 짐작", 8))
+        _STG = (("책 그림 격자", 3), ("책 그림 원본", 3), ("카메라 방향 파악", 4), ("읽기 표(면", 5), ("끼우는 부품 구멍 번호", 5), ("부품 방향", 6), ("읽기 표의 부품", 7), ("쓴 부품 합계", 7), ("리벳 결합", 7), ("볼트·너트", 7), ("메인보드", 7), ("부시 방향", 7), ("앞·뒤 번호", 8), ("화면 확대", 8), ("책 그림과 나란히", 8), ("카메라 책과 대조", 8), ("카메라가 짐작", 8))
         _at = lambda t: next((v for pre, v in _STG if t.startswith(pre)), 9)
         items = [(need and _stg >= _at(txt), ok, txt + ("" if _stg >= _at(txt) else " — %d단계에서" % _at(txt))) for need, ok, txt in items]
         rows[k] = items

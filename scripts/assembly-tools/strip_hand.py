@@ -5,6 +5,7 @@
 # 지우는 것(handcheck.py 가 세는 것과 같다)
 #   키워드: p=(숫자…) · marks/settleMarks/faceMarks/holeMarks=[[숫자…]] · side={…} · shift=(숫자…)(move_made 류)  → 그 인자를 뺀다(도구가 결합·구멍에서 다시 계산한다)
 #   위치:   place(부품, 자세, (x, y, z)) · _abs_place(단계, 부품, 자세, (…숫자 포함…))  → 위치를 (0, 0, 0) 미배치 자리로 되돌린다(새 창고 바닥 부품은 원래 원점이라 그대로 둔다)
+#   식·Part: 위 자리에 숫자가 섞인 식을 직접 적은 것((_x0 + 60.0, YC, ZL - 8.0) 등)과 Part(부품, 자세, 좌표) 직접 생성의 좌표도 같은 방법으로 지운다(handcheck._expr 와 같은 기준 — 함수 호출로 계산한 값은 건드리지 않는다)
 #           → 부품이 겹쳐 보이는 것이 정상이다. 번호를 만들 때 그 부품을 attach/recv 규칙 좌표로 다시 놓는다(위반 표시가 어디를 놓아야 하는지 알려 준다).
 # 안전장치: 지운 결과가 파이썬 문법으로 읽히지 않으면 쓰지 않는다. 옆자리 작업 위치(to_side)는 "어디에 둘지 정하는 값"이라 건드리지 않는다.
 import asmpath  # 조립도 파일 자리 연결
@@ -27,9 +28,13 @@ def plan(src):
         if isinstance(node.func, ast.Attribute) and node.func.attr == "place" and len(node.args) >= 3 and H._lit(node.args[2]):
             xyz = [x.value if isinstance(x, ast.Constant) else (-x.operand.value if isinstance(x, ast.UnaryOp) else None) for x in getattr(node.args[2], "elts", [])]
             if not (len(xyz) == 3 and xyz[0] == 0 and xyz[2] == 0): s, e = span(node.args[2]); edits.append((s, e, "(0, 0, 0)", "place 위치 → 원점", node.lineno))   # 원점(x=0·z=0)은 규칙(A4)이라 둔다
+        if isinstance(node.func, ast.Attribute) and node.func.attr == "place" and len(node.args) >= 3 and H._expr(node.args[2]): s, e = span(node.args[2]); edits.append((s, e, "(0, 0, 0)", "place 식 위치 → 원점", node.lineno))
+        if isinstance(node.func, ast.Name) and node.func.id == "Part" and len(node.args) >= 3 and (H._expr(node.args[2]) or H._lit(node.args[2])):
+            xyz = [x.value if isinstance(x, ast.Constant) else (-x.operand.value if isinstance(x, ast.UnaryOp) and isinstance(x.operand, ast.Constant) else None) for x in getattr(node.args[2], "elts", [])]
+            if not (len(xyz) == 3 and xyz[0] == 0 and xyz[2] == 0): s, e = span(node.args[2]); edits.append((s, e, "(0, 0, 0)", "Part 직접 생성 위치 → 원점", node.lineno))
         for kw in node.keywords:
             f = node.func.attr if isinstance(node.func, ast.Attribute) else ""
-            hit = (kw.arg == "p" and H._lit(kw.value)) or (kw.arg in ("marks", "settleMarks", "faceMarks", "holeMarks") and H._lit(kw.value)) or (kw.arg == "side" and isinstance(kw.value, ast.Dict)) or (kw.arg == "shift" and H._lit(kw.value) and f in ("move_made", "move_group", "move_built"))
+            hit = (kw.arg == "p" and (H._lit(kw.value) or H._expr(kw.value))) or (kw.arg in H._MARKS and (H._lit(kw.value) or H._expr(kw.value))) or (kw.arg == "side" and isinstance(kw.value, ast.Dict)) or (kw.arg == "shift" and H._lit(kw.value) and f in ("move_made", "move_group", "move_built"))
             if hit:
                 s = _off(lines, kw.value.lineno, kw.value.col_offset); e = _off(lines, kw.value.end_lineno, kw.value.end_col_offset)
                 k0 = src.rfind(kw.arg, 0, s); s = k0   # 'p=' 앞까지(키워드 이름 시작)

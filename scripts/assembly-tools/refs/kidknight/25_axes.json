@@ -1,0 +1,1 @@
+{"global": {"X": [55.0, -36.1], "Y": [4.1, -55.0], "Z": [55.0, 48.5]}, "fit": {"from": "25_plate.json", "err_px": 0.17, "points": 27, "theta": -0.75, "phi": 0.74, "cols": "+X", "rows": "+Z", "fov": 30, "cx": 100.0, "cy": 938.5, "roll": -7.6, "mirror_other": {"theta": 2.6, "phi": 0.64, "err_px": 16.28}}, "rotate_to": "X"}

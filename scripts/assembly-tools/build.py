@@ -389,7 +389,12 @@ except Exception as _e_:
     print("규칙 위반 표시를 만들지 못함:", str(_e_)[:120])
 # ✓ 완료(잠금)한 번호에 규칙 위반이 있으면 사용자가 원해도 막는다(사용자 지시 2026-11-08: 위반이 있는 조립도는 잠글 수 없다). ✓ 를 풀고 위반을 고쳐야 한다.
 try:
-    _lockbad = {int(_k): len(_v) for _k, _v in _vd.items() if int(_k) in _USER_DONE}
+    _MAGNET = bool(rules.get("magnet"))   # 자석 결합 단계 적용(2026-11-16): 손 배치 ✋·축 틈 ↔(violations 의 soft 항목)은 화면 칩에만 뜨고, "magnet": true 인 조립도(새 조립도 기본)만 막는다 — 옛 조립도 빌드를 깨지 않으려고
+    _lockbad = {int(_k): _n for _k, _n in ((_k, len([_x for _x in _v if _MAGNET or not _x.get("soft")])) for _k, _v in _vd.items() if int(_k) in _USER_DONE) if _n}
+    _soft = {int(_k): len([_x for _x in _v if _x.get("soft")]) for _k, _v in _vd.items() if int(_k) <= max(_upto, _UP0) and any(_x.get("soft") for _x in _v)}
+    if _soft: print("%s 자석 결합: 좌표를 직접 준 부품·축에 꿴 부품 틈 %d건(번호: 건수) %s%s" % ("❌" if _MAGNET else "⚠", sum(_soft.values()), dict(sorted(_soft.items())), "" if _MAGNET else " (참고 — <이름>_rules.json 에 \"magnet\": true 를 넣으면 이 조립도는 막는다)"))
+    if _soft and _MAGNET and write: sys.exit("❌ 좌표를 직접 준 부품·축 틈이 남아 --write 를 하지 않는다(번호: 건수) " + str(dict(sorted(_soft.items()))) + " — attach·recv·place_next·place_rest 로 결합에서 계산해 놓는다(C6 ②).")
+except SystemExit: raise
 except Exception as _e_:
     _lockbad = {}; print("완료 번호의 위반 검사를 못 했다:", str(_e_)[:100])
 if _lockbad:

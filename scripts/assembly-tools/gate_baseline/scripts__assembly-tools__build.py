@@ -2,11 +2,92 @@
 #   1) partlib 로 부품 연결점(conn.json·dims.json) 생성  2) 스크립트 실행(<이름>.py → <이름>_asm.json·<이름>_entry.js)
 #   3) check_local.js 의 모든 검사(단계별 정밀·겹침·검증 절차·LIST·안내 화살표) → 문제가 있으면 종료 코드 1
 #   4) --write 이면 문제 0건일 때만 public/design-assemblies.js 에 넣는다(emit.py)
+#   --write 없이 돌리면 검사만 한다 — 도는 동안 바뀐 파일(<이름>_asm.json·_entry.js·_rules.json·conn.json …)은 끝날 때 전부 처음 내용으로 되돌린다(C1: 쓰는 것은 --write 뿐).
 # 실수를 발견하면 lessons.py 의 LESSONS 에 규칙을 적고 가능하면 asmlib/검사로 옮긴다 — 이 스크립트가 마지막에 그 목록을 보여 준다.
 import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import re, subprocess, sys, os, json
+import atexit
+_exit_why = []   # 끝낸 이유(sys.exit 에 준 글·종료 코드) — 끝 요약이 "왜 멈췄나"를 한 줄로 다시 보여 준다
+_sys_exit = sys.exit
+def _exit(code=None):
+    _exit_why.append(code); _sys_exit(code)
+sys.exit = _exit
+_exc = []
+_hook0 = sys.excepthook
+def _hook(t_, v_, tb_):
+    _exc.append("%s: %s" % (t_.__name__, v_)); _hook0(t_, v_, tb_)
+sys.excepthook = _hook
+def _end_summary():   # 끝 요약(D14·B3-4): 출력이 길어 중간을 걸러 읽었더라도 마지막 이 블록만 보면 "저장됐나·왜 멈췄나·남은 것"을 안다 — 항상 나온다
+    g = globals(); L = []; why = _exit_why[-1] if _exit_why else None
+    if _exc: L.append("결과: ❌ 예외로 중단(저장 안 됨) — %s%s" % (_exc[-1][:200], " · 파일 쓰기 잠김(OSError 22/13)이면 잠시 뒤 다시 돌린다(.open_retry.log 에 기록)" if "OSError" in _exc[-1] or "PermissionError" in _exc[-1] else ""))
+    elif isinstance(why, str): L.append("결과: ❌ 중단%s — %s" % ("(저장 안 됨)" if g.get("write") else "", why[:300]))
+    elif why not in (None, 0): L.append("결과: ❌ 중단(종료 코드 %s)%s — 위 '❌ 문제 있음'·'단계 계약 위반' 목록을 본다" % (why, "(저장 안 됨)" if g.get("write") else ""))
+    elif g.get("write"): L.append("결과: %s" % ("✅ 저장함(public/design-assemblies.js)" if g.get("_emit_rc") == 0 else "❌ 저장 실패 — emit.py 출력을 본다"))
+    else: L.append("결과: 검사만 끝(저장은 --write)")
+    if not g.get("write") and _SNAP:
+        try:
+            b_, n_, c_ = _snap_restore()
+            L.append("읽기 전용: 파일을 남기지 않았다(되돌린 파일 %d개, 지운 새 파일 %d개)%s" % (len(b_), len(n_), " · ⚠ 못 되돌린 파일 %d개: %s" % (len(c_), ", ".join(os.path.basename(x_) for x_ in c_[:5])) if c_ else ""))
+        except Exception as e_: L.append("⚠ 읽기 전용 되돌리기를 못 함: %s" % str(e_)[:120])
+    if g.get("_bl"): L.append("번호별 점검 막힌 항목 %d개: %s%s" % (len(g["_bl"]), " / ".join(str(x_)[:70] for x_ in g["_bl"][:3]), " …" if len(g["_bl"]) > 3 else ""))
+    if g.get("_art_miss"): L.append("필수 산출물이 빠진 번호 %d개: %s" % (len(g["_art_miss"]), dict(sorted(g["_art_miss"].items()))))
+    if g.get("_badn"): L.append("규칙 점검 ❌ 번호 %d개: %s" % (len(g["_badn"]), g["_badn"][:30]))
+    if g.get("_n_"): L.append("규칙 위반 표시 %d번 (%s) — python violations.py %s" % (g["_n_"], ", ".join(g.get("_ts_") or []), g.get("name", "")))
+    print(); print("══ 끝 요약 — 위 출력을 걸러 읽었어도 이 블록은 전부 읽는다 ══")
+    for x_ in L: print("  · " + x_)
+atexit.register(_end_summary)
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 name = sys.argv[1]; write = "--write" in sys.argv
+# ── 읽기 전용 실행(사용자 지시 2026-11-15): --write 가 없으면 아무 파일도 남기지 않는다. 검사는 조립 스크립트가 만든 파일을 읽어야 하므로 도는 동안은 쓰게 두고,
+#    시작 때 조립도 폴더·도구 폴더의 "도구가 만드는 파일"(.json·.js) 상태를 적어 두었다가 끝날 때(오류로 끝나도) 바뀐 파일은 처음 내용으로, 새로 생긴 파일은 지워서 되돌린다.
+#    사람이 고치는 파일(조립 스크립트 .py·문서 .md·읽기 표·증거·관찰·점검 기록)은 건드리지 않는다 — 빌드가 도는 사이 고친 내용을 되돌리면 안 된다.
+_SNAP_HAND = ("_read.json", "_evidence.json", "_verify.json", "_obs.json", "_via.json", "_flags.json", "_approvals.json", "_orient.json", "_list.json", "_def.json")
+_SNAP_TOOLS = ("conn.json", "dims.json", "heads.json")   # 도구 폴더에서는 partlib 가 다시 만드는 이 셋만
+_SNAP = {}; _SNAP_BIG = 8 * 1024 * 1024
+def _snap_dirs():
+    here_ = os.getcwd(); out = [(here_, False)]
+    try: out.append((os.path.dirname(os.path.abspath(asmpath.resolve(name + ".py"))), True))
+    except Exception: pass
+    return out
+def _snap_walk():
+    for d_, deep_ in _snap_dirs():
+        if not os.path.isdir(d_): continue
+        for root_, dirs_, files_ in os.walk(d_):
+            if not deep_: dirs_[:] = []
+            else: dirs_[:] = [x_ for x_ in dirs_ if x_ not in ("__pycache__",)]
+            for f_ in files_:
+                if not f_.lower().endswith((".json", ".js")) or f_.endswith(_SNAP_HAND) or (not deep_ and f_ not in _SNAP_TOOLS): continue
+                p_ = os.path.normpath(os.path.join(root_, f_))
+                try: st_ = os.stat(p_)
+                except OSError: continue
+                yield p_, st_
+def _snap_take():
+    for p_, st_ in _snap_walk():
+        keep_ = st_.st_size <= _SNAP_BIG and not p_.lower().endswith((".jpg", ".jpeg", ".png", ".pdf", ".stl", ".pyc"))   # 그림·모델은 빌드가 쓰지 않는다 — 바뀌면 알리기만 한다
+        try: _SNAP[p_] = (st_.st_mtime_ns, st_.st_size, open(p_, "rb").read() if keep_ else None)
+        except OSError: pass
+def _snap_restore():
+    back_, gone_, cant_ = [], [], []
+    for p_, st_ in list(_snap_walk()):
+        if p_ not in _SNAP:
+            try: os.remove(p_); gone_.append(p_)
+            except OSError: cant_.append(p_)
+            continue
+        mt_, sz_, data_ = _SNAP[p_]
+        if st_.st_mtime_ns == mt_ and st_.st_size == sz_: continue
+        if data_ is None: cant_.append(p_); continue
+        try:
+            if open(p_, "rb").read() != data_:
+                open(p_, "wb").write(data_); back_.append(p_)
+        except OSError: cant_.append(p_)
+    for p_, (mt_, sz_, data_) in _SNAP.items():   # 도는 동안 지워진 파일
+        if not os.path.exists(p_) and data_ is not None:
+            try: open(p_, "wb").write(data_); back_.append(p_)
+            except OSError: cant_.append(p_)
+    return back_, gone_, cant_
+if not write:
+    try: _snap_take()
+    except Exception as _e: print("⚠ 읽기 전용 준비(파일 상태 적기)를 못 함:", str(_e)[:100])
 # 우회 옵션 전부 삭제(관리자 지시 2026-10-11): 쓸 수 있는 옵션은 --write 하나뿐이다. --unverified·--wip·--accept-contract·--allow-steps·--sync-approved·--iron-later·--grid-skip 등
 # 번호별 확인을 건너뛰게 하던 옵션을 Claude 가 말없이 써서 7~15번을 몰아 만든 일이 있었다. 확인의 근거는 사용자가 화면에서 누른 ✓ 완료(DB)뿐이다(userdone.py).
 _bad_opts = [a_ for a_ in sys.argv[2:] if a_ != "--write"]
@@ -17,9 +98,18 @@ def run(cmd, show=True):
     out = (p.stdout or "") + (p.stderr or "")
     if show and out.strip(): print(out.rstrip())
     return p.returncode, out
+# 기본 환경 자동 세팅(사용자 지시 2026-11-09): 이 조립도의 _rules.json 에 빠진 기본 검사 항목을 빌드할 때 자동으로 채운다 — 나중에 손으로 챙기지 않아도 검사가 켜져 있다(새 조립도 new_assembly.py 와 같은 목록, 규칙 00절). 이미 적힌 값은 건드리지 않는다.
+_DEFAULT_FLAGS = {"parts_sum": True, "mate_marks": True, "strict": True, "orient_check": True, "placecheck": True, "img_db": True, "rulecheck": True}
+try:
+    _rf = asmpath.resolve(name + "_rules.json"); _rj = json.load(open(_rf, encoding="utf-8")); _miss = [k for k in _DEFAULT_FLAGS if k not in _rj]
+    if _miss:
+        _rj.update({k: _DEFAULT_FLAGS[k] for k in _miss}); open(_rf, "w", encoding="utf-8").write(json.dumps(_rj, ensure_ascii=False, indent=1))
+        print("기본 검사 항목 자동 추가:", ", ".join(_miss))
+except Exception as _e:
+    print("⚠ 기본 검사 항목 자동 추가를 못 함:", str(_e)[:100])
 run([sys.executable, "partlib.py"], show=False)
 rc, out0 = run([sys.executable, asmpath.ap(name, ".py")])
-if rc: sys.exit("스크립트 실행 실패")
+if rc: sys.exit("스크립트 실행 실패 — " + (next((l_.strip() for l_ in reversed(out0.splitlines()) if l_.strip()), "")[:200]) + " (조립 스크립트 %s.py 가 오류로 끝났다. 위 Traceback 의 조립도 줄 번호를 본다. 옛 구멍 번호(hN_M) KeyError 면 convert_hole_ids.py 로 바꾸지 않은 조립도다)" % name)
 import userdone
 _m0 = re.search(r'id: "(cubo-\d+-[A-Za-z0-9_]+)"', open(name + "_entry.js", encoding="utf-8").read())
 _aid = _m0.group(1) if _m0 else "cubo-1-" + name
@@ -43,6 +133,10 @@ def _worked_upto():
     w = [k for k in range(1, 200) if {1, 2} <= hv.get(k, set()) or any(str((rd.get(str(k)) or {}).get(f, "")).strip() for f in ("면", "링"))]
     return max(w) if w else 0
 _UP0 = _worked_upto()
+try:   # number_start 가 적은 "지금까지 작업한 번호"(손 좌표 삭제로 뒤 번호가 다시 만들 일이 된 조립도) — 그 뒤 번호의 문제는 세지 않는다
+    _wf0 = os.path.join("refs", name, "_worked_upto.json")
+    if os.path.exists(_wf0): _UP0 = min(_UP0, int(json.load(open(_wf0, encoding="utf-8")).get("upto", 0)) + 1)   # +1 = 지금 하는 번호 바로 다음까지 미리 본다
+except Exception: pass
 _cnt = {}; _cur = None
 for line in (out0 + chr(10) + out).splitlines():
     s = line.strip()
@@ -57,17 +151,25 @@ for _h, (_s, _n) in _cnt.items():
 for line in (out0 + chr(10) + out).splitlines():
     s = line.strip()
     if s.startswith("안내점 맞물림 없는 부품:") and not s.endswith(" 0"):   # 안내점(marks)이 가리키는 구멍에 돌기가 제자리에서 안 들어가 있으면 화살표가 안 나온다(드롭체커 27번). <이름>_rules.json 에 "mate_marks": true 인 조립도만 막고, 나머지는 경고로 보여 준다(옛 조립도 ✓ 번호는 못 고친다)
-        if _MATE_MARKS: bad.append(s)
+        if _MATE_MARKS:   # 시작하지 않은 뒤 번호(1~_UP0 밖)의 맞물림 문제는 세지 않는다 — 위 단계별 검사와 같은 규칙(A1)
+            _mm = [int(m_.group(1)) for m_ in (re.match(r"(\d+)단계 .*맞물려 있지 않음", l_.strip()) for l_ in (out0 + chr(10) + out).splitlines()) if m_]
+            if any(k_ <= _UP0 for k_ in _mm) or not _mm: bad.append(s)
+            else: print("⚠ " + s + " (뒤 번호 %s단계 — 아직 시작하지 않아 막지 않음)" % ",".join(str(k_) for k_ in sorted(set(_mm))))
         else: print("⚠ " + s + " (참고 — <이름>_rules.json 에 \"mate_marks\": true 를 넣으면 이 조립도는 막는다)")
-    if s.startswith("[경고]") or "[경고]" in s: bad.append(s)
+    if s.startswith("[경고]") or "[경고]" in s:
+        _wm = re.search(r"(\d+)단계", s)
+        if _wm and int(_wm.group(1)) > _UP0: print("⚠ " + s + " (뒤 번호 %s단계 — 아직 시작하지 않아 막지 않음)" % _wm.group(1))
+        else: bad.append(s)
     if s.startswith("LIST") and "불일치" in s: bad.append(s)
 if bad:
     print("\n❌ 문제 있음 — 고친 뒤 다시 돌릴 것:"); [print("  ", b) for b in bad]
     sys.exit(1)
-print("\n✅ 문제 0건 (겹침 경고는 위 목록에서 오탐인지 직접 확인)")
+_ov = [int(m_.group(1)) for m_ in (re.search(r"몸통 겹침:\s*(\d+)", l_) for l_ in (out0 + chr(10) + out).splitlines()) if m_ and int(m_.group(1)) > 0]
+if _ov: print("\n⚠⚠ 몸통 겹침 %d건 — 부품이 서로 뚫고 들어가 있다. 위 '겹침' 줄을 하나씩 보고 진짜(물리적으로 불가능)면 자리를 고치고, 기어 상자 근사 오탐이면 읽기 표 판단과정에 이유를 적는다(2026-11-08 로봇팽이 15번: 큰기어가 판을 뚫었는데 ✅ 로 지나감)" % _ov[0])
+print("\n✅ 문제 0건 (겹침 경고는 위 목록에서 오탐인지 직접 확인)" if not _ov else "\n⚠ 문제 0건이지만 몸통 겹침 확인 전")
 # ───── 단계 계약 검사(계획이 조용히 사라지지 않게) ─────
 # <이름>_contract.json = 단계마다 부품 이름별 개수 + 부품 없는 단계 표시. 스크립트를 고친 뒤 이 값과 다르면 종료한다(30·31번 코드가 다른 수정에 지워졌는데 검사 0건이던 사고).
-# ✓ 완료 단계의 계약이 바뀌면 막고(고치려면 사용자가 ✓ 를 풀어야 함), ✓ 없는 단계는 자동으로 새 값을 받는다(--accept-contract 는 삭제됨). 설명에 "(채우는 중)"이 남은 단계도 막는다.
+# ✓ 완료 단계의 계약이 바뀌면 막고(고치려면 시작 때 00-1 로 풀거나, 시작 뒤 새로 건 ✓ 는 사용자가 풀어야 함), ✓ 없는 단계는 자동으로 새 값을 받는다(--accept-contract 는 삭제됨). 설명에 "(채우는 중)"이 남은 단계도 막는다.
 _asm0 = json.load(open(files[0], encoding="utf-8"))["steps"]
 cur_contract = {}
 for _k, _st in enumerate(_asm0, 1):
@@ -108,7 +210,7 @@ _ap = {k: h for k, h in _ap.items() if int(k) in _USER_DONE}
 _chg = [int(k) for k, h in _ap.items() if int(k) <= len(_asm0) and _fp(_asm0[int(k) - 1]) != h]
 if _chg:
     print(chr(10) + "❌ 사용자가 ✅ 완료로 체크한 단계의 내용이 바뀜: " + str(sorted(_chg)))
-    print("   되돌릴 것. 고쳐야 하는 단계라면 사용자에게 그 단계의 ✓ 를 풀어 달라고 보고한다(다른 방법은 없다).")
+    print("   되돌릴 것. 시작 때 `handoff --시작`(규칙 00-1)을 안 돌렸으면 먼저 그것을 돌린다(✓ 를 백업하고 푼다 — 묻지 않는다). 시작 뒤 사용자가 새로 건 ✓ 번호라면 그 번호만 사용자에게 풀어 달라고 보고한다.")
     sys.exit(1)
 for _k in sorted(_USER_DONE):
     if str(_k) not in _ap and _k <= len(_asm0): _ap[str(_k)] = _fp(_asm0[_k - 1])
@@ -151,22 +253,32 @@ _idxf = os.path.join("refs", name, "index.json")
 _idx = json.load(open(_idxf, encoding="utf-8")) if os.path.exists(_idxf) else []
 _have = {}
 for _r in _idx: _have.setdefault(_r["step"], {})[_r["idx"]] = _r.get("note", "")
-_nogrid = []
 _rdf0 = name + "_read.json"
 _rd0 = json.load(open(_rdf0, encoding="utf-8")) if os.path.exists(_rdf0) else {}
 # 아직 시작하지 않은 번호는 검사하지 않는다: 격자 그림(1·2)이나 읽기 표가 있는 가장 뒤 번호까지만 본다(그 앞 번호가 비면 막는다). 번호를 순서대로 만드는 규칙(A1)과 같다.
 _worked = [k for k in range(1, len(asm) + 1) if (1 in _have.get(k, {}) and 2 in _have.get(k, {})) or any(str((_rd0.get(str(k)) or {}).get(f, "")).strip() for f in ("면", "링"))]
 _upto = max(_worked) if _worked else 0
-for _k, _st in enumerate(asm, 1):
-    if _k > _upto: continue
-    if not _st.get("parts") or _k in _skip: continue
-    _h = _have.get(_k, {})
-    _plate = any(("프레임" in str(_p.get("n", "")) and "브라켓" not in str(_p.get("n", ""))) for _p in _st.get("parts", [])) or any("프레임" in str(_p.get("n", "")) for _p in _st.get("parts", []))
-    ok = (1 in _h and 2 in _h)   # 2026-10-08: 판이 없다는 이유의 원본 1장 예외 폐지(격자는 큰기어 구멍·판 구멍 등 보이는 구멍으로 항상 만든다)   # 프레임(판)이 있는 단계는 반드시 회전·방향 표시·격자(idx 2) — 원본 한 장으로 때우지 못한다
-    if not ok: _nogrid.append(_k)
-print("책 이미지 작업(방향 표시·격자) 단계별 그림:", (f"{len([1 for k, st in enumerate(asm, 1) if st.get('parts')]) - len(_nogrid)}단계 있음" + (f" — ❌ 격자가 없는 단계 {_nogrid}" if _nogrid else "")))
+_lb_saved = int((json.load(open(name + "_gate.json", encoding="utf-8")) if os.path.exists(name + "_gate.json") else {}).get("last_built", 0))
+try:   # 저장된 조립도에서 새 부품 없이 합치는 번호(moveMade·madeNoPart)도 '이미 저장한 번호'다 — stepchecks 의 마지막 번호 정의와 같게(부품만 세면 27번 같은 합치기 번호가 늘 새 번호로 취급돼 막힌다)
+    _sv = json.load(open(asmpath.resolve(name + "_asm.json"), encoding="utf-8"))["steps"]
+    _lb_saved = max([_lb_saved] + [i_ for i_, s_ in enumerate(_sv, 1) if s_.get("parts") or s_.get("moveMade") or s_.get("madeNoPart")])
+except Exception: pass   # 이미 저장한 번호(<= last_built)를 고치는 저장은 격자·읽기 표 게이트로 막지 않는다(사용자 지시 2026-11-10: 앞 번호 격자가 비었다고 26번 수정 저장이 막히면 안 된다). 새로 더하는 번호(> last_built)는 그대로 막는다.
+# ───── 필수 산출물 게이트(D14) — 정의는 rulecheck.py 한 곳(ARTIFACTS: 격자·양쪽 홀라인·홀라인 그림·링 대조·카메라·읽기 표·그림DB). ─────
+# 옛 "이미 저장한 번호는 막지 않는다" 예외는 없앴다(2026-11-13: 저장된 조립도를 다시 만드는 동안 모든 번호가 예외라 13~22번 홀라인 그림이 빠진 채 끝났다).
+# 작업 범위(number_start 가 적은 번호) 안에서 증거가 없거나 낡은 번호는 필수 산출물이 모두 있어야 --write 가 된다. 격자를 "못 만든다/불필요하다"고 혼자 정하는 --grid-skip 도 없다.
+_nogrid = []; _art_miss = {}
+try:
+    import rulecheck as _rcg
+    for _k, _its in _rcg.check(name)[0].items():
+        if _k > (_UP0 - 1 if os.path.exists(os.path.join("refs", name, "_worked_upto.json")) else _UP0): continue   # _UP0 는 '지금 번호 +1(미리 보기)'이라 산출물 게이트는 지금 번호까지만 — 안 그러면 11번을 저장하려는데 12번 격자·카메라가 없다고 막힌다(2026-11-15)
+        _m = [t_ for s_, t_, w_ in _its if s_ == "❌" and _rcg.is_artifact(t_)]
+        if _m: _art_miss[_k] = _m
+        if _m and any(s_ == "❌" and t_ == "증거" for s_, t_, w_ in _its): _nogrid.append(_k)
+except Exception as _e_: print("필수 산출물 점검을 못 했다:", str(_e_)[:100])
+print("필수 산출물(격자·홀라인 그림·카메라·읽기 표·그림DB) 빠진 번호:", _art_miss if _art_miss else "없음")
 if write and _nogrid:
-    sys.exit("❌ 책 이미지 작업(방향에 맞춰 돌린 그림 위의 격자 1차·2차)이 없는 단계가 있어 --write 를 하지 않는다: " + str(_nogrid) + "\n   큐보 부품결합규칙.md 규칙(1번 규칙·D 절)대로 그 단계의 격자를 먼저 만든다(refs_make → refs_rect). 이 검사는 건너뛸 수 없다.")
+    import subprocess as _sp_; _sp_.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "prep_badge.py"), name])   # 사전작업(부품정리·창고정리) 배지는 번호 산출물과 상관없이 올린다
+    sys.exit("❌ 작업 중인 번호의 필수 산출물이 빠져 --write 를 하지 않는다: " + str({k_: _art_miss[k_] for k_ in _nogrid}) + " — 큐보 부품결합규칙.md D14 순서(crop_ticks → holefit → axes_fit → refs_rect → DB 업로드)대로 만든다. 이 검사는 건너뛸 수 없다.")
 
 # ───── 철칙 순서 게이트(관리자 지시 2026-10-08, 우회 불가): 부품이 있는 번호마다 refs/<이름>/NN_lv.json(잘라내기→방향 표시→회전)이 있어야 한다 — 원본 위에서 격자를 먼저 맞춘 번호는 막는다(옛 조립도·--sync 이전 번호는 면제 목록 IRON_EXEMPT).
 IRON_EXEMPT = {"dog": {}}   # 철칙 이전에 만든 번호를 새 순서로 다시 만들 때까지 예외로 둘 목록(이름 → {번호}). 비워 두면 전 번호 필수
@@ -179,8 +291,16 @@ if name == "dog":
 _rdf = name + "_read.json"; _rd = json.load(open(_rdf, encoding="utf-8")) if os.path.exists(_rdf) else {}
 _noread = [_k for _k, _st in enumerate(asm, 1) if _k <= _upto and _st.get("parts") and not all(str((_rd.get(str(_k)) or {}).get(_f, "")).strip() for _f in ("면", "링", "부품"))]
 print("번호별 읽기 표(" + _rdf + "):", (f"{len([1 for k, st in enumerate(asm, 1) if st.get('parts')]) - len(_noread)}단계 있음" + (f" — ❌ 안 적은 단계 {_noread}" if _noread else "")))
+_noread_all = list(_noread); _noread = [k_ for k_ in _noread if k_ > _lb_saved]
+if _noread_all and not _noread: print("   (이미 저장한 번호 %s 는 읽기 표가 비었지만 고치는 저장이라 막지 않는다 — 읽기 표는 따로 적어야 한다)" % _noread_all)
 if write and _noread:
     sys.exit("❌ 번호별 읽기 표가 비어 있는 단계가 있어 --write 를 하지 않는다: " + str(_noread) + " — " + _rdf + " 에 그 번호의 면·링·부품을 적는다(격자를 만든 뒤 구멍을 센 결과). 묻지 말고 적고 계속한다.")
+
+# 연결점(초록 점)은 무조건 부품 DB 의 돌기·구멍 점을 그대로 쓴다 = guideMode "mates" (사용자 지시 2026-11-09, 규칙 G26). 따로 재거나 적은 안내점·허용치 방식은 쓰지 않는다.
+_ef = asmpath.resolve(name + "_entry.js")
+if os.path.exists(_ef) and 'guideMode: "mates"' not in open(_ef, encoding="utf-8").read():
+    print("❌ 연결점 방식이 mates 가 아니다(DB 연결점 그대로 쓰지 않음) — Asm(..., guideMode=\"mates\") 와 항목 파일에 guideMode: \"mates\" 가 있어야 한다(G26)")
+    if write: sys.exit("❌ guideMode mates 가 아니어서 --write 를 하지 않는다 — 조립도 스크립트의 Asm(...) 에 guideMode=\"mates\" 를 넣는다.")
 
 # ───── 그룹 이동 참고 정보(관리자 지시 2026-10-09: 막는 장치가 아니라 판단을 돕는 정보): rules 에 "placecheck": true 가 있으면 그룹으로 옮겨 붙이는 부품의 상대 자세가 옮기기 전·후에 같은지 보여 준다.
 #   어긋남이 크면 막지 않고 알려 준다 — 완성 모습·앞뒤 번호를 펼쳐 놓고 이유를 판단해 읽기 표 '판단과정'에 적는다.
@@ -209,6 +329,10 @@ if os.path.exists(_ckf):
         _eye_stale = [b_ for b_ in _bl if any(t_ in b_ for t_ in ("화면 확대 확인", "나란히 비교", "카메라 책과 대조", "짐작(guess)이 아님", "책과 비교한 뒤 내용이 바뀜"))]
         if _eye_stale: print("   (이미 저장한 번호를 고치는 저장이라 다음 눈 확인 %d개는 막지 않는다 — 저장 뒤 화면으로 다시 비교하고 record_check.py 로 증거를 새로 남긴다)" % len(_eye_stale)); [print("     ·", b_) for b_ in _eye_stale]
         _bl = [b_ for b_ in _bl if b_ not in _eye_stale]
+    # 이미 저장한 번호(<= last_built)의 막힘 항목은 저장을 막지 않는다(사용자 지시 2026-11-10: 앞 번호 읽기 표·눈 확인이 비었다고 고치는 저장이 막히면 안 된다). 새로 더하는 번호(> last_built)의 항목만 막는다. 건너뛴 항목은 출력에 남긴다.
+    _saved_bl = [b_ for b_ in _bl if re.match(r"(\d+)번", b_) and int(re.match(r"(\d+)번", b_).group(1)) <= _lb_saved]
+    if _saved_bl and write:
+        print("   (이미 저장한 번호의 미완 항목 %d개는 저장을 막지 않는다 — 나중에 채워야 한다)" % len(_saved_bl)); _bl = [b_ for b_ in _bl if b_ not in _saved_bl]
     if write and _bl: [print("   ☐(막힘)", b_) for b_ in _bl]
     if write and _bl: sys.exit("❌ 번호별 점검에서 막힌 항목이 있어 --write 를 하지 않는다 — 막힌 항목을 고친다. 눈으로 하는 확인(화면 확대·칸 수 대조·카메라 대조)은 화면 캡처와 책 그림을 나란히 비교하고 record_check.py 로 증거를 남긴 번호(또는 사용자가 ✓ 한 번호)만 통과한다. 마지막으로 만든 번호 하나만 증거 없이 쓸 수 있다.")
 # 규칙 점검(rulecheck.py): 번호마다 격자 출처·카메라 오차·증거·읽기 표를 판정해 요약을 보여 준다. 저장은 막지 않고(경고) 다음 번호 시작은 number_start 가 막는다.
@@ -234,7 +358,7 @@ try:
     _ef = name + "_entry.js"; _es = re.sub(r"      prepDone: .*\n", "", open(_ef, encoding="utf-8").read())
     if _rl.get("parts_sum") and os.path.exists(list_f):
         import collections as _co2
-        _lst = json.load(open(list_f, encoding="utf-8")); _tot = _co2.Counter(); _all_used = True
+        _lst = asmpath.list_counts(name); _tot = _co2.Counter(); _all_used = True   # LIST + 관리자 확정 수량(qtyOverride, 사용자 2026-11-13 — 배틀로봇 부품정리가 영영 미완이던 원인)
         for _st in _asm0:
             _mu = re.search(r"▣ 사용 부품:\s*(.*)", _st.get("note") or "")
             if not _mu: _all_used = False; continue
@@ -251,18 +375,34 @@ try:
     open(_ef, "w", encoding="utf-8").write(_es)
 except Exception as _e_:
     print("부품정리·창고정리 표시를 만들지 못함:", str(_e_)[:100])
+# 규칙 위반 화면 표시(사용자 지시 2026-11-08): 번호별 위반을 모아 항목 파일에 def.violations 로 넣는다 — 화면이 종류마다 다른 색·기호로 칠한다(violations.py). 번호 지문(✓ 보호)에는 들어가지 않는다.
+try:
+    import violations as _vi
+    _vd = _vi.collect(name)
+    _n_, _ts_, _ = _vi.write_entry(name, _vd)
+    print("규칙 위반 표시: %d번 (%s)" % (_n_, ", ".join(_ts_) or "없음"))
+    if not write:
+        for _k in sorted(_vd, key=int):
+            if int(_k) > max(_upto, _UP0): continue   # 작업한 번호까지만(A1)
+            for _v in _vd[_k]: print("   %s번 %s 부품 %d개 — %s" % (_k, _v["type"], len(_v["keys"]), _v["msg"]))
+except Exception as _e_:
+    print("규칙 위반 표시를 만들지 못함:", str(_e_)[:120])
+# ✓ 완료(잠금)한 번호에 규칙 위반이 있으면 사용자가 원해도 막는다(사용자 지시 2026-11-08: 위반이 있는 조립도는 잠글 수 없다). ✓ 를 풀고 위반을 고쳐야 한다.
+try:
+    _MAGNET = bool(rules.get("magnet"))   # 자석 결합 단계 적용(2026-11-16): 손 배치 ✋·축 틈 ↔(violations 의 soft 항목)은 화면 칩에만 뜨고, "magnet": true 인 조립도(새 조립도 기본)만 막는다 — 옛 조립도 빌드를 깨지 않으려고
+    _lockbad = {int(_k): _n for _k, _n in ((_k, len([_x for _x in _v if _MAGNET or not _x.get("soft")])) for _k, _v in _vd.items() if int(_k) in _USER_DONE) if _n}
+    _soft = {int(_k): len([_x for _x in _v if _x.get("soft")]) for _k, _v in _vd.items() if int(_k) <= max(_upto, _UP0) and any(_x.get("soft") for _x in _v)}
+    if _soft: print("%s 자석 결합: 좌표를 직접 준 부품·축에 꿴 부품 틈 %d건(번호: 건수) %s%s" % ("❌" if _MAGNET else "⚠", sum(_soft.values()), dict(sorted(_soft.items())), "" if _MAGNET else " (참고 — <이름>_rules.json 에 \"magnet\": true 를 넣으면 이 조립도는 막는다)"))
+    if _soft and _MAGNET and write: sys.exit("❌ 좌표를 직접 준 부품·축 틈이 남아 --write 를 하지 않는다(번호: 건수) " + str(dict(sorted(_soft.items()))) + " — attach·recv·place_next·place_rest 로 결합에서 계산해 놓는다(C6 ②).")
+except SystemExit: raise
+except Exception as _e_:
+    _lockbad = {}; print("완료 번호의 위반 검사를 못 했다:", str(_e_)[:100])
+if _lockbad:
+    sys.exit("❌ ✓ 완료로 잠긴 번호에 규칙 위반이 있다(번호: 건수) " + str(_lockbad) + " — 위반이 있으면 잠글 수 없다. 시작 절차(00-1)를 안 돌렸으면 먼저 돌려 푼다. 시작 뒤 사용자가 새로 건 ✓ 면 풀어도 되는지 묻고, 풀고 고친 뒤 위반 0 을 확인하고 다시 잠근다.")
 if write:  # (규칙 확인은 위에서 이미 검사)
     _m = re.search(r'id: "(cubo-\d+-[A-Za-z0-9_]+)"', open(name + "_entry.js", encoding="utf-8").read())   # 항목 파일의 id(2권은 cubo-2-...). 없으면 1권 규칙
-    rc, out = run([sys.executable, "emit.py", name + "_entry.js", _m.group(1) if _m else "cubo-1-" + name]); print(out.strip())
-    if rc == 0: json.dump({"last_built": max([_k for _k, _st in enumerate(asm, 1) if _st.get("parts")] or [0])}, open(name + "_gate.json", "w", encoding="utf-8"))
-    # 번호를 마무리(--write)할 때마다 자동 검사 경고 목록(public/design-warnings.js)도 새로 만든다. 경고는 막지 않는다 — 관리자 화면(⚠)에서 "문제없음/해결요청"을 고른다.
-    if rc == 0:
-        try:
-            _rc2, _o2 = run(["node", "insertion_check.js"], show=False)
-            _mine = [l_ for l_ in _o2.splitlines() if _m and l_.startswith(_m.group(1) + " ")] or [l_ for l_ in _o2.splitlines() if l_.startswith("cubo-") and name in l_]
-            print("자동 검사 경고 목록 갱신(insertion_check):", (_mine[0] if _mine else ("완료" if _rc2 == 0 else "실패 — " + _o2.strip()[:120])))
-        except Exception as _e2:
-            print("자동 검사 경고 목록을 갱신하지 못함(작업은 계속):", str(_e2)[:100])
+    rc, out = run([sys.executable, "emit.py", name + "_entry.js", _m.group(1) if _m else "cubo-1-" + name]); print(out.strip()); _emit_rc = rc
+    if rc == 0: json.dump({"last_built": max([_k for _k, _st in enumerate(asm, 1) if _st.get("parts") or _st.get("moveMade") or _st.get("madeNoPart")] or [0])}, open(name + "_gate.json", "w", encoding="utf-8"))
 # 검사 파일 감시(CCTV, gate_watch.py): 규칙을 지키는 검사 도구가 사용자가 마지막으로 확인한 상태에서 바뀌었으면 매번 여기서 한 줄로 보인다(막지는 않는다).
 try: print(subprocess.run([sys.executable, "gate_watch.py", "--brief"], capture_output=True, text=True, encoding="utf-8").stdout.strip())
 except Exception as _e3: print("검사 파일 감시를 실행하지 못함:", str(_e3)[:80])

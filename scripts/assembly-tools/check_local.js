@@ -131,20 +131,21 @@ if (process.argv[3]) {
     const step = si + 1, upto = [];
     steps.slice(0, step).forEach((s, k) => (s.parts || []).forEach((pt, i) => {
       const mvE = window.IVS_moveAt(pt, step), mv = !!mvE; const p = mv ? (mvE.p || pt.p.map((v, j) => v + mvE.by[j])) : pt.p;   // 여러 번 옮긴 부품은 그 단계 이전 마지막 이동(IVS_moveAt)
-      upto.push({ key: `${k + 1}.${i} ${pt.n}`, n: pt.n, p, r: (mv && mvE.r) ? mvE.r : (pt.r || [0, 0, 0]), step: k + 1, ref: pt });
+      upto.push({ key: `${k + 1}.${i} ${pt.n}`, n: pt.n, p, r: (mv && mvE.r) ? mvE.r : (pt.r || [0, 0, 0]), step: k + 1, ref: pt, pa: pt.poseAt && pt.poseAt[step] });
     }));
-    const res = M.check(upto, conn);
-    const worlds = upto.map((u) => ({ u, w: conn[u.n] ? M.worldConnectors({ p: u.p, r: u.r }, conn[u.n]) : null }));
+    // 그 번호만의 자세(poseAt — 기울이거나 눕혀 보여 주는 번호)가 있으면 화면이 그리는 자세(violations._drawn_pose 와 같은 순서: poseAt 먼저)로도 잰다. 안내점이 만든 자리 기준인 조립도와 화면 자세 기준인 조립도가 둘 다 있어 어느 한쪽에서 맞물리면 통과다.
+    const views = [upto].concat(upto.some((u) => u.pa) ? [upto.map((u) => (u.pa ? Object.assign({}, u, { p: u.pa.p, r: u.pa.r }) : u))] : [])
+      .map((list) => ({ list, res: M.check(list, conn), worlds: list.map((u) => ({ u, w: conn[u.n] ? M.worldConnectors({ p: u.p, r: u.r }, conn[u.n]) : null })) }));
     (st.parts || []).forEach((pt) => {
       if (pt.side || pt.explode || pt.noMarkCheck || pt.noGuide || pt.seated || !pt.dir || !(pt.marks && pt.marks.length)) return;
-      const me = upto.find((u) => u.ref === pt); if (!me || !conn[pt.n]) return;
+      if (!upto.some((u) => u.ref === pt) || !conn[pt.n]) return;
       pt.marks.forEach((m) => {
         let hit = false;
-        worlds.forEach(({ u, w }) => {
+        views.forEach(({ list, res, worlds }) => { const me = list.find((u) => u.ref === pt); worlds.forEach(({ u, w }) => {
           if (!w || u === me) return;
           if (pt.recv || pt.pegTarget) w.pegs.forEach((pg) => { const ends = [1, -1].map((sg) => [0, 1, 2].map((a) => pg.pos[a] + pg.dir[a] * pg.len / 2 * sg));   /* 돌기 양쪽 끝 모두 인정: 끼우는 쪽에 따라 돌기 끝 또는 뿌리 쪽 끝(축 등, 규칙 G21) */ ends.forEach((tip) => { if (Math.hypot(...sub3(tip, m)) <= 3 && res.mated.some((x) => x.part === u.key && x.peg === pg.id && x.into === me.key)) hit = true; }); });
           else w.holes.forEach((h) => { const rel = sub3(m, h.pos), al = dot3(rel, h.dir), lat = Math.hypot(...sub3(rel, h.dir.map((x) => x * al))); if (lat <= 1.8 && Math.abs(al) <= h.len / 2 + 3 && res.mated.some((x) => x.part === me.key && x.into === u.key && x.hole === h.id)) hit = true; });
-        });
+        }); });
         if (!hit) bad.push(`${step}단계 ${pt.n}: 안내점 [${m}] 에서 돌기·구멍이 제자리 자세로 맞물려 있지 않음 → 화살표가 안 나옴(제자리 p 를 돌기-구멍 거리 0.0 으로 맞추고, 떨어진 모습은 dir·hover 로)`);
       });
     });
