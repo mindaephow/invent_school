@@ -24,10 +24,11 @@ const RO = S.rimOuterR - 0.01
 const E = S.edgeWall
 const rad = (d) => (d * Math.PI) / 180
 
-export function arcFrameTriangles(seg = 20, sub = 4) {
+export function arcFrameTriangles(seg = 20, sub = 4, width = S.width, rimOuterR = S.rimOuterR) {
   const kit = makeKit(seg)
   const { quad, P } = kit
-  const n = ARC_STD.holes, W = S.width / 2, F = ARC_STD.foot
+  const RO = rimOuterR - 0.01
+  const n = ARC_STD.holes, W = width / 2, F = ARC_STD.foot
   const { R, delta } = solveArc()
   const half = (n - 1) / 2
   const Y0 = 0, Y1 = S.rimHeight, Y4 = S.rimHeight + S.plate, Y5 = S.total

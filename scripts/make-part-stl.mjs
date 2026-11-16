@@ -32,12 +32,14 @@ if (kind === 'servohorn' || kind === 'roundhorn') { // 서보혼(막대형)·둥
   console.log(`${kind}: 삼각형 ${t.length / 9}개, ${(s.length / 1024).toFixed(0)}KB → ${out}`)
   process.exit(0)
 }
-if (kind === 'arc') { // 반원프레임(구멍 9개 고정):  node scripts/make-part-stl.mjs arc 9 <저장할 파일.stl>
-  if (count !== 9 || !out) { console.error('사용: node scripts/make-part-stl.mjs arc 9 <저장할 파일.stl>'); process.exit(1) }
-  const t = arcFrameTriangles()
+if (kind === 'arc') { // 반원프레임(구멍 9개 고정):  node scripts/make-part-stl.mjs arc 9 <저장할 파일.stl> [폭(기본10)] [테두리바깥반지름(기본4, >3.5)]
+  if (count !== 9 || !out) { console.error('사용: node scripts/make-part-stl.mjs arc 9 <저장할 파일.stl> [폭(기본10)] [테두리바깥반지름(기본4, >3.5)]'); process.exit(1) }
+  const width = heightArg ? Number(heightArg) : undefined
+  const rimOuterR = entryArg ? Number(entryArg) : undefined
+  const t = arcFrameTriangles(20, 4, width, rimOuterR)
   const s = trianglesToStl(t)
   fs.writeFileSync(out, s)
-  console.log(`arc 9: 삼각형 ${t.length / 9}개, ${(s.length / 1024).toFixed(0)}KB → ${out}`)
+  console.log(`arc 9 (폭 ${width || 10}, 테두리 ${rimOuterR || 4}): 삼각형 ${t.length / 9}개, ${(s.length / 1024).toFixed(0)}KB → ${out}`)
   process.exit(0)
 }
 if (kind === 'peg') { // 규격 돌기 하나(다른 부품의 돌기를 바꿔 끼울 때 쓴다): 밑동이 원점, 방향 +z, 홈은 x·y 축.  node scripts/make-part-stl.mjs peg 1 <저장할 파일.json>
