@@ -12,6 +12,18 @@
     if (/^90도 프레임/.test(n)) return [{ c: [-sx / 2 + 5, 0, 0], h: [5, sy / 2, sz / 2] }, { c: [0, 0, -sz / 2 + 5], h: [sx / 2, sy / 2, 5] }];
     //   135도 프레임(83.3×5×33.3): 곧은 팔 = 구멍 h4~h9(z=11.5, x −13.5~36.5), 꺾인 팔 = h4→h1 방향 45°(−0.707, −0.707)로 29.7mm + 끝 여백 5mm. 팔 너비 10mm. (연결점 구멍 좌표 기준)
     if (/^135도 프레임/.test(n)) return [{ c: [14.07, 0, 11.5], h: [27.43, sy / 2, 5] }, { c: [-25.77, 0, -0.77], h: [17.35, sy / 2, 5], ry: -45 }];   // 긴 팔 상자는 꺾임 구멍 h4(x −13.36)에서 시작한다 — 뒤로 5mm 더 두면 상자 모서리가 실제 둥근 꺾임보다 2mm 나와 판 위의 프레임이 판과 겹친다고 나왔다(배틀로봇 7·8번, 2026-11-13)
+    //   반원프레임(약 70×5×32): 통상자로 보면 호 안쪽 빈 곳까지 몸통이 돼 그 안에 들어온 직선 프레임이 겹친 것으로 나온다 → 호 띠를 짧은 상자(접선 방향으로 기울인 것) 여러 개 + 양 끝 발 상자로 나눈다.
+    //   호: 구멍 9개가 현 10mm 간격(반지름 R≈31.27), 양 끝 구멍 x=±30, 띠 폭 = 가로 크기/2−30 (구멍 중심 ±W). 꼭대기(x=0)가 모델 −z 쪽, 호 중심 z = −sz/2 + R + W. 점은 (x, z)=(R·sin a, zc − R·cos a), 접선 상자는 ry=−a.
+    if (/^반원프레임/.test(n)) {
+      const R = 31.27, W = Math.max(sx / 2 - 30, 1), chord = 10, delta = 2 * Math.asin(chord / 2 / R), phiEnd = 4 * delta, zc = -sz / 2 + R + W, seg = 2 * 4 * 2, boxes = [];
+      for (let i = 0; i < seg; i++) {
+        const a0 = -phiEnd + (2 * phiEnd * i) / seg, a1 = -phiEnd + (2 * phiEnd * (i + 1)) / seg, am = (a0 + a1) / 2;
+        boxes.push({ c: [R * Math.sin(am), 0, zc - R * Math.cos(am)], h: [(R - W) * Math.tan((a1 - a0) / 2), sy / 2, W], ry: (-am * 180) / Math.PI });
+      }
+      const zh = zc - R * Math.cos(phiEnd), foot = sz / 2 - zh; // 끝 구멍 아래로 곧은 발(폭 2W)
+      if (foot > 0.1) for (const sgn of [-1, 1]) boxes.push({ c: [sgn * R * Math.sin(phiEnd), 0, zh + foot / 2], h: [W, sy / 2, foot / 2] });
+      return boxes;
+    }
     if (/프레임/.test(n)) return [{ c: [0, 0, 0], h: [sx / 2, sy / 2, sz / 2] }];
     const block = n.match(/(\d+)단블록/);
     // N단블록: 몸통은 길이 10mm×N, 두께 10mm — 앞뒤 면의 돌기(양쪽 5mm)와 양 끝 돌기(5mm)는 제외
