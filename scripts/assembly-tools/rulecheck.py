@@ -94,7 +94,9 @@ def check(name, only=None):
         if not needs_grid and not fs:
             items.append(("✅", "격자", "판 부품이 새로 들어오지 않음(해당 없음)"))
         elif not fs:
-            items.append((bad, "격자", "판 부품이 있는데 구멍 점(fits)이 없음"))
+            _why_g = str((read.get(str(k)) or {}).get("판단과정", ""))
+            if "⚠ 격자" in _why_g: items.append(("⚠", "격자", "구멍 점(fits)을 못 만들었다 — 시도·수치가 판단과정에 적혀 있음(D14: 시도·수치를 적은 미달은 ⚠, 사용자 확인 필요)"))   # 규칙 D14 표 '시도·수치를 판단과정에 적은 미달은 ⚠' (사용자 승인 2026-11-17 '고쳐')
+            else: items.append((bad, "격자", "판 부품이 있는데 구멍 점(fits)이 없음 — 시도했으면 시도·수치를 읽기 표 판단과정에 '⚠ 격자 …' 로 적는다"))
         else:
             for fn, fj in fs:
                 nm = str(fj.get("name", ""))
@@ -140,7 +142,10 @@ def check(name, only=None):
                 else: items.append((bad, "격자 " + fn, why))
         # C 카메라 ───────────────
         ax = load(os.path.join(R, "%02d_axes.json" % k), None)
-        if ax is None: items.append((bad, "카메라", "축 파일(_axes.json)이 없음"))
+        if ax is None:
+            _why_c = str((read.get(str(k)) or {}).get("판단과정", ""))
+            if "⚠ 카메라" in _why_c: items.append(("⚠", "카메라", "축 파일(_axes.json)을 못 만들었다 — 시도·수치가 판단과정에 적혀 있음(D14: 시도·수치를 적은 미달은 ⚠, 사용자 확인 필요)"))   # 사용자 승인 2026-11-17 '고쳐'
+            else: items.append((bad, "카메라", "축 파일(_axes.json)이 없음 — 시도했으면 시도·수치를 읽기 표 판단과정에 '⚠ 카메라 …' 로 적는다"))
         else:
             fit = ax.get("fit") or {}; e = fit.get("err_px"); pts = fit.get("points") or 0
             _sil = None   # 실루엣 겹침으로 푼 카메라(2026-10-31, silfit): 점을 읽지 않으므로 점 수·px 오차 대신 겹침 IoU ≥0.85 로 본다
