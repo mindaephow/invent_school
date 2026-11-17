@@ -449,7 +449,9 @@ def collect(name):
             _kk = max(_at(ka, ia), _at(kb, ib))
             # 그 번호 화면에서 창고에 보관 중(hideAt)인 부품은 안 보이는 부품이라 겹침으로 세지 않는다(배틀로봇 5번: 보관 중인 315프레임이 다른 창고의 135도 프레임과 겹친다고 나왔다, 2026-11-13)
             if _hidden_at(A.steps[ka - 1].parts[ia], _kk) or _hidden_at(A.steps[kb - 1].parts[ib], _kk): continue
-            add(_kk, "overlap", ["%d:%d" % (ka, ia), "%d:%d" % (kb, ib)], "%s ↔ %s 몸통이 겹침(뚫고 들어감)%s" % (na, nb, " — 기어는 상자 근사라 모서리 오탐일 수 있음, 중심 거리로 확인" if gear else ""))
+            _d = re.search(r"겹침상세\s+%d\.%d\s+%d\.%d\s+깊이=(\S+)\s+위치=(\S+)\s+A중심=(\S+)\s+B중심=(\S+)" % (ka, ia, kb, ib), _o)   # check_local.js 가 같이 내는 상세(2026-11-17: 어느 부품·어디서·얼마나 겹쳤는지 없던 설명을 채운다)
+            _det = (" — %d번에서 만든 %d번째 %s(중심 %s) ↔ %d번에서 만든 %d번째 %s(중심 %s), 가장 깊은 곳 (%s)에서 %smm 들어감 — 그만큼 떼면 닿기만 한다" % (ka, ia + 1, na, _d.group(3), kb, ib + 1, nb, _d.group(4), _d.group(2), _d.group(1))) if _d else (" — %d번에서 만든 %d번째 %s ↔ %d번에서 만든 %d번째 %s" % (ka, ia + 1, na, kb, ib + 1, nb))
+            add(_kk, "overlap", ["%d:%d" % (ka, ia), "%d:%d" % (kb, ib)], "%s ↔ %s 몸통이 겹침(뚫고 들어감)%s%s" % (na, nb, _det, " — 기어는 상자 근사라 모서리 오탐일 수 있음, 중심 거리로 확인" if gear else ""))
     except Exception as e_:
         print("violations: 몸통 겹침을 못 붙임 —", str(e_)[:100], file=sys.stderr)
     try:   # 중심: 번호를 끝낸 모습(그 번호 화면에 보이는 부품 전체)의 x·z 범위 중심이 원점(화면 가운데)에서 CENTER_TOL 넘게 벗어나면 ⊕ (사용자 지시 2026-11-09, A4)

@@ -30,7 +30,9 @@ const sameSlotOrMoved=(A,B)=>{const sa=steps[A.a.k-1].slot,sb=steps[B.a.k-1].slo
 let n=0;
 for(let i=0;i<items.length;i++)for(let j=i+1;j<items.length;j++){const A=items[i],B=items[j];if(!A.boxes||!B.boxes)continue;
  if(sameSlotOrMoved(A,B)===false)continue;   // 다른 창고(slot)에서 원점에 따로 만든 부품끼리는 합치기(moveMade) 전엔 같은 공간이 아니다(2026-11-08 로봇팽이 29번: 팽이 부시↔손잡이 15프레임 오탐)
- if(C.boxesOverlap(A.boxes,A.pos,A.q,B.boxes,B.pos,B.q,0.05)){n++;if(n<=40)console.log('  겹침',A.a.k+'.'+A.a.i,A.a.pt.n,'<>',B.a.k+'.'+B.a.i,B.a.pt.n);}}
+ const inf=C.boxesOverlapInfo?C.boxesOverlapInfo(A.boxes,A.pos,A.q,B.boxes,B.pos,B.q,0.05):(C.boxesOverlap(A.boxes,A.pos,A.q,B.boxes,B.pos,B.q,0.05)?{}:null);
+ if(inf){n++;if(n<=40){const r1=(v)=>Math.round(v*10)/10;console.log('  겹침',A.a.k+'.'+A.a.i,A.a.pt.n,'<>',B.a.k+'.'+B.a.i,B.a.pt.n);
+  if(inf.depth!=null)console.log('  겹침상세',A.a.k+'.'+A.a.i,B.a.k+'.'+B.a.i,'깊이='+r1(inf.depth),'위치='+inf.at.map(r1).join(','),'A중심='+[A.pos.x,A.pos.y,A.pos.z].map(r1).join(','),'B중심='+[B.pos.x,B.pos.y,B.pos.z].map(r1).join(','),'A상자='+inf.ia,'B상자='+inf.ib);}}}
 console.log('몸통 겹침:',n);
 // 바닥 기준: 가장 낮은 부품 바닥
 const cnt={};all.forEach(a=>cnt[a.pt.n]=(cnt[a.pt.n]||0)+1);console.log('부품 개수:',JSON.stringify(cnt));

@@ -83,6 +83,43 @@
     return true;
   }
 
+  // 겹친 두 상자가 얼마나 깊이 들어갔나(mm) — 분리축 검사에서 가장 얕게 겹친 축의 겹침 길이 = 이만큼만 밀면 떨어진다. 설명용이라 판정(obbOverlap)과 따로 둔다.
+  function obbPenetration(A, B) {
+    const d = [B.c[0] - A.c[0], B.c[1] - A.c[1], B.c[2] - A.c[2]];
+    const cand = [];
+    for (let i = 0; i < 3; i++) { cand.push(A.axes[i]); cand.push(B.axes[i]); }
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) {
+      const c = crs(A.axes[i], B.axes[j]);
+      const len = Math.hypot(c[0], c[1], c[2]);
+      if (len > 1e-6) cand.push([c[0] / len, c[1] / len, c[2] / len]);
+    }
+    let best = Infinity, axis = null;
+    for (const L of cand) {
+      let ra = 0, rb = 0;
+      for (let k = 0; k < 3; k++) { ra += A.h[k] * Math.abs(dot(L, A.axes[k])); rb += B.h[k] * Math.abs(dot(L, B.axes[k])); }
+      const ov = ra + rb - Math.abs(dot(L, d));
+      if (ov < best) { best = ov; axis = L; }
+    }
+    return { depth: best, axis };
+  }
+
+  // 겹친 부품 쌍의 설명: 어느 상자끼리(목록 번호)·가장 깊이 들어간 곳(월드 좌표)·침투 깊이. 안 겹치면 null. boxesOverlap 과 같은 판정이다.
+  function boxesOverlapInfo(boxesA, posA, qA, boxesB, posB, qB, tol) {
+    const axA = axesFromQuat(qA), axB = axesFromQuat(qB);
+    let best = null;
+    boxesA.forEach((a, ia) => {
+      const wa = worldBox(a, posA, qA, axA);
+      boxesB.forEach((b, ib) => {
+        const wb = worldBox(b, posB, qB, axB);
+        if (!obbOverlap(wa, wb, tol)) return;
+        if (!!a.rd !== !!b.rd && !cylinderHit(a.rd ? wa : wb, a.rd ? a.rd : b.rd, a.rd ? wb : wa, tol)) return;
+        const pn = obbPenetration(wa, wb);
+        if (!best || pn.depth > best.depth) best = { ia, ib, depth: pn.depth, axis: pn.axis, at: [(wa.c[0] + wb.c[0]) / 2, (wa.c[1] + wb.c[1]) / 2, (wa.c[2] + wb.c[2]) / 2] };
+      });
+    });
+    return best;
+  }
+
   // 부품 하나(몸통 상자 목록 + 위치 + 회전)끼리 겹치는가
   function boxesOverlap(boxesA, posA, qA, boxesB, posB, qB, tol) {
     const axA = axesFromQuat(qA), axB = axesFromQuat(qB);
@@ -114,5 +151,5 @@
     return false;
   }
 
-  window.IVS_COLLISION = { coreBoxes, axesFromQuat, worldBox, obbOverlap, boxesOverlap };
+  window.IVS_COLLISION = { coreBoxes, axesFromQuat, worldBox, obbOverlap, boxesOverlap, boxesOverlapInfo, obbPenetration };
 })();
