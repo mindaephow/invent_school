@@ -137,6 +137,19 @@ def screen_pose(A, q, k):
     if lf: p = p + np.array([0.0, lf, 0.0])
     return p, R
 
+def float_no_target(A):
+    """화면은 방향(dir)이 있는 새 부품을 안내점(marks)·hover 가 없어도 기본 띄움(22mm)만큼 띄워 그린다. 안내점이 없으면 어디에 끼우려고 뜬 것인지 알 수 없어, 가만히 있어야 할 부품이 혼자 떠 있게 된다(포뮬러원 3번 블록 2 가 22mm 떠 블록 1 과 높이가 달라 결합이 대각선으로 보인 사고, 2026-11-17)."""
+    out = []
+    for k, st in enumerate(A.steps, 1):
+        keys, names = [], []
+        for i, q in enumerate(st.parts):
+            ex = q.extra or {}
+            if not ex.get("dir") or ex.get("seated") or ex.get("noGuide") or ex.get("hover") or ex.get("recv") or (ex.get("move") or {}).get("at") == k or ex.get("moveGuide") or ex.get("loose"): continue
+            if ex.get("marks"): continue   # settleMarks 는 5번(settling)에서만 쓰여 3번 띄움과 무관
+            keys.append("%d:%d" % (k, i)); names.append(q.n)
+        if keys: out.append((k, keys, "%s %d개: 방향(dir)만 있고 안내점(marks)·hover 가 없어 화면이 기본 띄움 22mm 를 건다 — 가만히 있을 부품이면 dir 을 빼거나 hover 를 주고, 끼울 부품이면 안내점을 준다" % ("·".join(sorted(set(names))), len(keys))))
+    return out
+
 def tool_pose(A):
     """번호별 '도구가 본 화면 자세' {번호: {부품 키: [x, y, z, rx, ry, rz]}} — 앞 번호와 달라진 부품만 적는다(화면은 1번부터 차례로 덮어 읽는다). 화면(design-assembly.js)이 실제로 그리는 자세와 대조해 5mm·15° 넘게 다르면 '도구-화면' 칩에 뜬다."""
     from asmlib import R_to_euler
@@ -193,7 +206,7 @@ def split_bad(A):
     for k in sorted(moved_at):
         if k < 2: continue
         try:
-            prev, _ = _mate_pairs(A, k - 1); now, byid = _mate_pairs(A, k)
+            prev, _ = _mate_pairs(A, k - 1, drawn=True); now, byid = _mate_pairs(A, k, drawn=True)   # 화면이 그리는 자세로 잰다(poseAt 로 세워 이어지는 부품을 pose_at 은 못 읽어 7번 분리 4건을 거짓으로 냈다 — 2026-11-17)
         except Exception: continue   # 옛 형식 조립도는 자세를 못 구하면 건너뛴다
         for pr in sorted(prev - now, key=lambda s: sorted(map(str, s))):
             ids = list(pr)
@@ -402,6 +415,7 @@ def collect(name):
             add(k, "store", ["%d:%d" % (k, pi) for pi in pis], msg)
     except Exception as e_:
         print("violations: 창고 점검을 못 붙임 —", str(e_)[:100], file=sys.stderr)
+    for k_, keys_, msg_ in float_no_target(A): add(k_, "link", keys_, msg_)
     bad, _n, _sk = guidecheck.run(name)
     for k, msg in bad:
         nm = re.match(r"(\S+?)(?:\(옮김\))?\s", msg + " ")

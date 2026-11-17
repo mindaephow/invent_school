@@ -559,10 +559,13 @@ class Step:
         f = s.A.fix_of("shift", s.A.next_name(n))
         if f: p = p + np.array(f["delta"], float)
         return s._add(Part(n, R, p, s, extra), "place_next")
-    def _rest_pos(s, n, R, mine, host, hole, toward):
+    def _rest_pos(s, n, R, mine, host, hole, toward, hostPose=False):
         """place_rest 의 위치 계산(몸통 면이 host 구멍 끝면에 닿는 자리) → (부품 원점 위치, toward 방향 몸통 반폭)."""
         tmp = Part(n, R, (0, 0, 0), s); t = np.array(toward, float); t = t / np.linalg.norm(t)
-        hp = _host(s.A, host); mid = _item(tmp, mine, "홀")[0]; hid = _item(hp, hole, "홀")[0]; h = hp.hole(hid)
+        hp = _host(s.A, host)
+        if hostPose:   # 받는 부품(판 등)을 이 번호 화면이 그리는 자세로 읽는다(attach·recv 의 hostPose 와 같다) — 선 판·옮긴 부품에 면 규칙을 쓰려고
+            import copy, violations; _c = copy.copy(hp); _c.p, _c.R = (np.array(v, float) for v in violations._drawn_pose(s.A, hp, s.index)); hp = _c
+        mid = _item(tmp, mine, "홀")[0]; hid = _item(hp, hole, "홀")[0]; h = hp.hole(hid)
         size = np.array(tmp.conn.get("size") or partlib.get(n)["size"], float)
         half = float(np.dot(np.abs(t), np.abs(R) @ (size / 2)))   # toward 방향으로 몸통 반폭(상자, 몸통 중심 = 부품 원점)
         face = h["pos"] + t * (h["len"] / 2)
@@ -579,7 +582,7 @@ class Step:
         """부품을 **앞 부품 구멍의 끝면에 몸통이 닿게** 놓는다(물리법칙: 겹치지 않고 떠 있지도 않다). toward = 이 부품이 놓이는 쪽(세계 방향, 예: (0, 1, 0) 은 host 구멍 위쪽).
         끝면 = host 구멍 가운데에서 toward 로 구멍 길이의 절반(홀 테두리 끝면 포함), 몸통 두께 = 부품 크기(dims.json)를 자세 R 로 돌린 toward 방향 폭.
         구멍 길이(place_next)가 아니라 몸통 크기로 재므로 몸통이 구멍보다 길어도 파고들지 않는다. 옆으로는 내 구멍(mine)이 host 구멍(hole) 위에 오게 맞춘다."""
-        R = np.array(R, float); p, half = s._rest_pos(n, R, mine, host, hole, toward)
+        R = np.array(R, float); p, half = s._rest_pos(n, R, mine, host, hole, toward, extra.pop("hostPose", False))
         f = s.A.fix_of("shift", s.A.next_name(n))
         if f: p = p + np.array(f["delta"], float)
         if extra.get("recv") and "thick" not in extra: extra["thick"] = round(2 * half, 3)   # 받는 판 두께 = 몸통 두께(dims)
