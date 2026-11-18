@@ -1,6 +1,7 @@
 # 감독 모드 도구(2026-11-18) — Sonnet 작업자(cubo-worker)에게 줄 지시문을 만들고, 번호마다 감독 결과를 기록하고, 좋아지는지 추세를 본다. 규칙은 큐보/규칙/감독.md.
 #   python supervise.py brief <이름> <번호> [--포트 3180] [--아이디 minsiljang0] [--메모 "…"]   작업자 지시문(감독이 Agent 호출에 그대로 넣는다)
 #   python supervise.py add <이름> <번호> --판정 맞음|다름|못함 [--분 24] [--호출 90] [--저장 3] [--막힘 9] [--고침 "…"] [--메모 "…"]
+#   python supervise.py approve <이름> <번호> <책 시점 스크린샷> "<센 값 비교 30자 이상>" [--뒤 "<N+1번 책에서 확인한 것>"]   감독 판정 = 증거(record_check --감독)
 #   python supervise.py show [<이름>]                                         번호별 기록과 추세(최근 5번호 vs 그 전)
 # 기록은 저장소 큐보/규칙/감독기록.jsonl 에 쌓인다(git 으로 모든 PC 가 같이 본다).
 import json, os, sys, time, statistics as st
@@ -32,7 +33,8 @@ def brief(name, n, a):
         "- 진행기록: %s · 인수인계: 큐보/인수인계.md" % prog,
     ]
     if memo: lines.append("- 감독 메모: " + memo)
-    lines.append("- 끝나면 cubo-worker 정의의 '최종 보고' 6가지 형식으로, 막힘 기록은 빠짐없이.")
+    lines.append("- **증거는 감독이 남긴다(감독 판정 = 증거):** 8단계의 관찰 기록(observe·quick_obs)·6방향 6장·track.py·via.json 과 9단계의 record_check 는 하지 않는다. 대신 `build --write` 뒤 책과 같은 시점 스크린샷 1장을 찍어 경로를 보고한다.")
+    lines.append("- 끝나면 cubo-worker 정의의 '최종 보고' 형식으로, 막힘 기록은 빠짐없이.")
     print("\n".join(lines))
 
 def add(name, n, a):
@@ -44,6 +46,25 @@ def add(name, n, a):
     os.makedirs(os.path.dirname(LOG), exist_ok=True)
     open(LOG, "a", encoding="utf-8").write(json.dumps(r, ensure_ascii=False) + "\n")
     print("기록:", json.dumps(r, ensure_ascii=False))
+
+def approve(name, n, shot, note, a):
+    """감독 판정 = 증거: 감독이 책과 같은 시점 화면(shot)을 직접 보고 맞다고 판정했을 때 record_check --감독 으로 증거를 남긴다.
+    --뒤 "…" 를 주면 다음 번호 책(N+1)에서 이 조립을 확인한 것을 <이름>_via.json 에 적는다(뒤 번호 확인 칩)."""
+    import subprocess, asmpath
+    r = subprocess.run([sys.executable, os.path.join(HERE, "record_check.py"), "--감독", name, str(n), shot, note], cwd=HERE, env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+    if r.returncode != 0: sys.exit("❌ 감독 증거를 못 남겼다 — 위 출력의 원인을 고친다")
+    d = subprocess.run([sys.executable, os.path.join(HERE, "dbimgcheck.py"), name, str(n)], cwd=HERE, capture_output=True, text=True, encoding="utf-8", errors="replace", env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+    miss = [l for l in (d.stdout or "").splitlines() if l.startswith("❌ 안 올림") and "없음" not in l]
+    print(("⚠ 판정하며 새로 생긴 그림을 DB 에 올린다(viewer_snippets 3): " + miss[0]) if miss else "그림 DB: 올릴 것 없음")
+    nxt = opt(a, "--뒤")
+    if nxt:
+        vp = asmpath.resolve(name + "_via.json"); via = json.load(open(vp, encoding="utf-8")) if os.path.exists(vp) else {}
+        img = "%02d.jpg" % (int(n) + 1)
+        rows = [x for x in via.get(str(n), []) if x.get("image") != img]
+        rows.append({"step": int(n) + 1, "image": img, "book_only": True, "what": "감독: " + nxt})
+        via[str(n)] = rows; json.dump(via, open(vp, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+        subprocess.run([sys.executable, os.path.join(HERE, "verify_step.py"), name, str(n)], cwd=HERE, capture_output=True, env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+        print("뒤 번호 확인 기록:", vp, "→", rows[-1]["what"])
 
 def show(name):
     rows = [r for r in load() if not name or r["조립도"] == name]
@@ -66,5 +87,6 @@ if not a: sys.exit(__doc__ if __doc__ else open(__file__, encoding="utf-8").read
 cmd = a[0]
 if cmd == "brief" and len(a) >= 3: brief(a[1], a[2], a)
 elif cmd == "add" and len(a) >= 3: add(a[1], a[2], a)
+elif cmd == "approve" and len(a) >= 5: approve(a[1], a[2], a[3], a[4], a)
 elif cmd == "show": show(a[1] if len(a) > 1 and not a[1].startswith("--") else None)
 else: sys.exit(open(__file__, encoding="utf-8").read().split("\nimport")[0])

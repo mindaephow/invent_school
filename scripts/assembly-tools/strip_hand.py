@@ -7,6 +7,7 @@
 #   키워드: p=(숫자…) · marks/settleMarks/faceMarks/holeMarks=[[숫자…]] · side={…} · shift=(숫자…)(move_made 류)  → 그 인자를 뺀다(도구가 결합·구멍에서 다시 계산한다)
 #   위치:   place(부품, 자세, (x, y, z)) · _abs_place(단계, 부품, 자세, (…숫자 포함…))  → 위치를 (0, 0, 0) 미배치 자리로 되돌린다(새 창고 바닥 부품은 원래 원점이라 그대로 둔다)
 #   인덱스·상수: x.extra["move"]["marks"] = [숫자 좌표…] · x.extra["poseAt"] = {숫자…} 는 비우고({}·[]), 이름 = np.array([x, y, z]) 위치 상수(_cf15·_PV13 류; 방향 0·±1 만이면 제외)는 np.zeros(3) 으로 되돌린다(handcheck.hidden 과 같은 기준, 2026-11-18 추가 — 예전엔 이런 숫자가 남았다)
+#   띄움·두께(2026-11-18): hover=·thick=·pegDepth=·settleHover= 의 숫자 → 그 인자를 뺀다(리벳은 화면 기본 띄움, 그 위 판·블록은 번호를 만들 때 moves.plate_hover() 로 다시 준다 — hovercheck 가 순서를 알려 준다). hover=0.01(G19)은 둔다. x.extra["hover"]=숫자 대입은 handcheck 가 보여 주기만 한다
 #   식·Part: 위 자리에 숫자가 섞인 식을 직접 적은 것((_x0 + 60.0, YC, ZL - 8.0) 등)과 Part(부품, 자세, 좌표) 직접 생성의 좌표도 같은 방법으로 지운다(handcheck._expr 와 같은 기준 — 함수 호출로 계산한 값은 건드리지 않는다)
 #           → 부품이 겹쳐 보이는 것이 정상이다. 번호를 만들 때 그 부품을 attach/recv 규칙 좌표로 다시 놓는다(위반 표시가 어디를 놓아야 하는지 알려 준다).
 # 안전장치: 지운 결과가 파이썬 문법으로 읽히지 않으면 쓰지 않는다. 옆자리 작업 위치(to_side)는 "어디에 둘지 정하는 값"이라 건드리지 않는다.
@@ -36,7 +37,7 @@ def plan(src):
             if not (len(xyz) == 3 and xyz[0] == 0 and xyz[2] == 0): s, e = span(node.args[2]); edits.append((s, e, "(0, 0, 0)", "Part 직접 생성 위치 → 원점", node.lineno))
         for kw in node.keywords:
             f = node.func.attr if isinstance(node.func, ast.Attribute) else ""
-            hit = (kw.arg == "p" and (H._lit(kw.value) or H._expr(kw.value))) or (kw.arg in H._MARKS and (H._lit(kw.value) or H._expr(kw.value))) or (kw.arg == "side" and isinstance(kw.value, ast.Dict)) or (kw.arg == "shift" and H._lit(kw.value) and f in ("move_made", "move_group", "move_built"))
+            hit = (kw.arg in H._HOVKEYS and H._hand_num(kw.value)) or (kw.arg == "p" and (H._lit(kw.value) or H._expr(kw.value))) or (kw.arg in H._MARKS and (H._lit(kw.value) or H._expr(kw.value))) or (kw.arg == "side" and isinstance(kw.value, ast.Dict)) or (kw.arg == "shift" and H._lit(kw.value) and f in ("move_made", "move_group", "move_built"))
             if hit:
                 s = _off(lines, kw.value.lineno, kw.value.col_offset); e = _off(lines, kw.value.end_lineno, kw.value.end_col_offset)
                 k0 = src.rfind(kw.arg, 0, s); s = k0   # 'p=' 앞까지(키워드 이름 시작)

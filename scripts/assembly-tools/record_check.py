@@ -64,10 +64,14 @@ def resign(argv):
 
 def main():
     if len(sys.argv) > 1 and sys.argv[1] == "--재서명": return resign(sys.argv[2:])
+    # --감독(사용자 승인 2026-11-18 "감독관이 봤을 때 괜찮으면 증거 같은 것 없이 넘어가자"): 감독 모드의 감독이 책과 화면을 직접 나란히 보고 판정한 것을 증거로 남긴다.
+    #   관찰 기록(observe) 요구만 빼고 나머지(필수 산출물·45분 안 캡처·숫자 든 비교·비교 그림·지문 — 조립이 바뀌면 무효)는 같다. 감독(supervise.py approve)만 쓴다(큐보/규칙/감독.md).
+    by_sup = len(sys.argv) > 1 and sys.argv[1] == "--감독"
+    if by_sup: sys.argv = sys.argv[:1] + sys.argv[2:]
     if len(sys.argv) != 5: sys.exit(__doc__)
     name, step, shot, note = sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4].strip()
     here = os.path.dirname(os.path.abspath(__file__))
-    if step >= 16 or os.environ.get("OBS_REQUIRED") == "1":   # 관찰 증거(observe.py) — 결합 지점·그룹·뒤 번호를 눈으로 본 기록이 없으면 비교 증거를 안 받는다(2026-10-27 배틀바이크 17번). 기존 번호(1~15)는 그대로.
+    if not by_sup and (step >= 16 or os.environ.get("OBS_REQUIRED") == "1"):   # 관찰 증거(observe.py) — 결합 지점·그룹·뒤 번호를 눈으로 본 기록이 없으면 비교 증거를 안 받는다(2026-10-27 배틀바이크 17번). 기존 번호(1~15)는 그대로.
         import observe
         _miss = observe.check(name, step)
         if _miss: sys.exit("❌ 관찰 증거가 모자라 비교 증거를 기록하지 않는다 — `python observe.py add …` 로 책 확대와 화면을 나란히 본 기록을 먼저 남긴다(큐보 부품결합규칙.md H 절):\n   - " + "\n   - ".join(_miss))
@@ -96,7 +100,7 @@ def main():
     out = os.path.join(out_dir, "%02d.jpg" % step); side.save(out, "JPEG", quality=90, subsampling=0, optimize=True)   # 비교 그림도 JPEG(용량, 사용자 지시 2026-11-14)
     ef = os.path.join(here, name + "_evidence.json")
     ev = json.load(open(ef, encoding="utf-8")) if os.path.exists(ef) else {}
-    ev[str(step)] = {"fp": fp, "shape": stepfp.shape_fp(asm[step - 1], stepfp.anchor(asm), step, asm), "note": note, "time": time.strftime("%Y-%m-%d %H:%M:%S"), "cmp": "refs/%s/cmp/%02d.jpg" % (name, step), "geo": stepfp.geo(asm[step - 1], stepfp.anchor(asm), step, asm)}   # geo: 이 번호 화면의 조립 값 — 나중에 코드만 바뀌면 --재서명 이 이 값과 숫자로 비교한다
+    ev[str(step)] = {"fp": fp, "shape": stepfp.shape_fp(asm[step - 1], stepfp.anchor(asm), step, asm), "note": note, "time": time.strftime("%Y-%m-%d %H:%M:%S"), "cmp": "refs/%s/cmp/%02d.jpg" % (name, step), "geo": stepfp.geo(asm[step - 1], stepfp.anchor(asm), step, asm), **({"by": "감독"} if by_sup else {})}   # by: 감독 판정 증거(감독.md) · geo: 이 번호 화면의 조립 값 — 나중에 코드만 바뀌면 --재서명 이 이 값과 숫자로 비교한다
     json.dump(ev, open(ef, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     print("✅ %d번 비교 증거 기록: %s" % (step, out)); print("   지문", fp, "| 결과:", note)
     # 왼쪽 점검 칩 자동 연동(사용자 지시 2026-11-10 — "번호마다 이미지 작업을 하고도 칩이 한 번도 자동으로 안 채워졌다"): 증거를 남기는 순간 verify_step 을 돌려 칩 기록(<이름>_verify.json·DB)을 채운다
