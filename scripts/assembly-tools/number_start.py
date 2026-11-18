@@ -8,14 +8,15 @@ import json, os, re, sys
 sys.stdout.reconfigure(encoding="utf-8")
 here = os.path.dirname(os.path.abspath(__file__))
 name, k = sys.argv[1], int(sys.argv[2]); NN = "%02d" % k
-# ── 한화면 순서와 상황 색인: 규칙 파일(큐보 부품결합규칙.md)의 <!-- 한화면 -->·<!-- 상황색인 --> 블록을 그대로 보여 준다(규칙 원본은 그 파일 한 곳 — 여기에 다시 적지 않는다)
-#    번호마다 읽는 것은 이 두 블록이다. 규칙 본문은 색인이 가리키는 규칙 번호만 연다. `python number_start.py <이름> <번호> --색인` 은 두 블록만 보여 주고 끝낸다(막혔을 때 다시 볼 때).
+# ── 한화면 순서와 상황 색인: 3_번호하나.md 의 <!-- 한화면 --> 블록과 4_막힐때.md 의 <!-- 상황색인 --> 블록을 그대로 보여 준다(원본은 그 두 문서 — 여기에 다시 적지 않는다)
+#    번호마다 읽는 것은 이 두 블록이고, 단계별 할 일은 3_번호하나.md 본문이다. `python number_start.py <이름> <번호> --색인` 은 두 블록만 보여 주고 끝낸다(막혔을 때 다시 볼 때).
 def _flow():
     try:
-        rp = os.path.join(here, "큐보", "규칙", "큐보 부품결합규칙.md"); t = open(rp, encoding="utf-8").read()
-        for mk, title in (("한화면", "번호 하나 — 한 화면 순서"), ("상황색인", "상황 색인 (막히거나 책과 다르면 증상을 찾아 그 규칙만 연다 — 규칙 파일 0절)")):
+        rd = os.path.join(here, "큐보", "규칙")
+        for fn, mk, title in (("3_번호하나.md", "한화면", "번호 하나 — 늘 지킬 것·1~9단계 (단계별 할 일은 큐보/규칙/3_번호하나.md)"), ("4_막힐때.md", "상황색인", "상황 색인 (막히거나 책과 다르면 증상을 찾아 그 규칙만 연다 — 큐보/규칙/4_막힐때.md)")):
+            t = open(os.path.join(rd, fn), encoding="utf-8").read()
             print("═══ %s ═══" % title); print(t[t.index("<!-- %s -->" % mk) + len("<!-- %s -->" % mk):t.index("<!-- /%s -->" % mk)].strip()); print()
-    except Exception as e_: print("⚠ 한화면·상황 색인을 못 읽음(큐보 부품결합규칙.md 0절을 직접 연다):", e_)
+    except Exception as e_: print("⚠ 한화면·상황 색인을 못 읽음(큐보/규칙/3_번호하나.md·4_막힐때.md 를 직접 연다):", e_)
 _flow()
 if "--색인" in sys.argv: sys.exit(0)
 try:   # 옛 구멍 번호(hN_M) 자동 변환(사용자 지시 2026-11-15): 부품 DB 번호로 바뀌기 전에 만든 조립도는 스크립트가 KeyError 로 멈춘다 — 차시를 시작하면 백업하고 같은 위치의 새 번호로 바꾼다. 막지 않는다.

@@ -203,8 +203,8 @@ export function registerCuboAssemblyTools(server, getSupabase) {
         inputSchema: {},
       },
       async () => text([
-        '큐보 조립도 규칙의 유일한 원본: 저장소 mindaephow/invent_school 의 scripts/assembly-tools/큐보/규칙/큐보 부품결합규칙.md (get_github_file 로 읽는다). 공통편 + 제1부 교재검사 + 제2부 조립검사로 나뉘어 있다.',
-        '부품 사실(크기·돌기·구멍·방향·면): 부품 DB — get_part_connectors / 부품 상세내역 data.detail(run_sql 로 읽기). 연결점 확인 순서는 규칙 파일 K3.',
+        '큐보 조립도 규칙: 저장소 mindaephow/invent_school 의 scripts/assembly-tools/큐보/규칙/ 폴더(get_github_file 로 읽는다). 1_입구.md 가 어떤 문서를 언제 읽는지 알려 준다 — 2_조립도시작.md(새 조립도) · 3_번호하나.md(번호마다) · 4_막힐때.md(막힐 때) · 5_부품사전.md(부품별 결합 규칙 G·K) · 큐보 부품결합규칙.md(그 밖의 규칙 번호를 찾아보는 규칙집).',
+        '부품 사실(크기·돌기·구멍·방향·면): 부품 DB — get_part_connectors / 부품 상세내역 data.detail(run_sql 로 읽기). 연결점 확인 순서는 5_부품사전.md 공통 C(K3).',
         '조립 단계 데이터: get_assembly / validate_assembly. 작업 기록: get_assembly_notes. 새 조립도 시작: check_chapter_parts.',
         '※ 옛 안내서(get_assembly_guide 본문)와 get_assembly_reference 는 삭제했다. 규칙과 어긋나는 글이 두 곳에 있던 것을 없애기 위해서다.',
       ].join('\n'))
@@ -649,7 +649,7 @@ export function registerCuboAssemblyTools(server, getSupabase) {
       'check_chapter_parts',
       {
         title: '새 조립도 시작 점검(교재 부품 목록 ↔ 부품 DB)',
-        description: '새 조립도를 시작할 때 맨 먼저 부른다. 권(volume)과 차시 제목(chapter)을 주면 교재관리(ivs_textbooks)의 그 차시 부품 목록(LIST)을 읽어 부품마다 ① 부품 DB 에 있는지 ② 3D 모델이 있는지 ③ 돌기·구멍 연결점이 있는지·신뢰도(checked/auto) ④ 면 이름이 확정된 부품인지를 한 번에 보여 주고, 이미 만든 조립도가 있는지, 앞으로 등록·확인해야 할 부품 목록을 정리해 준다. 없는 부품은 멈추지 말고 교재를 보고 직접 등록한 뒤 진행한다(규칙 파일 큐보 부품결합규칙.md "00. 조립도를 시작할 때").',
+        description: '새 조립도를 시작할 때 맨 먼저 부른다. 권(volume)과 차시 제목(chapter)을 주면 교재관리(ivs_textbooks)의 그 차시 부품 목록(LIST)을 읽어 부품마다 ① 부품 DB 에 있는지 ② 3D 모델이 있는지 ③ 돌기·구멍 연결점이 있는지·신뢰도(checked/auto) ④ 면 이름이 확정된 부품인지를 한 번에 보여 주고, 이미 만든 조립도가 있는지, 앞으로 등록·확인해야 할 부품 목록을 정리해 준다. 없는 부품은 멈추지 말고 교재를 보고 직접 등록한 뒤 진행한다(규칙 문서 큐보/규칙/2_조립도시작.md).',
         inputSchema: {
           chapter: z.string().describe('차시 제목. 예: 조종형비행기 (띄어쓰기는 무시하고 찾는다)'),
           volume: z.number().int().optional().describe('권. 기본 1'),
@@ -711,9 +711,9 @@ export function registerCuboAssemblyTools(server, getSupabase) {
           lines.push('── 해야 할 일 ──')
           lines.push(needRegister.length ? '1) DB 에 없는 부품 ' + needRegister.length + '종: 교재 그림·치수를 보고 직접 등록(get_part_standard → make_part_stl → apply_part_to_db → set_part_connectors)' : '1) 부품 등록: 필요 없음')
           lines.push(needConnectors.length ? '2) 연결점 없음/자동탐지 부품: ' + [...new Set(needConnectors)].join(', ') + ' — 3D 뷰어(?subject=robot → 큐보 부품 전체 리스트)에서 구멍·돌기 개수와 위치를 세어 확인하고 필요하면 set_part_connectors' : '2) 연결점 확인: 모두 checked')
-          lines.push(needConfirm.length ? '3) 면 이름 미확정 부품: ' + [...new Set(needConfirm)].join(', ') + ' — 부품 DB 상세내역(data.detail)을 보고, 없으면 부품 리스트(설계 화면 0차시 "큐보 부품 전체 리스트")에서 모양을 보고 앞뒤를 정해 기록(규칙 파일 K3)' : '3) 면 이름: 모두 확정')
+          lines.push(needConfirm.length ? '3) 면 이름 미확정 부품: ' + [...new Set(needConfirm)].join(', ') + ' — 부품 DB 상세내역(data.detail)을 보고, 없으면 부품 리스트(설계 화면 0차시 "큐보 부품 전체 리스트")에서 모양을 보고 앞뒤를 정해 기록(5_부품사전.md 공통 C·D)' : '3) 면 이름: 모두 확정')
           if (noModel.length) lines.push('4) 3D 모델 없는 부품(조립도에서 제외 대상): ' + [...new Set(noModel)].join(', '))
-          lines.push('다음: 규칙 파일 큐보 부품결합규칙.md 의 "00. 조립도를 시작할 때"부터.')
+          lines.push('다음: 규칙 문서 큐보/규칙/2_조립도시작.md 부터.')
           return text(lines.join('\n'))
         } catch (e) { return fail(e.message) }
       }

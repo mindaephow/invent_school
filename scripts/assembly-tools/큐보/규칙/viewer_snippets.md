@@ -32,7 +32,7 @@ JSON.stringify(br.camState())
 ## 3. 그림(refs)을 DB 에 올린다 — 만들자마자
 ```bash
 mkdir -p public/_refs_tmp/<이름>      # 저장소 루트에서 — 올린 뒤 지운다(커밋 금지, .gitignore 에 있음)
-cp scripts/assembly-tools/refs/<이름>/index.json scripts/assembly-tools/refs/<이름>/NN.jpg scripts/assembly-tools/refs/<이름>/NN_1.jpg scripts/assembly-tools/refs/<이름>/NN_2.jpg public/_refs_tmp/<이름>/
+cp scripts/assembly-tools/refs/<이름>/index.json scripts/assembly-tools/refs/<이름>/NN*.jpg public/_refs_tmp/<이름>/   # 그 번호 그림 전부(NN·NN_1·NN_2·NN_4 …). 관찰 그림은 obs/ 폴더째: mkdir -p public/_refs_tmp/<이름>/obs && cp scripts/assembly-tools/refs/<이름>/obs/NN_* public/_refs_tmp/<이름>/obs/
 ```
 ```js
 const b = window.__ivsAssemblyBridge;   // 조립 보기 화면에서 (차시를 연 뒤)
@@ -41,7 +41,8 @@ const out=[];
 for (const r of index.filter(r => Number(r.step)===26)) {          // 올릴 번호들
   const blob = await (await fetch('/_refs_tmp/<이름>/' + r.file, { cache: 'no-store' })).blob();
   const img = await new Promise((ok, no) => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.onerror = no; fr.readAsDataURL(blob); });
-  await b.refStore.save('cubo-2-dropchecker', Number(r.step), Number(r.idx), img, r.note);   // (조립도 id, 번호, idx, 그림, 설명) — 같은 (번호, idx) 는 덮어쓴다
+  await b.refStore.save('cubo-2-dropchecker',   // ← 예시 id. 실제 id 는 <이름>.py 맨 위 Asm("cubo-…") 의 첫 글자열, 위 26 은 올릴 번호
+   Number(r.step), Number(r.idx), img, r.note);   // (조립도 id, 번호, idx, 그림, 설명) — 같은 (번호, idx) 는 덮어쓴다
   out.push([r.step, r.idx, r.file, blob.size]);
 }
 JSON.stringify(out)
