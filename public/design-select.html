@@ -105,9 +105,10 @@
   <div style="background:#fff;border-radius:20px;padding:24px;max-width:420px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.25);">
     <h2 id="viewPickTitle" style="margin:0 0 6px;font-size:20px;"></h2>
     <p style="margin:0 0 16px;color:#64748b;font-size:14px;">어디로 들어갈까요?</p>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+    <div id="viewPickGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
       <a id="goDesign" class="subject-card" style="text-align:center;"><span class="icon">📐</span><span class="title">설계도</span></a>
       <a id="goAssembly" class="subject-card" style="text-align:center;"><span class="icon">🧩</span><span class="title">조립도</span></a>
+      <a id="goCompare" class="subject-card" href="kit-compare.html" style="text-align:center;display:none;grid-column:1 / -1;"><span class="icon">⚖️</span><span class="title">교구비교</span></a>
     </div>
     <button id="viewPickClose" type="button" style="margin-top:14px;width:100%;padding:10px;border:0;background:none;color:#64748b;cursor:pointer;font-size:14px;">취소</button>
   </div>
@@ -123,6 +124,7 @@
       document.getElementById('viewPickTitle').textContent = card.querySelector('.title').textContent;
       document.getElementById('goDesign').href = base + '&view=design';
       document.getElementById('goAssembly').href = base + '&view=assembly';
+      document.getElementById('goCompare').style.display = base.indexOf('subject=robot') >= 0 ? 'flex' : 'none';   // 교구비교는 로봇만
       pick.style.display = 'flex';
     });
   });

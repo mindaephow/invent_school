@@ -56,6 +56,7 @@
     // move{at,p|by,r}: 그 단계부터는 옮긴 자세로 검사한다
     const mvAt = (pt, stp) => (typeof window !== 'undefined' && window.IVS_moveAt ? window.IVS_moveAt(pt, stp) : (pt.move && stp >= pt.move.at ? pt.move : null)) // 여러 번 옮긴 부품은 그 단계 이전 가장 마지막 이동
     const mvIs = (pt, stp) => (typeof window !== 'undefined' && window.IVS_moveIs ? window.IVS_moveIs(pt, stp) : !!(pt.move && pt.move.at === stp))
+    const paNow = (pt, stp) => { const ks = pt.poseAt ? Object.keys(pt.poseAt).map(Number).filter((k) => k <= stp) : []; return ks.length ? pt.poseAt[Math.max(...ks)] : null } // 받는 쪽(host)이 세운 자세(poseAt)면 화면이 그리는 그 자세로 돌기 방향을 잰다(2026-11-18, formula1 16번)
     const poseNow = (pt, stp) => { const m = mvAt(pt, stp); return m ? { p: m.p || pt.p.map((x, q) => x + (m.by || [0, 0, 0])[q]), r: m.r || pt.r || [0, 0, 0] } : { p: pt.p, r: pt.r || [0, 0, 0] } }
 
     // ── 단계별: 방향 확인 → 구멍 위치 목록 → 앞뒤 비교 ──
@@ -85,9 +86,14 @@
             const okAny = myPegs.some((m) => { const peg = w.pegs.find((q) => q.id === m.peg); return peg && dot(norm(peg.dir), d) <= -0.9 })
             if (!okAny) issues.push(`${si}단계 ${a.n}: 띄우는 방향 dir=${axisName(d)} 이면 돌기가 반대(${axisName(mul3(d, -1))})로 향해야 하는데 연결된 돌기(${myPegs.map((m) => m.peg).join(', ')})가 모두 다른 쪽을 향함(방향 어긋남)`)
           }
-          if (pt.recv && myHoles.length) {
-            const okAny = myHoles.some((m) => { const host = byKey.get(m.part); const hw = host && worldOf(host); const peg = hw && hw.pegs.find((q) => q.id === m.peg); return peg && (dot(norm(peg.dir), d) >= 0.9 || (peg.len >= 30 && dot(norm(peg.dir), d) <= -0.9)) }) // 축처럼 긴 돌기는 양 끝 어느 쪽에서도 끼운다(안쪽 부시)
-            if (!okAny) issues.push(`${si}단계 ${a.n}: 띄우는 방향 dir=${axisName(d)} 이면 고정된 돌기가 ${axisName(d)} 쪽을 향해야 하는데 연결된 돌기가 모두 다른 쪽을 향함(방향 어긋남)`)
+          if (pt.recv && (myHoles.length || upto.some((u) => paNow(u.ref, si)))) {
+            // 받는 쪽이 세운 자세(poseAt)면 결합 짝도 화면이 그리는 그 자세로 다시 찾아 돌기 방향을 잰다(2026-11-18, formula1 16번 — 눕힌 자세로 찾으면 엉뚱한 돌기가 짝으로 잡힌다)
+            const anyPa = upto.some((u) => paNow(u.ref, si))
+            const uptoD = anyPa ? upto.map((u) => { const pa = paNow(u.ref, si); return pa ? { ...u, p: pa.p, r: pa.r } : u }) : upto
+            const byD = new Map(uptoD.map((u) => [u.key, u]))
+            const holesD = anyPa ? mates.check(uptoD, conn).mated.filter((m) => m.into === a.key) : myHoles
+            const okAny = holesD.some((m) => { const host = byD.get(m.part); const hw = host && worldOf(host); const peg = hw && hw.pegs.find((q) => q.id === m.peg); return peg && (dot(norm(peg.dir), d) >= 0.9 || (peg.len >= 30 && dot(norm(peg.dir), d) <= -0.9)) }) // 축처럼 긴 돌기는 양 끝 어느 쪽에서도 끼운다(안쪽 부시)
+            if (holesD.length && !okAny) issues.push(`${si}단계 ${a.n}: 띄우는 방향 dir=${axisName(d)} 이면 고정된 돌기가 ${axisName(d)} 쪽을 향해야 하는데 연결된 돌기가 모두 다른 쪽을 향함(방향 어긋남)`)
           }
         }
         // 2) 구멍 위치 목록 (받는 쪽 기준)

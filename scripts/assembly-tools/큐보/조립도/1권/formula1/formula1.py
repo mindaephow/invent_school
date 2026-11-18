@@ -186,7 +186,7 @@ ge0.extra["faceMarks"] = [rnd(np.array(ge0.p, float) + np.array([0.0, 4.0, 0.0])
 bu0.extra["faceMarks"] = [rnd(np.array(bu0.p, float) + np.array([0.0, 2.75, 0.0]))]; bu0.extra["thick"] = 5.5   # 부시 두께 5.5
 _G8 = Group("8번 한 벌", [ax0, ge0, bu0])
 _cp8 = s8.copy_to_slot(_G8, 2, "8번 둘째 벌(기어축)", until=10, shift=(0.0, 0.0, 60.0))   # 책 8번은 두 벌이 나란히 보인다 — 옆(+Z 60, 화면 가로)에 놓고
-_sh8 = np.array([0.0, 0.0, 60.0])
+_sh8 = np.array([q for q in _cp8.parts if q.n == "축"][0].p, float) - np.array(ax0.p, float)   # 둘째 벌이 옆으로 옮겨진 만큼 = 복사본 축 위치 − 원본 축 위치(손 좌표 아님)
 for _o8, _c8 in zip([ax0, ge0, bu0], [[q for q in _cp8.parts if q.n == n_][0] for n_ in ("축", "작은기어", "부시")]):
     _c8.extra["hideAt"] = [9]   # 9번(첫째 벌만 판에 붙는 번호)에만 보관하고 8·10번에는 보인다
     _c8.extra.pop("noGuide", None)   # 책 8번은 두 벌 모두 부시·기어가 떠 있고 화살표가 있다 — 첫째 벌과 같은 안내를 옆 자리로 옮겨 단다
