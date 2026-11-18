@@ -377,11 +377,11 @@ A.steps[15].cam = (-1.94, 0.92, False, None, None, None); A.steps[15].camSrc = "
 s17 = SKEL[16]; s17.kw.pop("noPart", None)
 s17.note = "[교재 17] 검은 판(39프레임) 2장을 위에서 내려 끼워요. 한 장은 모터 돌기에, 한 장은 작은 블록 끝돌기 4개에 끼워요."
 R_B17 = R_W16                                                    # 39프레임: 긴 쪽(칸) → +Z, 줄 → −X, 구멍면(모델 +y)이 +Y(돌기가 내려와 들어오는 쪽)
-_kA = [_clone_stand(q) for q in blkA]; _kB = [_clone_stand(q) for q in blkB]   # 1번에서 판 위에 눕혀 올린 2단블록 4개의 세운 자세(끝돌기 p2 가 아래 = 뒤집으면 위)
-pB17 = s17.recv("39프레임", R_B17, {"h1": (_kA[0], "p2"), "h3": (_kA[1], "p2"), "h25": (_kB[0], "p2"), "h27": (_kB[1], "p2")}, hover=40, dir=(0, -1, 0))
-pA17 = s17.recv("39프레임", R_B17, {"h24": (_mBs, "p5"), "h6": (_mAs, "p3")}, hover=40, dir=(0, -1, 0))
+# 실제 블록·모터(7번부터 세운 자세 poseAt)에 hostPose=True 로 받는다 — 16번과 같은 방식(복제본 _clone_stand 는 반대편 자리에 놓여 어긋날 수 있었다)
+pB17 = s17.recv("39프레임", R_B17, {"h1": (blkA[0], "p2"), "h3": (blkA[1], "p2"), "h25": (blkB[0], "p2"), "h27": (blkB[1], "p2")}, hover=40, dir=(0, -1, 0), hostPose=True)
+pA17 = s17.recv("39프레임", R_B17, {"h24": (mB, "p5"), "h6": (mA, "p3")}, hover=40, dir=(0, -1, 0), hostPose=True)
 for _q in (pA17, pB17): _q.extra["loose"] = True; _q.extra["noMarkCheck"] = True
-A.steps[16].cam = (-0.85, 1.0, False, None, None)
+A.steps[16].cam = (-0.77, 0.96, False, None, None, None); A.steps[16].camSrc = "fit"   # 17번: axes_fit(17_U.json 9×3 holefit DoG 56%, +Z −X) 1.06px roll −5.7° — 앞 판 A(+Z +X)도 θ −0.56 φ 0.84 2.69px 로 비슷, 거울 해(θ 2.35)는 6.7px 라 버림
 
 # ── 18 ── 교재 113쪽 18 (읽은 것 2026-10-07, 격자 18_1·18_2: 흰 59프레임 5줄×9칸, 링 2개 = 칸3·칸9 같은 줄, 6칸 간격): 몸은 뒤집힌 채. 17번 검은 판(모터 위)이 놓인 상태에서, 흰 판 1장이 위에서 내려와 모터 돌기 2개(모터마다 1개, 17번 판이 쓰지 않은 바깥 줄)에 끼워진다.
 #   카메라가 보는 면: 몸 뒤쪽에서 모터 큰 상자 둘(돌기가 위로, 링이 하나씩), 판은 구멍이 열린 윗면. 17번 검은 판은 이미 놓여 있다(화살표 없음).

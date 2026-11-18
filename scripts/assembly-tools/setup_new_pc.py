@@ -36,6 +36,12 @@ def ponytail():
         shutil.copyfile(src, dst); say("MADE", ".claude/ponytail/hooks/ladder-gate.js 복사")
     else:
         say("OK  ", ".claude/ponytail/hooks/ladder-gate.js")
+    try:   # 감독 모드 환경(Sonnet 작업자 에이전트·조립도 입구 스킬)을 PC 전체 자리로 — 세션을 열 때마다 바뀐 것만 복사(감독.md)
+        import supervisor_env as _sv; _m, _b = _sv.install(quiet=True)
+        if _b: ok = False; say("FAIL", "감독 모드 환경: " + "; ".join(_b))
+        else: say("MADE" if _m else "OK  ", "감독 모드 환경(cubo-worker 에이전트·cubo-assembly 스킬)" + (" — 새로 복사: %d개" % len(_m) if _m else ""))
+    except Exception as _e:
+        ok = False; say("FAIL", "감독 모드 환경 복사 실패(%s)" % _e)
     sj = os.path.join(ROOT, ".claude", "settings.json")
     cfg = json.load(open(sj, encoding="utf-8")) if os.path.exists(sj) else {}
     pre = cfg.setdefault("hooks", {}).setdefault("PreToolUse", [])

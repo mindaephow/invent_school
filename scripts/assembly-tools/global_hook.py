@@ -40,6 +40,14 @@ def main():
         return 0
     if KIND not in HOOKS or inside(ev.get("cwd")) or not touches(ev):
         return 0
+    # 감독 모드 환경(2026-11-18): 다른 폴더에서 연 세션이 조립도 작업을 시작하면 세션마다 한 번 맞춘다(복사만, 바뀐 것만 — supervisor_env.py)
+    try:
+        import tempfile
+        _mk = os.path.join(tempfile.gettempdir(), "ivs_supervisor_env_%s" % str(ev.get("session_id") or "x")[:40])
+        if not os.path.exists(_mk):
+            sys.path.insert(0, HERE); import supervisor_env; supervisor_env.install(quiet=True); open(_mk, "w").close()
+    except Exception:
+        pass
     code = 0
     for cmd in HOOKS[KIND]:
         if os.environ.get("GLOBAL_HOOK_DRYRUN"):
