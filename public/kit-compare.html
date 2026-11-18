@@ -40,6 +40,29 @@
   .pick label{display:inline-flex; align-items:center; gap:6px; font-weight:600;}
   .pick select{font:inherit; padding:6px 8px; border:1px solid var(--border); border-radius:8px; background:var(--bg); color:var(--ink);}
   .pick .result{padding:10px 12px; border-radius:8px; background:var(--accent-soft); color:var(--ink);}
+  .adminbox{background:var(--surface); border:1px dashed var(--accent); border-radius:12px; padding:12px 14px; margin:0 0 14px; font-size:13px;}
+  .adminbox h3{margin:0 0 4px; font-size:14px;}
+  .adminbox .adm{font-size:11px; font-weight:700; color:#fff; background:var(--accent); border-radius:999px; padding:2px 8px; margin-left:4px;}
+  .adminbox .hint{margin:0 0 8px; color:var(--ink-soft);}
+  .wrap2{overflow-x:auto;}
+  #boardTbl, #genderTbl, #specTbl{min-width:620px; table-layout:auto;}
+  body:not(.is-admin) .adminonly{display:none;}
+  .viewparts{font:inherit; font-weight:700; margin-left:8px; padding:5px 12px; border:0; border-radius:8px; background:var(--accent); color:#fff; cursor:pointer;}
+  .modal{position:fixed; inset:0; z-index:50; background:rgba(15,23,42,.45); align-items:center; justify-content:center; padding:16px;}
+  .mbox{background:var(--surface); border-radius:16px; width:100%; max-width:560px; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 20px 50px rgba(0,0,0,.25);}
+  .mhead{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:14px 18px; border-bottom:1px solid var(--border);}
+  .mhead h2{margin:0; font-size:16px;}
+  .mhead button{border:0; background:none; font-size:18px; color:var(--ink-soft); cursor:pointer;}
+  .mbody{padding:14px 18px 18px; overflow:auto; font-size:13px;}
+  .mbody .mnote{margin:0 0 8px; color:var(--ink-soft);}
+  .mbody .msum{margin:0 0 10px;}
+  .mcheck{margin:0 0 12px; padding:10px 12px; border-radius:10px; background:var(--accent-soft); line-height:1.6;}
+  .mcheck .soon{font-size:11px; font-weight:700; color:var(--accent); background:var(--surface); border-radius:999px; padding:2px 8px; margin-left:4px;}
+  .mcheck .mnote2{color:var(--ink-soft); margin-top:2px;}
+  .ptbl{min-width:0; table-layout:auto;}
+  .ptbl th, .ptbl td{padding:6px 10px;}
+  .ptbl td:not(:first-child), .ptbl th:not(:first-child){text-align:right; width:60px;}
+  .ptbl tr.lack td{background:#FFF1EC; color:#B3401A; font-weight:700;}
   .wrap{overflow-x:auto; background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow);}
   table{border-collapse:collapse; width:100%; min-width:760px; font-size:13px; table-layout:fixed;}
   th, td{border:1px solid var(--border); padding:9px 11px; text-align:left; vertical-align:top; line-height:1.5;}
@@ -90,7 +113,10 @@
       <ul>
         <li>① <b>내가 가진 교구</b>와 단계 선택 — 2단계는 1단계+2단계(누적)이고, 생산중단 단계는 고를 수 없어요.</li>
         <li>② <b>만들고 싶은 교구</b>에서 권(단계) 선택 또는 권의 모델 선택 — 큐보 1~3단계는 따로 구매할 수 있어서 넣지 않았고, 큐보 4단계(생산중단)와 큐보플러스 1 / 1+2 / 1+2+3은 넣었어요.</li>
-        <li>③ 추가해야 할 부품과 구매 (준비 중)</li>
+        <li>③ <b>필요부품보기</b> — 추가해야 할 부품 목록(필요 / 보유 / 부족)이 모달로 떠요. 구매 연결은 준비 중이에요.</li>
+        <li class="adminonly">센서 처리 방식: 내 교구가 그 모델의 센서를 주지 않으면 → 내 교구 회사가 그 센서를 판매하는 경우 <b>구매할 수 있게</b> 하고, 판매하지 않으면 → <b>만들고 싶은 교구의 센서를 소개</b>하고 <b>서로 결합할 수 있는 젠더</b>를 함께 전해줘요. (예: 큐보는 센서를 여러 종류 주지 않아서 프로보 커넥트 모델에는 센서가 모자라요)</li>
+        <li class="adminonly">연결 방식: 모터는 대부분 <b>2핀 또는 DC잭</b>을 써서, <b>2핀을 DC잭으로 바꾸는 젠더</b>를 더하면 쓸 수 있어요. 서보모터와 센서는 보통 <b>3핀</b>이라 <b>테스트해서 확인</b>해요.</li>
+        <li>④ <b>메인보드·센서 확인(우리가 제공할 정보)</b> — 모델을 만들었을 때 내가 가진 메인보드가 그 동작을 할 수 있는지, 내 센서를 쓸 수 있는지는 우리가 확인해서 알려 줘야 해요. (모델이 쓰는 모터·센서는 모달에 보이고, 메인보드 지원 여부는 준비 중)</li>
       </ul>
       <h3>규격 · 데이터</h3>
       <ul>
@@ -110,18 +136,33 @@
       <label id="goalModelLabel">모델 <select id="goalModel"></select></label></div>
     <div class="result" id="result"></div>
   </section>
+  <section id="adminBoard" class="adminbox" style="display:none;">
+    <h3>메인보드 연결 정보 <span class="adm">관리자 전용</span></h3>
+    <p class="hint">내부에서 알고 있어야 하는 정보예요. 일반적으로 모터는 2핀 또는 DC잭, 서보모터·센서는 3핀을 써요. 값은 확인한 대로 채워요.</p>
+    <div class="wrap2"><table id="boardTbl"></table></div>
+    <p class="hint" style="margin-top:8px;">DC모터는 <b>+ , −</b> 두 선만 있으면 돼요. DC잭은 그 두 선을 잭 모양으로 만든 것이라, 2핀↔DC잭 젠더는 + / − 를 맞춰 이어 주면 돼요. <b>필요한 젠더는 2핀→DC잭, DC잭→2핀 두 가지뿐이에요.</b></p>
+    <p class="hint" style="margin-top:8px;"><b>교구 7개 = 규격 3가지</b> — 규격 기준으로 필요한 호환 부품을 정리했어요.</p>
+    <div class="wrap2"><table id="specTbl"></table></div>
+    <div class="wrap2" style="margin-top:10px;"><table id="genderTbl"></table></div>
+  </section>
+  <div id="partsModal" class="modal" style="display:none;">
+    <div class="mbox">
+      <div class="mhead"><h2 id="modalTitle"></h2><button type="button" id="modalClose" aria-label="닫기">✕</button></div>
+      <div id="modalBody" class="mbody"></div>
+    </div>
+  </div>
   <div class="wrap"><table id="tbl"></table></div>
 </div>
 <script>
 // 단계별 모터·센서: 부품 DB 교재 부품 목록(ivs_textbooks)에서 정리(2026-11-18). 없는 값은 비워 두면 '정리 전'으로 보인다. 권이 늘면 steps 와 목록을 고친다.
 // kit.steps = 단계 수(부품 DB ivs_robot_categories 의 volumes), d[i] = {m: 모터, s: 센서}
 const KITS = [
-  { name: '큐보', way: '리벳', steps: 4, disc: [4], part: '프레임 5mm · 피치 10mm', note: '메인보드-리모컨 연결 수월<br>동시 24명 번호 설정<br>혼선 많음',
+  { name: '큐보', way: '리벳', steps: 4, disc: [4], part: '프레임 5mm · 피치 10mm<br>홀 5.5mm', note: '메인보드-리모컨 연결 수월<br>동시 24명 번호 설정<br>혼선 많음',
     d: [{ m: 'DC모터 2개', s: '', mb: '지급 (리모컨 수신장치 포함)', rc: '지급 (적외선 방식)' }, { m: '', s: 'IR센서 2개, LED센서 2개' }, { m: '서보모터 1개', s: '터치센서 1개' }] },
   { name: '큐보+', full: '큐보플러스', way: '', steps: 3, note: '', d: [] },
-  { name: '타미주니어', full: '로보타미주니어', way: '리벳', steps: 5, part: '프레임 5mm · 피치 10mm<br>큐보보다 홀 1mm 작음<br>홀 테두리 없음<br>프레임 끝 더 둥긂', note: '', d: [] },
-  { name: '에이스랩', way: '리벳', steps: 4, part: '프레임 5mm · 피치 10mm<br>큐보보다 홀 1mm 작음<br>홀 테두리 없음<br>프레임 끝 더 둥긂', note: '', d: [] },
-  { name: '프로보 커넥트', way: '리벳', steps: 7, note: '리모컨 RF 방식<br>개별 연결 · 혼선 없음',
+  { name: '타미주니어', full: '로보타미주니어', way: '리벳', steps: 5, part: '프레임 5mm · 피치 10mm<br>홀 4.5mm (큐보보다 1mm 작음)<br>홀 테두리 없음<br>프레임 끝 더 둥긂', note: '', d: [] },
+  { name: '에이스랩', way: '리벳', steps: 4, part: '프레임 5mm · 피치 10mm<br>홀 4.5mm (큐보보다 1mm 작음)<br>홀 테두리 없음<br>프레임 끝 더 둥긂', note: '', d: [] },
+  { name: '프로보 커넥트', way: '리벳', steps: 7, part: '프레임 5mm · 피치 10mm<br>홀 6.0mm', note: '리모컨 RF 방식<br>개별 연결 · 혼선 없음',
     // 각 단계에서 새로 지급하는 것만(누적 아님) — 책 "N단계 부품수량확인" 쪽(LV1·2·3·4·6의 2쪽)에서 확인했다. 5단계는 책에 수량확인 쪽이 없어 계산한 값이다.
     d: [{ m: 'DC모터 2개', s: '스위치센서 1개' },
         { m: '', s: 'LED센서(레드·블루) 각 2개, 스위치센서 3개, 적외선센서 2개, FND센서 1개', mb: 'CPU블럭 1개' },
@@ -129,18 +170,22 @@ const KITS = [
         { m: '고속모터 2개, 서보모터 1개', s: '' },
         { m: '', s: '스프링스위치센서 4개, 적외선센서 1개' },   // 5단계는 계산: LV6 책 "1~5단계 부품 리스트" − (LV4 책 "1+2+3단계 부품 리스트" + 4단계 지급). 스프링스위치블럭 4−0, 적외선블럭 3−2, 서보·고속·모터·LED·스위치·FND 는 차이 0
         { m: '', s: '확장입력센서 1개, 자석센서 2개, 터치센서(레드·블루) 각 4개, 회전센서 2개, 무한회전센서 1개' }] },
-  { name: '프로보 익사이팅', way: '', steps: 4, part: '', note: '', d: [] },
-  { name: '프로보 말랑코딩', way: '', steps: 6, part: '', note: '', d: [] },
+  { name: '프로보 익사이팅', way: '', steps: 4, part: '프레임 5mm · 피치 10mm<br>홀 6.0mm', note: '', d: [] },
+  { name: '프로보 말랑코딩', way: '', steps: 6, part: '프레임 5mm · 피치 10mm<br>홀 6.0mm', note: '', d: [] },
   // 볼트너트 탭 — 단계 수는 부품 DB 권 수(프로보 테크닉·메타 7, X로보 7), 로보로보는 DB 에 없어 비워 둔다
   // 1단계 지급: 책 LV1 "부품 리스트"(8~9쪽)에서 확인. 2~7단계는 아직 확인 전이라 '정리 전'.
   { name: '프로보 테크닉', tab: '볼트너트', way: '볼트너트', steps: 7, part: '', note: '',
     d: [{ m: 'DC모터(R-120) 2개', s: '빨강LED센서 2개, 파랑LED센서 2개, 적외선센서 2개, 스위치센서 4개', mb: 'CPU보드 1개' }] },
   { name: '메타', tab: '볼트너트', way: '볼트너트', steps: 7, part: '', note: '', d: [] },
-  { name: '로보로보', tab: '볼트너트', way: '볼트너트', steps: 0, part: '', note: '', d: [] },
+  { name: '로보로보', tab: '볼트너트', way: '볼트너트', steps: 7, part: '', note: '', d: [] },
   { name: 'X로보', tab: '볼트너트', way: '볼트너트', steps: 7, part: '', note: '', d: [] },
 ];
 // 모델 목록: 부품 DB 교재 차시 제목(ivs_textbooks, 2026-11-18). 준비·창작 차시는 뺐다.
 const MODELS = {
+  '프로보 테크닉': { 1: ['새요','에어크래프트','범퍼카','보노','티노','패트롤카','로치','앨리','썬더볼트','두더지','아지'], 2: ['모노','라인트레인','롤링파이터','맨티스','샷건','쿠터','덜덜이','덤프','로더','포세이돈','몬스터해머'], 3: ['지프','사이보그핸드','글라디','멀탱','캐터펄트','티봇','리프트그랩','아머드','장풍이','헤라클레스'], 4: ['사커','윈디','바이크','블레이드','웜','타이슨','더블스피어','로드그랩','또리','클리링'], 5: ['리버스','캐넌슈터','파이어탱크1','파이어탱크2','파워지게차','캐넌탱크','파워불도저','트레일러','파워크레인','험비'], 6: ['캐리어','배트포드','코코','파워로더','랠리카','토네이도','세이트','파워굴착기'], 7: ['몬스터트럭','슈퍼버기카','와일드몬스터','개틀링머신','울트라로더','틸팅바이크'] },
+  '메타': { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: [] },   // 모델 목록은 알려 주시는 대로 채운다
+  '로보로보': { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: [] },
+  'X로보': { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: [] },
   '프로보 익사이팅': { 1: ['스틱 슝슝이','탭탭','쇼트트랙 볼','턴 타이밍','디비전 게임','피아르','수평 게임','페이스 슛팅','고백점프','슈터','순간의 판단'], 2: ['신호등','빙글빙글','토글 게임','꼬리잡기','스틱 붕붕이','놀라운 기억력','순풍 역풍','손등 치기','망치 게임','좌우 조종','왕복 달리기'], 3: ['턴테이블','도그파이트','무.꽃.피','러닝머신','빙글빙글 막대기','파도타기','창과 방패','위험한 인사','곡예 운전','마인러쉬','정교한 해머'], 4: ['캐치 마그넷','터치 터치','마구 탁구','스피드 터치','두더지 게임','무한 러닝머신','험난한 레이스','헤드 어택','원 터치','블럭 넘기기'] },
   '프로보 말랑코딩': { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] },   // 모델 목록은 알려 주시는 대로 채운다
   '큐보': { 1: ['토끼','양팔저울','풍차','로봇팽이','3륜바이크','축구로봇','오토건','조종형비행기','롤링봇','배틀로봇','꼬마기사','포뮬러원(F1)','강아지로봇'], 2: ['스피드바이크','투석기','드롭체커','사마귀로봇','어보이더','배틀로봇','오토타깃','바이킹','트레일러','볼링머신'], 3: ['배틀바이크','조향자동차','해머배틀','장갑차','미니덤프','석궁봇','빅핸드','집게로봇','오토투석기','큐보바이크'], 4: [] },   // 4단계는 생산중단(DB 에 교재·모델 없음 — 모델 목록은 알려 주시는 대로 채운다)
@@ -151,32 +196,170 @@ const MODELS = {
 };
 const DISC = { '큐보': ['4'] };
 const isDisc = (kit, v) => (DISC[kit] || []).includes(String(v));
+// 큐보플러스는 모든 것이 큐보와 동일(사용자 2026-11-18) — 1~3권 모델도 큐보 1~3권과 같게 둔다.
+MODELS['큐보플러스'] = { 1: MODELS['큐보'][1], 2: MODELS['큐보'][2], 3: MODELS['큐보'][3] };
 const opt = (v, t) => '<option value="' + v + '">' + t + '</option>';
 const $ = id => document.getElementById(id);
-const names = ['큐보', '타미주니어', '에이스랩', '프로보 커넥트', '프로보 익사이팅', '프로보 말랑코딩'].filter(n => MODELS[n]);   // 표 머리글 순서와 같게
-$('ownKit').innerHTML = names.map(n => opt(n, n)).join('');
+const names = ['큐보', '큐보플러스', '타미주니어', '에이스랩', '프로보 커넥트', '프로보 익사이팅', '프로보 말랑코딩', '프로보 테크닉', '메타', '로보로보', 'X로보'].filter(n => MODELS[n]);   // 표 머리글 순서와 같게
+const tabOf = n => (KITS.find(k => k.name === n || k.full === n) || {}).tab || '리벳';
 // 만들고 싶은 교구에만 있는 항목(권을 따로 고르지 않는다) — 큐보 4단계는 생산중단, 큐보플러스는 합친 묶음. 모델 목록은 알려 주시는 대로 채운다.
-const GOAL_ONLY = ['큐보 4단계 · 생산중단', '큐보플러스 1', '큐보플러스 1+2', '큐보플러스 1+2+3'];
+const GOAL_ONLY = ['큐보 4단계 · 생산중단'];
 // 큐보 1·2·3단계는 따로 구매할 수 있으니 '만들고 싶은 교구'에 넣지 않는다(사용자 2026-11-18). 큐보는 보유 교구로만 고른다.
 const isGoalOnly = k => GOAL_ONLY.includes(k);
-$('goalKit').innerHTML = names.filter(n => n !== '큐보').map(n => opt(n, n)).join('') + GOAL_ONLY.map(n => opt(n, n)).join('');
-function fillOwnVol() { $('ownVol').innerHTML = Object.keys(MODELS[$('ownKit').value]).filter(v => !isDisc($('ownKit').value, v)).map(v => opt(v, v === '1' ? '1단계' : '1~' + v + '단계 (누적)')).join(''); show(); }   // 생산중단 단계는 보유로 고를 수 없다(만들고 싶은 모델로만)
+// 탭(조립방식)마다 그 방식의 교구만 고른다 — 볼트너트 탭에서는 내가 가진 교구도, 만들고 싶은 교구도 볼트너트 교구만 나온다.
+let curTab = '리벳';
+// 만들고 싶은 교구 목록: 그 탭의 교구에서 큐보(따로 구매 가능)와 내가 고른 교구(이미 판매중이라 필요 없음)를 뺀다
+function fillGoalKits() {
+  const keep = $('goalKit').value;
+  const ks = names.filter(n => tabOf(n) === curTab && n !== '큐보' && n !== $('ownKit').value);
+  $('goalKit').innerHTML = ks.map(n => opt(n, n)).join('') + (curTab === '리벳' ? GOAL_ONLY.map(n => opt(n, n)).join('') : '');
+  if ([...$('goalKit').options].some(o => o.value === keep)) $('goalKit').value = keep;
+}
+function fillKits(tab) {
+  curTab = tab;
+  const ks = names.filter(n => tabOf(n) === tab);
+  $('ownKit').innerHTML = ks.map(n => opt(n, n)).join('');
+  document.querySelector('.pick').style.display = ks.length ? '' : 'none';
+  fillGoalKits(); fillOwnVol(); fillVol();
+}
+function fillOwnVol() { $('ownVol').innerHTML = !$('ownKit').value ? '' : Object.keys(MODELS[$('ownKit').value]).filter(v => !isDisc($('ownKit').value, v)).map(v => opt(v, v === '1' ? '1단계' : '1~' + v + '단계 (누적)')).join(''); show(); }   // 생산중단 단계는 보유로 고를 수 없다(만들고 싶은 모델로만)
 function fillVol() {
   const go = isGoalOnly($('goalKit').value);
   $('goalVol').parentElement.style.display = go ? 'none' : '';
   $('goalMode').parentElement.style.display = go ? 'none' : '';
-  $('goalVol').innerHTML = go ? opt('', '') : Object.keys(MODELS[$('goalKit').value]).filter(v => !isDisc($('goalKit').value, v)).map(v => opt(v, v + '권')).join('');   // 큐보 4권은 '큐보 4단계 · 생산중단' 항목으로 고른다
+  $('goalVol').innerHTML = go || !$('goalKit').value ? opt('', '') : Object.keys(MODELS[$('goalKit').value]).filter(v => !isDisc($('goalKit').value, v)).map(v => opt(v, v + '권')).join('');   // 큐보 4권은 '큐보 4단계 · 생산중단' 항목으로 고른다
   fillModel();
 }
-function fillModel() { const l = isGoalOnly($('goalKit').value) ? [] : MODELS[$('goalKit').value][$('goalVol').value]; $('goalModel').innerHTML = l.length ? l.map(m => opt(m, m)).join('') : opt('', '모델 목록 준비 중'); show(); }
+function fillModel() { const l = !$('goalKit').value ? [] : isGoalOnly($('goalKit').value) ? (MODELS['큐보'][4] || []) : (MODELS[$('goalKit').value][$('goalVol').value] || []); $('goalModel').innerHTML = l.length ? l.map(m => opt(m, m)).join('') : opt('', '모델 목록 준비 중'); show(); }   // 큐보 4단계는 권 없이 바로 모델
 function show() {
-  const own = $('ownKit').value, g = $('goalKit').value, m = $('goalModel').value, byModel = $('goalMode').value === 'model' && !isGoalOnly(g);
+  const own = $('ownKit').value, g = $('goalKit').value, m = $('goalModel').value, byModel = isGoalOnly(g) || $('goalMode').value === 'model';
+  if (!own || !g || !$('ownVol').value) { $('result').innerHTML = ''; return; }
   $('goalModelLabel').style.display = byModel ? '' : 'none';   // 방법 ① 권(단계) 선택 → 그 권 전체 / ② 권(단계)의 모델 선택 → 모델 하나
-  const goal = isGoalOnly(g) ? g + ' 전체' : g + ' ' + $('goalVol').value + '권' + (byModel ? ' ' + m + ' 모델' : ' 전체');
-  $('result').innerHTML = '<b>' + own + ' ' + ($('ownVol').value === '1' ? '1단계' : '1~' + $('ownVol').value + '단계') + '</b>로 <b>' + goal + '</b>' + (byModel ? '을' : '를') + ' 만들려면 추가해야 할 부품: <span style="color:var(--ink-soft)">부품 목록 준비 중 (모델별 필요 부품을 책에서 읽어 오면 여기에 나와요)</span>';
+  const goal = isGoalOnly(g) ? g + (m ? ' ' + m : '') + ' 모델' : g + ' ' + $('goalVol').value + '권' + (byModel ? ' ' + m + ' 모델' : ' 전체');
+  const ownTxt = own + ' ' + ($('ownVol').value === '1' ? '1단계' : '1~' + $('ownVol').value + '단계');
+  const head = '<b>' + ownTxt + '</b>로 <b>' + goal + '</b>' + (byModel ? '을' : '를') + ' 만들려면';
+  const calc = calcParts(own, +$('ownVol').value, g, $('goalVol').value, byModel ? m : null);
+  lastCalc = { title: ownTxt + ' → ' + goal, calc, own, goal: g };
+  if (!calc.ok) { $('result').innerHTML = head + ' 추가해야 할 부품: <span style="color:var(--ink-soft)">' + calc.why + '</span> <button type="button" id="viewParts" class="viewparts">필요부품보기</button>'; $('viewParts').onclick = openParts; return; }   // 부품 목록이 없어도 규격·젠더·변환 리벳 안내는 보여 준다
+  const short = calc.rows.filter(r => r.lack > 0).length;
+  $('result').innerHTML = head + ' 추가해야 할 부품 <b>' + short + '종</b> <button type="button" id="viewParts" class="viewparts">필요부품보기</button>';
+  $('viewParts').onclick = openParts;
 }
-$('goalKit').onchange = fillVol; $('goalVol').onchange = fillModel; $('goalModel').onchange = show; $('goalMode').onchange = show; $('ownKit').onchange = fillOwnVol; $('ownVol').onchange = show;
-fillOwnVol(); fillVol();
+// ── 관리자 전용: 교구별 메인보드 연결 정보(모터·서보모터·센서) ── 관리자로 로그인했을 때만 화면에 나온다(화면 표시 제한이며 보안 장치는 아니다).
+// 값은 확인한 대로 채운다: motor = 모터 연결(2핀 / DC잭), servo = 서보모터 연결(3핀 …), sensor = 센서 연결(3핀 …)
+const BOARDS = {
+  '큐보': { board: '', motor: 'DC잭', servo: '3핀', sensor: '3핀' },
+  '큐보+': { board: '', motor: 'DC잭', servo: '3핀', sensor: '3핀' },
+  '타미주니어': { board: '', motor: '2핀', servo: '3핀', sensor: '3핀' },
+  '에이스랩': { board: '', motor: '2핀', servo: '3핀', sensor: '3핀' },
+  '프로보 커넥트': { board: '', motor: '2핀', servo: '3핀', sensor: '3핀' },
+  '프로보 익사이팅': { board: '', motor: '2핀', servo: '3핀', sensor: '3핀' },
+  '프로보 말랑코딩': { board: '', motor: '2핀', servo: '3핀', sensor: '3핀' },
+  '프로보 테크닉': { board: '', motor: '', servo: '3핀', sensor: '3핀' },
+  '메타': { board: '', motor: '', servo: '3핀', sensor: '3핀' },
+  '로보로보': { board: '', motor: '', servo: '3핀', sensor: '3핀' },
+  'X로보': { board: '', motor: '', servo: '3핀', sensor: '3핀' },
+};
+// 호환 젠더: 우리가 보유하고 있는지 정리한다. from = 모델이 원래 쓰는 모터 연결, to = 내 메인보드의 모터 연결. have: true 보유 / 'making' 제작중 / false 없음 / null 확인 전
+// 2핀→DC잭: 타미주니어 등 2핀 모터를 큐보 메인보드(DC잭)에 결합할 수 있게 하는 젠더 — 제작중(사용자 2026-11-18) / DC잭→2핀: 큐보 모터를 타미주니어 등 2핀 메인보드에 쓰는 젠더 — 제작중(사용자 2026-11-18)
+const GENDERS = [
+  { name: '2핀→DC잭 젠더', from: '2핀', to: 'DC잭', have: 'making', qty: '' },
+  { name: 'DC잭→2핀 젠더', from: 'DC잭', to: '2핀', have: 'making', qty: '' },
+];
+// 변환 리벳(양쪽): 홀 크기가 달라서, 큐보 계열 ↔ 타미주니어·에이스랩 계열 부품(모터·센서 등)을 쓰려면 양쪽에 필요하다(사용자 2026-11-18)
+const HOLE_GROUP = { '큐보': '큐보계', '큐보+': '큐보계', '큐보플러스': '큐보계', '타미주니어': '로버트론계', '에이스랩': '로버트론계', '프로보 커넥트': '프로보계', '프로보 익사이팅': '프로보계', '프로보 말랑코딩': '프로보계' };   // 프로보계 홀 6.0mm = 프로보 커넥트 3D 모델(1X3·1X5블럭)에서 구멍 가장 좁은 곳을 잰 값, 익사이팅·말랑코딩은 같은 규격(사용자)
+const RIVET_ADAPTER = { name: '변환 리벳 (양쪽)', use: '큐보(홀 5.5mm) ↔ 타미주니어·에이스랩(홀 4.5mm) 부품(모터·센서 등) 결합 — 홀 크기가 달라서 양쪽에 필요', have: null, qty: '' };
+// 프로보 계열 홀 규격을 모르는 조합 — 변환 리벳이 필요한지 확인 전(규격을 알면 확정)
+const RIVET_UNKNOWN = [
+  { name: '변환 리벳 (큐보계 ↔ 프로보계)', use: '큐보·큐보+(홀 5.5mm) ↔ 프로보 커넥트·익사이팅·말랑코딩(홀 6.0mm) 부품 결합 — 양쪽에 필요', have: null, qty: '' },
+  { name: '변환 리벳 (로버트론계 ↔ 프로보계)', use: '타미주니어·에이스랩(홀 4.5mm) ↔ 프로보 커넥트·익사이팅·말랑코딩(홀 6.0mm) 부품 결합 — 양쪽에 필요', have: null, qty: '' },
+]
+function rivetNeed(own, goal) {   // 같은 계열이면 null, 다른 계열이면 변환 리벳, 계열을 모르면 'unknown'(홀 규격 확인 전)
+  if (own === goal) return null; const a = HOLE_GROUP[own], b = HOLE_GROUP[goal];
+  if (!a || !b) return 'unknown'; return a !== b ? RIVET_ADAPTER : null;
+}
+// 교구 7개는 규격이 3가지다 — 호환 부품은 이 3가지 규격 기준으로 정리한다(사용자 2026-11-18)
+const SPECS = [
+  { name: '큐보계', kits: '큐보 · 큐보+', hole: '5.5mm', motor: 'DC잭' },
+  { name: '로버트론계', kits: '타미주니어 · 에이스랩', hole: '4.5mm', motor: '2핀' },
+  { name: '프로보계', kits: '프로보 커넥트 · 익사이팅 · 말랑코딩', hole: '6.0mm', motor: '2핀' },
+];
+function specCell(a, b) {   // 내 규격 a 로 만들고 싶은 규격 b 를 만들 때 필요한 호환 부품
+  if (a === b) return '<span style="color:var(--ink-soft)">필요 없음</span>';
+  const items = [];
+  if (a.motor !== b.motor) { const g = GENDERS.find(x => x.from === b.motor && x.to === a.motor); items.push((g ? g.name : b.motor + '→' + a.motor + ' 젠더') + (g ? ' (' + haveTxt(g) + ')' : '')); }
+  items.push(!a.hole || !b.hole ? '변환 리벳 (필요 여부 확인 전)' : a.hole !== b.hole ? '변환 리벳 (양쪽)' : '');
+  return items.filter(Boolean).join('<br>') || '<span style="color:var(--ink-soft)">필요 없음</span>';
+}
+const boardKey = n => n === '큐보플러스' ? '큐보+' : n;
+function genderNeed(own, goal) {   // 모터 연결이 다르면 필요한 젠더, 같으면 null
+  const o = BOARDS[boardKey(own)], g = BOARDS[boardKey(goal)];
+  if (!o || !g || !o.motor || !g.motor || o.motor === g.motor) return null;
+  return GENDERS.find(x => x.from === g.motor && x.to === o.motor) || { name: g.motor + '→' + o.motor + ' 젠더', from: g.motor, to: o.motor, have: null, qty: '' };
+}
+const haveTxt = x => x.have === true ? '보유' + (x.qty ? ' ' + x.qty + '개' : '') : x.have === 'making' ? '제작중' : x.have === false ? '없음' : '확인 전';
+function isAdminUser() {   // design.html 과 같은 기준: 로그인 토큰의 app_metadata.role === 'admin'
+  try {
+    for (const store of [localStorage, sessionStorage]) for (let i = 0; i < store.length; i++) {
+      const k = store.key(i); if (!/auth/i.test(k)) continue;
+      const j = JSON.parse(store.getItem(k)); const tok = j && (j.access_token || (j.currentSession && j.currentSession.access_token)); if (!tok) continue;
+      const p = JSON.parse(atob(tok.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+      if (p.app_metadata && p.app_metadata.role === 'admin') return true;
+    }
+  } catch (e) { /* 로그인 정보를 못 읽으면 일반 사용자로 본다 */ }
+  return false;
+}
+function renderAdminBoard() {
+  const box = $('adminBoard');
+  document.body.classList.toggle('is-admin', isAdminUser());
+  if (!isAdminUser()) { box.style.display = 'none'; box.querySelector('#boardTbl').innerHTML = ''; return; }
+  const v = x => x ? x : '<span style="color:var(--ink-soft)">확인 전</span>';
+  $('boardTbl').innerHTML = '<thead><tr><th>교구</th><th>메인보드</th><th>모터 연결</th><th>서보모터 연결</th><th>센서 연결</th></tr></thead><tbody>' +
+    Object.keys(BOARDS).filter(n => tabOf(n) === curTab).map(n => '<tr><td>' + n + '</td><td>' + v(BOARDS[n].board) + '</td><td>' + v(BOARDS[n].motor) + '</td><td>' + v(BOARDS[n].servo) + '</td><td>' + v(BOARDS[n].sensor) + '</td></tr>').join('') + '</tbody>';
+  $('specTbl').innerHTML = '<thead><tr><th>내 규격 \ 만들고 싶은 규격</th>' + SPECS.map(x => '<th>' + x.name + '<br><span style="font-weight:400">' + x.kits + '<br>홀 ' + (x.hole || '확인 전') + ' · 모터 ' + x.motor + '</span></th>').join('') + '</tr></thead><tbody>' +
+    SPECS.map(a => '<tr><td><b>' + a.name + '</b></td>' + SPECS.map(b => '<td>' + specCell(a, b) + '</td>').join('') + '</tr>').join('') + '</tbody>';
+  $('genderTbl').innerHTML = '<thead><tr><th>호환 부품</th><th>용도</th><th>우리 보유</th></tr></thead><tbody>' +
+    GENDERS.concat([RIVET_ADAPTER], RIVET_UNKNOWN).map(x => '<tr><td>' + x.name + '</td><td>' + (x.use || (x.from + ' 모터를 ' + x.to + ' 메인보드에 연결')) + '</td><td>' + (x.have === null ? '<span style="color:var(--ink-soft)">확인 전</span>' : haveTxt(x)) + '</td></tr>').join('') + '</tbody>';
+  box.style.display = Object.keys(BOARDS).some(n => tabOf(n) === curTab) ? '' : 'none';
+}
+// ── 필요 부품 계산 ── 부품 DB 교재 차시별 부품(public/kit-parts.json, scripts/make-kit-parts.mjs 로 만든다)
+// 보유 = 내 교구 1~N단계 모든 모델에서 부품별 최대 수량(한 번에 한 모델씩 만든다고 본다) / 필요 = 만들고 싶은 모델(또는 권 전체의 부품별 최대) / 부족 = 필요 − 보유
+let PARTS = null, lastCalc = null;
+fetch('kit-parts.json').then(r => r.json()).then(j => { PARTS = j; show(); }).catch(() => {});
+const dataKey = n => n === '큐보플러스' ? '큐보' : n === '타미주니어' ? '로보타미주니어' : n;
+function maxOf(models) { const o = {}; models.forEach(m => Object.keys(m).forEach(p => { o[p] = Math.max(o[p] || 0, m[p]); })); return o; }
+function calcParts(own, ownVol, goal, goalVol, model) {
+  if (!PARTS) return { ok: false, why: '부품 데이터를 불러오는 중이에요' };
+  const ok = dataKey(own), gk = dataKey(goal);
+  if (!PARTS[ok]) return { ok: false, why: own + '의 부품 목록이 아직 없어요 (준비 중)' };
+  if (isGoalOnly(goal) || !PARTS[gk]) return { ok: false, why: goal + '의 부품 목록이 아직 없어요 (준비 중)' };
+  const have = maxOf(Object.keys(PARTS[ok]).filter(v => +v <= ownVol).flatMap(v => Object.values(PARTS[ok][v])));
+  const gv = PARTS[gk][goalVol] || {};
+  const need = model ? (gv[model] || {}) : maxOf(Object.values(gv));
+  if (!Object.keys(need).length) return { ok: false, why: '이 모델의 부품 목록이 아직 없어요 (준비 중)' };
+  const rows = Object.keys(need).map(p => ({ name: p, need: need[p], have: have[p] || 0, lack: Math.max(0, need[p] - (have[p] || 0)) }))
+    .sort((a, b) => (b.lack > 0) - (a.lack > 0) || b.lack - a.lack || a.name.localeCompare(b.name, 'ko'));
+  return { ok: true, rows, cross: dataKey(own) !== dataKey(goal) };
+}
+function openParts() {
+  const c = lastCalc.calc, rows = c.rows || [], short = rows.filter(r => r.lack > 0);
+  $('modalTitle').textContent = '필요 부품 · ' + lastCalc.title;
+  $('modalBody').innerHTML = (c.cross ? '<p class="mnote">교구 간 부품 대응표가 아직 없어서, 이름이 같은 부품만 같은 부품으로 계산했어요.</p>' : '') +
+    '<div class="mcheck"><b>메인보드·센서 확인</b> <span class="soon">준비 중</span><div>이 모델이 쓰는 모터 · 센서: ' +
+      (rows.filter(r => /모터|센서/.test(r.name) && !/혼|프레임|케이블|볼트|케이스/.test(r.name)).map(r => r.name + ' ' + r.need + '개').join(', ') || '—') +
+      '</div>' + ((ms => ms.length ? '<div>부족한 센서: <b>' + ms.map(r => r.name + ' ' + r.lack + '개').join(', ') + '</b></div><div class="mnote2">' + lastCalc.own + '에서 이 센서를 판매하면 → ' + lastCalc.own + ' 센서를 구매해요. 판매하지 않으면 → ' + lastCalc.goal + ' 센서를 소개해요.' + (isAdminUser() ? ' 서로 연결할 수 있는 젠더를 함께 안내해요. (센서 판매·젠더 정보는 준비 중)' : '') + '</div>' : '')(rows.filter(r => /센서/.test(r.name) && r.lack > 0))) +
+      (!isAdminUser() || !rivetNeed(lastCalc.own, lastCalc.goal) ? '' : rivetNeed(lastCalc.own, lastCalc.goal) === 'unknown' ? '<div>홀 규격을 아직 몰라요 → 변환 리벳이 필요한지 <b>확인 전</b></div>' : '<div>홀 크기가 달라요 → <b>' + RIVET_ADAPTER.name + '</b> 필요 · ' + (RIVET_ADAPTER.have === true ? '우리가 함께 보내 드려요' : RIVET_ADAPTER.have === 'making' ? '제작 중이에요' : '준비 중') + '</div>') +
+      (!isAdminUser() ? '' : (gn => gn ? '<div>모터 연결이 달라요 (' + gn.from + ' → ' + gn.to + ') → <b>' + gn.name + '</b> 필요 · ' + (gn.have === true ? '우리가 함께 보내 드려요' : gn.have === 'making' ? '제작 중이에요' : '준비 중') + '</div>' : '<div>모터 연결이 같거나 아직 확인 전이에요.</div>')(genderNeed(lastCalc.own, lastCalc.goal))) +
+      (isAdminUser() ? '<div class="mnote2">서보모터와 센서는 모두 3핀이라 직접 연결돼요. (모터는 2핀 또는 DC잭 — 다르면 젠더로 연결)</div>' : '') +
+      '<div class="mnote2">내 메인보드가 이 동작을 할 수 있는지, 내 센서가 쓸 수 있는지는 우리가 확인해서 알려 줄 정보예요.</div></div>' +
+    (!c.ok ? '<p class="msum">' + c.why + '</p>' : '<p class="msum">추가해야 할 부품 <b>' + short.length + '종</b> / 필요한 부품 ' + rows.length + '종</p>' +
+    '<table class="ptbl"><thead><tr><th>부품</th><th>필요</th><th>보유</th><th>부족</th></tr></thead><tbody>' +
+    rows.map(r => '<tr class="' + (r.lack > 0 ? 'lack' : '') + '"><td>' + r.name + '</td><td>' + r.need + '</td><td>' + r.have + '</td><td>' + (r.lack > 0 ? r.lack : '—') + '</td></tr>').join('') + '</tbody></table>');
+  $('partsModal').style.display = 'flex';
+}
+$('partsModal').onclick = e => { if (e.target.id === 'partsModal' || e.target.id === 'modalClose') $('partsModal').style.display = 'none'; };
+document.addEventListener('keydown', e => { if (e.key === 'Escape') $('partsModal').style.display = 'none'; });
+$('goalKit').onchange = fillVol; $('goalVol').onchange = fillModel; $('goalModel').onchange = show; $('goalMode').onchange = show; $('ownKit').onchange = () => { fillGoalKits(); fillOwnVol(); fillVol(); }; $('ownVol').onchange = show;
 // 큐보+(큐보플러스)는 모든 것이 큐보와 동일(사용자 2026-11-18) — 큐보 값을 그대로 쓴다. 단계는 1~3단계.
 // 단계별(1~3단계) 칸은 비워 둔다(사용자 2026-11-18 "삭제") — 조립방식·특이사항만 큐보와 같다.
 Object.assign(KITS.find(k => k.name === '큐보+'), { way: KITS[0].way, part: KITS[0].part, note: KITS[0].note, blank: true });
@@ -212,7 +395,7 @@ function renderTable(tab) {
   tbl.style.minWidth = (92 + ks.length * 200) + 'px';   // 교구(열)가 늘어나면 칸을 줄이지 않고 가로 스크롤로 보인다
 }
 document.getElementById('tabs').innerHTML = TABS.map(t => '<button type="button" data-tab="' + t + '">' + t + '</button>').join('');
-function setTab(t) { document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t)); renderTable(t); }
+function setTab(t) { document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t)); renderTable(t); fillKits(t); renderAdminBoard(); }
 document.getElementById('tabs').onclick = e => { if (e.target.dataset.tab) setTab(e.target.dataset.tab); };
 setTab('리벳');
 </script>
