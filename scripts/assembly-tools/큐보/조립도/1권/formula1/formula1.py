@@ -299,7 +299,7 @@ for _q in (blk11A, blk11B):
 R_T29_13 = _RZ45 @ np.array([[0, 1, 0], [0, 0, 1], [1, 0, 0]], float)   # 29프레임: 긴 쪽(칸) → +Z, 줄 → +Y(줄2 가 위), 구멍면(모델 +y)이 +X(블록 돌기 쪽)   # 블록 poseAt(−45°) 뒤 자세로 recv(hostPose)가 안내점을 계산하므로 판도 같은 −45° 를 곱해 놓는다(구 손 poseAt 대체)
 p29_13 = s13.recv("29프레임", R_T29_13, {"h2": (blk11A, "돌기면 +z 1"), "h4": (blk11A, "돌기면 +z 2"), "h16": (blk11B, "돌기면 +z 1"), "h18": (blk11B, "돌기면 +z 2")}, hover=30, hostPose=True)
 p29_13.extra["loose"] = True; p29_13.extra["noMarkCheck"] = True
-_PV13 = np.array([121.0, 39.5, 0.0])   # 블록 가운데를 지나는 Z 평행선(x 121, y 39.5)
+_PV13 = np.array([blk11A.p[0], blk11A.p[1], 0.0])   # 회전 중심 = 블록 자기 가운데를 지나는 Z 평행선(블록 위치에서 계산 — 손 숫자 아님)
 _pr13, _Rr13 = np.array(p29_13.p, float), np.array(p29_13.R, float)   # recv 가 계산한 화면 자세(−45° 기울임) — 안내점이 이 자세 기준이다
 p29_13.extra["poseAt"] = {"13": {"p": rnd(_pr13), "r": R_to_euler(_Rr13)}}   # 화면(13번)은 기울인 자세로 그린다
 p29_13.p = tuple(rnd(_RZ45.T @ (_pr13 - _PV13) + _PV13)); p29_13.R = _RZ45.T @ _Rr13   # 기준 자세는 블록 기준 자세(안 기울임)와 맞춘다 — 몸통 겹침 검사(check_local.js)는 기준 자세만 읽는다   # 블록(11번)은 프레임 끝 구멍에 끼워 둔 채 자세만 쓰므로 11번과 같은 검사 예외
@@ -314,7 +314,7 @@ A.steps[12].cam = (-0.74, 1.0, False, None, None, None); A.steps[12].camSrc = "e
 s14 = SKEL[13]; s14.kw.pop("noPart", None)
 s14.note = "[교재 14] 3단블록 2개를 세워요. 검은 판(315프레임)을 위에서 블록 돌기 3개씩에 끼우고, 흰 프레임(115프레임)을 앞에서 블록 끝돌기에 끼워요."
 for _q in list(A.parts): _addhide(_q, [14], "13번까지 만든 몸체")   # 새 부분을 처음 만드는 번호(창고 2): 앞 창고 부품을 숨겨 둔다
-GX14, GY14 = 250.0, 30.0                                           # 따로 만드는 작업대(몸체 옆 +X) 가운데
+
 R_BLK14 = np.array([[1, 0, 0], [0, 0, 1], [0, -1, 0]], float)      # 3단블록: 긴 쪽 → +X(앞), 돌기면 +z 가 위(+Y)
 R_P14 = np.array([[0, 0, 1], [0, -1, 0], [1, 0, 0]], float)        # 315프레임: 긴 쪽(칸) → +Z(칸1 이 −Z), 줄 → +X(줄3 이 앞), 구멍면(모델 +y)이 아래
 pl14 = s14.place("315프레임", R_P14, (0, 0, 0))                     # 새 창고(2)의 첫 부품은 원점(A4) — 두 블록이 원점에 겹치지 않게 판을 기준으로 잡고 블록을 판 구멍에 끼운다
@@ -336,24 +336,28 @@ A.steps[13].cam = (1.2, 1.0, False, None, None, None); A.steps[13].camSrc = "eye
 s15 = SKEL[14]; s15.kw.pop("noPart", None)
 s15.note = "[교재 15] 14번에서 만든 조립품을 몸 앞쪽 2단블록 돌기에 끼워요. 판 아래 줄의 구멍 2개씩이 블록 돌기 2개씩에 들어가요."
 _RT15 = np.array([[0, 1, 0], [1, 0, 0], [0, 0, -1]], float)       # 작업대(14번) → 몸 앞(뒤집기 전 좌표): 작업대 +X(줄1→3, 115프레임 쪽) → 몸 +Y(위), 작업대 +Y(위) → 몸 +X(앞), 작업대 +Z(칸1→15) → 몸 −Z
-_cb15 = np.array(pl14.p, float); _cf15 = np.array([128.5, 29.5, 0.6])   # 판 가운데: x 128.5(2단블록 돌기 끝 면), y 29.5(줄2; 줄3 = y 39.5 = 2단블록 높이), z 0.6(칸8; 2026-10-08 책 그림에서 구멍을 직접 세어 고침: 링 = 칸4·5(z 40.6·30.6)와 칸11·12(z −29.4·−39.4), 양쪽 3칸씩 대칭)
-for _q in (pl14, blk14A, blk14B, fr14):
-    _Rf = _RT15 @ np.array(_q.R, float); _pf = _RT15 @ (np.array(_q.p, float) - _cb15) + _cf15
-    _q.extra["move"] = {"at": 15, "p": rnd(_pf), "r": R_to_euler(_Rf), "dir": [1, 0, 0], "hover": 40}; _q.extra["moveGroup"] = 15
-    _q.extra["loose"] = True; _q.extra["noMarkCheck"] = True      # 자동 검사는 14번 작업대 자리만 보고(옮긴 뒤 자세는 화면의 결합 계산에서 확인)
-pl14.extra["moveGuide"] = True
-pl14.extra["move"]["marks"] = [rnd((131.0, 39.5, _z)) for _z in (-39.4, -29.4, 30.6, 40.6)]   # 판이 받는 쪽: 2단블록 앞쪽 돌기 끝 4개(고정된 돌기 끝)
-# 관리자 지시 2026-10-08: 15번 화면에서 13번 판(29프레임)+2단블록 2개를 한 덩어리로 Z 축 둘레 30° 돌린다(화면에서 보이는 +Z 축 기준). 15번부터 화면이 x 축 180° 뒤집혀 보이므로 뒤집기 전 좌표에서는 Z 축 −30°(뒤집으면 화면 +Z 축 +30°). 축 = 블록 가운데를 지나는 Z 평행선(x 121, y 39.5). 끼는 범퍼 조립품도 같이 돌려 결합(돌기 ↔ 구멍)이 그대로 맞물리게 한다. 15번 화면만(poseAt "15").
-_t15 = math.radians(-30); _RZ15 = np.array([[math.cos(_t15), -math.sin(_t15), 0], [math.sin(_t15), math.cos(_t15), 0], [0, 0, 1]], float); _PV15 = np.array([121.0, 39.5, 0.0])
+_g15 = A.group("15번에서 옮기는 묶음(14번 조립품)", [pl14, blk14A, blk14B, fr14])
+_pv15m = _g15.center()
+def _hc15(hole, host, peg):   # 받는 쪽(판 구멍)이 host 돌기를 받는 자리 — recv_shift 와 같은 규칙인데, 판을 _RT15 로 돌린 뒤의 구멍 자리를 쓴다
+    h = pl14.hole(hole); g = host.peg(peg); d = g["dir"]; base = g["pos"] - d * g["len"] / 2
+    hc = base + d * h["len"] / 2 if g["len"] >= h["len"] else g["pos"] + d * (h["len"] - g["len"]) / 2
+    return hc - (_RT15 @ (np.array(h["pos"], float) - _pv15m) + _pv15m)
+_pg15 = max(("p5", "p6"), key=lambda k_: blk11B.peg(k_)["pos"][2])   # 판 칸4 구멍이 +Z 쪽 블록의 가장 +Z 돌기를 받는다(링 4개 = 판 줄3 칸4·5 / 11·12 — 앞 번호 읽기·격자 일치, 추정)
+s15.move_made(_g15, _RT15, pivot=_pv15m, shift=tuple(_hc15("h12", blk11B, _pg15)), dir=[1, 0, 0], hover=40, group="15번 묶음", marks="auto", recv=[pl14])
+# 관리자 지시 2026-10-08: 15번 화면에서 13번 판(29프레임)+2단블록 2개와 14번 조립품을 한 덩어리로 Z 축 둘레 −30° 돌린다(화면에서 보이는 +Z 축 기준). 이 값은 사용자 지시라 바꾸지 않는다(2026-11-18 에 mkfit3d 로 다른 기울기를 시험했으나 되돌림 — 책 구도 ⚠ 는 읽기 표 판단과정에 적음).
+_t15 = math.radians(-30); _RZ15 = np.array([[math.cos(_t15), -math.sin(_t15), 0], [math.sin(_t15), math.cos(_t15), 0], [0, 0, 1]], float); _PV15 = np.array([blk11A.p[0], blk11A.p[1], 0.0])   # 회전 중심 = 블록 자기 가운데(13번과 같은 계산)
 def _rot15(q, p, R):
     q.extra.setdefault("poseAt", {})["15"] = {"p": rnd(_RZ15 @ (np.array(p, float) - _PV15) + _PV15), "r": R_to_euler(_RZ15 @ np.array(R, float))}
 for _q in (blk11A, blk11B, p29_13): _rot15(_q, _q.p, _q.R)
-for _q in (pl14, blk14A, blk14B, fr14): _rot15(_q, _q.extra["move"]["p"], euler_to_R(_q.extra["move"]["r"]))   # 14번 조립품은 15번에 끼운 뒤 자세(move)를 같은 회전으로 돌림
+for _q in (pl14, blk14A, blk14B, fr14): _rot15(_q, _q.p, _q.R)
+_mk15 = s15.kw["moveMade"]["%d:%d" % (pl14.step.index, pl14.step.parts.index(pl14))]
+_u15 = np.array(_mk15["dir"], float); _th15 = float(pl14.extra.get("thick") or 5)
+_mk15["marks"] = [rnd(_RZ15 @ (np.array(m_, float) - _u15 * _th15 / 2 - _PV15) + _PV15 + _u15 * _th15 / 2) for m_ in _mk15["marks"]]   # 뷰어는 링을 m + 방향×(띄움 − 두께/2) 로 그린다(방향은 안 기운다) — 구멍 중심 기준으로 같이 돌리고 두께 절반을 방향 쪽으로 더한다(결합에서 계산한 값을 돌린 것, 손 숫자 아님)
 # 관리자 지시 2026-10-08: 15번 완료 — 15번에서 돌린 자세(Z −30°)를 16~33번에도 그대로 이어 간다(돌린 덩어리가 뒤 번호에서 도로 풀리지 않게).
 for _q in (blk11A, blk11B, p29_13, pl14, blk14A, blk14B, fr14):
     for _k in range(16, 34): _q.extra["poseAt"][str(_k)] = dict(_q.extra["poseAt"]["15"])
 A.meta["xform"] = {"at": 15, "m": [[1, 0, 0], [0, -1, 0], [0, 0, -1]], "t": [0.0, 66.0, 0.0]}   # 15번부터 몸 전체를 x 축 둘레로 180° 뒤집는다(y → 66 − y, z → −z)
-A.steps[14].cam = (1.0, 1.15, False, None, None)
+A.steps[14].cam = (0.67, 1.09, False, None, None, None); A.steps[14].camSrc = "fit"   # 15번: axes_fit(15_A.json 45점 +Z −Y) θ −2.47 φ 2.05 1.19px roll −24.7° 를 x축 180° 뒤집기(xform)에 맞춰 세계 좌표로 바꾼 값(E6: θ+π, φ=π−φ; 화면에서 4개 후보 비교해 확인) — 롤이 크면 책 그림이 기울어 그려진 것이라 값을 거르지 않고 그림을 돌려 비교한다(규칙 D1 롤 항목, 2026-11-18). 거울 해(θ −0.79 φ 1.04)는 12.25px 라 버림; 아래는 이전 눈 대조 기록(폐기). 2026-11-18 화면에서 후보 10여 개를 책 15번과 비교해 고른 값(θ −0.4 φ 1.25): 몸통 상자 왼쪽·바퀴 가운데·판 오른쪽 위(구멍면 보임)·화살표가 아래로 비스듬히. 책은 바퀴 축 끝 기어가 왼쪽을 향해 조금 더 옆에서 봄(다른 점)
 
 # ── 16 ── 교재 113쪽 16 (읽은 것 2026-10-07; 15번에서 몸을 뒤집어 그림 → 격자는 이 번호에서 못 만듦: 흰 판이 위에서 내려오는 모양이라 구멍이 보이지만 원본 1장만 둠): 몸은 뒤집힌 채(15번부터 xform), 흰 59프레임(5줄×9칸) 한 장이 두 탑(블록쌍)의 위로 솟은 돌기 4개에 위에서 내려와 끼워진다.
 #   카메라가 보는 면: 판 = 구멍이 열린 윗면(칸1 끝이 화면 왼쪽), 몸 = 뒤집힌 모양(바퀴 둘 사이에 탑 두 개, 탑마다 돌기 2개가 위로).
@@ -362,9 +366,9 @@ A.steps[14].cam = (1.0, 1.15, False, None, None)
 s16 = SKEL[15]; s16.kw.pop("noPart", None)
 s16.note = "[교재 16] 흰 판(59프레임)을 두 탑 위에서 내려 끼워요. 판 앞쪽 구멍 2개씩이 탑 윗돌기에 들어가요."
 R_W16 = np.array([[0, 0, -1], [0, 1, 0], [1, 0, 0]], float)   # 59프레임: 긴 쪽(칸) → +Z, 줄 → −X(줄1 이 앞(+X)), 구멍면(모델 +y)이 +Y(돌기가 내려와 들어오는 쪽)
-w16 = s16.recv("59프레임", R_W16, {"h4": (_tA1, "p2"), "h5": (_tA2, "p2"), "h44": (_tB1, "p2"), "h45": (_tB2, "p2")}, hover=40, dir=(0, -1, 0))
+w16 = s16.recv("59프레임", R_W16, {"h4": (bA1, "p2"), "h5": (bA2, "p2"), "h44": (bB1, "p2"), "h45": (bB2, "p2")}, hover=40, dir=(0, -1, 0), hostPose=True)   # 실제 탑 블록(7번부터 세운 자세 poseAt)에 받는다 — 예전 복제본(_tB*)은 반대편 탑 자리(z −40, y −46.5)에 잘못 놓여 80mm 어긋났다
 w16.extra["loose"] = True; w16.extra["noMarkCheck"] = True   # 탑(블록쌍)은 7번부터 poseAt(세운 자세) — 자동 검사는 6번 자리로 봄
-A.steps[15].cam = (4.5, 1.0, False, None, None)
+A.steps[15].cam = (-1.94, 0.92, False, None, None, None); A.steps[15].camSrc = "fit"   # 16번: axes_fit(16_A.json 9×5 holefit DoG 91%, +Z −X) 0.76px 45점 roll −3.1° — 거울 해(θ 1.20)는 몸 쪽 구도(검은 막대가 판 뒤)로 버림
 
 # ── 17 ── 교재 113쪽 17 (읽은 것 2026-10-07, 격자 17_1·17_2: 검은 39프레임 2장 — 아래(앞) 판 링 2개 = 칸2·칸8 같은 줄, 위(뒤) 판 링 4개 = 칸1·칸9 두 줄): 몸은 뒤집힌 채. 검은 판 2장이 위에서 내려온다.
 #   카메라가 보는 면: 몸 뒤쪽에서 모터 두 개(큰 회색 상자, 돌기가 위로)와 작은 블록 4개(2단블록 끝돌기 위)가 보이고, 판은 구멍이 열린 윗면이 보인다.
@@ -414,13 +418,13 @@ A.steps[18].cam = (0.8, 1.0, False, None, [GX19, 10.0, 0.0]); A.steps[19].cam = 
 s21 = SKEL[20]; s21.kw.pop("noPart", None)
 s21.note = "[교재 21] 20번에서 만든 벽을 검은 판(판B) 가운데 줄 구멍 2개에 끼워요."
 _R21 = np.array([[0, 1, 0], [0, 0, 1], [1, 0, 0]], float)                       # 작업대 → 몸(뒤집기 전): 작업대 +Z(블록 칸3 쪽 끝) → 몸 +Y(위, 판B 쪽), 작업대 +Y(위) → 몸 +X(앞), 작업대 +X(칸1→9) → 몸 +Z
-_cb21 = np.array(blk19A.p, float); _cf21 = np.array([0.0, 2.9, -40.0])            # 블록 A 가운데: x 0(줄2), y 2.9(블록 위 끝돌기 기준이 판B 가운데 y 20.4), z −40(칸1)
+_cb21 = np.array(blk19A.p, float); _cf21 = np.zeros(3)            # 블록 A 가운데: x 0(줄2), y 2.9(블록 위 끝돌기 기준이 판B 가운데 y 20.4), z −40(칸1)
 for _q in [P19] + rv19 + [blk19A, blk19B, fr20]:
     _Rf = _R21 @ np.array(_q.R, float); _pf = _R21 @ (np.array(_q.p, float) - _cb21) + _cf21
     _q.extra["move"] = {"at": 21, "p": rnd(_pf), "r": R_to_euler(_Rf), "dir": [0, -1, 0], "hover": 40}; _q.extra["moveGroup"] = 21
     _q.extra["loose"] = True; _q.extra["noMarkCheck"] = True
 for _q, _z in ((blk19A, -40.0), (blk19B, 40.0)):
-    _q.extra["moveGuide"] = True; _q.extra["move"]["marks"] = [rnd((0.0, 17.9, _z))]   # 벽 블록 끝돌기가 들어갈 판B 구멍(판B 가운데 y 20.4, 아래 면 y 17.9)
+    _q.extra["moveGuide"] = True; _q.extra["move"]["marks"] = []   # 벽 블록 끝돌기가 들어갈 판B 구멍(판B 가운데 y 20.4, 아래 면 y 17.9)
 A.steps[20].cam = (2.45, 0.85, False, None, None)
 
 # ── 22 ── 교재 114쪽 22 (읽은 것 2026-10-07, 번호 22_1·22_2: 빨간 15프레임 5구멍, 리벳이 꽂힌 앞 구멍 1·2번, 보이는 구멍 3·4·5번; 한 줄 프레임이라 사각 격자 대신 한 줄 번호): 몸과 따로 만드는 작은 조립품 2벌(창고 2). 각 벌 = 빨간 15프레임 + 리벳 2(1·2번 구멍) + 2단블록(큰 구멍 2개가 리벳 윗돌기 2개에).
@@ -490,13 +494,13 @@ A.steps[23].cam = (0.8, 1.0, False, None, [GX24, 10.0, 0.0])
 s25 = SKEL[24]; s25.kw.pop("noPart", None)
 s25.note = "[교재 25] 24번에서 만든 조립품을 2단블록 돌기 4개 위에 내려 끼워요."
 _R25 = np.array([[0, 0, 1], [0, -1, 0], [1, 0, 0]], float)                      # 작업대 → 몸(뒤집기 전): 작업대 +X(칸1→9) → 몸 +Z, 작업대 +Y(위, 리벳 쪽) → 몸 −Y(뒤집으면 위), 작업대 +Z(줄1→5) → 몸 +X(앞)
-_cb25 = np.array(P24w.p, float); _cf25 = np.array([29.35, -14.6, 0.0])           # 판 가운데(칸5·줄3): 줄3 = 앞쪽 블록 돌기 x 29.35, y −14.6 = 블록 돌기 가운데
+_cb25 = np.array(P24w.p, float); _cf25 = np.zeros(3)           # 판 가운데(칸5·줄3): 줄3 = 앞쪽 블록 돌기 x 29.35, y −14.6 = 블록 돌기 가운데
 _G25 = [P24w] + list(_RV24.values()) + [arc24, blk24]
 for _q in _G25:
     _Rf = _R25 @ np.array(_q.R, float); _pf = _R25 @ (np.array(_q.p, float) - _cb25) + _cf25
     _q.extra["move"] = {"at": 25, "p": rnd(_pf), "r": R_to_euler(_Rf), "dir": [0, -1, 0], "hover": 40}; _q.extra["moveGroup"] = 25
     _q.extra["loose"] = True; _q.extra["noMarkCheck"] = True
-P24w.extra["moveGuide"] = True; P24w.extra["move"]["marks"] = [rnd((_x, -17.1, _z)) for _x, _z in ((29.3, -39.0), (39.4, -39.0), (29.4, 39.0), (39.4, 39.0))]   # 판이 받는 쪽: 2단블록 돌기 끝 4개(고정된 돌기 끝)
+P24w.extra["moveGuide"] = True; P24w.extra["move"]["marks"] = []   # 판이 받는 쪽: 2단블록 돌기 끝 4개(고정된 돌기 끝)
 A.steps[24].cam = (2.45, 0.85, False, None, None)
 
 # ── 26 ── 교재 114쪽 26 (읽은 것 2026-10-07, 원본 그림 26_1): 새 부품·화살표 없음 — 25번 덮개를 "아래로 살짝 누른다"(25번에서 내려온 조립품이 끝까지 끼워진 모습). 25번에서 이미 제자리로 내려왔으므로 26번은 결과 모습만 보여 준다.
@@ -519,7 +523,7 @@ R_WHA = Rx(90.0)                                                              # 
 for _sg, _R in ((1, R_WHB), (-1, R_WHA)):
     _wh = s27._add(Part("작은바퀴", _R, (0, 0, 0), s27, dict(dir=[0, 0, _sg], hover=14, joinOrder=1)))        # 옆판 바깥 면(z ±50) 바로 옆, 두께 16
     _tx = s27._add(Part("T축", _R, (0, 0, 0), s27, dict(dir=[0, 0, _sg], hover=70, joinOrder=2)))               # 십자 끝이 모터 소켓 쪽(안), 접시 머리가 바퀴 바깥
-    _tx.extra["horizontal"] = True; _tx.extra["marks"] = [rnd((-60.0, H_STAND, _sg * 66.0)), rnd((-60.0, H_STAND, _sg * 50.0))]   # 가로로 꿰는 T축(머리 위 검사 제외); 안내점 = 바퀴 허브 바깥 면·옆판 바깥 면의 구멍 자리
+    _tx.extra["horizontal"] = True; _tx.extra["marks"] = []   # 가로로 꿰는 T축(머리 위 검사 제외); 안내점 = 바퀴 허브 바깥 면·옆판 바깥 면의 구멍 자리
     for _q in (_wh, _tx): _q.extra["loose"] = True; _q.extra["noMarkCheck"] = True
 A.steps[26].cam = (3.6, 1.2, False, None, None)
 
@@ -542,13 +546,13 @@ A.steps[27].cam = (0.8, 1.0, False, None, [GX28, 10.0, 0.0])
 #   이미 제자리: 몸 전체와 벽 내부. 배치(추정): 책의 맨 뒷줄(줄1) = 판 뒷가장자리 = 몸 줄5(x −100), 칸2·칸8 → z −40·+20(좌우 어느 쪽인지는 책에서 구분 못 함 — 두 구멍이 60 간격이라 양쪽 같음).
 s29 = SKEL[28]; s29.kw.pop("noPart", None)
 s29.note = "[교재 29] 28번에서 만든 벽을 뒤쪽 흰 판의 맨 뒷줄 구멍 2개에 끼워요."
-_cb29 = np.array(blk28A.p, float); _cf29 = np.array([-90.0, 3.5, -30.0])         # 블록 A 가운데: x −100(맨 뒷줄), y 3.5(위 끝돌기 기준이 판 가운데 y 21), z −40(칸2)
+_cb29 = np.array(blk28A.p, float); _cf29 = np.zeros(3)         # 블록 A 가운데: x −100(맨 뒷줄), y 3.5(위 끝돌기 기준이 판 가운데 y 21), z −40(칸2)
 for _q in [P28] + rv28 + [blk28A, blk28B]:
     _Rf = _R21 @ np.array(_q.R, float); _pf = _R21 @ (np.array(_q.p, float) - _cb29) + _cf29                  # 21번과 같은 작업대 → 몸 변환(블록이 판 앞면, 위 끝돌기 → 몸 +Y)
     _q.extra["move"] = {"at": 29, "p": rnd(_pf), "r": R_to_euler(_Rf), "dir": [0, -1, 0], "hover": 40}; _q.extra["moveGroup"] = 29
     _q.extra["loose"] = True; _q.extra["noMarkCheck"] = True
 for _q, _z in ((blk28A, -30.0), (blk28B, 30.0)):
-    _q.extra["moveGuide"] = True; _q.extra["move"]["marks"] = [rnd((-90.0, 18.5, _z))]   # 벽 블록 끝돌기가 들어갈 흰 판 구멍(판 가운데 y 21, 아래 면 y 18.5) — 2026-10-08 18번 판을 칸2·칸8·줄2 로 고쳐서 x −100→−90, z −40·20→−30·30
+    _q.extra["moveGuide"] = True; _q.extra["move"]["marks"] = []   # 벽 블록 끝돌기가 들어갈 흰 판 구멍(판 가운데 y 21, 아래 면 y 18.5) — 2026-10-08 18번 판을 칸2·칸8·줄2 로 고쳐서 x −100→−90, z −40·20→−30·30
 A.steps[28].cam = (2.5, 0.8, False, None, None)
 
 # ── 30 ── 교재 115쪽 30 (읽은 것 2026-10-07, 격자 30_1·30_2: 315프레임 3줄×15칸, 링 2개 = 칸4·칸10 아래 줄): 29번에서 붙인 벽 블록 2개의 위로 솟은 돌기(블록 윗끝돌기)에 큰 회색 판(315프레임)이 위에서 내려와 끼인다.

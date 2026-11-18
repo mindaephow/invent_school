@@ -1,10 +1,12 @@
 # 조립 스크립트(<이름>.py)의 손 좌표를 백업하고 지운다 — 조립도 작업을 시작할 때 한 번(release_start.py 가 부른다, 규칙 00-1 ③, 사용자 지시 2026-11-13: "손좌표가 방해가 된다").
 #   python strip_hand.py <이름>            → 백업(refs/<이름>/_script_backup/<시각>.py) 후 지운다
+#   python strip_hand.py <이름> --줄 N     → N행부터 뒤만 지운다(끝낸 앞 번호가 쓰는 값은 둔다)
 #   python strip_hand.py <이름> --보기     → 지울 곳만 보여 준다(파일을 안 쓴다)
 #   python strip_hand.py <이름> --복원 <백업파일>
 # 지우는 것(handcheck.py 가 세는 것과 같다)
 #   키워드: p=(숫자…) · marks/settleMarks/faceMarks/holeMarks=[[숫자…]] · side={…} · shift=(숫자…)(move_made 류)  → 그 인자를 뺀다(도구가 결합·구멍에서 다시 계산한다)
 #   위치:   place(부품, 자세, (x, y, z)) · _abs_place(단계, 부품, 자세, (…숫자 포함…))  → 위치를 (0, 0, 0) 미배치 자리로 되돌린다(새 창고 바닥 부품은 원래 원점이라 그대로 둔다)
+#   인덱스·상수: x.extra["move"]["marks"] = [숫자 좌표…] · x.extra["poseAt"] = {숫자…} 는 비우고({}·[]), 이름 = np.array([x, y, z]) 위치 상수(_cf15·_PV13 류; 방향 0·±1 만이면 제외)는 np.zeros(3) 으로 되돌린다(handcheck.hidden 과 같은 기준, 2026-11-18 추가 — 예전엔 이런 숫자가 남았다)
 #   식·Part: 위 자리에 숫자가 섞인 식을 직접 적은 것((_x0 + 60.0, YC, ZL - 8.0) 등)과 Part(부품, 자세, 좌표) 직접 생성의 좌표도 같은 방법으로 지운다(handcheck._expr 와 같은 기준 — 함수 호출로 계산한 값은 건드리지 않는다)
 #           → 부품이 겹쳐 보이는 것이 정상이다. 번호를 만들 때 그 부품을 attach/recv 규칙 좌표로 다시 놓는다(위반 표시가 어디를 놓아야 하는지 알려 준다).
 # 안전장치: 지운 결과가 파이썬 문법으로 읽히지 않으면 쓰지 않는다. 옆자리 작업 위치(to_side)는 "어디에 둘지 정하는 값"이라 건드리지 않는다.
@@ -39,6 +41,10 @@ def plan(src):
                 s = _off(lines, kw.value.lineno, kw.value.col_offset); e = _off(lines, kw.value.end_lineno, kw.value.end_col_offset)
                 k0 = src.rfind(kw.arg, 0, s); s = k0   # 'p=' 앞까지(키워드 이름 시작)
                 edits.append((s, e, "", "%s= 인자 삭제" % kw.arg, kw.value.lineno))
+    for ln_, kd_, nm_, v_ in H.hidden(tree):   # 인덱스 대입(x.extra["move"]["marks"] = [숫자 좌표…])·위치 상수(_cf15 = np.array([x, y, z])) — 예전엔 못 잡았다
+        sv, ev = span(v_)
+        if kd_ == "상수": edits.append((sv, ev, "np.zeros(3)", "위치 상수 %s → 0(원점)" % nm_, ln_))
+        else: edits.append((sv, ev, "{}" if nm_ == "poseAt" else "[]", "%s 대입 → 비움" % nm_, ln_))
     edits.sort(key=lambda x: (x[0], -x[1])); out = []; last = -1
     for ed in edits:
         if ed[0] >= last: out.append(ed); last = ed[1]
@@ -62,6 +68,8 @@ def main():
     if "--복원" in sys.argv:
         bf = sys.argv[sys.argv.index("--복원") + 1]; shutil.copy2(bf, sf); print("복원:", bf); return
     src = open(sf, encoding="utf-8").read(); edits = plan(src)
+    if "--줄" in sys.argv:   # 이미 끝낸 앞 번호가 쓰는 값은 두고, 이 줄 번호부터 뒤만 지운다(예: python strip_hand.py formula1 --줄 335 — 15번부터)
+        _from = int(sys.argv[sys.argv.index("--줄") + 1]); edits = [e_ for e_ in edits if e_[4] >= _from]
     print("%s: 지울 손 좌표 %d곳" % (name, len(edits)))
     for s, e, new, why, line in edits[:40]: print("  %4d행 %s  [%s]" % (line, why, src[s:e].replace("\n", " ")[:60]))
     if view or not edits: return

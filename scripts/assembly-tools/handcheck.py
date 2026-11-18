@@ -31,9 +31,41 @@ def _expr(n):
     return all(isinstance(x, ok) for x in w) and any(isinstance(x, ast.Constant) and isinstance(x.value, (int, float)) and not isinstance(x.value, bool) for x in w)
 
 _MARKS = ("marks", "settleMarks", "faceMarks", "holeMarks")
+_HIDKEYS = _MARKS + ("poseAt",)   # x.extra["move"]["marks"] = … · x.extra["poseAt"] = … 처럼 인덱스 대입으로 적은 좌표(키워드 인자가 아니라 예전 검사가 못 봤다)
+
+def _keys(t):
+    """대입 대상 x["a"]["b"] 의 문자열 키들."""
+    ks = []
+    while isinstance(t, ast.Subscript):
+        sl = t.slice
+        if isinstance(sl, ast.Constant) and isinstance(sl.value, str): ks.append(sl.value)
+        t = t.value
+    return ks
+
+def _num_tuple(v):
+    """값 안에 숫자가 든 좌표 묶음(길이 3 이상 튜플·리스트)이 있는가 — 안내점·자세 자리에 숫자를 직접 적은 것."""
+    for n in ast.walk(v):
+        if isinstance(n, (ast.Tuple, ast.List)) and len(n.elts) >= 3 and any(_is_num(e) for e in n.elts): return True
+    return False
+
+def hidden(tree):
+    """[(줄, 종류, 대상, 값 범위 노드)] — 종류: "인덱스"(x[\"marks\"]=숫자 좌표) · "상수"(이름 = np.array([x, y, z]) 위치 상수; 방향(0·±1 만)은 제외)."""
+    out = []
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Assign, ast.AugAssign)):
+            tg = node.targets[0] if isinstance(node, ast.Assign) else node.target; v = node.value
+            ks = [k for k in _keys(tg) if k in _HIDKEYS]
+            if ks and _num_tuple(v) and not any(isinstance(n_, ast.Attribute) and n_.attr == "p" for n_ in ast.walk(v)): out.append((node.lineno, "인덱스", ks[0], v)); continue
+            if isinstance(node, ast.Assign) and isinstance(tg, ast.Name) and isinstance(v, ast.Call) and getattr(v.func, "attr", getattr(v.func, "id", "")) == "array" and v.args and isinstance(v.args[0], (ast.List, ast.Tuple)):
+                a = v.args[0]
+                if len(a.elts) == 3 and all(_is_num(e) for e in a.elts):
+                    vals = [e.value if isinstance(e, ast.Constant) else -e.operand.value for e in a.elts]
+                    if not all(abs(x) in (0, 1) for x in vals): out.append((node.lineno, "상수", tg.id, v))
+    return out
 def scan(path):
     src = open(path, encoding="utf-8").read(); tree = ast.parse(src)
-    out = {"place": [], "원점": [], "p=": [], "안내점": [], "side": [], "이동량": [], "작업위치": [], "식": [], "Part": []}
+    out = {"place": [], "원점": [], "p=": [], "안내점": [], "side": [], "이동량": [], "작업위치": [], "식": [], "Part": [], "인덱스": [], "상수": []}
+    for _ln, _kd, _nm, _v in hidden(tree): out[_kd].append((_ln, "", _nm, ast.get_source_segment(src, _v) or ""))
     step_of = {}                                   # 줄 번호 → 몇 번 단계인지(sK. 이름에서)
     first_place = True
     for node in ast.walk(tree):
@@ -79,11 +111,11 @@ def main():
         try: path = asmpath.ap(nm, ".py")
         except BaseException as e: print("⚠ %s 건너뜀: %s" % (nm, repr(e)[:60])); continue
         o = scan(path)
-        bad = len(o["place"]) + len(o["p="]) + len(o["안내점"]) + len(o["side"]) + len(o["이동량"])
+        bad = len(o["place"]) + len(o["p="]) + len(o["안내점"]) + len(o["side"]) + len(o["이동량"]) + len(o["인덱스"]) + len(o["상수"])
         base = 0
         more = len(o["식"]) + len(o["Part"])
-        print("== %s: 손 좌표 %d곳 (place %d·p= %d·안내점 %d·side %d·이동량 %d) · 식 좌표 %d곳 · Part 직접 생성 %d곳 · 새 조립 바닥 부품(원점) %d곳 · 옆자리 작업 위치 %d곳" % (nm, bad, len(o["place"]), len(o["p="]), len(o["안내점"]), len(o["side"]), len(o["이동량"]), len(o["식"]), len(o["Part"]), len(o["원점"]), len(o["작업위치"])))
-        for key in ("place", "p=", "안내점", "side", "이동량", "식", "Part"):
+        print("== %s: 손 좌표 %d곳 (place %d·p= %d·안내점 %d·side %d·이동량 %d·인덱스 대입 %d·위치 상수 %d) · 식 좌표 %d곳 · Part 직접 생성 %d곳 · 새 조립 바닥 부품(원점) %d곳 · 옆자리 작업 위치 %d곳" % (nm, bad, len(o["place"]), len(o["p="]), len(o["안내점"]), len(o["side"]), len(o["이동량"]), len(o["인덱스"]), len(o["상수"]), len(o["식"]), len(o["Part"]), len(o["원점"]), len(o["작업위치"])))
+        for key in ("place", "p=", "안내점", "side", "이동량", "인덱스", "상수", "식", "Part"):
             for line, b, who, val in o[key][:12]: print("   %s %d행 %s %s %s" % (key, line, b, who, val[:50]))
             if len(o[key]) > 12: print("   %s … 외 %d곳" % (key, len(o[key]) - 12))
         total += bad - base; total2 += more

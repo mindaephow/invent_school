@@ -33,6 +33,19 @@ for(let i=0;i<items.length;i++)for(let j=i+1;j<items.length;j++){const A=items[i
  const inf=C.boxesOverlapInfo?C.boxesOverlapInfo(A.boxes,A.pos,A.q,B.boxes,B.pos,B.q,0.05):(C.boxesOverlap(A.boxes,A.pos,A.q,B.boxes,B.pos,B.q,0.05)?{}:null);
  if(inf){n++;if(n<=40){const r1=(v)=>Math.round(v*10)/10;console.log('  겹침',A.a.k+'.'+A.a.i,A.a.pt.n,'<>',B.a.k+'.'+B.a.i,B.a.pt.n);
   if(inf.depth!=null)console.log('  겹침상세',A.a.k+'.'+A.a.i,B.a.k+'.'+B.a.i,'깊이='+r1(inf.depth),'위치='+inf.at.map(r1).join(','),'A중심='+[A.pos.x,A.pos.y,A.pos.z].map(r1).join(','),'B중심='+[B.pos.x,B.pos.y,B.pos.z].map(r1).join(','),'A상자='+inf.ia,'B상자='+inf.ib);}}}
+// 화면이 번호마다 그리는 자세(poseAt — 세우기·기울이기)로도 잰다(사용자 지시 2026-11-18 "기울기 도구와 기준을 맞춰": 화면 검사기(bridge.xray)는 번호별 poseAt 자세로 재서 16번 135도 프레임↔14번 조립품 1.1mm 겹침을 보는데 이 검사는 처음 놓인 자세만 봐서 0건이었다). 같은 짝은 처음 보인 번호에서 한 번만 낸다.
+{const seen=new Set();
+ for(let s=1;s<=steps.length;s++){
+  const drawn=items.map((it)=>{if(it.a.k>s)return null;const pa=it.a.pt.poseAt&&it.a.pt.poseAt[s];if(pa)return {a:it.a,boxes:it.boxes,q:quat(pa.r),pos:{x:pa.p[0],y:pa.p[1],z:pa.p[2]},pa:true};
+   let me=null;for(let j=s;j>=it.a.k;j--){const e=(steps[j-1].moveMade||{})[it.a.k+':'+it.a.i];if(e&&e.p){me=e;break;}}   // s번 시점의 자세: 그 번호까지 옮겨진 마지막 자세(없으면 처음 놓인 자세) — 아직 합치기 전이면 따로 만든 자리 그대로
+   return me?{a:it.a,boxes:it.boxes,q:quat(me.r||it.a.pt.r||[0,0,0]),pos:{x:me.p[0],y:me.p[1],z:me.p[2]}}:{a:it.a,boxes:it.boxes,q:quat(it.a.pt.r||[0,0,0]),pos:{x:it.a.pt.p[0],y:it.a.pt.p[1],z:it.a.pt.p[2]}};});
+  if(!drawn.some((d)=>d&&d.pa))continue;
+  for(let i=0;i<drawn.length;i++)for(let j=i+1;j<drawn.length;j++){const A=drawn[i],B=drawn[j];if(!A||!B||!A.boxes||!B.boxes)continue;if(!A.pa&&!B.pa)continue;
+   const key=A.a.k+'.'+A.a.i+'|'+B.a.k+'.'+B.a.i;if(seen.has(key))continue;
+   if(sameSlotOrMoved(A,B)===false)continue;
+   const inf=C.boxesOverlapInfo?C.boxesOverlapInfo(A.boxes,A.pos,A.q,B.boxes,B.pos,B.q,0.05):(C.boxesOverlap(A.boxes,A.pos,A.q,B.boxes,B.pos,B.q,0.05)?{}:null);
+   if(inf){seen.add(key);n++;const r1=(v)=>Math.round(v*10)/10;console.log('  겹침',A.a.k+'.'+A.a.i,A.a.pt.n,'<>',B.a.k+'.'+B.a.i,B.a.pt.n);
+    if(inf.depth!=null)console.log('  겹침상세',A.a.k+'.'+A.a.i,B.a.k+'.'+B.a.i,'깊이='+r1(inf.depth),'위치='+inf.at.map(r1).join(','),'A중심='+[A.pos.x,A.pos.y,A.pos.z].map(r1).join(','),'B중심='+[B.pos.x,B.pos.y,B.pos.z].map(r1).join(','),'A상자='+inf.ia,'B상자='+inf.ib,'(그리는 자세 '+s+'번)');}}}}
 console.log('몸통 겹침:',n);
 // 바닥 기준: 가장 낮은 부품 바닥
 const cnt={};all.forEach(a=>cnt[a.pt.n]=(cnt[a.pt.n]||0)+1);console.log('부품 개수:',JSON.stringify(cnt));

@@ -797,7 +797,8 @@
   let checkVerdicts = {}; // '단계|경고키' → 'ok' | 'fix'
   // 자동 검사 경고 = 하단 칩과 같은 기준: 화면에 지금 놓인 부품의 몸통 겹침(bridge.xray). 예전 미리 계산 목록은 판을 세운 자세를 몰라 오경고가 나서 없앴다(사용자 지시 2026-11-11).
   const warnCache = {};   // 번호 → 그 번호를 마지막으로 열었을 때의 겹침 경고(열지 않은 번호 버튼에도 ⚠ 를 보이려고, 사용자 지시 2026-11-13)
-  const warnsOf = (i) => { const b = bridge(), xr = i === step && b && b.xray ? b.xray(lastLabels) : null; if (xr) warnCache[i] = xr.overlaps.map((q) => ({ key: i + '|' + q.a + '|' + q.b, part: q.a, text: q.a + '이(가) ' + q.b + ' 와 겹쳐 있어요' })); return warnCache[i] || []; };
+  // 2026-11-18 사용자 지시: 카드는 하단 '겹침' 칩과 같은 저장 데이터(def.violations[번호] 의 overlap)만 보인다 — 예전엔 화면 xray 로 따로 재서 칩 0 인데 카드만 4건이 떴다.
+  const warnsOf = (i) => { const V = ((def && def.violations && def.violations[i]) || []).filter((v) => v.type === 'overlap'); warnCache[i] = V.map((v, n) => { const nm = (v.idx || []).map((k) => lastLabels[k]).filter(Boolean); return { key: i + '|' + (nm.length ? nm.join('|') : 'v' + n), part: nm[0] || '', text: nm.length > 1 ? nm[0] + '이(가) ' + nm[1] + ' 와 겹쳐 있어요' : String(v.msg || '겹침') }; }); return warnCache[i]; };
   // 도구-화면 불일치: 도구(violations.py tool_pose → def.toolPose)가 "화면이 이렇게 그린다"고 본 자세와 화면이 실제로 놓는 결합 자리(final, 없으면 pos)·회전이 5mm·15° 넘게 다른 부품을 찾는다.
   //   도구가 다른 좌표로 재면 겹침·바닥·중심 검사가 화면과 어긋나도 모른다(꼬마기사 20번 중심 오탐). 눈에 띄게 어긋날 때만 잡는다(구도는 시계 한 칸의 절반까지 같은 것으로 본다).
   const TOOL_MM = 5, TOOL_DEG = 15;
