@@ -80,3 +80,16 @@ window.__go=async function(ks){const bt=[...document.querySelectorAll('button')]
 ```
 원인 찾는 법: 점이 부품 가장자리에서 떨어져 있으면 `guide` 공식(design-assembly.js 536~575줄)의 받는 쪽(recv) `to = faceMarks(없으면 marks) + dir×hover` 가 떠 있는 부품 구멍과 같은지 본다. 옆자리(`side`)에서 새로 놓이는 묶음(풍차 11·16·17번)은 `hover`·`joinOrder`(보통 모드)가 쓰이고 `settleHover`·`settleOrder` 는 합치는 번호(side.until)에서만 쓰인다.
 
+
+## 7. 시계판 한 장 — 방향(시계 12방향)·높이(φ)를 스크린샷 한 번으로 고른다 (사용자 2026-11-19 "시계방향 돌려보기 + 카메라 높이")
+번호를 연 뒤 돌린다. 30° 간격 12방향 × 높이 2단을 한 화면에 깔고, 책 그림과 같은 칸(판이 기우는 쪽·가까운 부품·뒤에 있는 부품)을 고른다. 칸 글자가 θ·φ 다. 화면 클릭하면 닫힌다. 카메라는 원래대로 돌려 놓는다(저장 안 함).
+```js
+const br=window.__ivsAssemblyBridge; const cv=document.querySelector('canvas'); const c0=br.camState();
+const PH=[0.55,0.95], T=128, cols=6; const tiles=[];   // 더 낮게 볼 책이면 PH 에 1.3 을 더한다
+for (const ph of PH) for (let k=0;k<12;k++){ const th=k*Math.PI/6; br.camera({...c0, theta:th, phi:ph}); await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))); tiles.push({k,ph,th,u:cv.toDataURL('image/jpeg',0.7)}); }
+br.camera(c0); document.getElementById('__clock')?.remove();
+const ov=document.createElement('div'); ov.id='__clock'; ov.style.cssText='position:fixed;inset:0;z-index:99999;background:#fff;display:grid;grid-template-columns:repeat('+cols+','+T+'px);gap:2px;padding:4px;align-content:start;font:11px sans-serif';
+for (const t of tiles){ const d=document.createElement('div'); d.style.cssText='position:relative'; d.innerHTML='<img src="'+t.u+'" style="width:'+T+'px;height:'+T+'px;display:block;border:1px solid #ccc"><span style="position:absolute;left:2px;top:1px;background:#fffc;padding:0 2px">'+(t.k===0?12:t.k)+'시 · θ'+t.th.toFixed(2)+' φ'+t.ph+'</span>'; ov.appendChild(d); }
+ov.onclick=()=>ov.remove(); document.body.appendChild(ov); tiles.length
+```
+그다음 `screenshot` 한 번. 고른 칸 둘레를 더 맞추려면 그 θ±15°·φ±0.15 로 2번을 쓴다. 다 보면 `document.getElementById('__clock')?.remove()`.

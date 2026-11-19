@@ -44,8 +44,11 @@ def main():
     for f in sorted(glob.glob(os.path.join(R, "fits", "%02d_*.json" % N))):
         j = json.load(open(f, encoding="utf-8")); P = np.array([[c, r, x, y] for c, r, x, y in j["pts"]], float)
         if len(P) < 4: continue
+        if len(set(P[:, 0])) < 2 or len(set(P[:, 1])) < 2: print("  %s: 한 줄 격자라 칸·줄 환산을 못 한다 — 건너뜀(링 칸은 책 확대에서 센다)" % os.path.basename(f)); continue
         H, _ = cv2.findHomography(P[:, :2].astype(np.float32), P[:, 2:].astype(np.float32), 0)
+        if H is None: print("  %s: 격자 변환을 못 구함 — 건너뜀" % os.path.basename(f)); continue
         fits.append((os.path.basename(f)[3:-5], j, P, H, np.linalg.inv(H)))
+    if not fits and glob.glob(os.path.join(R, "fits", "%02d_*.json" % N)): sys.exit("⚠ 한 줄 격자뿐이라 cellmap(NN_4 그림)은 만들 수 없다 — 건너뛴다(D14: 격자 그림은 판 격자가 있는 번호만 필수)")
     if not fits: sys.exit("❌ 이 번호에 격자(fits)가 없다 — 먼저 holefit")
     rings = find_rings(im)
     rows = []

@@ -82,7 +82,9 @@ for N in steps:
         if e is None or e > 2.0: st = "warn"; msgs.append("오차 %spx > 2.0" % e)
         else: msgs.append("오차 %.2fpx" % e)
         if c:
-            if abs(c[0] - ax["fit"].get("theta", 99)) > 0.011 or abs(c[1] - ax["fit"].get("phi", 99)) > 0.011: st = "fail"; msgs.append("모델 cam(%.2f,%.2f) ≠ axes fit(%.2f,%.2f) — 풀이값이 모델에 안 들어감" % (c[0], c[1], ax["fit"].get("theta"), ax["fit"].get("phi")))
+            _roll = ax["fit"].get("roll")
+            if c[2] == "eye" and _roll is not None and abs(float(_roll)) > 8: msgs.append("롤 %.1f° — 책 그림이 기울어 뷰어로 같은 그림이 안 나와 책 구도로 고른 눈 카메라 인정(E11, violations.py 와 같은 기준)" % float(_roll))
+            elif abs(c[0] - ax["fit"].get("theta", 99)) > 0.011 or abs(c[1] - ax["fit"].get("phi", 99)) > 0.011: st = "fail"; msgs.append("모델 cam(%.2f,%.2f) ≠ axes fit(%.2f,%.2f) — 풀이값이 모델에 안 들어감" % (c[0], c[1], ax["fit"].get("theta"), ax["fit"].get("phi")))
             if c[2] == "guess": st = "fail" if st != "fail" else st; msgs.append("camSrc=guess")
             for m in (N - 1, N + 1):
                 o = cam_of(m)

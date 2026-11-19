@@ -23,9 +23,9 @@ def rigid_problems(asm, tol=1.0, exempt=()):
             mv = pt.get("move")
             if mv and not pt.get("nonRigid"):
                 p0, r0 = _pose_before(pt, mv["at"])
-                groups.setdefault(mv["at"], []).append((si, pt["n"], p0, r0, np.array(mv["p"], float), np.array(euler_to_R(mv["r"]), float)))
+                groups.setdefault((mv["at"], str(pt.get("moveGroup", ""))), []).append((si, pt["n"], p0, r0, np.array(mv["p"], float), np.array(euler_to_R(mv["r"]), float)))   # 같은 번호라도 moveGroup 이름이 다르면 따로 옮기는 묶음(formula1 23번 벽 양옆 두 벌) — 묶음마다 강체인지 본다
     out = []; summary = []
-    for at, L in sorted(groups.items()):
+    for (at, _g), L in sorted(groups.items()):
         worst, w = 0.0, None
         for i in range(len(L)):
             for j in range(i + 1, len(L)):

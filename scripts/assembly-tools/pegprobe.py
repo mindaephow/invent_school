@@ -3,7 +3,8 @@
 #   python pegprobe.py <이름> 위돌기  [--판 x z c0 r0] [--피치 10]            위로 향한 돌기를 높이 순으로(판 칸 좌표로 환산) — 새 판·부품이 얹힐 때 받는 돌기를 찾는다
 #   python pegprobe.py <이름> 빈구멍  <칸c> <칸r> [--판 x z c0 r0] [--반경 12]    그 칸 가까이 위·아래로 열린 구멍과 안에 든 돌기(사용중 부품) — 새 리벳·돌기가 꽂힐 빈 구멍을 찾는다
 #   python pegprobe.py <이름> 빈돌기  <부품이름 일부>                             그 부품의 돌기 방향·위치와 이미 구멍에 들어갔는지(사용중) — 막대·브래킷이 이어 줄 빈 돌기를 찾는다
-#     --판 x z c0 r0  = 판 칸 (c0,r0) 이 놓인 세계 좌표(x,z). 드롭체커 713프레임: x 5 z 5 칸 7 줄 4 (기본값). 칸 +X·줄 +Z, 간격 --피치(기본 10mm).
+#   python pegprobe.py <이름> 후보  <번호> [부품이름 일부]                        그 번호 직전 모델에서 비어 있고 드러난 구멍만(부품 자체 홀 이름) — 책 그림에서 고를 후보
+#     --판 x z c0 r0  =판 칸 (c0,r0) 이 놓인 세계 좌표(x,z). 드롭체커 713프레임: x 5 z 5 칸 7 줄 4 (기본값). 칸 +X·줄 +Z, 간격 --피치(기본 10mm).
 #   읽는 법: 높이 y 가 같은 돌기들이 한 판에 같이 꽂힌다(드롭체커 25번: y 37.5 의 6개 = 판 구멍 6곳). 구멍의 "사용중:None" 이 빈 구멍. 돌기 길이=판 구멍 길이면 판 중심 y = 돌기 중심 y.
 #   함정: 이 도구는 마지막 번호까지 끝난 위치로 계산한다. 어떤 번호 시점의 위치를 보려면 그 번호 코드 앞에서 자른 사본(<이름>.py 를 해당 줄까지)을 따로 실행한다.
 import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
@@ -47,7 +48,7 @@ def main():
                 w = q.world("hole", c); d = w["dir"]
                 if abs(d[1]) < 0.9: continue
                 cc, rr = cell(w["pos"])
-                if abs(cc - tc) * pitch < rad and abs(rr - tr) * pitch < rad: out.append((round(float(w["pos"][1]), 1), q.name, c["id"], round(cc, 2), round(rr, 2), pegs_in(w["pos"], d, float(w["len"]))))
+                if abs(cc - tc) * pitch < rad and abs(rr - tr) * pitch < rad: out.append((round(float(w["pos"][1]), 1), q.name, c["id"], round(cc, 2), round(rr, 2), pegs_in(w["pos"], d, float(w["len"] or 0))))
         out.sort(reverse=True); print("칸 (%g,%g) 근처 위·아래로 열린 구멍(높은 순) — 마지막 칸 = 안에 돌기가 든 부품(None 이 빈 구멍):" % (tc, tr))
         for r in out[:30]: print("  y %.1f | %-12s %-6s | 칸 %.2f 줄 %.2f | 사용중: %s" % r)
     elif mode == "빈돌기":
@@ -64,6 +65,63 @@ def main():
                             d = w["pos"] - hw["pos"]; al = float(d @ hw["dir"]); lat = float(np.linalg.norm(d - al * hw["dir"]))
                             if lat < 1.2 and abs(al) < hw["len"] / 2 + w["len"] / 2 + 0.5: used = q2.name
                 print("   %-3s 방향 %-14s 위치 %-24s 사용중: %s" % (c["id"], np.round(w["dir"], 1).tolist(), np.round(w["pos"], 1).tolist(), used))
-    else: sys.exit("모드는 위돌기·빈구멍·빈돌기")
+    elif mode == "후보":
+        candidates(A, int(pos[0]), pos[1] if len(pos) > 1 else None)
+    else: sys.exit("모드는 위돌기·빈구멍·빈돌기·후보")
+
+def candidates(A, N, only=None):
+    """N번을 시작하기 직전(N−1번까지 끝난) 모델에서 '비어 있고 바깥으로 드러난' 구멍만 부품 자체 번호로 뽑는다.
+    학생이 책을 보는 방식: 가려진 곳에는 조립하지 않으므로 끼울 자리는 이 목록 안에 있다 — 고르는 것은 책 그림으로 한다(점수로 정하지 않는다)."""
+    import obb, faces, partlib
+    from asmlib import euler_to_R
+    def pose(q):   # N−1번이 끝났을 때의 자세: N 전에 옮겨졌으면 옮긴 자세, 아니면 처음 자세
+        mv = q.extra.get("move")
+        if mv and mv["at"] < N: return np.array(mv["p"], float), euler_to_R(mv["r"])
+        if getattr(q, "_base", None) is not None: return q._base[0], q._base[1]
+        return q.p, q.R
+    live = [q for q in A.parts if q.step.index < N and N not in (q.extra.get("hideAt") or [])]
+    P = {id(q): pose(q) for q in live}
+    W = lambda q, c: (P[id(q)][0] + P[id(q)][1] @ np.array(c["pos"], float), P[id(q)][1] @ np.array(c["dir"], float), float(c.get("len") or 0))
+    box = {id(q): np.array(q.conn.get("size") or partlib.get(q.n)["size"], float) / 2 for q in live}
+    pegs = [W(q, c) for q in live for c in q.conn["pegs"]]
+    num = faces.number_parts(A.parts)   # 화면과 같은 번호(전체 부품에서 같은 이름의 n번째)
+    out = []
+    for q in live:
+        if only and only not in q.n: continue
+        for c in q.conn["holes"]:
+            hp, hd, hl = W(q, c)
+            if any(np.linalg.norm((pp - hp) - float((pp - hp) @ hd) * hd) < 1.5 and abs(float((pp - hp) @ hd)) < hl / 2 + 3 and abs(float(pd @ hd)) > 0.9 for pp, pd, _ in pegs): continue   # 이미 돌기가 들어 있음
+            sides = []
+            for sg in (1, -1):   # 구멍 양쪽 입구 바로 바깥 점이 다른 부품 몸통 안이면 그쪽은 막힘
+                tip = hp + sg * hd * (hl / 2 + 2.5)
+                if not any(obb.contains(tip, *P[id(o)], box[id(o)], 0.0) for o in live if o is not q): sides.append(sg)
+            if not sides: continue
+            ax = "XYZ"[int(np.argmax(np.abs(hd)))]
+            op = "·".join(("+" if s * hd["XYZ".index(ax)] > 0 else "-") + ax for s in sides)
+            out.append(("%s %d번" % (q.n, num[id(q)]), faces.name_of(q.conn, "홀", c["id"]), c["id"], op, np.round(hp, 1).tolist()))
+        holes = [(o, W(o, h)) for o in live if o is not q for h in o.conn["holes"]]
+        for c in q.conn["pegs"]:   # 빈 돌기: 어느 구멍에도 안 들어 있고 끝 바로 앞이 막히지 않은 돌기(구멍 쪽 부품을 끼울 자리 — formula1 23번 프레임 구멍 ↔ 벽 블록 옆돌기)
+            pp, pd, pl = W(q, c)
+            if any(abs(float(hd @ pd)) > 0.9 and np.linalg.norm((pp - hp) - float((pp - hp) @ hd) * hd) < 1.5 and abs(float((pp - hp) @ hd)) < hl / 2 + pl / 2 + 0.5 for _, (hp, hd, hl) in holes): continue
+            tip = pp + pd * (pl / 2 + 2.5)
+            if any(obb.contains(tip, *P[id(o)], box[id(o)], 0.0) for o in live if o is not q): continue
+            ax = "XYZ"[int(np.argmax(np.abs(pd)))]
+            out.append(("%s %d번" % (q.n, num[id(q)]), faces.name_of(q.conn, "돌기", c["id"]), c["id"], ("+" if pd["XYZ".index(ax)] > 0 else "-") + ax + "(돌기)", np.round(pp, 1).tolist()))
+    xf = (getattr(A, "meta", {}) or {}).get("xform")
+    if xf and N >= xf.get("at", 10 ** 6):   # 몸을 뒤집어 보이는 조립도: 좌표는 뒤집기 전(몸 좌표)이라 화면의 위·아래가 반대일 수 있다 — 화면 기준 방향을 덧붙인다
+        M = np.array(xf["m"], float)
+        def _scr(op):
+            out_ = []
+            for t in op.replace("(돌기)", "").split("·"):
+                v = np.zeros(3); v["XYZ".index(t[1])] = 1 if t[0] == "+" else -1; w = M @ v; k = int(np.argmax(np.abs(w)))
+                out_.append(("+" if w[k] > 0 else "-") + "XYZ"[k])
+            return op + " (화면 " + "·".join(out_) + ")"
+        out = [(a, b, c, _scr(d), e) for a, b, c, d, e in out]
+        print("※ 이 조립도는 %d번부터 몸을 뒤집어 보인다(xform) — 위치·열린 쪽은 몸 좌표, 괄호 안이 화면 기준(화면 +Y = 위)" % xf["at"])
+    print("%d번 직전 — 비어 있고 드러난 구멍·돌기 %d개 (부품 · 부품 자체 이름 · 열린(향한) 쪽 · 위치):" % (N, len(out)))
+    last = None
+    for o in out:
+        if o[0] != last: print("  ==", o[0]); last = o[0]
+        print("     %-22s %-5s 열린 쪽 %-18s %s" % o[1:])
 
 main()

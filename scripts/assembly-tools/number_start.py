@@ -214,7 +214,8 @@ if k > 1 and load(os.path.join(here, name + "_rules.json"), {}).get("holeline_im
     except Exception as _e_: print("앞 번호 산출물 점검 실패:", str(_e_)[:80])
 if k > 1:   # 앞 번호: 사용자 ✓ 또는 지금 내용과 같은 지문의 비교 증거(record_check)가 있어야 다음 번호를 시작한다
     _prev = asm[k - 2]
-    if _prev.get("noPart") or not (_prev.get("parts") or _prev.get("moveMade") or _prev.get("madeNoPart")): _gate.append(("앞 번호 %d" % (k - 1), "아직 작성 전(부품 없음)", "앞 번호부터 끝낸다 — 번호는 순서대로"))
+    _moved_prev = any((q.get("move") or {}).get("at") == k - 1 for s_ in asm[:max(k - 2, 0)] for q in s_.get("parts", [])) or any(str(k - 1) in (q.get("poseAt") or {}) and (q.get("poseAt") or {}).get(str(k - 1)) != (q.get("poseAt") or {}).get(str(k - 2)) for s_ in asm[:max(k - 2, 0)] for q in s_.get("parts", []))   # poseAt 자세 변경 번호도 · 앞 번호 부품에 move.at 을 적어 합치는 번호(formula1 21번) — record_check 와 같은 기준
+    if (_prev.get("noPart") and not _moved_prev) or not (_prev.get("parts") or _prev.get("moveMade") or _prev.get("madeNoPart") or _moved_prev): _gate.append(("앞 번호 %d" % (k - 1), "아직 작성 전(부품 없음)", "앞 번호부터 끝낸다 — 번호는 순서대로"))
     else:   # 부품이 있는 번호, 또는 앞 번호 부품을 옮기기만 하는(합치는) 번호
         _ok = False
         try:

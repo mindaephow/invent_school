@@ -116,7 +116,8 @@
         const a = mine[i], b = mine[j]
         if (a.n === b.n && Math.hypot(...sub(a.p, b.p)) < 0.5 && JSON.stringify(a.r) === JSON.stringify(b.r)) issues.push(`${si}단계: ${a.n} 이 같은 자리에 두 번 놓임`)
       }
-      const prevSet = all.filter((a) => a.step < si)
+      const hm = st.hideMade || null   // 이번 번호가 새 작업장이면 앞 번호 부품은 화면에 없다 — design-assembly.js hidHere 와 같은 조건으로 빼고 비교한다
+      const prevSet = upto.filter((a) => a.step < si && !((a.ref.hideAt && a.ref.hideAt.includes(si)) || (hm && (hm[a.step] !== undefined || hm[a.step + ':' + a.idx] !== undefined))))
       mine.forEach((a) => {
         const dup = prevSet.find((b) => b.n === a.n && Math.hypot(...sub(a.p, b.p)) < 0.5 && JSON.stringify(b.r) === JSON.stringify(a.r))
         if (dup) issues.push(`${si}단계: ${a.n} 이 ${dup.step}단계 부품과 같은 자리(중복)`)

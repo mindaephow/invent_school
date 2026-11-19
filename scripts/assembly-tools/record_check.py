@@ -90,7 +90,8 @@ def main():
     book = os.path.join(here, "refs", name, "%02d.jpg" % step)
     if not os.path.isfile(book): sys.exit("❌ 책 그림이 없다: " + book)
     asm = json.load(open(os.path.join(here, name + "_asm.json"), encoding="utf-8"))["steps"]
-    if step < 1 or step > len(asm) or not (asm[step - 1].get("parts") or asm[step - 1].get("moveMade") or asm[step - 1].get("madeNoPart")): sys.exit("❌ 부품이 있거나 앞 번호 부품을 옮기는(합치는) 번호가 아니다(부품 없는 번호는 kw madeNoPart 로 표시 — 어보이더 28·30번)")
+    _moved_here = any((q.get("move") or {}).get("at") == step for s_ in asm[:max(step - 1, 0)] for q in s_.get("parts", [])) or any(str(step) in (q.get("poseAt") or {}) and (q.get("poseAt") or {}).get(str(step)) != (q.get("poseAt") or {}).get(str(step - 1)) for s_ in asm[:max(step - 1, 0)] for q in s_.get("parts", []))   # poseAt 으로 이 번호에서 자세가 바뀜(formula1 26 덮개 닫힘) · 앞 번호 부품에 move.at=N 을 적어 이 번호에서 합치는 방식(formula1 19·20·21·23번)
+    if step < 1 or step > len(asm) or not (asm[step - 1].get("parts") or asm[step - 1].get("moveMade") or asm[step - 1].get("madeNoPart") or _moved_here): sys.exit("❌ 부품이 있거나 앞 번호 부품을 옮기는(합치는) 번호가 아니다(부품 없는 번호는 kw madeNoPart 로 표시 — 어보이더 28·30번)")
     fp = stepfp.fp(asm[step - 1])
     b = Image.open(book).convert("RGB"); h = 760
     a = b.resize((int(b.width * h / b.height), h)); c = im.resize((int(im.width * h / im.height), h))

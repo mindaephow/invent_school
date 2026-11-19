@@ -930,7 +930,11 @@ def compute_anchors(A):
         if P is None:
             continue
         best = None
-        for Q in sorted((q for q in parts if idx[id(q)] < idx[id(P)] and q.step.kw.get("slot", 1) == P.step.kw.get("slot", 1)), key=lambda q: -idx[id(q)]):   # 같은 창고 부품만 — 새 창고(원점)의 부품이 다른 창고 부품의 돌기·구멍과 우연히 같은 자리에 있다고 그 뒤를 따라가면 안 된다(해머배틀 29번 오른쪽 블록이 19번 서보고정볼트를 따라 1.3mm 내려앉음, 2026-11-03)
+        _hm = P.step.kw.get("hideMade") or {}; _k = P.step.index   # P 번호 화면에서 숨긴 부품(앞 작업장)은 기준으로 잡지 않는다 — 같은 창고 번호라도 새 작업장이면 화면에 없다(formula1 24·28번이 숨긴 19~22번 블록을 따라가 빌드마다 번갈아 움직임, 2026-11-19)
+        def _hid(q):
+            ha = (q.extra or {}).get("hideAt")
+            return str(q.step.index) in _hm or (bool(ha) and (_k in [int(x) for x in ha] if isinstance(ha, (list, tuple, set)) else int(ha) <= _k))   # violations._hidden_at 과 같은 뜻
+        for Q in sorted((q for q in parts if idx[id(q)] < idx[id(P)] and q.step.kw.get("slot", 1) == P.step.kw.get("slot", 1) and not _hid(q)), key=lambda q: -idx[id(q)]):   # 같은 창고 부품만 — 새 창고(원점)의 부품이 다른 창고 부품의 돌기·구멍과 우연히 같은 자리에 있다고 그 뒤를 따라가면 안 된다(해머배틀 29번 오른쪽 블록이 19번 서보고정볼트를 따라 1.3mm 내려앉음, 2026-11-03)
             for a, pgid, hoid in inn.get(id(P), []):      # Q 의 돌기가 P 의 구멍에
                 if a is Q:
                     best = (("홀", hoid), ("돌기", pgid), Q)
