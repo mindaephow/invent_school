@@ -4,5 +4,6 @@
  "strict": true,
  "orient_check": true,
  "placecheck": true,
- "img_db": true
+ "img_db": true,
+ "rulecheck": true
 }
