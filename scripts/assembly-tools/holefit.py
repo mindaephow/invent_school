@@ -10,7 +10,7 @@ import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연�
 import sys, os, json
 import numpy as np, cv2
 sys.stdout.reconfigure(encoding="utf-8")
-if len(sys.argv) < 14: sys.exit(__doc__)
+if len(sys.argv) < 14: print("".join(l[2:] if l.startswith("# ") else l[1:] for l in open(__file__, encoding="utf-8").read().splitlines(True)[:12] if l.startswith("#")), end=""); sys.exit(1)   # 인자 없이 부르면 머리말(사용법)을 보여 준다
 name, step, label, cols, rows = sys.argv[1], int(sys.argv[2]), sys.argv[3], int(sys.argv[4]), int(sys.argv[5])
 C = np.array([float(v) for v in sys.argv[6:14]], np.float32).reshape(4, 2)
 dark_plate = len(sys.argv) > 14 and sys.argv[14] == "어두운판"
@@ -103,5 +103,7 @@ est = [[c, r] for c in range(1, cols + 1) for r in range(1, rows + 1) if (c, r) 
 out = {"cols": cols, "rows": rows, "pts": pts, "name": "%s %d번 %s: 구멍 %d개를 찾아 %d×%d 격자에 호모그래피로 맞춤(오차 평균 %.2fpx·최대 %.2fpx) — holefit.py" % (name, step, label, len(sel), cols, rows, mean_e, max_e), "est": est, "err_px": round(mean_e, 2), "max_err_px": round(max_e, 2)}
 out.update({"tool": "holefit", "err_px": round(mean_e, 2), "max_err_px": round(max_e, 2), "found": len(sel), "found_ratio": round(len(sel) / (cols * rows), 2), "mode": used_mode})   # 규칙 점검(rulecheck.py)이 읽는 출처 기록 — 이 도구가 기준을 통과해 만든 격자라는 표시
 os.makedirs(D + "fits", exist_ok=True)
+_fp = D + "fits/%02d_%s.json" % (step, label)
+if os.path.exists(_fp): import shutil; shutil.copy2(_fp, _fp + ".bak")   # 통과해 덮기 전에 옛 fits 를 .bak 으로 남긴다(옛 손 격자 복원용)
 json.dump(out, open(D + "fits/%02d_%s.json" % (step, label), "w", encoding="utf-8"), ensure_ascii=False)
 print("✅ 통과 — fits/%02d_%s.json 저장(찾지 못해 격자로 채운 점 %d개). 확인 그림 hf/%02d_%s.png 를 눈으로 본다." % (step, label, len(est), step, label))

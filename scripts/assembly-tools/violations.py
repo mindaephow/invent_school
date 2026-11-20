@@ -46,7 +46,7 @@ def nohole_bad(A, tol=1.5, minlen=10.0):
     import stepchecks
     out = []
     for k in range(1, len(A.steps) + 1):
-        allp = [q for j in range(1, k + 1) for q in A.steps[j - 1].parts if q.conn]
+        allp = [q for j in range(1, k + 1) for q in A.steps[j - 1].parts if q.conn and not _hidden_at(q, k)]   # 숨긴 앞 번호 부품(hideMade·hideAt)은 화면에 없으니 구멍 검사에서도 뺀다
         if not any(q.n in ("T축", "축") for q in A.steps[k - 1].parts): continue   # 막대가 새로 놓이는 번호만 자세를 계산한다
         try: pose = {id(q): stepchecks.pose_at(A, q, k) for q in allp}
         except Exception: continue   # 옛 형식(구멍 id 가 다른) 조립도는 자세를 못 구하면 건너뛴다
@@ -77,9 +77,13 @@ def nohole_bad(A, tol=1.5, minlen=10.0):
 _SHAFTY = ("DC모터", "서보모터", "T축", "축", "부시")
 
 def _hidden_at(q, k):
-    """k번 화면에서 숨겨진 부품인가(hideAt 은 숨길 번호 목록, 한 개면 그 번호부터)."""
+    """k번 화면에서 숨겨진 부품인가 — 부품의 hideAt(숨길 번호 목록, 한 개면 그 번호부터) 또는 k번 스텝의 kw["hideMade"](앞 번호 조립 숨김, 키 "번호" 또는 "번호:부품순서" — design-verify.js·asmlib.compute_anchors 와 같은 뜻).
+    occupied_holes·nohole_bad·_mate_pairs·shaft_gaps 등이 모두 이 함수 하나로 숨김을 본다(dog 2번: 숨긴 1번 DC모터를 nohole 이 읽던 오탐)."""
     ha = (q.extra or {}).get("hideAt")
-    return bool(ha) and (k in [int(x) for x in ha] if isinstance(ha, (list, tuple, set)) else int(ha) <= k)
+    if bool(ha) and (k in [int(x) for x in ha] if isinstance(ha, (list, tuple, set)) else int(ha) <= k): return True
+    try: hm = q.step.A.steps[k - 1].kw.get("hideMade") or {}
+    except Exception: hm = {}
+    return bool(hm) and (str(q.step.index) in hm or "%d:%d" % (q.step.index, q.step.parts.index(q)) in hm)
 
 def occupied_holes(A, k, lat=1.5, ov=0.5):
     """k번 화면에서 한 구멍에 서로 다른 부품의 돌기가 둘 이상 들어 있는 곳(사용자 지시 2026-11-09: 연결점을 이미 쓴 구멍에 또 결합하면 모니터링 — 리벳·블록 돌기로 막힌 프레임 구멍에 눈블록 같은 돌기를 또 꽂음).

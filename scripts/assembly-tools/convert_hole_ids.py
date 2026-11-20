@@ -54,6 +54,11 @@ def run(path, write):
         _nl = "\r\n" if b"\r\n" in open(path, "rb").read() else "\n"   # 줄 끝(CRLF/LF)은 원래대로
         open(path, "w", encoding="utf-8", newline="").write(_nl.join(lines))
     return len(edits), unresolved
+FMT_ID = re.compile(r"""["']h(%[ds]|[{][^}"']*[}])_(%[ds]|[{][^}"']*[}])["']""")   # 형식 문자열로 만든 옛 번호("h%d_%d" % (칸, 줄) · f"h{c}_{r}") — 글자로는 안 보여 needs() 가 못 센다
+def format_lines(path):
+    """옛 번호를 형식 문자열로 만드는 줄 -> [(줄 번호, 그 줄 앞 90자)]. 실행 KeyError 로만 드러나던 곳(dog 596·709줄)을 줄 번호로 알린다."""
+    try: return [(i, L.strip()[:90]) for i, L in enumerate(open(path, encoding="utf-8").read().splitlines(), 1) if FMT_ID.search(L)]
+    except OSError: return []
 def needs(path):
     """이 스크립트에 옛 구멍 번호(hN_M)가 남아 있는 개수."""
     try: return len(OLD_ID.findall(open(path, encoding="utf-8").read()))
@@ -98,4 +103,4 @@ if __name__ == "__main__":
     w = "--write" in sys.argv
     for f in [a for a in sys.argv[1:] if not a.startswith("--")]:
         if not os.path.exists(f): f = asmpath.resolve(f + ".py")
-        n, u = run(f, w); print(f, "바꿈" if w else "바꿀 것", n, "| 못 정한", len(u), u[:6], "| 옛 번호(hN_M) 남음", needs(f))
+        n, u = run(f, w); print(f, "바꿈" if w else "바꿀 것", n, "| 못 정한", len(u), u[:6], "| 옛 번호(hN_M) 남음", needs(f), "| 형식 문자열 의심", [l for l, _ in format_lines(f)][:20])

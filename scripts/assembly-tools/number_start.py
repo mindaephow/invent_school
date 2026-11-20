@@ -26,6 +26,8 @@ try:   # 옛 구멍 번호(hN_M) 자동 변환(사용자 지시 2026-11-15): 부
         print("═══ 옛 구멍 번호 자동 변환 ═══"); print("  옛 번호 %d곳 중 %d곳을 같은 위치의 새 번호로 바꿨다(백업: %s)" % (_k0, _dn, os.path.relpath(_bk, here) if os.path.isabs(_bk) else _bk))
         if _er or _left: print("  ⚠ 아직 남은 옛 번호 %d곳 — 스크립트가 멈추는 곳: %s" % (_left, _er or "없음(실행 안 되는 줄에만 남음)")); print("    그 줄의 번호를 부품 DB 번호로 손으로 바꾼다(같은 구멍 찾기: python convert_hole_ids.py %s 가 못 정한 줄을 보여 준다, 구멍 위치는 pegprobe·get_part_connectors)" % name)
         else: print("  ✅ 스크립트가 끝까지 돈다")
+    _fm = _ch.format_lines(asmpath.resolve(name + ".py"))   # 형식 문자열("h%d_%d" % …)로 만든 옛 번호는 글자 검사로 안 잡힌다 — 줄 번호만 알린다
+    if _fm: print("⚠ 옛 구멍 번호를 형식 문자열로 만드는 줄 %d곳(줄 번호: %s) — 새 번호는 h 숫자 하나다. 그 줄이 부품 DB 번호(get_part_connectors)와 맞는지 보고, 안 맞으면 실행할 때 KeyError 가 난다(첫 줄: %s)" % (len(_fm), ", ".join(str(l_) for l_, _ in _fm[:12]) + (" …" if len(_fm) > 12 else ""), _fm[0][1]))
 except Exception as _e_: print("⚠ 구멍 번호 변환 필요 여부를 못 봤다 — python convert_hole_ids.py %s 로 직접 본다: %s" % (name, str(_e_)[:100]))
 # 지금까지 작업한 번호(build 가 이 번호까지만 막는다 — 규칙 A1: 아직 시작하지 않은 뒤 번호의 문제는 세지 않는다). 시작 때(release_start) 0 으로 되돌아간다.
 try:
@@ -170,13 +172,14 @@ _gate = []
 try: _act0 = open(os.path.join(here, ".active_assembly"), encoding="utf-8").read().strip()
 except Exception: _act0 = ""
 if _act0 != name: _gate.append(("00-1 시작 절차", "이 조립도(%s)로 시작 절차를 안 했다(작업 중 조립도: %s) — 📷·❄·✓ 가 안 풀렸고 끝까지 가 지킴이도 이 조립도를 모른다" % (name, _act0 or "없음"), "묻지 말고 python handoff.py %s --아이디 <계정> --시작 부터 돌린다(규칙 00-1 — 확인만 하는 작업이어도 같다)" % name))
+def _cut(l, n=15): return "%s%s" % (l[:n], " … 총 %d개" % len(l) if len(l) > n else "")   # 게이트 메시지가 앞 n개만 보이면 전체 개수를 모르니 개수를 붙인다
 _R0 = os.path.join(here, "refs", name)
 _miss_img = [i for i in range(0, len(asm) + 1) if i and not os.path.exists(os.path.join(_R0, "%02d.jpg" % i))]
 if not os.path.exists(os.path.join(_R0, "00.jpg")): _miss_img.insert(0, 0)
-if _miss_img: _gate.append(("02 이미지 자르기", "책 그림이 없는 번호: %s" % _miss_img[:12], "refs_make.py 로 만든다(02)"))
+if _miss_img: _gate.append(("02 이미지 자르기", "책 그림이 없는 번호: %s" % _cut(_miss_img, 12), "refs_make.py 로 만든다(02)"))
 if not os.path.exists(os.path.join(_R0, "00_1.jpg")): _gate.append(("02 완성품 방향선 그림", "완성 사진과 한 세트인 방향선 그림(refs/%s/00_1.jpg)이 없다" % name, "규칙 파일 P2 3-2 로 만들어 올린다(앞 +Z · 뒤 −Z · 위 +Y · 왼쪽 +X · 오른쪽 −X, 추정으로 표시하고 멈추지 않는다 — 확인은 마지막 보고) — 규칙 파일 A10"))
 _miss_used = [i for i, s in enumerate(asm, 1) if "▣ 사용 부품:" not in (s.get("note") or "")]
-if _miss_used: _gate.append(("03 부품 체크", "▣ 사용 부품이 없는 번호: %s" % _miss_used[:15], "번호별 사용 부품을 적고 LIST 와 대조한다(03 B)"))
+if _miss_used: _gate.append(("03 부품 체크", "▣ 사용 부품이 없는 번호: %s" % _cut(_miss_used), "번호별 사용 부품을 적고 LIST 와 대조한다(03 B)"))
 # 03 부품 정리 합계 점검(큐보 부품결합규칙.md A2, 2026-11-02): 번호별 ▣ 사용 부품 합계가 교재 LIST 와 부품별로 같아야 번호를 시작한다. 이미 만든 조립도가 갑자기 막히지 않게 <이름>_rules.json 에 "parts_sum": true 를 켠 조립도만 막는다.
 if load(os.path.join(here, name + "_rules.json"), {}).get("parts_sum") and not _miss_used:
     import collections as _co
@@ -191,8 +194,8 @@ if load(os.path.join(here, name + "_rules.json"), {}).get("parts_sum") and not _
     if _bad0: _gate.append(("03 부품 정리(합계)", "사용 부품 합계가 교재 LIST 와 다르다 (부품: 사용합/LIST): %s" % ", ".join("%s %d/%d" % (n_, u_, c_) for n_, (u_, c_) in list(_bad0.items())[:10]), "책을 번호 순서대로 다시 읽어 어느 번호를 잘못 읽었는지 찾아 ▣ 사용 부품을 고친다 — 숫자를 맞추려고 고치지 않는다(큐보 부품결합규칙.md A2)"))
 _miss_slot = [i for i, s in enumerate(asm, 1) if s.get("slot") is None]
 _miss_hist = [i for i in range(2, len(asm) + 1) if asm[i - 1].get("slot") is not None and asm[i - 2].get("slot") is not None and asm[i - 1]["slot"] != asm[i - 2]["slot"] and not asm[i - 1].get("history")]
-if _miss_slot: _gate.append(("04 창고 정리", "창고(slot)가 없는 번호: %s" % _miss_slot[:15], "번호마다 slot·history 를 적는다(04) — 스크립트를 고쳤으면 python %s.py 로 asm 을 다시 만든다" % name))
-if _miss_hist: _gate.append(("04 창고 정리", "창고가 바뀌는데 history 가 없는 번호: %s" % _miss_hist[:15], "history 글을 적는다(04)"))
+if _miss_slot: _gate.append(("04 창고 정리", "창고(slot)가 없는 번호: %s" % _cut(_miss_slot), "번호마다 slot·history 를 적는다(04) — 스크립트를 고쳤으면 python %s.py 로 asm 을 다시 만든다" % name))
+if _miss_hist: _gate.append(("04 창고 정리", "창고가 바뀌는데 history 가 없는 번호: %s" % _cut(_miss_hist), "history 글을 적는다(04)"))
 # 앞 번호까지의 그림이 DB 에 다 올라갔는지(큐보 부품결합규칙.md B5·I1, dbimgcheck.py): "이미지 작업이 DB 에 올라가 화면에 보이는 것"이 규칙을 순서대로 지킨 증거다. <이름>_rules.json 에 "img_db": true 를 켠 조립도만 막는다. DB 를 못 읽으면 막지 않고 알린다.
 if k > 1 and load(os.path.join(here, name + "_rules.json"), {}).get("img_db"):
     import subprocess

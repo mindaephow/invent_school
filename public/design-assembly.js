@@ -552,7 +552,7 @@
         if (isNew && pt.seated && !lowering && !(moving && pt.moveGuide)) { // moveGuide: seated 부품이 move 로 옮겨 붙는 단계에서는 링만 칠하지 않고 화살표도 그린다(꼬마기사 14번 모터)
           // seated: 교재가 이미 꽂아 둔 모양으로 그리는 부품(리벳 등) — 떠서 내려오지 않고 제자리에 두고, 꽂힌 구멍에 초록 원만 칠한다(교재 23·25·27)
           (pt.marks || []).forEach((m) => guides.push({ from: m, to: m, dir: dirH || [0, 1, 0], idx: list.length, ringOnly: true }));
-        } else if (isNew && dirH && pt.noGuide) {
+        } else if (isNew && dirH && (pt.noGuide || (moving && mvSrc.noGuide))) { // mvSrc.noGuide: 이 이동 하나에만 화살표가 없다(move_made(noGuide=True)) — 그 부품이 처음 놓인 번호의 화살표는 그대로 남는다
           pos = add(base, dirH, (moving ? (mvSrc.hover || pt.hover) : pt.hover) || HOVER); // noGuide: 받는 판과 함께 떠서 오는 부품(판에 이미 박힌 리벳) — 따로 안내 화살표·점이 없다. 옮겨 붙는 단계(move)에서는 그 이동의 hover 를 따라 같은 묶음과 같이 뜬다(드롭체커 28번: 27번의 판 hover 30 이 남아 25프레임만 블록에서 떨어졌다)
         } else if (isNew && dirH) {
           // 띄우는 거리·돌기가 들어가는 깊이·판 두께는 부품마다 정할 수 있다(T축처럼 길게 꽂히는 것, 두꺼운 부시)

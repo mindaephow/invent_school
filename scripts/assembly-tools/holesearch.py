@@ -5,6 +5,7 @@ import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연�
 import subprocess, sys, re, os
 sys.stdout.reconfigure(encoding="utf-8")
 a = sys.argv[1:]
+if len(a) < 13: print("".join(l[2:] if l.startswith("# ") else l[1:] for l in open(__file__, encoding="utf-8").read().splitlines(True)[:12] if l.startswith("#")), end=""); sys.exit(1)
 name, step, label, cols, rows = a[0], a[1], a[2], a[3], a[4]
 C = [float(v) for v in a[5:13]]; extra = a[13:]
 here = os.path.dirname(os.path.abspath(__file__))

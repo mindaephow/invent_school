@@ -185,6 +185,43 @@ def floor_lift(A, k):
     amt = float(np.ceil(-min(ys) - 1e-9)); A.meta["lift"] = {**lift, str(k): amt}
     return amt
 
+def _view_low(A, k):
+    """k번 화면에 보이는 모든 부품(앞 번호 부품 포함, hideMade·hideAt 으로 숨긴 것 제외 — violations._hidden_at, 자세는 stepchecks.pose_at)의 가장 낮은 점 y(올림 전) -> (가장 낮은 y 또는 None, 보이는 앞 번호 부품이 있는 번호 집합).
+    옆자리(side)로 그리는 부품은 floor_check 가 따로 보니 뺀다."""
+    import stepchecks, violations
+    xf = A.meta.get("xform"); low_y = None; seen = set()
+    for j in range(1, k + 1):
+        for q in A.steps[j - 1].parts:
+            if not q.conn or violations._hidden_at(q, k) or (q.extra or {}).get("side"): continue
+            if j < k: seen.add(j)
+            size = q.conn.get("size")
+            if not size: continue
+            p, R = (np.array(v, float) for v in stepchecks.pose_at(A, q, k))
+            if xf and k >= xf["at"]: Mx = np.array(xf["m"], float); p = Mx @ p + np.array(xf["t"], float); R = Mx @ R
+            sz = np.array(size, float) / 2
+            if q.n in ("중간바퀴", "작은바퀴"): ax = R[:, 1]; half = float(sz[1] * abs(ax[1]) + max(sz[0], sz[2]) * float(np.sqrt(max(0.0, 1.0 - ax[1] ** 2))))
+            else: half = float(np.abs(R[1]) @ sz)
+            y = float(p[1] - half + float(A.meta.get("floorDy") or 0))
+            if low_y is None or y < low_y: low_y = y
+    return low_y, seen
+
+def floor_lift_all(A):
+    """파일 끝에서 한 번 부른다 — 번호마다 화면 전체 올림(A.meta["lift"][k])을 계산한다(번호마다 floor_lift 를 손으로 부르지 않는다).
+    ① 자체 필요량 = max(floor_lift 가 보는 k번에 새로 놓인 부품·띄운 자리, k번 화면에 보이는 모든 부품(앞 번호 부품 포함)의 가장 낮은 점)
+    ② 이어받기 = k번 화면에 보이는 앞 번호 부품 중 k번과 같은 창고(slot)이고 가장 늦은 번호 j 의 올림(바로 앞 번호가 아니다 — 작업대 번호를 건너뛰고 돌아오는 번호도 맞다). 보이는 앞 부품이 없으면(새 창고) 0 부터.
+    k번 올림 = max(① , ②). 기존 floor_lift(A, k) 는 그대로(이미 끝난 조립도의 화면 높이를 바꾸지 않는다). 반환: {번호: 올린 mm}(0 이 아닌 번호만)."""
+    got = {}; lifts = {}
+    for k in range(1, len(A.steps) + 1):
+        sl = A.steps[k - 1].kw.get("slot", 1)
+        need = floor_lift(A, k)
+        low_y, seen = _view_low(A, k)
+        if low_y is not None and low_y < 0: need = max(need, float(np.ceil(-low_y - 1e-9)))
+        js = [j for j in seen if A.steps[j - 1].kw.get("slot", 1) == sl]
+        amt = max(need, lifts.get(max(js), 0.0) if js else 0.0); lifts[k] = amt
+        A.meta["lift"] = {**{kk: vv for kk, vv in (A.meta.get("lift") or {}).items() if kk != str(k)}, **({str(k): amt} if amt else {})}
+        if amt: got[k] = amt
+    return got
+
 class Group:
     """끝낸 조립품을 한 부품처럼 움직이게 묶는다 (사용자 지시 2026-10-04: 1번 완성품은 부품이 아니라 그룹이 하나처럼 움직인다).
     g = A.group("1번 완성품", [부품…]);  단계.move_group(g, rot_x(90), floor=True) 처럼 돌리고 옮기면 묶음 전체가 같은 회전·이동을 받는다.
@@ -468,11 +505,12 @@ class Step:
             pt.p = pt.p + sh
             pt.extra["move"] = {"at": s.index, "p": rnd(pt.p), "r": R_to_euler(pt.R)}
         return g
-    def move_made(s, g, R, pivot=None, shift=(0, 0, 0), dir=None, hover=60, group=None, marks=None, recv=()):
+    def move_made(s, g, R, pivot=None, shift=(0, 0, 0), dir=None, hover=60, group=None, marks=None, recv=(), noGuide=False):
         """이미 ✓ 한 앞 번호에서 만든 부품 묶음을 이번 번호에서 옮긴다(투석기 17번). move_group 은 앞 번호 부품 데이터에 move 를 써서 ✓ 단계 지문이 바뀌어 빌드가 막히므로,
         이동은 이번 단계 데이터(kw["moveMade"] = {"만든번호:부품순서": {p, r, dir, hover, moveGroup, marks}})에만 적는다. 화면·도구는 design-assemblies.js 끝의 합치기 코드로 part.move 를 본다.
         marks 는 {부품: [안내점…]} (부품 하나당 한 번). 부품마다 한 번만 옮길 수 있다(여러 번 옮기려면 poseAt).
-        recv=(부품…): 구멍을 받는 쪽으로 움직이는 부품(프레임) — 초록 링을 그 부품의 구멍 중심에 붙이고 화살표는 고정된 돌기 끝에서 시작한다(G23). 안 주면 링이 고정된 돌기 끝에 찍힌다."""
+        recv=(부품…): 구멍을 받는 쪽으로 움직이는 부품(프레임) — 초록 링을 그 부품의 구멍 중심에 붙이고 화살표는 고정된 돌기 끝에서 시작한다(G23). 안 주면 링이 고정된 돌기 끝에 찍힌다.
+        noGuide=True: 책에 이 이동의 화살표가 없다 — 이동 항목에만 noGuide 를 적어 이 이동 단계에서만 화살표·안내점 검사를 뺀다(그 부품이 처음 놓인 번호의 띄움·화살표는 그대로). 묶음은 이 이동의 hover 로 같이 뜬다."""
         if hover == 0: print("[경고] %s단계 move_made hover=0 — 0 은 화면 코드의 `hover || HOVER` 에서 기본 띄움이 되어 옮기는 묶음만 위로 뜬다. 띄움이 필요 없으면 hover=0.01 을 쓴다(큐보 부품결합규칙.md C6)" % getattr(s, "index", "?"))
         R = np.array(R, float); pv = g.center() if pivot is None else np.array(pivot, float); sh = np.array(shift, float)
         mm = s.kw.setdefault("moveMade", {})
@@ -481,6 +519,7 @@ class Step:
             pt.p = R @ (pt.p - pv) + pv + sh; pt.R = R @ pt.R
             e = {"p": rnd(pt.p), "r": R_to_euler(pt.R), "dir": [float(v) for v in (dir if dir is not None else [0, 1, 0])], "hover": hover}
             if group is not None: e["moveGroup"] = group
+            if noGuide: e["noGuide"] = True
             if isinstance(marks, dict) and id(pt) in marks: e["marks"] = marks[id(pt)]
             mm["%d:%d" % (pt.step.index, pt.step.parts.index(pt))] = e
         if isinstance(marks, str) and marks == "auto":   # 옮긴 묶음이 제자리에서 합쳐지는 안내점은 결합에서 계산한다(손 좌표·숫자 금지, G21): 끼우는 돌기 → 받는 구멍 입구, 받는 구멍 ← 받는 돌기 끝

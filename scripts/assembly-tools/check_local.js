@@ -81,7 +81,7 @@ if (process.argv[3]) {
     const arrSet = new Set(arriving.map(a => a.key));
     arriving.forEach(({ key, pt, mode }) => {
       if (mode === 'settle' && pt.n === 'T축') return; // T축은 묶음(기어·프레임)과 같이 합쳐지고, 끝이 아래 구멍에 그냥 들어가 있어도 결합이 아니다(사용자 2026-11-04 토끼 15번) — 안내는 구멍을 받는 부품이 맡는다
-      if (pt.n === '리벳' || pt.noGuide) return; // noGuide = 우연히 맞닿아 보일 뿐 결합이 아닌 부품(안내 화살표 없음). 리벳은 교재도 화살표 없이 꽂힌 채로 그린다(같이 도착하는 묶음 안의 결합도 제외)
+      if (pt.n === '리벳' || pt.noGuide || (mode === 'move' && window.IVS_moveAt(pt, step).noGuide)) return; // 이동 항목의 noGuide = 이 이동에만 화살표 없음(move_made noGuide=True). // noGuide = 우연히 맞닿아 보일 뿐 결합이 아닌 부품(안내 화살표 없음). 리벳은 교재도 화살표 없이 꽂힌 채로 그린다(같이 도착하는 묶음 안의 결합도 제외)
       const outside = (k) => prior.has(k) && !arrSet.has(k); // 같이 합쳐지는 묶음 안의 결합은 빼고, 이미 있던 부품과의 결합만 본다
       // 창고(slot) 구분: 다른 창고 부품과의 맞닿음은 같은 좌표에서 우연히 겹친 것이라 결합이 아니다(design-verify.js 와 같은 기준, 규칙 A4·사용자 2026-11-07)
       const slotOf = (n) => { const s = stepsAll[n - 1]; return s && s.slot !== undefined && s.slot !== null ? s.slot : 1; };

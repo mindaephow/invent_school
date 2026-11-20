@@ -9,6 +9,7 @@
 #   to_side(…, (x, y, z), …)       — 옆자리 작업 위치(새 창고): 어디에 둘지는 정하는 값이라 "작업 위치"로 따로 센다
 #   식 좌표                         — 위 자리들에 숫자가 섞인 식을 튜플·리스트로 직접 적은 것: (_x0 + 60.0, YC, ZL - 8.0), [[xg, YC, ZL + 16.5]] (함수 호출로 계산한 값은 아니다)
 #   Part(부품, 자세, 좌표, …)       — Part 를 직접 만들어 _add 하는 것(place·attach·recv 의 검사를 거치지 않는 통로). 좌표가 숫자든 식이든 센다
+#   위치 대입                       — 부품 .p 에 숫자가 섞인 값을 더하거나 대입한 손 이동: _q.p = np.array(_q.p, float) + np.array([0, 0, -1.0]) · _q.p += (0, 0, 5) · _q.p[2] -= 3 (dog 4번 겹침 원인 1mm). 0 이 아닌 숫자 상수가 값에 있어야 센다(복원·복사·계산값만이면 제외)
 #   띄움·두께: hover=·thick=·pegDepth=·settleHover= 에 숫자(또는 숫자가 섞인 식)를 직접 적은 것과 x.extra["hover"] = 숫자 (2026-11-18 사용자 "손값 모두 없애고 규칙과 도구로", 규칙 G12)
 #              — 리벳은 화면 기본 띄움, 그 위 판·블록은 moves.plate_hover(), 두께는 구멍 연결점(G27)이 정한다. 예외: hover=0.01(G19, 띄우지 않는 이동)
 # 실행해서 실제로 좌표를 직접 받은 부품(변수에 담아 넘긴 것까지, 앵커 제외)은 violations.py 의 ✋(asmlib.hand_placed)가 번호·부품별로 보여 준다
@@ -50,6 +51,19 @@ def _keys(t):
         t = t.value
     return ks
 
+def _pos_assign(node):
+    """부품 위치(.p·.p[i])에 0 이 아닌 숫자 상수가 든 값을 대입·누적하는 줄인가 — 인덱스([0] 등)로 쓰인 숫자는 상수로 안 센다."""
+    if not isinstance(node, (ast.Assign, ast.AugAssign)): return False
+    tgs = node.targets if isinstance(node, ast.Assign) else [node.target]
+    def _is_p(t):
+        while isinstance(t, ast.Subscript): t = t.value
+        return isinstance(t, ast.Attribute) and t.attr == "p"
+    flat = [e for t in tgs for e in (t.elts if isinstance(t, (ast.Tuple, ast.List)) else [t])]
+    if not any(_is_p(t) for t in flat): return False
+    idx = {id(n_) for n_ in ast.walk(node.value) if isinstance(n_, ast.Subscript) for n_ in ast.walk(n_.slice)}
+    idx |= {id(c_) for n_ in ast.walk(node.value) if isinstance(n_, ast.Call) and getattr(n_.func, "attr", "") in ("zeros", "ones", "eye", "empty", "full") for c_ in ast.walk(n_)}   # np.zeros(3) 의 3 은 모양이지 위치 값이 아니다
+    return any(isinstance(n_, ast.Constant) and isinstance(n_.value, (int, float)) and not isinstance(n_.value, bool) and n_.value != 0 and id(n_) not in idx for n_ in ast.walk(node.value))
+
 def _num_tuple(v):
     """값 안에 숫자가 든 좌표 묶음(길이 3 이상 튜플·리스트)이 있는가 — 안내점·자세 자리에 숫자를 직접 적은 것."""
     for n in ast.walk(v):
@@ -72,13 +86,15 @@ def hidden(tree):
     return out
 def scan(path):
     src = open(path, encoding="utf-8").read(); tree = ast.parse(src)
-    out = {"place": [], "원점": [], "p=": [], "안내점": [], "side": [], "이동량": [], "작업위치": [], "식": [], "Part": [], "인덱스": [], "상수": [], "띄움": []}
+    out = {"place": [], "원점": [], "p=": [], "안내점": [], "side": [], "이동량": [], "작업위치": [], "식": [], "Part": [], "인덱스": [], "상수": [], "띄움": [], "위치대입": []}
     for node in ast.walk(tree):   # 띄움·두께 손값 — 키워드(hover=40)와 인덱스 대입(x.extra["hover"] = 40)
         if isinstance(node, ast.Call):
             for kw in node.keywords:
                 if kw.arg in _HOVKEYS and _hand_num(kw.value): out["띄움"].append((kw.value.lineno, "", "", "%s=%s" % (kw.arg, ast.get_source_segment(src, kw.value))))
         elif isinstance(node, ast.Assign) and node.targets and any(k in _HOVKEYS for k in _keys(node.targets[0])[:1]) and _hand_num(node.value):
             out["띄움"].append((node.lineno, "", "", "%s = %s" % (_keys(node.targets[0])[0], ast.get_source_segment(src, node.value))))
+    for node in ast.walk(tree):
+        if _pos_assign(node): out["위치대입"].append((node.lineno, "", "", ast.get_source_segment(src, node)[:60]))
     for _ln, _kd, _nm, _v in hidden(tree): out[_kd].append((_ln, "", _nm, ast.get_source_segment(src, _v) or ""))
     step_of = {}                                   # 줄 번호 → 몇 번 단계인지(sK. 이름에서)
     first_place = True
@@ -125,11 +141,11 @@ def main():
         try: path = asmpath.ap(nm, ".py")
         except BaseException as e: print("⚠ %s 건너뜀: %s" % (nm, repr(e)[:60])); continue
         o = scan(path)
-        bad = len(o["place"]) + len(o["p="]) + len(o["안내점"]) + len(o["side"]) + len(o["이동량"]) + len(o["인덱스"]) + len(o["상수"])
+        bad = len(o["place"]) + len(o["p="]) + len(o["안내점"]) + len(o["side"]) + len(o["이동량"]) + len(o["인덱스"]) + len(o["상수"]) + len(o["위치대입"])
         base = 0
         more = len(o["식"]) + len(o["Part"])
-        print("== %s: 손 좌표 %d곳 (place %d·p= %d·안내점 %d·side %d·이동량 %d·인덱스 대입 %d·위치 상수 %d) · 식 좌표 %d곳 · Part 직접 생성 %d곳 · 띄움·두께 손값 %d곳 · 새 조립 바닥 부품(원점) %d곳 · 옆자리 작업 위치 %d곳" % (nm, bad, len(o["place"]), len(o["p="]), len(o["안내점"]), len(o["side"]), len(o["이동량"]), len(o["인덱스"]), len(o["상수"]), len(o["식"]), len(o["Part"]), len(o["띄움"]), len(o["원점"]), len(o["작업위치"])))
-        for key in ("place", "p=", "안내점", "side", "이동량", "인덱스", "상수", "식", "Part", "띄움"):
+        print("== %s: 손 좌표 %d곳 (place %d·p= %d·안내점 %d·side %d·이동량 %d·인덱스 대입 %d·위치 상수 %d·위치 대입 %d) · 식 좌표 %d곳 · Part 직접 생성 %d곳 · 띄움·두께 손값 %d곳 · 새 조립 바닥 부품(원점) %d곳 · 옆자리 작업 위치 %d곳" % (nm, bad, len(o["place"]), len(o["p="]), len(o["안내점"]), len(o["side"]), len(o["이동량"]), len(o["인덱스"]), len(o["상수"]), len(o["위치대입"]), len(o["식"]), len(o["Part"]), len(o["띄움"]), len(o["원점"]), len(o["작업위치"])))
+        for key in ("place", "p=", "안내점", "side", "이동량", "인덱스", "상수", "위치대입", "식", "Part", "띄움"):
             for line, b, who, val in o[key][:12]: print("   %s %d행 %s %s %s" % (key, line, b, who, val[:50]))
             if len(o[key]) > 12: print("   %s … 외 %d곳" % (key, len(o[key]) - 12))
         total += bad - base; total2 += more; total3 += len(o["띄움"])

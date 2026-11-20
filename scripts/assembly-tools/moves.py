@@ -121,18 +121,14 @@ def auto_hover(A, gap=20.0, skip=("리벳",), maxadd=200.0):
             o = byk0.get(str(q.extra.get("copyOf") or ""))
             if o is not None and q.extra.get("dir") is not None and o.extra.get("hover") is not None and q.extra.get("hover") != o.extra["hover"]:
                 q.extra["hover"] = o.extra["hover"]; out.append((s2.index, q.n, o.extra["hover"], "복사본 — 원본(%s)과 같게" % q.extra["copyOf"]))
-    # ④ 바닥(G24 — 띄운 자리도 바닥 위)이 G1c 보다 먼저: asmlib.floor_check(바닥 검사와 같은 계산, xform 포함)가 "새로 놓일 때" 바닥 아래로 잡은 부품은 바닥에 닿기 전까지만 띄운다
+    # ④ 바닥(G24 — 띄운 자리도 바닥 위): 띄운 자리가 바닥 아래로 가면 띄움은 그대로 두고 그 번호 화면 전체를 올린다(asmlib.floor_lift — 바닥 검사와 같은 계산, xform 포함).
+    #   띄움을 줄이면 끼우기 전 부품이 이미 꽂힌 것처럼 보인다(사용자 2026-11-20 dog 1~9번 — 번호마다 floor_lift 를 손으로 앞에 두던 것을 도구가 한다)
     import asmlib
     byk = {"%d:%d" % (st.index, i): q for st in A.steps for i, q in enumerate(st.parts)}
-    for _ in range(3):
-        bad = [r for r in asmlib.floor_check(A, keys=True) if "새로" in str(r[3]) and str(r[-1]) in byk and id(byk[str(r[-1])]) in mine]
-        if not bad: break
-        for r in bad:
-            q = byk[str(r[-1])]; d = _v(q.extra["dir"]); hv = float(q.extra.get("hover") or 0)
-            dy = abs(float(d[1])) or 1.0; nh = max(0.01, round(hv - (-float(r[2]) + 0.5) / dy, 1))
-            if nh < hv:
-                q.extra["hover"] = nh
-                out = [(a, b, (nh if (a, b) == (q.step.index, q.n) and c == hv else c), (w + " · 바닥 때문에 %.0f→%.0f(최소 못 지킴)" % (hv, nh) if (a, b) == (q.step.index, q.n) and c == hv else w)) for a, b, c, w in out]
+    for k in sorted({int(r[0]) for r in asmlib.floor_check(A, keys=True) if "새로" in str(r[3]) and str(r[-1]) in byk and id(byk[str(r[-1])]) in mine}):
+        old = float(((A.meta.get("lift") or {}).get(str(k))) or 0); amt = max(old, asmlib.floor_lift(A, k))
+        A.meta["lift"] = {**(A.meta.get("lift") or {}), str(k): amt}
+        if amt > old: out.append((k, "(화면 전체)", amt, "띄운 자리가 바닥 아래 — 띄움은 그대로, %d번 화면 전체를 %.0f→%.0f 올림(G24)" % (k, old, amt)))
     return out
 
 def pegs_into(s, name, R, host, holes, peg_face="+z", hole_face="-y", pegs=None, **extra):

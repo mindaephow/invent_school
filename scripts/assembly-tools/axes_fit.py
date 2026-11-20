@@ -88,6 +88,8 @@ def main():
     out = {"global": d, "fit": {"from": "%02d_%s.json" % (step, label), "err_px": round(float(e), 2), "points": len(obj), "theta": round(math.radians(az), 2), "phi": round(math.radians(90 - el), 2), "cols": cd, "rows": rd, "fov": fov, "cx": round(float(K[0][2]), 1), "cy": round(float(K[1][2]), 1)}}
     out["rotate_to"] = cd[-1]   # 구멍 줄(칸 방향)이 놓인 세계 축 — refs_rect 가 그림을 이 축선과 같은 방향으로 작은 각도만 돌린다(규칙 E3). 안 적으면 격자 줄과 축선이 어긋나 보인다(사용자 지적 2026-11-10: 홀라인·xyz축 그림)
     if rd[-1] == "Y": out["column_axis"] = "Y"   # 서 있는 판은 가운데 열이 Z 가 아니라 Y 선을 따른다(refs_rect 머리말)
+    _ap = os.path.join(D, "%02d_axes.json" % step)
+    if os.path.exists(_ap): import shutil; shutil.copy2(_ap, _ap + ".bak")   # 부를 때마다 덮으니 옛 카메라를 .bak 으로 남긴다
     json.dump(out, open(os.path.join(D, "%02d_axes.json" % step), "w", encoding="utf-8"), ensure_ascii=False)
     _roll = math.degrees(math.asin(max(-1, min(1, float(right[1])))))
     try:   # 롤은 뷰어 카메라로 만들 수 없으니 축 파일에도 적는다(롤이 큰 번호는 책과 비슷한 방위의 눈 카메라를 쓸 수 있다 — violations cam 이 인정)
