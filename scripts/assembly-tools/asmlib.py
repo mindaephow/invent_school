@@ -14,6 +14,7 @@ import numpy as np
 import partlib
 import faces
 import re
+from xformlib import xform_at   # 조립도 전체 뒤집기 xform(딕셔너리 또는 목록)에서 그 단계에 쓸 항목 고르기 — 다른 도구도 asmlib.xform_at 으로 쓴다
 
 D = math.pi / 180
 TOL = 0.8   # 돌기·구멍 어긋남 허용(mm) — 2단블록 돌기 간격이 10.1 이라 0.7 정도는 모델 오차
@@ -129,12 +130,12 @@ def floor_check(A, tol=FLOOR_TOL, keys=False):
     부품마다 ① 제자리(앞으로 옮겨지는 단계가 있으면 건너뜀) ② 새로 놓일 때 띄운 자리(옆자리면 옆자리 자세, dir·hover 만큼) ③ 옆자리에서 합쳐질 때 띄운 자리의 가장 낮은 점이 y 0 보다 tol 넘게 낮으면 모은다.
     반환: [(단계, 부품 이름, 가장 낮은 y, 어느 자리)] (keys=True 면 끝에 화면 키 "만든번호:부품순서" 를 더한다)"""
     out = []
-    xf = A.meta.get("xform")
     def low(pt, p, R, off=(0, 0, 0), lift=0.0, stp=None):   # stp: 그 자세가 화면에 나오는 단계(xform 은 단계 기준으로 걸린다 — 부품이 놓인 단계가 아니라)
         size = (pt.conn or {}).get("size")
         if not size: return None
         p, R, off = np.array(p, float), np.array(R, float), np.array(off, float)
-        if xf and (stp if stp is not None else pt.step.index) >= xf["at"]:   # xform(16번부터 전체를 세워 놓는 변환)이 걸린 단계는 변환한 서 있는 세계 좌표로 잰다
+        xf = xform_at(A.meta, stp if stp is not None else pt.step.index)
+        if xf:   # xform(16번부터 전체를 세워 놓는 변환, 목록이면 그 단계에 맞는 항목)이 걸린 단계는 변환한 서 있는 세계 좌표로 잰다
             Mx = np.array(xf["m"], float); p = Mx @ p + np.array(xf["t"], float); R = Mx @ R; off = Mx @ off
         sz = np.array(size, float) / 2
         if pt.n in ("중간바퀴", "작은바퀴"):   # 둥근 부품: 축(모델 y)에 수직인 원판 — 기울여도 가장 낮은 점은 반지름(x·z 최대)·두께 방향의 원통 값(상자 모서리로 재면 기울인 바퀴가 바닥 아래로 잘못 나온다, 사용자 지시 2026-10-29 배틀바이크 35번 기울이기)
@@ -189,7 +190,7 @@ def _view_low(A, k):
     """k번 화면에 보이는 모든 부품(앞 번호 부품 포함, hideMade·hideAt 으로 숨긴 것 제외 — violations._hidden_at, 자세는 stepchecks.pose_at)의 가장 낮은 점 y(올림 전) -> (가장 낮은 y 또는 None, 보이는 앞 번호 부품이 있는 번호 집합).
     옆자리(side)로 그리는 부품은 floor_check 가 따로 보니 뺀다."""
     import stepchecks, violations
-    xf = A.meta.get("xform"); low_y = None; seen = set()
+    xf = xform_at(A.meta, k); low_y = None; seen = set()
     for j in range(1, k + 1):
         for q in A.steps[j - 1].parts:
             if not q.conn or violations._hidden_at(q, k) or (q.extra or {}).get("side"): continue
@@ -197,7 +198,7 @@ def _view_low(A, k):
             size = q.conn.get("size")
             if not size: continue
             p, R = (np.array(v, float) for v in stepchecks.pose_at(A, q, k))
-            if xf and k >= xf["at"]: Mx = np.array(xf["m"], float); p = Mx @ p + np.array(xf["t"], float); R = Mx @ R
+            if xf: Mx = np.array(xf["m"], float); p = Mx @ p + np.array(xf["t"], float); R = Mx @ R
             sz = np.array(size, float) / 2
             if q.n in ("중간바퀴", "작은바퀴"): ax = R[:, 1]; half = float(sz[1] * abs(ax[1]) + max(sz[0], sz[2]) * float(np.sqrt(max(0.0, 1.0 - ax[1] ** 2))))
             else: half = float(np.abs(R[1]) @ sz)

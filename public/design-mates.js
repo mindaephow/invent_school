@@ -126,5 +126,8 @@
 }
 
 
-  window.IVS_MATES = { matFromEuler, worldConnectors, check, checkSteps };
+  // def.xform(조립도 전체를 어느 단계부터 통째로 뒤집는 변환)은 {at,m,t} 하나이거나 [{at,m,t},…] 목록이다 — 단계 step 에서 쓸 항목은 at <= step 인 것 중 at 이 가장 큰 하나(같으면 뒤의 것).
+  // 그 항목의 m·t 는 "스크립트 좌표 → 화면 좌표" 전체이므로 앞 항목과 합성하지 않고 대체한다. 파이썬 짝: scripts/assembly-tools/xformlib.py xform_at.
+  const xformAt = (def, step) => { const x = def && def.xform; if (!x) return null; let best = null; for (const e of (Array.isArray(x) ? x : [x])) if (e && e.at <= step && (!best || e.at >= best.at)) best = e; return best };
+  window.IVS_MATES = { matFromEuler, worldConnectors, check, checkSteps, xformAt };
 })();

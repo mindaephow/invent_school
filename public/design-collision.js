@@ -2,6 +2,10 @@
 // 있지만 그 이상의 겹쳐짐은 안 된다"). 부품 몸통을 기울어진 상자(OBB)로 근사해서 검사하고, 돌기·리벳·축처럼
 // 홀에 들어가는 부분은 몸통에 넣지 않는다(= 홀에 끼우는 것은 겹침으로 세지 않는다). three.js에 의존하지 않는 순수 수학.
 (function () {
+  // 기어 물림 — 큐보 기어는 이빨 끝 지름이 모델 크기(dims)로 나오고(큰기어 46·작은기어 17.6), 이빨 깊이는 약 2.5mm(GEAR_TOOTH, 위 coreBoxes 가 상자 반폭을 줄이는 값과 같다).
+  //   피치 반지름 합 = 끝 반지름 합 − 이빨 깊이(강아지 30번 실측: 22+7.9=29.9, 끝 합 31.8). 두 기어가 같은 축 방향(평행)이고 중심 거리가 이 피치 합보다 GEAR_MESH_SLACK 넘게 짧지 않으면(= 파고든 깊이 ≤ 이빨 깊이+여유) 정상 물림이라 겹침이 아니다.
+  //   상자(회전한 정사각 판)로 재면 비스듬한 모서리가 이웃 기어를 파고들어 5mm 오탐이 났다(2026-11 강아지 30·36번) → 기어끼리는 원판 두 개로 잰다.
+  const GEAR_TOOTH = 2.5, GEAR_MESH_SLACK = 0.5, GEAR_PARALLEL = 0.996;
   // 부품 이름과 3D 모델 크기(가운데 기준)로 몸통 상자 목록을 만든다. 규칙이 없는 부품은 null(검사 안 함).
   // 상자: { c: [x, y, z](부품 가운데 기준 중심), h: [반치수 x, y, z] } — 모델 로컬 좌표.
   function coreBoxes(name, dims) {
@@ -36,7 +40,7 @@
     // 눈블록: 모델 아래쪽(y 0~2)의 둥근 판만 몸통 — 위쪽 돌기(프레임 구멍에 꽂는 쪽)는 제외. 판 두께는 등록 모델 실측 2mm(2026-11-05, 예전 2.5 는 프레임에 0.5mm 겹쳐 보였다)
     if (/눈블록/.test(n)) return [{ c: [0, -sy / 2 + 1, 0], h: [sx / 2, 1, sz / 2], rd: sx / 2 }];   // rd: 둥근 부품(원기둥 반지름, 축 = 모델 y) — 상자 모서리는 비어 있다
     // 기어: 이빨 끝까지 통짜 상자로 보면 맞물리는 두 기어(중심 간격 = 피치 반지름 합 < 상자 반폭 합)가 항상 겹쳐 막힌다 → 이빨 깊이(2.5mm)만큼 평면 반폭을 줄여 맞물림 높이까지 들어갈 수 있게 한다(사용자 지시 2026-10-12: 큰기어가 작은기어 높이까지 들어가야 한다).
-    if (/기어/.test(n)) return [{ c: [0, 0, 0], h: [Math.max(sx / 2 - 2.5, 1), sy / 2, Math.max(sz / 2 - 2.5, 1)], rd: sx / 2 }];   // 상자는 이빨 깊이만큼 줄인 것(기어끼리 맞물림용), rd 는 이빨 끝까지의 실제 반지름 — 기어와 다른 부품은 원기둥으로 다시 본다
+    if (/기어/.test(n)) return [{ c: [0, 0, 0], h: [Math.max(sx / 2 - GEAR_TOOTH, 1), sy / 2, Math.max(sz / 2 - GEAR_TOOTH, 1)], rd: sx / 2, gear: true }];   // 상자는 이빨 깊이만큼 줄인 것(기어끼리 맞물림용), rd 는 이빨 끝까지의 실제 반지름 — 기어와 다른 부품은 원기둥으로 다시 본다
     if (/부시/.test(n)) return [{ c: [0, 0, 0], h: [sx / 2, sy / 2, sz / 2], rd: sx / 2 }];
     return null;
   }
@@ -103,6 +107,19 @@
     return { depth: best, axis };
   }
 
+  // 기어↔기어(둘 다 gear 상자, 축 평행): 원판 두 개로 잰다. 해당 없으면 null(기존 상자 검사), 있으면 {hit, depth, axis, at}. depth = 끝 반지름 합 − 평면 중심 거리(그만큼 떼면 닿기만 한다).
+  function gearPair(a, wa, b, wb, tol) {
+    if (!a.gear || !b.gear) return null;
+    const ya = wa.axes[1], yb = wb.axes[1];
+    if (Math.abs(dot(ya, yb)) < GEAR_PARALLEL) return null;
+    const d = [wb.c[0] - wa.c[0], wb.c[1] - wa.c[1], wb.c[2] - wa.c[2]], al = dot(d, ya);
+    const pl = [d[0] - al * ya[0], d[1] - al * ya[1], d[2] - al * ya[2]], dist = Math.hypot(pl[0], pl[1], pl[2]);
+    const axial = Math.abs(al) < wa.h[1] + wb.h[1] - tol;
+    const depth = a.rd + b.rd - dist;
+    const hit = axial && depth > Math.max(tol, GEAR_TOOTH + GEAR_MESH_SLACK);
+    return { hit, depth, axis: dist > 1e-6 ? pl.map((v) => v / dist) : [1, 0, 0], at: [(wa.c[0] + wb.c[0]) / 2, (wa.c[1] + wb.c[1]) / 2, (wa.c[2] + wb.c[2]) / 2] };
+  }
+
   // 겹친 부품 쌍의 설명: 어느 상자끼리(목록 번호)·가장 깊이 들어간 곳(월드 좌표)·침투 깊이. 안 겹치면 null. boxesOverlap 과 같은 판정이다.
   function boxesOverlapInfo(boxesA, posA, qA, boxesB, posB, qB, tol) {
     const axA = axesFromQuat(qA), axB = axesFromQuat(qB);
@@ -111,6 +128,8 @@
       const wa = worldBox(a, posA, qA, axA);
       boxesB.forEach((b, ib) => {
         const wb = worldBox(b, posB, qB, axB);
+        const gp = gearPair(a, wa, b, wb, tol);
+        if (gp) { if (gp.hit && (!best || gp.depth > best.depth)) best = { ia, ib, depth: gp.depth, axis: gp.axis, at: gp.at }; return; }
         if (!obbOverlap(wa, wb, tol)) return;
         if (!!a.rd !== !!b.rd && !cylinderHit(a.rd ? wa : wb, a.rd ? a.rd : b.rd, a.rd ? wb : wa, tol)) return;
         const pn = obbPenetration(wa, wb);
@@ -127,6 +146,8 @@
       const wa = worldBox(a, posA, qA, axA);
       for (const b of boxesB) {
         const wb = worldBox(b, posB, qB, axB);
+        const gp = gearPair(a, wa, b, wb, tol);
+        if (gp) { if (gp.hit) return true; continue; }
         if (!obbOverlap(wa, wb, tol)) continue;
         if (!!a.rd !== !!b.rd && !cylinderHit(a.rd ? wa : wb, a.rd ? a.rd : b.rd, a.rd ? wb : wa, tol)) continue;   // 둥근 부품(기어·부시·눈블록)은 상자 모서리가 비어 있다 — 상대 상자가 원기둥 안에 들어와야 겹침(2026-11-08 로봇팽이 33번)
         return true;
@@ -151,5 +172,5 @@
     return false;
   }
 
-  window.IVS_COLLISION = { coreBoxes, axesFromQuat, worldBox, obbOverlap, boxesOverlap, boxesOverlapInfo, obbPenetration };
+  window.IVS_COLLISION = { gearPair, GEAR_TOOTH, GEAR_MESH_SLACK, coreBoxes, axesFromQuat, worldBox, obbOverlap, boxesOverlap, boxesOverlapInfo, obbPenetration };
 })();

@@ -5,6 +5,7 @@
 # 하지 않는 일: 방향·격자·자세 같은 판단은 하지 않는다(그림을 읽는 사람이 한다). axes 파일은 만들지 않는다(0 값이 진짜로 오해되는 것을 막으려고).
 import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import json, os, re, sys
+from xformlib import xform_at
 sys.stdout.reconfigure(encoding="utf-8")
 here = os.path.dirname(os.path.abspath(__file__))
 name, k = sys.argv[1], int(sys.argv[2]); NN = "%02d" % k
@@ -303,7 +304,7 @@ try:
     import numpy as np, math
     if not mid: raise ValueError("조립도 id 를 스크립트에서 못 찾음")
     prow = _rest("ivs_assembly_poses?select=poses&assembly_id=eq.%s&step=eq.%d" % (mid.group(1), k)); crow = _rest("ivs_assembly_cams?select=cam&assembly_id=eq.%s&step=eq.%d" % (mid.group(1), k))
-    dfn = load(os.path.join(here, name + "_def.json"), {}); xf = dfn.get("xform"); M = np.array(xf["m"], float) if (xf and k >= xf.get("at", 10**9)) else np.eye(3)
+    dfn = load(os.path.join(here, name + "_def.json"), {}); xf = xform_at(dfn, k); M = np.array(xf["m"], float) if xf else np.eye(3)
     cnt, code = {}, {}
     for si, st2 in enumerate(asm, 1):
         for q in st2.get("parts", []):

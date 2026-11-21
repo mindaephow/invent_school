@@ -110,7 +110,7 @@ const _D2R = Math.PI / 180
 const _mmul = (a, b) => [0, 1, 2].map((i) => [0, 1, 2].map((j) => a[i][0] * b[0][j] + a[i][1] * b[1][j] + a[i][2] * b[2][j]))
 const _eulerToMat = (r) => { const [a, b, c] = r.map((v) => v * _D2R), cx = Math.cos(a), sx = Math.sin(a), cy = Math.cos(b), sy = Math.sin(b), cz = Math.cos(c), sz = Math.sin(c); return [[cz * cy, cz * sy * sx - sz * cx, cz * sy * cx + sz * sx], [sz * cy, sz * sy * sx + cz * cx, sz * sy * cx - cz * sx], [-sy, cy * sx, cy * cx]] }
 const _matToEuler = (R) => { const sy = Math.max(-1, Math.min(1, -R[2][0])), ry = Math.asin(sy); let rx, rz; if (Math.abs(sy) < 0.99999) { rx = Math.atan2(R[2][1], R[2][2]); rz = Math.atan2(R[1][0], R[0][0]) } else { rx = Math.atan2(-R[1][2], R[1][1]); rz = 0 } return [rx, ry, rz].map((v) => Math.round((v / _D2R) * 1e4) / 1e4 + 0) }
-export function applyPoseRotations(steps, posesByStep, xform) {
+export function applyPoseRotations(steps, posesByStep, xform, xformAt = (d, n) => (d.xform && d.xform.at <= n ? d.xform : null)) {   // xformAt: 목록 xform 도 고르는 공통 함수(site.IVS_MATES.xformAt, 호출하는 쪽이 넘긴다)
   if (!posesByStep || !Object.keys(posesByStep).length) return steps
   const cnt = {}
   return steps.map((st, si) => ({
@@ -122,7 +122,8 @@ export function applyPoseRotations(steps, posesByStep, xform) {
       const o = (posesByStep[si + 1] || {})[`${pt.n} ${cnt[pt.n]}번`]
       if (!o || !Array.isArray(o.r)) return pt
       let r = o.r.slice()
-      if (xform && xform.m && si + 1 >= xform.at) r = _matToEuler(_mmul(xform.m[0].map((_, j) => xform.m.map((row) => row[j])), _eulerToMat(r)))   // def.xform 이후 화면 자세 → 코드 자세(m 의 전치를 곱함)
+      const xf = xformAt({ xform }, si + 1)
+      if (xf && xf.m) r = _matToEuler(_mmul(xf.m[0].map((_, j) => xf.m.map((row) => row[j])), _eulerToMat(r)))   // def.xform 이후 화면 자세 → 코드 자세(m 의 전치를 곱함)
       return { ...pt, r, ...(pt.move && pt.move.r ? { move: { ...pt.move, r: r.slice() } } : {}) }
     }),
   }))
@@ -284,7 +285,7 @@ export function registerCuboAssemblyTools(server, getSupabase) {
           if (!list) {
             const a = (site.IVS_ASSEMBLIES || []).find((x) => x.id === assemblyId)
             if (!a) return fail('assemblyId 또는 steps 를 주세요 (list_assemblies 로 id 확인).')
-            list = applyPoseRotations(a.steps, await loadPoses(getSupabase(), assemblyId), a.xform)   // 관리자가 ❄ 로 저장한 회전도 검사에 반영
+            list = applyPoseRotations(a.steps, await loadPoses(getSupabase(), assemblyId), a.xform, site.IVS_MATES.xformAt || undefined)   // 관리자가 ❄ 로 저장한 회전도 검사에 반영
           }
           // 돌기↔구멍 결합 검사: 부품 DB의 연결점(data.connectors)으로 각 돌기가 다른 부품 구멍에 들어가 있는지 본다
           const partsFinal = partsFinalOf(list)
@@ -783,7 +784,7 @@ export function registerCuboAssemblyTools(server, getSupabase) {
             const connBefore = { ...base }; if (existing.data?.connectors) connBefore[partName] = existing.data.connectors
             const connAfter = { ...base, [partName]: connectors }
             for (const a of users) {
-              const steps = applyPoseRotations(a.steps, await loadPoses(sb, a.id), a.xform)   // 관리자가 ❄ 로 저장한 회전도 반영
+              const steps = applyPoseRotations(a.steps, await loadPoses(sb, a.id), a.xform, site.IVS_MATES.xformAt || undefined)   // 관리자가 ❄ 로 저장한 회전도 반영
               impact.push(...diffSummary(`${a.id} (${a.chapter})`, connectorSummary(site, steps, connBefore), connectorSummary(site, steps, connAfter)))
             }
           }

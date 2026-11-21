@@ -193,7 +193,7 @@
     }
     bar2.hidden = false;
     const idxOf = (h) => { const keys = new Set((h && h.keys) || []), r = []; list.forEach((d, i) => { if (keys.has(d.key)) r.push(i); }); return r; };
-    const xf = def.xform && step >= def.xform.at ? def.xform : null, T = xf ? xf.t : [0, 0, 0];
+    const xf = window.IVS_MATES.xformAt(def, step), T = xf ? xf.t : [0, 0, 0];
     const pv = (h) => [h.pivot[0] + T[0], h.pivot[1] + T[1], h.pivot[2] + T[2]];
     const armIdx = idxOf(arm), motIdx = idxOf(mot), armPv = pv(arm), motPv = mot ? pv(mot) : null;
     const rng = $('asmHingeRange'), num = $('asmHingeNum'), mx = Number(arm.max) || 0;
@@ -480,7 +480,7 @@
       const st = def.steps[k - 1] || {};
       if (st.bands) {
         if ((st.bandsHideAt || []).indexOf(n) >= 0) return [];
-        const xf = def.xform && n >= def.xform.at ? def.xform : null;   // 부품처럼 줄도 xform(전체 이동·회전)을 같이 받는다 — 안 그러면 31번처럼 부품만 올라가고 줄이 제자리에 남는다
+        const xf = window.IVS_MATES.xformAt(def, n);   // 부품처럼 줄도 xform(전체 이동·회전)을 같이 받는다 — 안 그러면 31번처럼 부품만 올라가고 줄이 제자리에 남는다
         const mv = (v) => { if (!xf) return v; const w = mvec(xf.m, v); return [w[0] + xf.t[0], w[1] + xf.t[1], w[2] + xf.t[2]]; };
         const hel = ((def.hinges || []).find((h) => h.elastic) || {}).elastic;
         return st.bands.map((b) => Object.assign({}, b, { pts: (b.tight && hel && hingeActive ? elasticPts(hel, hingeAng.arm, xf) : (b.pts || []).map(mv)) }));
@@ -582,7 +582,7 @@
     });
     deferredShift.forEach((fn) => fn());
     // xform: 이 단계부터는 지금까지 만든 것 전체를 통째로 돌려서 놓는다(예: 풍차 몸체를 세워서 받침에 올리기). 부품 자리는 원래 좌표 그대로 두고 여기서 한꺼번에 변환한다.
-    const xf = def.xform && target >= def.xform.at ? def.xform : null;
+    const xf = window.IVS_MATES.xformAt(def, target);
     if (xf) {
       const T = (v) => { const w = mvec(xf.m, v); return [w[0] + xf.t[0], w[1] + xf.t[1], w[2] + xf.t[2]]; };
       list.forEach((d) => {
@@ -1524,6 +1524,21 @@
         sn.appendChild(ln);
       } }
   }
+
+  // 항상 중앙(사용자 지시 2026-11-21 "번호를 누르는 순간이 아니라 항상 중앙에 둬"): 조립 보기를 보는 동안 0.3초마다 보는 중심을 보이는 부품 전체의 가운데로 맞춘다.
+  //   부품이 움직이거나 단계가 바뀌어도 늘 가운데에 있고, 회전·확대는 중심이 안 바뀌어 그대로다. 마우스를 누르고 있는 동안·관리자가 📷 로 저장한 시점이 있는 단계에서는 건드리지 않는다. 하단 규칙 바의 '중심 위치'를 끄면(fitCenter 안) 쉰다.
+  (function keepCentered() {
+    let down = false;
+    window.addEventListener('pointerdown', () => { down = true; }, true);
+    window.addEventListener('pointerup', () => { down = false; }, true);
+    window.addEventListener('pointercancel', () => { down = false; }, true);
+    setInterval(() => {
+      try {
+        if (down || !viewing || savedCams[step]) return;
+        const b = bridge(); if (b && b.fitCenter && b.fitCenter() && baseCam && baseCam.step === step && b.camState) baseCam.target = b.camState().target;   // 교재 시점 표시줄(📷 비교)도 같은 중심으로 — 안 그러면 카메라 칸이 어긋남으로 뜬다
+      } catch (e) { /* 화면이 아직 없으면 다음 턴에 */ }
+    }, 300);
+  })();
 
   function stop() {
     clearInterval(timer); clearTimeout(timer); timer = null; timerDir = 0;

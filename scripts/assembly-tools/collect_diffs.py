@@ -7,6 +7,7 @@ from collections import Counter, defaultdict
 import numpy as np
 sys.stdout.reconfigure(encoding="utf-8")
 import userdone
+from xformlib import xform_at
 here = os.path.dirname(os.path.abspath(__file__))
 env = userdone._env(); URL = (env.get("SUPABASE_URL") or env.get("NEXT_PUBLIC_SUPABASE_URL")).rstrip("/"); KEY = env["SUPABASE_SERVICE_ROLE_KEY"]
 def rest(path):
@@ -23,7 +24,7 @@ fix = []; tot = Counter(); chg = Counter(); angs = defaultdict(list)
 for row in poses:
     a = A.get(row["assembly_id"])
     if not a: continue
-    k = row["step"]; xf = a.get("xform"); M = np.array(xf["m"], float) if (xf and k >= xf.get("at", 10**9)) else np.eye(3)
+    k = row["step"]; xf = xform_at(a, k); M = np.array(xf["m"], float) if xf else np.eye(3)
     cnt, code = {}, {}
     for si, st in enumerate(a["steps"], 1):
         for q in st.get("parts", []):

@@ -175,7 +175,7 @@
         const d = dims[a.n]; if (!d || /도 프레임$/.test(a.n)) return // 꺾인 프레임은 상자 근사가 실제보다 커서 바닥 검사에서 뺀다
         let po = poseAt(a.ref, sg.end)
         if (sg.flip && !a.ref.noflip) po = flipPose(po, sg.end)
-        const xf = def.xform && sg.end >= def.xform.at ? def.xform : null
+        const xf = M().xformAt(def, sg.end)
         const bx = obbMinY({ n: a.n, p: po.p, r: po.r }, d, xf)
         if (bx) { if (bx.min < lo) { lo = bx.min; loPart = a.key } if (bx.max > hi) hi = bx.max }
       })

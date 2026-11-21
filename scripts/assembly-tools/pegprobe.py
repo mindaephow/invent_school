@@ -9,6 +9,7 @@
 #   함정: 이 도구는 마지막 번호까지 끝난 위치로 계산한다. 어떤 번호 시점의 위치를 보려면 그 번호 코드 앞에서 자른 사본(<이름>.py 를 해당 줄까지)을 따로 실행한다.
 import asmpath  # 조립도 파일 자리(큐보/조립도/<권>/<이름>/) 연결
 import sys, os, runpy
+from xformlib import xform_at
 import numpy as np
 sys.stdout.reconfigure(encoding="utf-8")
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -107,8 +108,8 @@ def candidates(A, N, only=None):
             if any(obb.contains(tip, *P[id(o)], box[id(o)], 0.0) for o in live if o is not q): continue
             ax = "XYZ"[int(np.argmax(np.abs(pd)))]
             out.append(("%s %d번" % (q.n, num[id(q)]), faces.name_of(q.conn, "돌기", c["id"]), c["id"], ("+" if pd["XYZ".index(ax)] > 0 else "-") + ax + "(돌기)", np.round(pp, 1).tolist()))
-    xf = (getattr(A, "meta", {}) or {}).get("xform")
-    if xf and N >= xf.get("at", 10 ** 6):   # 몸을 뒤집어 보이는 조립도: 좌표는 뒤집기 전(몸 좌표)이라 화면의 위·아래가 반대일 수 있다 — 화면 기준 방향을 덧붙인다
+    xf = xform_at(getattr(A, "meta", {}) or {}, N)
+    if xf:   # 몸을 뒤집어 보이는 조립도: 좌표는 뒤집기 전(몸 좌표)이라 화면의 위·아래가 반대일 수 있다 — 화면 기준 방향을 덧붙인다
         M = np.array(xf["m"], float)
         def _scr(op):
             out_ = []

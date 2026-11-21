@@ -77,6 +77,13 @@ def check(name, only=None):
         for _r in load(os.path.join(R, "index.json"), []): _imgidx.setdefault(int(_r["step"]), set()).add(int(_r["idx"]))
     except Exception: pass
     bad = "❌" if strict else "⚠"
+    _hide = {}   # 번호 → [(기호, 글)] — hidecheck.py 판정을 번호별로 모은 것(감독 사이클에서 한 번도 안 돌던 점검을 rulecheck 에 연결, 2026-11-22 dog 27번 사고)
+    try:
+        import hidecheck
+        for _k, _p, _m in hidecheck.twin_built(asm): _hide.setdefault(_k, []).append(("❌", _m))
+        for _k, _v in hidecheck.stray_prev(asm): _hide.setdefault(_k, []).append(("⚠", "새 창고에서 만드는 번호인데 앞 창고 %s번 부품이 hideMade 에 없음 — 책 그림에 없으면 숨긴다(A3a)" % ",".join(str(x) for x in _v)))
+        for _k, _m, _pis in hidecheck.stray_loc(asm): _hide.setdefault(_k, []).append(("⚠", "다른 창고에 있는 %d번의 부품 %d개가 이 번호 화면에 같이 보임 — 책 그림과 비교해 숨긴다(A3a)" % (_m, len(_pis))))
+    except Exception: pass
     for k, st in enumerate(asm, 1):
         if only and k not in only: continue
         parts = st.get("parts") or []
@@ -206,6 +213,8 @@ def check(name, only=None):
             else: items.append(("✅" if _vr.get("상태") == "통과" else "⚠", "점검 칩", "상태 %s — %s" % (_vr.get("상태"), ", ".join("%s %s" % (a, {"ok": "✅", "warn": "⚠", "fail": "❌"}.get(b, b)) for a, b in (_vr.get("항목") or {}).items() if b != "ok") or "전부 ✅")))
         if rules.get("overlay_proof"):   # P 증명 — 책 그림 위 겹침 그림(NN_3.jpg)
             items.append(("✅", "증명", "겹침 그림 있음(NN_3.jpg)") if os.path.exists(os.path.join(R, "%02d_3.jpg" % k)) else (bad, "증명", "책 그림 위 겹침 그림(NN_3.jpg)이 없음 — overlay_check.py 로 만든다"))
+        if k in _hide:   # 창고정리(hidecheck.py, 규칙 A3·A3a) — 2개 만들기 둘째 벌을 나란히 새로 만든 것은 ❌, 앞 창고 부품이 같이 보이는 것은 책 그림과 비교해야 해서 ⚠
+            for _sym, _msg in _hide[k]: items.append((bad if _sym == "❌" else "⚠", "창고정리", _msg))
         if k in done:   # 사용자가 화면에서 직접 ✓ 한 번호는 사용자 승인으로 본다(❌ → ⚠)
             items = [("⚠" if sym == "❌" else sym, t, ("사용자 ✓ 로 승인됨 — " + why) if sym == "❌" else why) for sym, t, why in items]
         out[k] = items

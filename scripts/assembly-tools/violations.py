@@ -7,6 +7,7 @@ import asmpath
 import json
 import sys, os, re, runpy
 import numpy as np
+from xformlib import xform_at   # xform 이 목록이어도 그 번호에 맞는 항목을 고른다
 HERE = os.path.dirname(os.path.abspath(__file__))
 CENTER_TOL = 100   # mm — 번호 완성 모습의 x·z 중심 허용 오차("대략 중심", 사용자 2026-11-12; 숫자는 임의값 — 비행기 본체가 ±95 라 100 으로 두고 480~650mm 이탈만 잡는다. 사용자가 정하면 바꾼다)
 
@@ -135,8 +136,8 @@ def _drawn_pose(A, q, k):
 def screen_pose(A, q, k):
     """뷰어가 k번 화면에 그리는 세계 자세(결합된 자리) — _drawn_pose 에 조립도 전체 변환(xform, k ≥ at)과 그 번호 화면 전체 띄움(meta lift)을 건 값. 도구가 "화면이 이렇게 그린다"고 믿는 자세의 한 곳이다."""
     p, R = _drawn_pose(A, q, k); p = np.array(p, float); R = np.array(R, float)
-    xf = A.meta.get("xform")
-    if xf and k >= int(xf["at"]) and not (q.extra or {}).get("noXform"): M = np.array(xf["m"], float); p = M @ p + np.array(xf["t"], float); R = M @ R
+    xf = xform_at(A.meta, k)
+    if xf and not (q.extra or {}).get("noXform"): M = np.array(xf["m"], float); p = M @ p + np.array(xf["t"], float); R = M @ R
     lf = float(((A.meta.get("lift") or {}).get(str(k))) or 0)
     if lf: p = p + np.array([0.0, lf, 0.0])
     return p, R
@@ -479,8 +480,8 @@ def collect(name):
                     if mv: m = max(mv, key=lambda q: int(q["at"])); pose = (m["p"], _al.euler_to_R(m["r"]))
                     sd = (pt.extra or {}).get("side")
                     if sd and k < int(sd.get("until") or 0): pose = (sd["p"], _al.euler_to_R(sd["r"]))   # 옆자리에서 따로 조립하는 번호(합쳐지는 번호 전)는 화면이 그리는 옆자리 자세로 잰다
-                    _xf = A.meta.get("xform"); _Rp = np.array(pose[1], float); c = np.array(pose[0], float)
-                    if _xf and k >= int(_xf["at"]): _Mx = np.array(_xf["m"], float); c = _Mx @ c + np.array(_xf["t"], float); _Rp = _Mx @ _Rp   # xform(세우기, 16번부터)은 화면이 그리는 서 있는 세계 좌표로 잰다 — 변환 전 좌표로 재면 20번 같은 창고 2 번호가 x +150 벗어난 것으로 오탐된다
+                    _xf = xform_at(A.meta, k); _Rp = np.array(pose[1], float); c = np.array(pose[0], float)
+                    if _xf: _Mx = np.array(_xf["m"], float); c = _Mx @ c + np.array(_xf["t"], float); _Rp = _Mx @ _Rp   # xform(세우기, 16번부터)은 화면이 그리는 서 있는 세계 좌표로 잰다 — 변환 전 좌표로 재면 20번 같은 창고 2 번호가 x +150 벗어난 것으로 오탐된다
                     h = np.abs(_Rp) @ (np.array(sz, float) / 2)
                     lo = np.minimum(lo, [c[0] - h[0], c[2] - h[2]]); hi = np.maximum(hi, [c[0] + h[0], c[2] + h[2]])
                     if j == k: mine.append("%d:%d" % (j, i))
