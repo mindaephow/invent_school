@@ -1268,7 +1268,13 @@
       const cur = stepStatus[step], next = !cur ? 'edit' : cur === 'edit' ? 'done' : null, mine = step;
       { const vio = ((def.violations && def.violations[mine]) || []);
        if (next === 'done' && vio.length) { notice(mine + '단계에 규칙 위반이 ' + vio.length + '건 있어서 완료로 잠글 수 없어요. 화면의 빨간 표시를 먼저 고쳐 주세요.'); return; } }   // 규칙 위반이 있으면 완료(잠금)로 못 넘어간다(사용자 지시 2026-11-08)
-      try { await b2.statusStore.set(def.id, mine, next); if (next) stepStatus[mine] = next; else delete stepStatus[mine]; paintStatus(); paintDone(); }
+      try { await b2.statusStore.set(def.id, mine, next); if (next) stepStatus[mine] = next; else delete stepStatus[mine]; paintStatus(); paintDone();
+        if (next === 'done' && b2.camStore && b2.camState && window.__ivsIsAdmin && window.__ivsIsAdmin()) { // 완료로 잠글 때 지금 보이는 시점(중심·거리·각도)을 확정 위치로 저장 — 이 번호를 열면 바로 그 자리로(1초 뒤 자동 중심 맞춤으로 튀지 않게, 사용자 지시 2026-11-22)
+          const c = b2.camState(), r3 = (v) => Math.round(v * 1000) / 1000, r1 = (v) => Math.round(v * 10) / 10;
+          const cam = { theta: r3(c.theta), phi: r3(c.phi), radius: r1(c.radius), target: c.target.map(r1) };
+          try { await b2.camStore.save(def.id, mine, cam); savedCams[mine] = cam; paintStatus(); if (baseCam && baseCam.step === mine) baseCam = { step: mine, th: cam.theta, ph: cam.phi, target: cam.target, radius: cam.radius, src: 'admin' }; }
+          catch (e2) { b2.status(mine + '단계 확정 위치 저장 실패: ' + e2.message, 'error'); }
+        } }
       catch (e) { b2.status('상태 저장 실패: ' + e.message + ' (supabase/assembly_status.sql 을 실행했는지 확인)', 'error'); notice('상태 저장에 실패했습니다: ' + e.message); }
     });
   }

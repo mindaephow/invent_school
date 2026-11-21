@@ -36,7 +36,8 @@ import numpy as np
 from asmlib import *
 import moves as mv   # 동작 묶음(축 끝 부시 등)
 
-A = Asm("cubo-1-dog", "강아지로봇", "교재 120~127쪽 · 강아지로봇 (1~43단계)", camera={"target": [60, 20, 0], "radius": 380, "theta": 0.9, "phi": 1.0},
+A = Asm("cubo-1-dog", "강아지로봇", "교재 120~127쪽 · 강아지로봇 (1~43단계)", camera={"target": [60, 20, 0], "radius": 380, "theta": -0.15, "phi": 0.95},   # 완성 화면 카메라(번호마다 cam 이 있어 완성에서만 쓰임): 책 00.jpg(머리 왼쪽 위·메인보드 오른쪽·기어 다리 오른쪽 앞·흰 L 발 왼쪽 아래)와 같게 화면에서 돌려 맞춤(2026-11-22, formula1 완성 카메라와 같은 방식)
+
         listNote="만드는 중 — 단계가 끝나기 전까지 LIST 개수는 안 맞는 것이 정상", guideMode="mates", centerAll=True)   # centerAll: 번호를 열면 지금까지 조립한 부품 전체가 바로 화면 가운데(규칙 E11 ①, 사용자 지시 2026-11-21). 연결점은 부품에 붙어 있고 결합할 자리일 때만 보인다(맞물림 방식, 사용자 지시 2026-10-04)
 RELOCK = "--relock" in sys.argv   # 잠금 기록을 새로 만들 때(수정 지시는 이번 빌드에서 무시한다)
 if not RELOCK: A.load_fixes("dog_fixes.json")   # 관리자 수정 지시(앞 단계 수정 → 뒤 단계가 따라온다). 파일이 없으면 아무 일도 안 한다
@@ -175,11 +176,6 @@ for _q in (P1, K1, M1): _addhide(_q, [2], "창고 1")   # 2번(기어 축을 새
 s3 = SKEL[2]; s3.kw.pop("noPart", None)
 s3.note = "[교재 3] 2번에서 만든 기어 축 한 벌이 판 뒤쪽에 붙어 있어요. 판 앞으로 나온 T축 끝에 빨간 부시를 끼워요."
 COL_G = 11                                  # 기어 축(T축)이 지나는 판 칸(격자 03_2: 줄2 칸11)
-def _move_group(parts, old_ref, new_ref, Rg, at, dir_, hover):   # 한 덩어리 조립품을 새 자리로 옮긴다(위치·회전을 같은 회전으로)
-    for q in parts:
-        pf = np.array(new_ref, float) + Rg @ (np.array(q.p, float) - np.array(old_ref, float)); Rf = Rg @ np.array(q.R, float)
-        q.extra["move"] = {"at": at, "p": rnd(pf), "r": R_to_euler(Rf), "dir": dir_, "hover": hover}; q.extra["moveGroup"] = at
-        q.extra["loose"] = True; q.extra["noMarkCheck"] = True
 _g0 = G2[0]
 ZG = -7.0                                   # 기어 가운데 z: 앞면(+4.5)이 판 뒤면(−2.5)에 딱 붙게 → 기어 앞면 z = −2.5(관리자 지시 2026-10-08 "꽉 끼운다": 책에서 기어가 판에 붙어 있고 T축 끝이 25프레임까지 닿는다)
 _gm3 = A.group("3번에서 옮기는 묶음", [G2[0], TA2[0], TB2[0]])   # 2번에서 만든 첫째 기어 축 한 벌(창고 2)
@@ -923,8 +919,8 @@ if _UPTO >= 42:
     # ── 42 ── 교재 127쪽 42 (읽은 것 2026-10-09 — 새 부품 없음, 번호표만)
     #   번호 사이 읽기: 41번(앞) = 꼬리 조립품(2단블록+브래킷 2개, 창고 2) — 42번은 그 조립품의 2단블록 끝 돌기(−X 쪽)를 몸 뒤쪽 벽(27프레임 칸4 줄2, 가운데 아래 구멍)에 꽂는다. 43번(뒤) = 메인보드.
     #   카메라가 보는 면: 몸의 +Z 옆(머리 화면 왼쪽), 오른쪽 아래에 꼬리 조립품이 떠서 벽을 향한다. 링 1개: 몸 뒤쪽 벽의 구멍 → 블록 끝 돌기.
-    s42 = SKEL[41]
-    s42.note = "[교재 42] 41번에서 만든 꼬리 조립품의 블록 끝 돌기를 몸 뒤쪽 벽(27프레임) 가운데 아래 구멍에 꽂아요."
+    s42 = SKEL[41]; s42.kw["madeNoPart"] = True   # 새 부품이 없는 합치는 단계 — 41번 꼬리 조립품(창고 2)을 move_made 로 몸 뒤 벽에 합친다(25번 머리와 같은 방식)
+    s42.note = "[교재 42] 41번에서 만든 꼬리 조립품의 블록 끝 돌기를 몸 뒤쪽 벽(27프레임) 가운데(칸4) 위 줄 구멍에 꽂아요."
     def _bodyd2(q):    # 몸 부품의 화면(뒤집은 뒤) 좌표 복제 — 11번의 전체 변환 x'=x, y'=83−y, z'=75−z
         p_, R_ = _pose_end(q, 16); return Part(q.n, _RX @ np.array(R_, float), np.array([p_[0], 83.0 - p_[1], 75.0 - p_[2]], float), s42, {})
     _wall = _bodyd2(next(q for q in A.parts if q.step.index == 16 and q.n == "27프레임"))   # 16번에서 단 몸 뒤쪽 벽(27프레임 7칸×2줄)
@@ -932,15 +928,13 @@ if _UPTO >= 42:
     _zs42 = [float(_wall.world("hole", h_)["pos"][2]) for h_ in _wall.conn["holes"]]; _zmid42 = (min(_zs42) + max(_zs42)) / 2.0   # 가운데 열 = 구멍 z 범위의 가운데(부품 DB 구멍 위치가 옛 표보다 1mm 달라 37.5 고정값은 비게 됐다)
     _cand = [h_ for h_ in _wall.conn["holes"] if abs(float(_wall.world("hole", h_)["pos"][2]) - _zmid42) < 1.0]
     _hid42 = max(_cand, key=lambda h_: float(_wall.world("hole", h_)["pos"][1]))["id"]
-    _hw = _wall.hole(_hid42)
-    _tmpb = Part("2단블록", np.eye(3), (0.0, 0.0, 0.0), s42); _pg = _tmpb.peg("p2")
-    _surf = np.array(_hw["pos"], float) - np.array(_pg["dir"], float) * (_hw["len"] / 2.0)
-    _pblock = (_surf + np.array(_pg["dir"], float) * _pg["len"] / 2.0) - np.array(_pg["pos"], float)   # 블록 끝 돌기 p2 가 벽 구멍에 들어간 최종 자리
-    TAIL = [TB, TBA, TBB]
-    _move_group(TAIL, np.array(TB.p, float), _pblock, np.eye(3), 42, [1, 0, 0], 40)
-    for _q in TAIL: _q.extra["noFreeze"] = list(range(42, 45)); _q.extra["settleOrder"] = 1
-    TB.extra["moveGuide"] = True; TB.extra["move"]["marks"] = [rnd(np.array(_hw["pos"], float))]
-    A.steps[41].cam = (1.1, 0.9, False, [[-90.0, 0.0, -10.0], [140.0, 120.0, 110.0]], None, None); A.steps[41].camSrc = "guess"   # 책 42 는 로봇 뒤쪽에서 본 그림(뒷벽이 정면, 머리 화면 왼쪽 위)
+    _pk42 = min(("p1", "p2"), key=lambda k_: float(TB.peg(k_)["dir"][0]))   # 블록 끝 돌기 중 몸 쪽(−X)을 보는 것 — 브래킷 모서리 반대쪽 끝(41번 자세 그대로, 책 42)
+    _sh42 = merge_shift(TB, _pk42, _wall, _hid42)                            # 그 돌기 → 뒤 벽 칸4 위 줄 구멍 결합으로 옮길 양(손값 아님)
+    G42 = A.group("41번 꼬리 조립품", [TB, TBA, TBB])
+    s42.move_made(G42, np.eye(3), pivot=np.array(TB.p, float), shift=tuple(float(v) for v in _sh42), dir=[1, 0, 0], group="42번 꼬리")   # 뒤(+X)에서 몸 쪽으로 들어와 끼움 — 책 42 화살표 1개(꼬리 = 블록 끝돌기, 촉 = 벽 구멍)
+    TB.extra["moveGuide"] = True
+    s42.kw["moveMade"]["%d:%d" % (TB.step.index, TB.step.parts.index(TB))]["marks"] = join_marks(TB, [_wall])   # 안내점: 옮긴 뒤 끝돌기 → 벽 구멍 입구(G26·G29) — 손 좌표 아님
+    A.steps[41].cam = (0.76, 1.25, False, None, None, None); A.steps[41].camSrc = "fit"   # axes_fit dog 42 P 7 2 +Z +Y: 1.32px roll 2.2° — 서 있는 판이라 거울 해 둘(θ±0.76)이 같은 오차, 화면에서 둘 다 돌려 보고 뒷벽이 정면·머리가 왼쪽 위 멀리 보이는 θ+0.76(mirror_other)을 골랐다(θ-0.76 은 몸 앞쪽이 보임)
 
 if _UPTO >= 43:
     # ── 43 ── 교재 127쪽 43 (읽은 것 2026-10-09 — 번호표 없음)
@@ -959,7 +953,7 @@ if _UPTO >= 43:
     _R_MB = np.array([[0, 0, 1], [0, 1, 0], [-1, 0, 0]], float)      # 메인보드: 돌기 두 개 줄(모델 z) → 몸 길이 방향(+X), 아래 돌기
     MB = s43.attach("메인보드", _R_MB, {"p1": (_g59, _hA), "p2": (_g59, _hB)})
     MB.extra["loose"] = True; MB.extra["noMarkCheck"] = True
-    A.steps[42].cam = (3.6 - math.pi, 0.9, False, [[-90.0, 0.0, 15.0], [140.0, 120.0, 130.0]], None, None); A.steps[42].camSrc = "guess"   # 책 43 은 몸의 +Z 옆에서 본 그림(머리 왼쪽, 꼬리 오른쪽)
+    A.steps[42].cam = (3.6 - math.pi, 0.9, False, [[-90.0, 0.0, 15.0], [140.0, 120.0, 130.0]], None, None); A.steps[42].camSrc = "eye"   # ⚠ 카메라: 흰 판 격자 미달(holefit·holesearch·infer_grid)이라 axes_fit 못 돌림 — 책 43 에서 읽음: 가까운 쪽 +Z(다리·기어), 오른쪽 +X(꼬리), 위 +Y, 메인보드 앞면·오른쪽 좁은 면이 보임(화면 θ0.46 φ0.9 로 같은 구도 확인)
 
 for _q in A.parts:   # 17번부터 몸은 따로 보관(창고 1): 머리를 새로 만든다(25번에서 얹을 때까지)
     if _q.step.index <= 16: _addhide(_q, list(range(17, 25)), "창고 1")
@@ -1001,6 +995,7 @@ for _q in (BU3, K2_4, K3_4, BU7, K2B, K3B):   # 반대편 7·8번도 같은 식�
 EYE23.extra["hover"] = F39.extra["hover"]   # 눈블록은 39프레임에 꽂힌 채 같이 뜬다(판 hover 를 따라감, 손값 아님)
 EYE24.extra["hover"] = F39b.extra["hover"]   # 24번도 같다(판 hover 를 따라감, 손값 아님)
 floor_lift_all(A)   # G24 — 같은 창고 번호는 앞 조립 올림을 이어받는다
+if (A.meta.get("lift") or {}).get(str(len(A.steps))): A.meta["lift"][str(len(A.steps) + 1)] = A.meta["lift"][str(len(A.steps))]   # 완성 화면(44)도 마지막 번호(43)와 같은 높이로 띄운다 — floor_lift_all 은 1~43번만 계산해 완성만 23mm 내려가 도구-화면 자세가 114개 어긋났다(steercar 46번과 같은 방식)
 import stepchecks; stepchecks.apply(A, "dog")                  # 번호마다 한 일을 체크박스로 설명 끝에 적는다(관리자 지시 2026-10-08)
 for _i, _u in USED.items():                    # 번호 설명이 위에서 다시 쓰여 사용 부품 줄이 지워지므로 stepchecks 뒤에 다시 붙인다(P3 B-2)
     _pp = A.steps[_i - 1].note.split("\n▣ 사용 부품:")
