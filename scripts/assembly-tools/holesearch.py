@@ -12,11 +12,11 @@ here = os.path.dirname(os.path.abspath(__file__))
 def run(c):
     p = subprocess.run([sys.executable, os.path.join(here, "holefit.py"), name, step, label, cols, rows] + [str(int(round(v))) for v in c] + extra, capture_output=True, text=True, encoding="utf-8", env=dict(os.environ, PYTHONIOENCODING="utf-8"))
     out = p.stdout
-    m = re.findall(r"\[DoG\][^\n]*?(\d+)개 배정\((\d+)%\) \| 오차 평균 ([\d.]+)px 최대 ([\d.]+)px", out)
+    m = re.findall(r"\[(?:DoG|기본|어두운판)\][^\n]*?(\d+)개 배정\((\d+)%\) \| 오차 평균 ([\d.]+)px 최대 ([\d.]+)px", out)
     ok = "통과 —" in out
     if not m: return 99.0, 0, ok
-    n, pct, mean, mx = m[-1]
-    return float(mean) + (0 if int(pct) >= 40 else 50), int(pct), ok
+    # holefit 는 방식(기본/어두운판 → DoG)을 차례로 시도한다 — 그중 가장 나은 줄로 점수를 매긴다(2026-11-22: 예전엔 [DoG] 줄만 읽어 어두운판·기본이 첫 방식에서 끝나면 오차가 99.0 으로 찍혔다)
+    return min((float(mean) + (0 if int(pct) >= 40 else 50), int(pct)) for n, pct, mean, mx in m) + (ok,)
 best, pct, ok = run(C); print("시작", round(best, 2), pct, ok)
 for dlt in (8, 4, 2, 1):
     improved = True

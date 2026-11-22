@@ -113,7 +113,7 @@ def occupied_holes(A, k, lat=1.5, ov=0.5):
                 w = pos - hp; t0 = float(np.dot(w, hd)); lt = np.linalg.norm(w - t0 * hd)
                 if lt > lat: continue
                 _hf = float(np.dot(d, hd)) * ln / 2; a, b = sorted((t0 - _hf, t0 + _hf))   # 돌기 pos 는 길이의 가운데(K3) → 구간은 pos ± len/2
-                if q.n not in _SHAFTY and min(b, hl) - max(a, -hl) > ov: ins.append((q, pid))   # 축·모터 돌기는 구멍 안 축 결합이 정상이라 뺀다
+                if q.n not in _SHAFTY and not q.n.endswith("볼트") and q.n != "너트" and min(b, hl) - max(a, -hl) > ov: ins.append((q, pid))   # 축·모터·볼트·너트 돌기는 구멍 안 결합이 정상이라 뺀다(볼트가 프레임 여러 장을 지나 너트로 조임 — 5_부품사전 64·71·72·75행, asmlib.recv 와 같은 이름 판정)
             if len({id(q) for q, _ in ins}) >= 2:
                 mine = sorted({cur[id(q)] for q, _ in ins if id(q) in cur})
                 if not mine: continue

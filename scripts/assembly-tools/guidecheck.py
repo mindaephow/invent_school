@@ -21,6 +21,13 @@ HERE = os.path.dirname(os.path.abspath(__file__)); os.chdir(HERE)
 FASTENERS = ("리벳", "T축", "부시", "볼트", "너트")
 HOVER, HOVER_RECV, DEPTH = 22.0, 20.0, 5.0   # design-assembly.js 상수 — 바뀌면 같이 바꾼다
 
+from stepchecks import _dims
+def _hlen(o, c, w):   # 구멍 길이 — len 이 없는 통과 구멍(스프라켓 h1 등 len=null)은 부품 크기(dims.json)의 구멍 축 방향 폭(두께), 그 밖은 옛 기본 10
+    if w.get("len"): return float(w["len"])
+    d = _dims().get(o.n)
+    if w.get("through") and d: return float(np.array(d, float)[int(np.argmax(np.abs(np.array(c["dir"], float))))])
+    return 10.0
+
 def unit(v): v = np.array(v, float); return v / (np.linalg.norm(v) or 1.0)
 
 def receives_by_hole(q, m, u, hv, thick=None):
@@ -79,7 +86,7 @@ def run(name, only=None):
                         else:
                             for c in o.conn["holes"]:
                                 w = o.world("hole", c); uu = unit(w["dir"]); r = m - np.array(w["pos"]); al = float(r @ uu)
-                                if abs(al) <= (w.get("len") or 10) / 2 + 3: best = min(best, float(np.linalg.norm(r - uu * al)))
+                                if abs(al) <= _hlen(o, c, w) / 2 + 3: best = min(best, float(np.linalg.norm(r - uu * al)))
                     n += 1
                     if best > 1.5: bad.append((k, "%s 안내점 %s 가 %s에서 %s떨어져 있다(≤1.5) — 안내점이 자기 자리가 아니다" % (q.n, np.round(m, 1).tolist(), "고정된 돌기 끝" if e2.get("recv") else "받는 구멍 축", ("%.1fmm " % best) if best < 1e8 else "(받는 쪽 없음) ")))
         for q in new:   # 결합 전 모양(G1): 리벳·T축·부시·볼트·너트는 항상 띄워서 화살표로 — seated·방향 없음·안내점 없음이면 위반, noGuide 는 확인 필요
@@ -126,7 +133,7 @@ def run(name, only=None):
                             if o is q or o.step.index > k or not o.conn: continue
                             for hc in o.conn["holes"]:
                                 h = o.world("hole", hc); r = to - np.array(h["pos"]); al = float(r @ unit(h["dir"]))
-                                if np.linalg.norm(r - unit(h["dir"]) * al) <= 1.5 and abs(al) <= (h.get("len") or 10) / 2 + 3: ok = True
+                                if np.linalg.norm(r - unit(h["dir"]) * al) <= 1.5 and abs(al) <= _hlen(o, hc, h) / 2 + 3: ok = True
                         if not ok: bad.append((k, "%s 화살표 끝 %s 가 받는 구멍 축 위에 없음(%s)" % (q.n, np.round(to, 1).tolist(), kind)))
                 else:
                     frm = m + (sh if sh is not None else 0); to = (np.array(fm_[i_], float) if i_ < len(fm_) else m) + u * hv   # 화면: 받는 부품 화살표 끝 = faceMarks(있으면) + 방향×띄움
@@ -139,7 +146,7 @@ def run(name, only=None):
                     ok = False
                     for hc in q.conn["holes"]:
                         h = q.world("hole", hc); r = to - (np.array(h["pos"]) + u * hv); al = float(r @ unit(h["dir"]))
-                        if np.linalg.norm(r - unit(h["dir"]) * al) <= 1.5 and abs(al) <= (h.get("len") or 10) / 2 + 3: ok = True
+                        if np.linalg.norm(r - unit(h["dir"]) * al) <= 1.5 and abs(al) <= _hlen(q, hc, h) / 2 + 3: ok = True
                     _ring = to - u * float(ex.get("thick") or 5) / 2; _own = min(float(np.linalg.norm(_ring - (np.array(q.world("hole", hc2)["pos"]) + u * hv))) for hc2 in q.conn["holes"])   # 링 = 화살표 끝 − 방향×두께/2 가 자기 구멍 중심에 1.5mm 안이어야 한다(옮김 점검과 같은 기준, 허용 5.6mm 는 토끼 14번 부시의 4.3mm 어긋남을 놓쳤다)
                     if ok and _own > 1.5: bad.append((k, "%s 링 %s 가 자기 구멍 중심에서 %.1fmm 떨어짐(≤1.5, %s)" % (q.n, np.round(_ring, 1).tolist(), _own, kind))); ok = True
                     if not ok: bad.append((k, "%s 화살표 끝 %s 가 떠 있는 자기 구멍 축 위에 없음(%s)" % (q.n, np.round(to, 1).tolist(), kind)))
