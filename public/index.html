@@ -2,6 +2,7 @@
 <link rel="stylesheet" href="/fonts/pretendard/pretendardvariable-dynamic-subset.css">
 <script src="/vendor/xlsx.full.min.js"></script>
 <script src="/vendor/supabase.min.js"></script>
+<script src="/vendor/qrcode-generator.js"></script>
 <script src="db-shim.js"></script>
 <script src="local-cache.js"></script>
 <style>
@@ -158,6 +159,13 @@
   .check-chip{display:flex; align-items:center; gap:5px; border:1px solid var(--border); border-radius:8px; padding:6px 10px; font-size:13px; cursor:pointer;}
   .check-chip input{width:auto;}
   .check-chip.checked{background:var(--accent-soft); border-color:var(--accent); color:var(--accent); font-weight:600;}
+  .cal-grid{display:grid; grid-template-columns:repeat(7, 1fr); gap:4px;}
+  .cal-day{border:1px solid var(--border); border-radius:6px; padding:6px 4px; font-size:12px; min-height:46px; cursor:pointer; background:var(--surface);}
+  .cal-day.other-month{opacity:.35;}
+  .cal-day.closed{background:var(--absent-bg); border-color:var(--absent);}
+  .cal-day .dnum{font-weight:700;}
+  .cal-day .plabel{display:block; font-size:10px; margin-top:2px; color:var(--ink-soft); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .cal-weekday{font-size:11px; color:var(--ink-soft); text-align:center; font-weight:600;}
 
   table{width:100%; border-collapse:collapse; font-size:13px;}
   th, td{text-align:left; padding:8px 8px; border-bottom:1px solid var(--border);}
@@ -250,6 +258,20 @@
   </section>
 
   <section id="tab-attend" hidden>
+    <div class="card" id="schoolCalCard" hidden>
+      <h3 style="font-size:15px;">학교 달력 (<span id="schoolCalName"></span>)</h3>
+      <p class="note" id="schoolCalTodayNote"></p>
+      <div style="display:flex; align-items:center; gap:10px; margin-top:10px;">
+        <button type="button" class="ghost" id="schoolCalPrev">◀</button>
+        <b id="schoolCalMonthLabel"></b>
+        <button type="button" class="ghost" id="schoolCalNext">▶</button>
+      </div>
+      <div id="schoolCalGrid" class="cal-grid" style="margin-top:10px;"></div>
+      <p class="note" style="margin-top:8px;">날짜를 누르면 휴강으로 표시/해제돼요. 방학·공휴일·개교기념일 같은 사유는 아래서 적어주세요.</p>
+      <div id="schoolCalClosedList" style="margin-top:8px;"></div>
+      <div id="schoolCalPeriods" style="margin-top:14px;"></div>
+      <button type="button" class="ghost" id="schoolCalAddPeriod" style="margin-top:8px; font-size:13px;">+ 기간 추가</button>
+    </div>
     <div class="card">
       <p class="note">수업을 고르면 오늘 날짜로 학생별 출석·과제·미션을 바로 체크할 수 있습니다.</p>
       <div class="session-picker">
@@ -278,6 +300,7 @@
       <form class="add-form" id="studentAddForm" hidden style="margin-top:14px; border-top:none; padding-top:0;"></form>
       <div id="bulkUploadArea" hidden style="margin-top:14px;">
         <p class="note">엑셀(.xlsx) 또는 CSV 파일 첫 줄에 <b>학년, 반, 번호, 이름, 전화번호, 특이사항</b> 헤더를 넣어주세요 (이름만 필수, 순서는 상관없어요).</p>
+        <button type="button" class="ghost" id="bulkSampleBtn" style="margin:4px 0 10px;">샘플 파일 다운로드</button>
         <input type="file" id="bulkFileInput" accept=".xlsx,.xls,.csv" style="margin:10px 0;">
         <div id="bulkPreview"></div>
       </div>
@@ -668,6 +691,12 @@
     renderHome();
     renderManage();
     await populateAttendClassPicker();
+    // 출석부에 들어가면 수업을 따로 고르지 않아도 첫 수업 기준으로 학교 달력이 바로 보이게 한다
+    // (사용자 지시: "출석부를 들어가면 달력은 그냥 나와야 하는건데").
+    if (classForAttend.options.length > 1 && !classForAttend.value) {
+      classForAttend.value = classForAttend.options[1].value;
+      classForAttend.dispatchEvent(new Event('change'));
+    }
     const back = new URLSearchParams(location.search);
     if (back.get('tab') === 'attend' && back.get('course')) {
       history.replaceState(null, '', location.pathname);
@@ -728,6 +757,22 @@
     }, 3000);
   }
 
+  // 학생이 QR을 스캔하면 design.html이 자동으로 로그인하는 URL(비밀번호가 URL에 그대로 담기는 건
+  // 의도된 것 — 지금 화면·인쇄로 보여주는 비밀번호와 같은 신뢰수준). QR 생성은 로컬 vendor 라이브러리
+  // (qrcode-generator, 외부 API 호출 없음)로 만든다. PIN을 모르면(재설정 전 기존 계정) QR도 못 만든다.
+  function loginQrUrl(loginId, pin){
+    return `${location.origin}/design.html?sid=${encodeURIComponent(loginId)}&spin=${encodeURIComponent(pin)}`;
+  }
+  function loginQrImgTag(loginId, pin, cellSize){
+    try {
+      const qr = qrcode(0, 'M');
+      qr.addData(loginQrUrl(loginId, pin));
+      qr.make();
+      cellSize = cellSize || 3;
+      return qr.createImgTag(cellSize, cellSize * 4); // margin(여백)은 QR 인식률을 위한 권장 여유 영역, 라이브러리 기본값과 동일
+    } catch (err) { return '<span class="note">QR 생성 실패</span>'; }
+  }
+
   function renderCredentials(studentDocs){
     if (!studentDocs.length) { credArea.innerHTML = ''; return; }
     const rows = studentDocs.map(s => {
@@ -739,14 +784,15 @@
         <td>${escapeHtml(d.name)}</td>
         <td>${loginId ? `<b>${escapeHtml(loginId)}</b>` : '<span class="note">아직 없음</span>'}</td>
         <td>${pin ? `<b>${escapeHtml(pin)}</b>` : (loginId ? '<span class="note">●●●●●●</span>' : '')}</td>
+        <td>${pin ? loginQrImgTag(loginId, pin, 3) : (loginId ? '<span class="note">(재설정 후 인쇄)</span>' : '')}</td>
         <td><button type="button" class="ghost" data-reset="${escapeHtml(s.id)}" style="padding:4px 9px; font-size:12px;">${loginId ? '비밀번호 재설정' : '계정 만들기'}</button></td>
       </tr>`;
     }).join('');
     credArea.innerHTML = `
       <h3 style="font-size:14px;">학생 로그인 정보</h3>
-      <p class="note">학생은 설계하기 화면에서 아래 아이디와 비밀번호로 로그인합니다. 비밀번호는 만든 직후 이 화면에서만 볼 수 있으니 바로 인쇄하거나 적어두세요. 잊어버리면 재설정해서 새로 받을 수 있습니다.</p>
+      <p class="note">학생은 설계하기 화면에서 아래 아이디와 비밀번호로 로그인하거나, QR코드를 스캔하면 바로 로그인됩니다. 비밀번호와 QR은 만든 직후 이 화면에서만 볼 수 있으니 바로 인쇄하거나 적어두세요. 잊어버리면 재설정해서 새로 받을 수 있습니다.</p>
       <div class="table-wrap"><table>
-        <thead><tr><th>번호</th><th>이름</th><th>아이디</th><th>비밀번호</th><th></th></tr></thead>
+        <thead><tr><th>번호</th><th>이름</th><th>아이디</th><th>비밀번호</th><th>QR</th><th></th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
       <button type="button" class="ghost" id="printCredBtn" style="margin-top:10px;">로그인 정보 인쇄</button>`;
@@ -771,14 +817,14 @@
       const body = printable.map(s => {
         const d = s.data();
         const pin = issuedPins[s.id];
-        return `<tr><td>${escapeHtml(d.number || '')}</td><td>${escapeHtml(d.name)}</td><td>${escapeHtml(s.row.login_id)}</td><td>${pin ? escapeHtml(pin) : '(재설정 후 인쇄)'}</td></tr>`;
+        return `<tr><td>${escapeHtml(d.number || '')}</td><td>${escapeHtml(d.name)}</td><td>${escapeHtml(s.row.login_id)}</td><td>${pin ? escapeHtml(pin) : '(재설정 후 인쇄)'}</td><td>${pin ? loginQrImgTag(s.row.login_id, pin, 4) : '(재설정 후 인쇄)'}</td></tr>`;
       }).join('');
       const w = window.open('', '_blank');
       if (!w) { alert('팝업이 차단되어 인쇄 창을 열지 못했어요. 팝업을 허용해주세요.'); return; }
       w.document.write(`<!doctype html><meta charset="utf-8"><title>학생 로그인 정보</title>
-        <style>body{font-family:sans-serif;padding:24px} table{border-collapse:collapse;width:100%} th,td{border:1px solid #999;padding:8px 10px;text-align:left;font-size:15px} h2{margin:0 0 4px} p{margin:0 0 14px;color:#555}</style>
-        <h2>발명학교 학생 로그인 정보</h2><p>${escapeHtml(classForAttend.options[classForAttend.selectedIndex]?.textContent || '')} · 로그인 주소: ${escapeHtml(location.origin)}/design.html</p>
-        <table><thead><tr><th>번호</th><th>이름</th><th>아이디</th><th>비밀번호</th></tr></thead><tbody>${body}</tbody></table>
+        <style>body{font-family:sans-serif;padding:24px} table{border-collapse:collapse;width:100%} th,td{border:1px solid #999;padding:8px 10px;text-align:left;font-size:15px} h2{margin:0 0 4px} p{margin:0 0 14px;color:#555} td img{display:block}</style>
+        <h2>발명학교 학생 로그인 정보</h2><p>${escapeHtml(classForAttend.options[classForAttend.selectedIndex]?.textContent || '')} · 로그인 주소: ${escapeHtml(location.origin)}/design.html · QR을 스캔하면 자동으로 로그인됩니다</p>
+        <table><thead><tr><th>번호</th><th>이름</th><th>아이디</th><th>비밀번호</th><th>QR</th></tr></thead><tbody>${body}</tbody></table>
         <script>window.onload=function(){window.print()}<\/script>`);
       w.document.close();
     });
@@ -813,23 +859,243 @@
   const DAYS = ['월', '화', '수', '목', '금', '토', '일'];
   const SECTIONS = ['A반', 'B반', 'C반', 'D반'];
   const TERMS = ['1학기', '2학기', '1분기', '2분기', '3분기', '4분기'];
+  const TERM_SYSTEMS = ['학기제', '분기제'];
+  // 수강스토리(언제부터 다녔는지): "25년1학기" 같은 연도+학기/분기 조합 — 2020년부터 올해+1년까지(사용자 지시 2026-11-23)
+  const ENROLL_TERMS = (() => {
+    const curYear = new Date().getFullYear();
+    const out = [];
+    for (let y = 2020; y <= curYear + 1; y++) {
+      const yy = String(y).slice(2);
+      ['1학기', '2학기'].forEach(s => out.push(`${yy}년${s}`));
+      ['1분기', '2분기', '3분기', '4분기'].forEach(q => out.push(`${yy}년${q}`));
+    }
+    return out;
+  })();
   const LEVELS = [
     { key: 'course', label: '수업', parentKey: 'teacher', collection: 'courses', parentField: 'teacherId', fields: [
       {k:'name', label:'수업 이름', type:'text', required:true},
       {k:'school', label:'학교', type:'text', required:true},
       {k:'day', label:'요일', type:'select', options: DAYS, required:true},
-      {k:'term', label:'분기 또는 학기', type:'select', options: TERMS, required:true},
+      {k:'term', label:'학기제 또는 분기제', type:'select', options: TERM_SYSTEMS, required:true},
       {k:'section', label:'반 (여러 개 선택 시 반마다 수업이 각각 생성됩니다)', type:'multiselect', options: SECTIONS, required:true}
     ]},
     { key: 'student', label: '학생', parentKey: 'course', collection: 'students', parentField: 'courseId', fields: [
       {k:'grade', label:'학년', type:'text'},
       {k:'classLabel', label:'반', type:'text'},
       {k:'number', label:'번호', type:'text'},
-      {k:'name', label:'이름', type:'text', required:true},
-      {k:'phone', label:'전화번호', type:'text'},
+      {k:'name', label:'이름', type:'toggleText'},
+      {k:'phone', label:'전화번호', type:'toggleText'},
+      {k:'enroll', label:'수강스토리', type:'enrollStory'},
+      {k:'robot', label:'교구 (로봇 · 권 · 진도)', type:'robotProgress'},
       {k:'notes', label:'특이사항', type:'textarea'}
     ]}
   ];
+
+  // 교구(로봇·권·진도) 복합 필드: 브랜드 선택 → 그 브랜드의 권(교재)들을 탭 버튼으로 동시에 들고 있는다(1,2,3단계를
+  // 다 끝낸 학생도 표현해야 해서 "권 하나만" 이 아니라 textbookId -> 체크된 차시ID 맵(books)으로 저장한다). 권 탭을
+  // 옮겨도 전에 체크하던 권의 상태는 메모리(state.books)에 남아있다가 저장할 때 같이 나간다. "이 권 전체 완료로
+  // 표시" 버튼은 몇 년 전에 이미 다 끝낸 학생 기록을 한 번에 입력하기 위한 것(사용자 지시 2026-11-23).
+  // robotCategories/allTextbooks 는 교재관리 탭과 같은 로더(loadCategories/loadTextbooks, 아래쪽에 정의)를 그대로 쓴다 —
+  // 함수 선언은 호이스팅되니 선언 위치는 상관없지만, 호출은 반드시 폼이 열릴 때(나중)만 한다(그래야 그 로더들이
+  // 참조하는 let 변수들이 이미 초기화된 뒤라 TDZ 에러가 안 난다).
+  function robotProgressHtml(prefix){
+    return `<div id="${prefix}_robot">
+      <div id="${prefix}_robot_cats" style="display:flex; gap:6px; flex-wrap:wrap;"><span class="note">불러오는 중...</span></div>
+      <div id="${prefix}_robot_vols" style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;"></div>
+      <div id="${prefix}_robot_chapters" class="check-group" style="margin-top:6px;"></div>
+      <button type="button" id="${prefix}_robot_allbtn" class="ghost" style="margin-top:8px; font-size:12px; padding:4px 9px; display:none;">이 권 전체 완료로 표시</button>
+    </div>`;
+  }
+  const _robotProgressState = {};
+  // 큐보 1,2,3권을 다 끝내고 에이스랩으로 이어가는 학생처럼, 로봇(브랜드)도 권처럼 여러 개를 동시에 들고 있어야
+  // 해서 state.categories = { catId: { books: { textbookId: [chapterId,...] } } } 로 저장한다(권만 있던 구조를
+  // 브랜드까지 한 단 더 올림, 사용자 지시 2026-11-23). 브랜드 탭은 로봇 선택 드롭다운이 아니라 권 탭과 같은
+  // 탭 버튼 방식이고, 그 브랜드의 등록된 권을 전부 완료했으면 탭 자체를 색칠한다(사용자 지시: "완료한것만 색칠").
+  async function wireRobotProgress(prefix, existing){
+    const catsEl = document.getElementById(`${prefix}_robot_cats`);
+    const volsEl = document.getElementById(`${prefix}_robot_vols`);
+    const chEl = document.getElementById(`${prefix}_robot_chapters`);
+    const allBtn = document.getElementById(`${prefix}_robot_allbtn`);
+    if (!catsEl) return;
+    if (!robotCategories.length) await loadCategories();
+    if (!allTextbooks.length) await loadTextbooks();
+    const cats = robotCategories.filter(c => c.subject === 'robot');
+
+    const state = { categories: JSON.parse(JSON.stringify((existing && existing.categories) || {})), doneLog: ((existing && existing.doneLog) || []).slice() };
+    _robotProgressState[prefix] = state;
+    let curCatId = null;
+    let curTbId = null;
+
+    function volsForCategory(catId){ return allTextbooks.filter(t => t.category === catId).sort((a, b) => (a.volume || 0) - (b.volume || 0)); }
+    function catBooks(catId){ return (state.categories[catId] && state.categories[catId].books) || {}; }
+    function catComplete(catId){
+      const vols = volsForCategory(catId);
+      if (!vols.length) return false;
+      const books = catBooks(catId);
+      return vols.every(t => (books[t.id] || []).length === (t.chapters || []).length && (t.chapters || []).length > 0);
+    }
+    function catHasProgress(catId){
+      const books = catBooks(catId);
+      return Object.values(books).some(ids => (ids || []).length > 0);
+    }
+
+    function renderCats(){
+      catsEl.innerHTML = cats.map(c => {
+        const isCur = c.id === curCatId;
+        const complete = catComplete(c.id);
+        const hasProgress = catHasProgress(c.id);
+        const style = complete ? 'background:var(--accent-soft); border-color:var(--accent); color:var(--accent); font-weight:600;'
+          : hasProgress ? 'background:var(--late-bg); border-color:var(--late); color:var(--late); font-weight:600;'
+          : isCur ? 'border-color:var(--accent); font-weight:600;' : '';
+        return `<button type="button" data-cat="${escapeHtml(c.id)}" class="ghost" style="font-size:12px; padding:4px 9px; ${style}">${escapeHtml(c.name)}${hasProgress ? ' ✓' : ''}</button>`;
+      }).join('');
+      catsEl.querySelectorAll('[data-cat]').forEach(b => b.addEventListener('click', () => selectCat(b.dataset.cat)));
+    }
+    function renderVols(){
+      const vols = volsForCategory(curCatId);
+      const books = catBooks(curCatId);
+      volsEl.innerHTML = vols.map(t => {
+        const total = (t.chapters || []).length;
+        const done = (books[t.id] || []).length;
+        const complete = total > 0 && done === total;
+        const hasProgress = done > 0;
+        const isCur = t.id === curTbId;
+        const style = complete ? 'background:var(--accent-soft); border-color:var(--accent); color:var(--accent); font-weight:600;'
+          : hasProgress ? 'background:var(--late-bg); border-color:var(--late); color:var(--late); font-weight:600;'
+          : isCur ? 'border-color:var(--accent); font-weight:600;' : '';
+        return `<button type="button" data-vol="${escapeHtml(t.id)}" class="ghost" style="font-size:12px; padding:4px 9px; ${style}">${t.volume != null ? t.volume + '권' : escapeHtml(t.name)}${complete ? ' ✓완료' : done ? ` (${done}/${total})` : ''}</button>`;
+      }).join('');
+      volsEl.querySelectorAll('[data-vol]').forEach(b => b.addEventListener('click', () => selectVol(b.dataset.vol)));
+    }
+    function renderChapters(){
+      const tb = allTextbooks.find(t => t.id === curTbId);
+      const chapters = (tb && tb.chapters) || [];
+      allBtn.style.display = chapters.length ? '' : 'none';
+      if (!chapters.length) { chEl.innerHTML = '<p class="note" style="margin:4px 0 0;">로봇을 먼저 선택하세요.</p>'; return; }
+      const doneIds = catBooks(curCatId)[curTbId] || [];
+      chEl.innerHTML = chapters.map((c, i) => `<label class="check-chip${doneIds.includes(c.id) ? ' checked' : ''}"><input type="checkbox" value="${escapeHtml(c.id)}" ${doneIds.includes(c.id) ? 'checked' : ''}>${i + 1}. ${escapeHtml(c.title || '')}</label>`).join('');
+      chEl.querySelectorAll('input').forEach(cb => cb.addEventListener('change', () => {
+        cb.closest('.check-chip').classList.toggle('checked', cb.checked);
+        syncCurrentVol();
+      }));
+    }
+    function syncCurrentVol(){
+      if (!curCatId || !curTbId) return;
+      const checked = Array.from(chEl.querySelectorAll('input:checked')).map(cb => cb.value);
+      const catState = state.categories[curCatId] || (state.categories[curCatId] = { books: {} });
+      const prev = catState.books[curTbId] || [];
+      const tb = allTextbooks.find(t => t.id === curTbId);
+      const titleById = {};
+      (tb && tb.chapters || []).forEach(c => { titleById[c.id] = c.title || ''; });
+      checked.filter(id => !prev.includes(id)).forEach(id => state.doneLog.push({ categoryId: curCatId, textbookId: curTbId, chapterId: id, title: titleById[id] || '', at: Date.now() }));
+      catState.books[curTbId] = checked;
+      renderVols();
+      renderCats();
+    }
+    function selectVol(id){
+      curTbId = id;
+      renderChapters();
+      renderVols();
+    }
+    function selectCat(id){
+      curCatId = id;
+      curTbId = null;
+      renderCats();
+      const vols = volsForCategory(curCatId);
+      if (vols.length) selectVol(vols[0].id);
+      else { chEl.innerHTML = '<p class="note" style="margin:4px 0 0;">등록된 권이 없어요.</p>'; allBtn.style.display = 'none'; renderVols(); }
+    }
+    allBtn.onclick = () => {
+      if (!curTbId) return;
+      chEl.querySelectorAll('input').forEach(cb => { cb.checked = true; cb.closest('.check-chip').classList.add('checked'); });
+      syncCurrentVol();
+    };
+
+    renderCats();
+    const startCatId = Object.keys(state.categories)[0] || null;
+    if (startCatId) selectCat(startCatId); else { renderVols(); renderChapters(); }
+  }
+  // 체크된 차시는 브랜드→권별(categories: {catId:{books:{textbookId:[chapterId,...]}}})로 쌓이고, 새로 체크된
+  // 차시만 doneLog 에 날짜와 함께 추가된다(사용자 지시: "교구 진도도 기록이 남아야" — 체크를 풀어도 지난 기록은 안 지움).
+  function readRobotProgress(prefix){
+    const state = _robotProgressState[prefix];
+    if (!state) return { categories: {}, doneLog: [] };
+    return { categories: state.categories, doneLog: state.doneLog };
+  }
+
+  // 수강스토리: 기간(시작~마지막, 연속 수강) 또는 일일이 선택(비연속 학기/분기 체크) 두 모드를 체크박스로 토글.
+  function enrollStoryHtml(prefix){
+    const opts = ENROLL_TERMS.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+    const chips = ENROLL_TERMS.map(t => `<label class="check-chip"><input type="checkbox" value="${escapeHtml(t)}">${escapeHtml(t)}</label>`).join('');
+    return `<div id="${prefix}_enroll">
+      <label style="display:flex; align-items:center; gap:6px; font-weight:400; margin-bottom:8px;">
+        <input type="checkbox" id="${prefix}_enroll_individual" style="width:auto; flex:none;">
+        <span id="${prefix}_enroll_mode_label">기간으로 선택 중 (체크하면 학기·분기를 하나하나 선택)</span>
+      </label>
+      <div id="${prefix}_enroll_range" style="display:flex; gap:10px;">
+        <select id="${prefix}_enroll_start" style="flex:1;"><option value="">시작</option>${opts}</select>
+        <select id="${prefix}_enroll_end" style="flex:1;"><option value="">마지막</option>${opts}</select>
+      </div>
+      <div id="${prefix}_enroll_list" class="check-group" hidden>${chips}</div>
+    </div>`;
+  }
+  function wireEnrollStory(prefix, existing){
+    const chk = document.getElementById(`${prefix}_enroll_individual`);
+    const rangeEl = document.getElementById(`${prefix}_enroll_range`);
+    const listEl = document.getElementById(`${prefix}_enroll_list`);
+    const modeLabel = document.getElementById(`${prefix}_enroll_mode_label`);
+    if (!chk) return;
+    const applyMode = () => {
+      rangeEl.style.display = chk.checked ? 'none' : 'flex';
+      listEl.style.display = chk.checked ? 'flex' : 'none';
+      modeLabel.textContent = chk.checked ? '개별 선택 중 (체크 해제하면 기간으로 선택)' : '기간으로 선택 중 (체크하면 학기·분기를 하나하나 선택)';
+    };
+    chk.onchange = applyMode;
+    listEl.querySelectorAll('input').forEach(cb => cb.addEventListener('change', () => cb.closest('.check-chip').classList.toggle('checked', cb.checked)));
+    chk.checked = !!(existing && existing.mode === 'individual');
+    applyMode();
+    if (existing) {
+      document.getElementById(`${prefix}_enroll_start`).value = existing.start || '';
+      document.getElementById(`${prefix}_enroll_end`).value = existing.end || '';
+      if (existing.terms) listEl.querySelectorAll('input').forEach(cb => {
+        cb.checked = existing.terms.includes(cb.value);
+        cb.closest('.check-chip').classList.toggle('checked', cb.checked);
+      });
+    }
+  }
+  function readEnrollStory(prefix){
+    const chk = document.getElementById(`${prefix}_enroll_individual`);
+    if (!chk) return { mode: 'range', start: '', end: '' };
+    if (chk.checked) {
+      return { mode: 'individual', terms: Array.from(document.querySelectorAll(`#${prefix}_enroll_list input:checked`)).map(cb => cb.value) };
+    }
+    return { mode: 'range', start: document.getElementById(`${prefix}_enroll_start`).value || '', end: document.getElementById(`${prefix}_enroll_end`).value || '' };
+  }
+
+  // 이름·전화번호처럼 개인정보가 될 수 있는 칸은 기본으로 숨겨두고, "사용" 체크해야 입력칸+권장 안내가 나온다.
+  function toggleTextHtml(prefix, f){
+    return `<label style="display:flex; align-items:center; gap:6px; font-weight:400; margin-bottom:6px;">
+      <input type="checkbox" id="${prefix}_${f.k}_use" style="width:auto; flex:none;"> 사용
+    </label>
+    <div id="${prefix}_${f.k}_wrap" style="display:none;">
+      <input id="${prefix}_${f.k}">
+      <p class="note" style="margin-top:4px;">개인정보 보호를 위해 꼭 필요하지 않으면 적지 않는 걸 권장해요.</p>
+    </div>`;
+  }
+  function wireToggleText(prefix, f, existing){
+    const chk = document.getElementById(`${prefix}_${f.k}_use`);
+    const wrap = document.getElementById(`${prefix}_${f.k}_wrap`);
+    if (!chk) return;
+    chk.onchange = () => { wrap.style.display = chk.checked ? 'block' : 'none'; };
+    chk.checked = !!existing;
+    wrap.style.display = chk.checked ? 'block' : 'none';
+    if (existing) document.getElementById(`${prefix}_${f.k}`).value = existing;
+  }
+  function readToggleText(prefix, f){
+    const chk = document.getElementById(`${prefix}_${f.k}_use`);
+    if (!chk || !chk.checked) return '';
+    return (document.getElementById(`${prefix}_${f.k}`).value || '').trim();
+  }
 
   function currentLevelIndex(){ return state.nav.length; } // 0 = courses list (root), up to 4 = students list
 
@@ -857,17 +1123,26 @@
       return `<select id="${prefix}_${f.k}" ${f.required ? 'required' : ''}><option value="">선택</option>${f.options.map(o => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('')}</select>`;
     }
     if (f.type === 'textarea') return `<textarea id="${prefix}_${f.k}" rows="2" ${f.required ? 'required' : ''}></textarea>`;
+    if (f.type === 'robotProgress') return robotProgressHtml(prefix);
+    if (f.type === 'enrollStory') return enrollStoryHtml(prefix);
+    if (f.type === 'toggleText') return toggleTextHtml(prefix, f);
     return `<input id="${prefix}_${f.k}" ${f.required ? 'required' : ''}>`;
   }
   studentFormEl.innerHTML = `<h3 style="font-size:14px;">학생 추가</h3>` +
     STUDENT_FIELDS.map(f => `<div><label>${f.label}</label>${renderFieldControl(f)}</div>`).join('') +
     `<button type="submit" class="primary">추가</button>`;
+  wireEnrollStory('sf');
+  STUDENT_FIELDS.filter(f => f.type === 'toggleText').forEach(f => wireToggleText('sf', f));
+  toggleStudentFormBtn.addEventListener('click', () => { wireRobotProgress('sf'); }, { once: true });
   studentFormEl.onsubmit = async (e) => {
     e.preventDefault();
     if (!db || !classForAttend.value) { alert('먼저 위에서 수업을 선택하세요.'); return; }
     const body = { courseId: classForAttend.value, createdAt: Date.now() };
     let ok = true;
     STUDENT_FIELDS.forEach(f => {
+      if (f.type === 'robotProgress') { body[f.k] = readRobotProgress('sf'); return; }
+      if (f.type === 'enrollStory') { body[f.k] = readEnrollStory('sf'); return; }
+      if (f.type === 'toggleText') { body[f.k] = readToggleText('sf', f); return; }
       const v = (document.getElementById('sf_' + f.k).value || '').trim();
       if (f.required && !v) ok = false;
       body[f.k] = v;
@@ -892,6 +1167,16 @@
   toggleBulkBtn.addEventListener('click', () => {
     bulkArea.hidden = !bulkArea.hidden;
     toggleBulkBtn.textContent = bulkArea.hidden ? '+ 엑셀로 일괄등록' : '숨기기';
+  });
+
+  document.getElementById('bulkSampleBtn').addEventListener('click', () => {
+    if (typeof XLSX === 'undefined') { alert('엑셀 기능을 불러오지 못했어요. 새로고침해 주세요.'); return; }
+    const rows = [['학년', '반', '번호', '이름', '전화번호', '특이사항'], ['3', '2', '7', '홍길동', '', '']];
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{ wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 12 }, { wch: 14 }, { wch: 20 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '학생명단');
+    XLSX.writeFile(wb, '학생명단_샘플.xlsx');
   });
 
   const FIELD_ALIASES = {
@@ -971,8 +1256,10 @@
     });
   }
 
+  let editingDocId = null;
   async function renderManage(){
     renderCrumbs();
+    editingDocId = null;
     listEl.innerHTML = '<p class="list-empty">불러오는 중...</p>';
     formEl.innerHTML = '';
     formEl.hidden = true;
@@ -996,14 +1283,37 @@
       listEl.innerHTML = `<p class="list-empty">등록된 ${level.label}이(가) 없습니다. 아래 "+ ${level.label} 추가" 버튼으로 추가하세요.</p>`;
     } else {
       listEl.innerHTML = '';
-      snap.docs.forEach(doc => {
+      let docs = snap.docs;
+      if (level.key === 'course') {
+        docs = docs.slice().sort((a, b) => {
+          const ka = `${a.data().day || ''}||${a.data().school || ''}`, kb = `${b.data().day || ''}||${b.data().school || ''}`;
+          return ka < kb ? -1 : ka > kb ? 1 : 0;
+        });
+      }
+      let lastGroupKey = null;
+      docs.forEach(doc => {
         const d = doc.data();
+        if (level.key === 'course') {
+          const groupKey = `${d.day || ''}||${d.school || ''}`;
+          if (groupKey !== lastGroupKey) {
+            lastGroupKey = groupKey;
+            const header = document.createElement('div');
+            header.style.cssText = 'font-weight:700; font-size:13px; color:var(--ink-soft); margin:14px 0 6px;';
+            header.textContent = [d.day ? d.day : '', d.school].filter(Boolean).join(' / ') || '요일·학교 미지정';
+            listEl.appendChild(header);
+          }
+        }
         const row = document.createElement('div');
         row.className = 'item-row';
-        const sub = level.key === 'course' ? [d.school, d.section, d.day ? (d.day + '요일') : '', d.term].filter(Boolean).join(' · ')
+        const sub = level.key === 'course' ? [d.section, d.term].filter(Boolean).join(' · ')
           : level.key === 'student' ? [d.grade, d.classLabel, d.number ? (d.number + '번') : '', d.phone].filter(Boolean).join(' · ')
           : '';
-        row.innerHTML = `<div class="item-main"><span class="item-title">${escapeHtml(d.name)}</span>${sub ? `<span class="item-sub">${escapeHtml(sub)}</span>` : ''}</div><button type="button" class="ghost" data-del style="padding:4px 9px; font-size:12px;">삭제</button>`;
+        const title = d.name || (level.key === 'student' ? (d.number ? d.number + '번 학생' : '이름 미기재 학생') : '');
+        row.innerHTML = `<div class="item-main"><span class="item-title">${escapeHtml(title)}</span>${sub ? `<span class="item-sub">${escapeHtml(sub)}</span>` : ''}</div><div style="display:flex; gap:8px; flex:none;"><button type="button" class="ghost" data-edit style="padding:4px 9px; font-size:12px;">수정</button><button type="button" class="ghost" data-del style="padding:4px 9px; font-size:12px;">삭제</button></div>`;
+        row.querySelector('[data-edit]').addEventListener('click', (e) => {
+          e.stopPropagation();
+          startEditDoc(level, doc.id, d);
+        });
         row.querySelector('[data-del]').addEventListener('click', (e) => {
           e.stopPropagation();
           armDeleteButton(e.currentTarget, async () => {
@@ -1016,6 +1326,10 @@
             populateAttendClassPicker();
           });
         });
+        if (level.key === 'course') {
+          row.style.cursor = 'pointer';
+          row.addEventListener('click', () => openAttendanceFor(doc.id));
+        }
         listEl.appendChild(row);
       });
     }
@@ -1033,18 +1347,28 @@
           `).join('')}</div>`;
         } else if (f.type === 'textarea') {
           control = `<textarea id="f_${f.k}" rows="2" ${f.required ? 'required' : ''}></textarea>`;
+        } else if (f.type === 'robotProgress') {
+          control = robotProgressHtml('f');
+        } else if (f.type === 'enrollStory') {
+          control = enrollStoryHtml('f');
+        } else if (f.type === 'toggleText') {
+          control = toggleTextHtml('f', f);
         } else {
           control = `<input id="f_${f.k}" ${f.required ? 'required' : ''}>`;
         }
         return `<div><label>${f.label}</label>${control}</div>`;
       }).join('') +
-      `<button type="submit" class="primary">추가</button>`;
+      `<button type="submit" class="primary" id="formSubmitBtn">추가</button>`;
     formEl.querySelectorAll('.check-chip input').forEach(cb => {
       cb.addEventListener('change', () => cb.closest('.check-chip').classList.toggle('checked', cb.checked));
     });
+    wireEnrollStory('f');
+    wireRobotProgress('f');
+    level.fields.filter(f => f.type === 'toggleText').forEach(f => wireToggleText('f', f));
     formEl.onsubmit = async (e) => {
       e.preventDefault();
-      const baseBody = { [level.parentField]: parentId, createdAt: Date.now() };
+      const editingId = editingDocId;
+      const baseBody = editingId ? {} : { [level.parentField]: parentId, createdAt: Date.now() };
       let ok = true;
       let multiField = null, multiValues = [];
       level.fields.forEach(f => {
@@ -1053,6 +1377,13 @@
           if (f.required && checked.length === 0) ok = false;
           multiField = f.k;
           multiValues = checked;
+          if (editingId) baseBody[f.k] = checked[0] || '';
+        } else if (f.type === 'robotProgress') {
+          baseBody[f.k] = readRobotProgress('f');
+        } else if (f.type === 'enrollStory') {
+          baseBody[f.k] = readEnrollStory('f');
+        } else if (f.type === 'toggleText') {
+          baseBody[f.k] = readToggleText('f', f);
         } else {
           const v = (document.getElementById('f_' + f.k).value || '').trim();
           if (f.required && !v) ok = false;
@@ -1060,7 +1391,9 @@
         }
       });
       if (!ok) return;
-      if (multiField) {
+      if (editingId) {
+        await db.collection(level.collection).doc(editingId).update(baseBody);
+      } else if (multiField) {
         for (const val of multiValues) {
           await db.collection(level.collection).add(Object.assign({}, baseBody, { [multiField]: val }));
         }
@@ -1070,6 +1403,31 @@
       renderManage();
       if (level.key === 'course' || level.key === 'student') populateAttendClassPicker();
     };
+  }
+
+  // 목록 행의 [수정]을 누르면 같은 추가 폼을 그 값으로 채워서 "수정 저장"으로 바꾼다(로봇 카테고리 관리의 수정 패턴과 동일)
+  function startEditDoc(level, id, d){
+    editingDocId = id;
+    formEl.hidden = false;
+    toggleAddFormBtn.textContent = '숨기기';
+    level.fields.forEach(f => {
+      if (f.type === 'multiselect') {
+        document.querySelectorAll(`#f_${f.k} input`).forEach(cb => {
+          cb.checked = cb.value === d[f.k];
+          cb.closest('.check-chip').classList.toggle('checked', cb.checked);
+        });
+      } else if (f.type === 'robotProgress') {
+        wireRobotProgress('f', d[f.k]);
+      } else if (f.type === 'enrollStory') {
+        wireEnrollStory('f', d[f.k]);
+      } else if (f.type === 'toggleText') {
+        wireToggleText('f', f, d[f.k]);
+      } else {
+        document.getElementById('f_' + f.k).value = d[f.k] || '';
+      }
+    });
+    document.getElementById('formSubmitBtn').textContent = '수정 저장';
+    formEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
   // ---------- attendance tab ----------
@@ -1085,6 +1443,9 @@
       const d = c.data();
       const opt = document.createElement('option');
       opt.value = c.id;
+      opt.dataset.school = d.school || '';
+      opt.dataset.term = d.term || '';
+      opt.dataset.day = d.day || '';
       opt.textContent = `${d.name} (${[d.school, d.section, d.day ? d.day+'요일' : ''].filter(Boolean).join(' · ')})`;
       classForAttend.appendChild(opt);
     });
@@ -1095,6 +1456,7 @@
 
   classForAttend.addEventListener('change', async () => {
     renderAttendTable();
+    loadSchoolCalendarFor();
     bulkCourseId = classForAttend.value;
     bulkArea.hidden = true;
     bulkPreview.innerHTML = '';
@@ -1103,6 +1465,211 @@
     toggleBulkBtn.textContent = '+ 엑셀로 일괄등록';
     studentFormEl.hidden = true;
     toggleStudentFormBtn.textContent = '+ 학생 추가';
+  });
+
+  // ---------- 학교 달력 (출석부 탭 위, 선택한 수업의 학교 기준 — 사용자 지시 2026-11-23) ----------
+  const schoolCalCard = document.getElementById('schoolCalCard');
+  const schoolCalNameEl = document.getElementById('schoolCalName');
+  const schoolCalTodayNote = document.getElementById('schoolCalTodayNote');
+  const schoolCalGrid = document.getElementById('schoolCalGrid');
+  const schoolCalMonthLabel = document.getElementById('schoolCalMonthLabel');
+  const schoolCalPeriodsEl = document.getElementById('schoolCalPeriods');
+  const schoolCalClosedListEl = document.getElementById('schoolCalClosedList');
+  let schoolCalDoc = null; // { id, data: { school, periods:[{id,label,start,end,subterms:[{id,label,start,end}]}], closedDates:[{date,reason}] }, _term }
+  function closedEntry(dateStr){ return (schoolCalDoc.data.closedDates || []).find(c => c.date === dateStr); }
+  const schoolCalMonth = new Date(); schoolCalMonth.setDate(1);
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  const periodOptionsFor = (term) => term === '분기제' ? ['1분기', '2분기', '3분기', '4분기'] : ['1학기', '2학기'];
+  // 텀은 학기/분기 "안의" 개념이라 자기 이름이 따로 없다 — 항상 "{기간 라벨} {순번}텀"으로 계산해서 보여준다
+  // (사용자 지시 2026-11-23: "1학기1텀 1학기2텀 이런것"). 텀 길이는 곳마다 다를 수 있어(4주·6주 등) 자동으로
+  // 나누지 않고 선생님이 직접 하나씩 추가한다(사용자 지시: "그냥 알아서 선생님이 설정하게끔").
+  function subtermLabel(p, s){ return `${p.label} ${(p.subterms || []).indexOf(s) + 1}텀`; }
+  // UTC 로 계산한다: 로컬(한국) 자정 Date 를 toISOString 하면 하루 전 날짜가 나와 같은 날짜만 반복되고,
+  // sessionNumberFor 의 for 루프가 영원히 돌아 화면이 멈춘다("자꾸 다운"의 원인).
+  function addDays(dateStr, days){ const d = new Date(dateStr + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); }
+  // 몇 차시인지는 그 수업의 요일(course.day)과 같은 요일인 날짜만 세서 매긴다 — 휴강으로 표시된 날은 차시에서 뺀다.
+  function sessionNumberFor(subterm, dateStr){
+    const weekdayNames = ['일', '월', '화', '수', '목', '금', '토'];
+    const wd = weekdayNames.indexOf(schoolCalDoc._day || '');
+    if (wd < 0 || new Date(dateStr + 'T00:00:00').getDay() !== wd) return null;
+    const closedDates = schoolCalDoc.data.closedDates || [];
+    let n = 0;
+    for (let cur = subterm.start; cur <= dateStr; cur = addDays(cur, 1)) {
+      if (new Date(cur + 'T00:00:00').getDay() === wd && !closedDates.some(c => c.date === cur)) n++;
+    }
+    return n;
+  }
+  function findPeriodForDate(dateStr){
+    const periods = (schoolCalDoc && schoolCalDoc.data.periods) || [];
+    for (const p of periods) {
+      if (p.start && p.end && dateStr >= p.start && dateStr <= p.end) {
+        const sub = (p.subterms || []).find(s => s.start && s.end && dateStr >= s.start && dateStr <= s.end);
+        return { period: p, subterm: sub };
+      }
+    }
+    return null;
+  }
+  async function loadSchoolCalendarFor(){
+    const opt = classForAttend.selectedOptions[0];
+    const school = opt ? opt.dataset.school : '';
+    if (!school) { schoolCalCard.hidden = true; schoolCalDoc = null; return; }
+    schoolCalCard.hidden = false;
+    schoolCalNameEl.textContent = school;
+    schoolCalTodayNote.textContent = '달력 불러오는 중...';
+    try {
+      const snap = await db.collection('schoolCalendars').where('school', '==', school).get();
+      if (snap.error) { schoolCalTodayNote.textContent = '달력을 불러오지 못했어요: ' + (snap.error.message || '알 수 없는 오류'); schoolCalDoc = null; return; }
+      schoolCalDoc = snap.docs.length
+        ? { id: snap.docs[0].id, data: Object.assign({ school, periods: [], closedDates: [] }, snap.docs[0].data()) }
+        : { id: null, data: { school, periods: [], closedDates: [] } };
+      // 예전에 날짜 문자열만 저장하던 시절의 데이터(["2026-11-10"])가 남아있으면 {date,reason} 꼴로 바꿔준다 —
+      // 안 바꾸면 사유를 입력할 때 entry 가 undefined 라 그 자리에서 멈춘다(사용자 지시: "휴일수정하다가" 멈춤의 원인).
+      schoolCalDoc.data.closedDates = (schoolCalDoc.data.closedDates || []).map(c => typeof c === 'string' ? { date: c, reason: '' } : c);
+      schoolCalDoc._term = opt.dataset.term || '학기제';
+      schoolCalDoc._day = opt.dataset.day || '';
+      renderSchoolCal();
+    } catch (err) {
+      console.error('[schoolCal] load failed', err);
+      schoolCalTodayNote.textContent = '달력을 불러오지 못했어요: ' + err.message;
+      schoolCalDoc = null;
+    }
+  }
+  function renderSchoolCal(){
+    if (!schoolCalDoc) return;
+    const y = schoolCalMonth.getFullYear(), m = schoolCalMonth.getMonth();
+    schoolCalMonthLabel.textContent = `${y}년 ${m + 1}월`;
+    const startWeekday = new Date(y, m, 1).getDay();
+    const daysInMonth = new Date(y, m + 1, 0).getDate();
+    const cells = [];
+    for (let i = 0; i < startWeekday; i++) cells.push(null);
+    for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+    const weekdayHtml = ['일', '월', '화', '수', '목', '금', '토'].map(w => `<div class="cal-weekday">${w}</div>`).join('');
+    // 배경색은 안 칠하고(사용자 지시: "달력색상은 비워두고"), 어느 학기·텀·차시인지는 글자로 보여준다(사용자 지시: "왜 어느학기 몇텀 몇차시인지 표시가 안돼?").
+    const dayHtml = cells.map(d => {
+      if (!d) return `<div></div>`;
+      const dateStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const closedInfo = closedEntry(dateStr);
+      const found = findPeriodForDate(dateStr);
+      const isToday = dateStr === TODAY_STR;
+      let label = '';
+      if (closedInfo && closedInfo.reason) label = closedInfo.reason;
+      else if (found) {
+        if (found.subterm) {
+          label = subtermLabel(found.period, found.subterm);
+          if (!closedInfo) { const n = sessionNumberFor(found.subterm, dateStr); if (n) label += ` ${n}차`; }
+        } else label = found.period.label;
+      }
+      return `<div class="cal-day${closedInfo ? ' closed' : ''}" data-date="${dateStr}" style="${isToday ? 'outline:2px solid var(--accent);' : ''}"><span class="dnum">${d}</span>${label ? `<span class="plabel">${escapeHtml(label)}</span>` : ''}</div>`;
+    }).join('');
+    schoolCalGrid.innerHTML = weekdayHtml + dayHtml;
+    schoolCalGrid.querySelectorAll('[data-date]').forEach(cell => cell.addEventListener('click', () => toggleClosed(cell.dataset.date)));
+    const todayFound = findPeriodForDate(TODAY_STR);
+    const todayClosed = closedEntry(TODAY_STR);
+    schoolCalTodayNote.textContent = todayClosed
+      ? `오늘(${TODAY_STR})은 ${todayClosed.reason || '휴강'}이에요.`
+      : todayFound ? `오늘(${TODAY_STR})은 ${todayFound.period.label}${todayFound.subterm ? ' · ' + subtermLabel(todayFound.period, todayFound.subterm) : ''} 기간이에요.`
+      : `오늘(${TODAY_STR})은 설정된 기간이 없어요.`;
+    renderClosedList();
+    renderSchoolCalPeriods();
+  }
+  function renderClosedList(){
+    const list = (schoolCalDoc.data.closedDates || []).slice().sort((a, b) => a.date < b.date ? -1 : 1);
+    schoolCalClosedListEl.innerHTML = list.map(c => `
+      <div style="display:flex; gap:8px; align-items:center; margin-bottom:6px;" data-closed="${c.date}">
+        <span class="note" style="width:90px; flex:none;">${c.date}</span>
+        <input data-reason value="${escapeHtml(c.reason || '')}" placeholder="사유 (예: 방학, 공휴일, 개교기념일)" style="flex:1;">
+        <button type="button" class="ghost" data-del-closed style="font-size:12px; padding:4px 9px;">삭제</button>
+      </div>
+    `).join('');
+    schoolCalClosedListEl.querySelectorAll('[data-closed]').forEach(row => {
+      const dateStr = row.dataset.closed;
+      const entry = closedEntry(dateStr);
+      row.querySelector('[data-reason]').addEventListener('change', (e) => { entry.reason = e.target.value; saveSchoolCal(); });
+      row.querySelector('[data-del-closed]').addEventListener('click', () => toggleClosed(dateStr));
+    });
+  }
+  function renderSchoolCalPeriods(){
+    const periods = schoolCalDoc.data.periods || [];
+    const termOptions = periodOptionsFor(schoolCalDoc._term);
+    schoolCalPeriodsEl.innerHTML = periods.map(p => `
+      <div style="border:1px solid var(--border); border-radius:8px; padding:10px; margin-bottom:8px;" data-period="${p.id}">
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <select data-p-label style="width:auto;">${termOptions.map(o => `<option value="${escapeHtml(o)}" ${o === p.label ? 'selected' : ''}>${escapeHtml(o)}</option>`).join('')}</select>
+          <input type="date" data-p-start value="${p.start || ''}" style="width:auto;">
+          <span class="note">~</span>
+          <input type="date" data-p-end value="${p.end || ''}" style="width:auto;">
+          <button type="button" class="ghost" data-p-del style="font-size:12px; padding:4px 9px; color:var(--absent);">기간 삭제</button>
+        </div>
+        <div style="margin-top:8px; padding-left:14px; border-left:2px solid var(--border);">
+          ${(p.subterms || []).map(s => `
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:6px;" data-subterm="${s.id}">
+              <b style="font-size:12px; width:70px; flex:none;">${escapeHtml(subtermLabel(p, s))}</b>
+              <input type="date" data-s-start value="${s.start || ''}" style="width:auto;">
+              <span class="note">~</span>
+              <input type="date" data-s-end value="${s.end || ''}" style="width:auto;">
+              <button type="button" class="ghost" data-s-del style="font-size:12px; padding:2px 7px;">삭제</button>
+            </div>
+          `).join('')}
+          <button type="button" class="ghost" data-add-subterm style="font-size:12px; padding:4px 9px;">+ 텀 추가</button>
+        </div>
+      </div>
+    `).join('') || '<p class="note">아직 등록된 기간이 없어요.</p>';
+    schoolCalPeriodsEl.querySelectorAll('[data-period]').forEach(block => {
+      const pid = block.dataset.period;
+      const p = periods.find(x => x.id === pid);
+      block.querySelector('[data-p-label]').addEventListener('change', (e) => { p.label = e.target.value; saveSchoolCal(); });
+      block.querySelector('[data-p-start]').addEventListener('change', (e) => { p.start = e.target.value; saveSchoolCal(); });
+      block.querySelector('[data-p-end]').addEventListener('change', (e) => { p.end = e.target.value; saveSchoolCal(); });
+      block.querySelector('[data-p-del]').addEventListener('click', () => {
+        schoolCalDoc.data.periods = periods.filter(x => x.id !== pid);
+        saveSchoolCal();
+      });
+      block.querySelectorAll('[data-subterm]').forEach(sEl => {
+        const sid = sEl.dataset.subterm;
+        const s = (p.subterms || []).find(x => x.id === sid);
+        sEl.querySelector('[data-s-start]').addEventListener('change', (e) => { s.start = e.target.value; saveSchoolCal(); });
+        sEl.querySelector('[data-s-end]').addEventListener('change', (e) => { s.end = e.target.value; saveSchoolCal(); });
+        sEl.querySelector('[data-s-del]').addEventListener('click', () => {
+          p.subterms = (p.subterms || []).filter(x => x.id !== sid);
+          saveSchoolCal();
+        });
+      });
+      block.querySelector('[data-add-subterm]').addEventListener('click', () => {
+        if (!p.subterms) p.subterms = [];
+        p.subterms.push({ id: uid(), start: '', end: '' });
+        saveSchoolCal();
+      });
+    });
+  }
+  // 날짜를 누르면 일단 "휴강"으로만 표시해두고(사유 없음), 아래 목록에서 방학·공휴일·개교기념일 같은
+  // 사유를 적는다(사용자 지시 2026-11-23). 그 날은 sessionNumberFor 가 이미 차시 세기에서 빼고 있다.
+  function toggleClosed(dateStr){
+    const list = schoolCalDoc.data.closedDates || (schoolCalDoc.data.closedDates = []);
+    const idx = list.findIndex(c => c.date === dateStr);
+    if (idx >= 0) list.splice(idx, 1); else list.push({ date: dateStr, reason: '' });
+    saveSchoolCal();
+  }
+  let schoolCalSaveTimer = null;
+  function saveSchoolCal(){
+    renderSchoolCal();
+    clearTimeout(schoolCalSaveTimer);
+    schoolCalSaveTimer = setTimeout(async () => {
+      try {
+        const payload = { school: schoolCalDoc.data.school, periods: schoolCalDoc.data.periods, closedDates: schoolCalDoc.data.closedDates };
+        if (schoolCalDoc.id) await db.collection('schoolCalendars').doc(schoolCalDoc.id).update(payload);
+        else { const res = await db.collection('schoolCalendars').add(Object.assign({ createdAt: Date.now() }, payload)); schoolCalDoc.id = res.id; }
+      } catch (err) { console.error('[schoolCal] save failed', err); }
+    }, 400);
+  }
+  document.getElementById('schoolCalPrev').addEventListener('click', () => { schoolCalMonth.setMonth(schoolCalMonth.getMonth() - 1); renderSchoolCal(); });
+  document.getElementById('schoolCalNext').addEventListener('click', () => { schoolCalMonth.setMonth(schoolCalMonth.getMonth() + 1); renderSchoolCal(); });
+  document.getElementById('schoolCalAddPeriod').addEventListener('click', () => {
+    if (!schoolCalDoc.data.periods) schoolCalDoc.data.periods = [];
+    const used = schoolCalDoc.data.periods.map(p => p.label);
+    const opts = periodOptionsFor(schoolCalDoc._term);
+    const label = opts.find(o => !used.includes(o)) || opts[0];
+    schoolCalDoc.data.periods.push({ id: uid(), label, start: '', end: '', subterms: [] });
+    saveSchoolCal();
   });
 
   async function openAttendanceFor(courseId){

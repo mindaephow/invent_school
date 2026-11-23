@@ -6900,6 +6900,34 @@
     } catch (e) { /* 세션 없으면 그냥 버튼 숨김 상태 유지 */ }
   }
 
+  // QR 자동 로그인: 선생님이 인쇄해 나눠주는 QR(design.html?sid=<아이디>&spin=<PIN>)로 들어온 경우
+  // 로그인 폼을 보여주지 않고 바로 signInWithPassword → openDraft() 로 들어간다. PIN이 URL에 그대로
+  // 담기는 건 의도된 것(지금 화면/인쇄로 보여주는 비밀번호와 같은 신뢰수준). 실패하면 기존 로그인 폼을
+  // 에러 메시지와 함께 보여준다. 반환값: 성공 true / URL 파라미터 자체가 없음(QR 로그인 아님) 'skip' /
+  // 시도했지만 실패 → 보여줄 에러 메시지 문자열.
+  async function tryAutoLogin(){
+    const params = new URLSearchParams(location.search);
+    const sid = (params.get('sid') || '').trim().toLowerCase();
+    const spin = (params.get('spin') || '').trim();
+    if (!sid || !spin) return 'skip';
+    try {
+      const { error } = await db.auth.signInWithPassword({ email: `${sid}@${EMAIL_DOMAIN}`, password: spin });
+      if (error) throw error;
+      const ok = await loadStudent();
+      if (!ok) {
+        await db.auth.signOut();
+        throw new Error('not a student');
+      }
+      openDraft();
+      notifyFeedback();
+      return true;
+    } catch (err) {
+      return /not a student/.test(err.message)
+        ? '학생 계정이 아니에요. 선생님은 선생님 화면을 이용해주세요.'
+        : '아이디나 비밀번호가 맞지 않아요. 다시 확인해주세요.';
+    }
+  }
+
   // 같은 탭에서 새로고침한 경우: 아직 로그인되어 있으면 바로 프로젝트 화면으로
   (async function boot(){
     checkPartsLabAccess();
@@ -6908,7 +6936,9 @@
     const { data: { session } } = await db.auth.getSession();
     if (session && await loadStudent()) { accessToken = session.access_token; openDraft(); notifyFeedback(); return; }
     if (session) await db.auth.signOut();
-    if (!(await startTeacher())) showLoginStep();
+    if (await startTeacher()) return;
+    const autoLoginResult = await tryAutoLogin();
+    if (autoLoginResult !== true) showLoginStep(autoLoginResult === 'skip' ? undefined : autoLoginResult);
   })();
 })();
 </script>
