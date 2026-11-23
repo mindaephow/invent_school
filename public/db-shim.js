@@ -33,6 +33,7 @@ function createSupabaseDb(supabaseUrl, supabaseKey, options) {
     projects: 'ivs_projects',
     teacherProjects: 'ivs_teacher_projects',
     feedback: 'ivs_feedback',
+    workChecks: 'ivs_work_checks',
     schoolCalendars: 'ivs_school_calendars'
   };
 

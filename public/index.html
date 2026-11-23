@@ -230,6 +230,8 @@
     <button class="tab-btn active" data-tab="home">홈</button>
     <button class="tab-btn" data-tab="manage">수업 관리</button>
     <button class="tab-btn" data-tab="attend">출석부</button>
+    <button class="tab-btn" data-tab="notice">안내</button>
+    <button class="tab-btn" data-tab="assign">과제</button>
     <button class="tab-btn" data-tab="curriculum">커리큘럼</button>
     <button class="tab-btn" id="textbooksTabBtn" data-tab="textbooks" hidden>교재관리</button>
     <button class="tab-btn" id="partsTabBtn" data-tab="parts" hidden>부품 관리</button>
@@ -257,6 +259,56 @@
     </div>
   </section>
 
+  <section id="tab-notice" hidden>
+    <div class="card">
+      <h3 style="font-size:15px;">학교 안내</h3>
+      <p class="note">학교를 고르고 안내를 등록하면 그 학교 QR 첫 화면에 보여요. 기본 숙지는 항상, 잠깐 전달은 정한 날짜까지만 보여요.</p>
+      <label style="font-size:13px;">학교 선택</label>
+      <select id="noticeSchool"><option value="">학교 선택</option></select>
+      <div id="noticeBody" hidden style="margin-top:10px;">
+        <button type="button" class="primary" id="noticeOpenForm">+ 안내 추가</button>
+        <div id="noticeForm" hidden style="margin-top:10px;">
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <select id="noticeKind" style="flex:1; min-width:150px;"><option value="basic">기본 숙지 (항상 보임)</option><option value="temp">잠깐 전달 (기간 한정)</option></select>
+            <input id="noticeTitle" placeholder="제목 (선택)" style="flex:2; min-width:140px;">
+          </div>
+          <div id="noticeUntilRow" hidden style="margin-top:8px;"><label style="font-size:13px;">이 날짜까지 보여요</label> <input id="noticeUntil" type="date"></div>
+          <textarea id="noticeText" rows="4" placeholder="안내 내용" style="width:100%; margin-top:8px;"></textarea>
+          <div style="display:flex; gap:8px; align-items:center; margin-top:8px;"><button type="button" class="primary" id="noticeSave">저장</button><button type="button" class="ghost" id="noticeCancel">취소</button><span class="note" id="noticeMsg"></span></div>
+        </div>
+        <div id="noticeList" style="margin-top:14px;"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-assign" hidden>
+    <div class="card">
+      <button type="button" class="primary" id="assignOpenForm">+ 과제 만들기</button>
+      <div id="assignCreate" hidden style="margin-top:12px;">
+        <label style="font-size:13px;">학교 선택</label>
+        <select id="assignSchool"><option value="">학교 선택</option></select>
+        <div id="assignForm" hidden style="margin-top:10px;">
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <input id="assignTitle" placeholder="과제 제목" style="flex:2; min-width:160px;">
+            <input id="assignDue" type="date" style="flex:1; min-width:130px;">
+          </div>
+          <textarea id="assignDesc" rows="3" placeholder="과제 설명 (선택)" style="width:100%; margin-top:8px;"></textarea>
+          <div style="display:flex; gap:8px; align-items:center; margin-top:8px;"><button type="button" class="primary" id="assignAdd">저장</button><button type="button" class="ghost" id="assignCancel">취소</button><span class="note" id="assignMsg"></span></div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h3 style="font-size:15px;">과제 리스트</h3>
+      <div id="assignList" style="margin-top:8px;"></div>
+      <div id="assignStatus" style="margin-top:12px;"></div>
+    </div>
+    <div class="card">
+      <h3 style="font-size:15px;">작품 검사 요청 <span class="note" id="workCount"></span></h3>
+      <p class="note">학생(부모님)이 올린 작품 사진·영상입니다. 통과를 누르거나 답변을 보내면 학생 화면에 나타납니다.</p>
+      <div id="workList" style="margin-top:8px;"></div>
+    </div>
+  </section>
+
   <section id="tab-attend" hidden>
     <div class="card" id="schoolCalCard" hidden>
       <h3 style="font-size:15px;">학교 달력 (<span id="schoolCalName"></span>)</h3>
@@ -276,7 +328,7 @@
       </details>
     </div>
     <div class="card">
-      <p class="note">수업을 고르면 학생별 출석·과제·미션을 바로 체크할 수 있습니다. 달력에서 날짜를 누르면 그 날짜의 출석부가 보여요.</p>
+      <p class="note">수업을 고르면 학생별 출석·진도·대기·메모를 바로 체크할 수 있습니다. 달력에서 날짜를 누르면 그 날짜의 출석부가 보여요.</p>
       <div class="session-picker">
         <select id="classForAttend"></select>
         <span class="note" id="todayLabel"></span>
@@ -285,12 +337,11 @@
       <div class="table-wrap">
         <table id="attendTable">
           <thead>
-            <tr><th>번호</th><th>이름</th><th>출석</th><th>과제</th><th>진도</th><th>대기</th><th>설계·평가</th><th>미션(진행 상황)</th></tr>
+            <tr><th>번호</th><th>이름</th><th>출석</th><th>진도</th><th>대기</th><th>메모</th></tr>
           </thead>
           <tbody id="attendBody"></tbody>
         </table>
       </div>
-      <div id="designsPanel" hidden style="margin-top:14px;"></div>
       <p class="list-empty" id="attendEmpty" hidden>수업을 먼저 선택하세요.</p>
     </div>
 
@@ -2159,47 +2210,21 @@
     renderAttendTable();
   }
 
-  const designsPanel = document.getElementById('designsPanel');
-  const stars = (n) => '\u2605'.repeat(n) + '\u2606'.repeat(5 - n);
-
-  // 학생 한 명의 설계 목록 + 평가 (확인·평가 → 설계 화면에서 열어 보고 평가·조언을 남김)
-  function showDesigns(courseId, studentName, list, fbByProject){
-    const rows = list
-      .slice()
-      .sort((a, b) => (b.submitted ? 1 : 0) - (a.submitted ? 1 : 0) || (b.updatedAt || 0) - (a.updatedAt || 0))
-      .map(p => {
-        const fb = fbByProject[p.id];
-        const when = p.updatedAt ? new Date(p.updatedAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
-        return `<div class="design-row">
-          <div class="item-main">
-            <div class="item-title">${escapeHtml(p.name || '(이름 없음)')} <span class="pill ${p.submitted ? 'on' : 'off'}">${p.submitted ? '제출함' : '미제출'}</span></div>
-            <div class="item-sub">${escapeHtml(when)} 저장 · 부품 ${(p.parts || []).length}개 · ${fb ? '평가 ' + stars(fb.rating || 0) : '평가 전'}</div>
-            ${fb && fb.advice ? `<div class="item-sub">조언: ${escapeHtml(fb.advice)}</div>` : ''}
-          </div>
-          <a class="btn-link primary" href="design.html?review=${encodeURIComponent(p.id)}">확인·평가</a>
-        </div>`;
-      }).join('');
-    designsPanel.innerHTML = `<h3 style="font-size:15px;">${escapeHtml(studentName)} 학생의 설계</h3>${rows || '<p class="note">아직 저장한 설계가 없어요.</p>'}`;
-    designsPanel.hidden = false;
-    designsPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }
-
   async function renderAttendTable(){
     const courseId = classForAttend.value;
     if (!db || !courseId) {
       const noClassToday = db && dateChosen && classForAttend.options.length > 1;
-      attendBody.innerHTML = noClassToday ? `<tr><td colspan="8" class="note">${selectedDate}은 ${weekdayOf(selectedDate)}요일이에요. 이 요일에는 수업이 없어요.</td></tr>` : '';
+      attendBody.innerHTML = noClassToday ? `<tr><td colspan="6" class="note">${selectedDate}은 ${weekdayOf(selectedDate)}요일이에요. 이 요일에는 수업이 없어요.</td></tr>` : '';
       credArea.innerHTML = '';
       attendEmpty.hidden = noClassToday ? true : false;
       document.getElementById('attendSummary').hidden = true;
       return;
     }
     attendEmpty.hidden = true;
-    designsPanel.hidden = true;
     // 날짜를 골랐는데 선택한 수업이 그 요일 수업이 아니면 출석 표 대신 안내를 보인다.
     const selOpt = classForAttend.selectedOptions[0];
     if (dateChosen && selOpt && selOpt.dataset.day && selOpt.dataset.day !== weekdayOf(selectedDate)) {
-      attendBody.innerHTML = `<tr><td colspan="8" class="note">${selectedDate}은 ${weekdayOf(selectedDate)}요일이에요. 이 요일에 수업이 있는 반이 없어요(선택한 수업은 ${escapeHtml(selOpt.dataset.day)}요일).</td></tr>`;
+      attendBody.innerHTML = `<tr><td colspan="6" class="note">${selectedDate}은 ${weekdayOf(selectedDate)}요일이에요. 이 요일에 수업이 있는 반이 없어요(선택한 수업은 ${escapeHtml(selOpt.dataset.day)}요일).</td></tr>`;
       credArea.innerHTML = '';
       attendEmpty.hidden = true;
       document.getElementById('attendSummary').hidden = true;
@@ -2208,15 +2233,6 @@
     const attendDate = selectedDate;   // 표를 그리는 동안 날짜가 바뀌어도 이 표의 기록은 이 날짜로 저장한다
     const studentsSnap = await db.collection('students').where('courseId', '==', courseId).get();
     const recordsSnap = await db.collection('records').where('courseId', '==', courseId).where('date', '==', attendDate).get();
-    // 내 수업 학생들의 설계와 평가 (권한 규칙상 담당 선생님만 조회 가능)
-    const [projSnap, fbSnap] = await Promise.all([db.collection('projects').get(), db.collection('feedback').get()]);
-    const fbByProject = {};
-    fbSnap.docs.forEach(f => { fbByProject[f.row.project_id] = f.data(); });
-    const projectsByStudent = {};
-    projSnap.docs.forEach(p => {
-      if (p.row.course_id !== courseId) return;
-      (projectsByStudent[p.row.student_id] = projectsByStudent[p.row.student_id] || []).push({ id: p.id, ...p.data() });
-    });
     const recordByStudent = {};
     recordsSnap.docs.forEach(r => { recordByStudent[r.data().studentId] = { id: r.id, ...r.data() }; });
     // 지난주(7일 전 같은 요일) 기록: 지난주에 아무것도 안 한 친구를 요약에 표시하려고 불러온다(사용자 지시 2026-11-24).
@@ -2231,7 +2247,7 @@
     renderCredentials(sortedStudents);
     try { if (!robotCategories.length) await loadCategories(); if (!allTextbooks.length) await loadTextbooks(); } catch (e) { /* 못 불러오면 진도 칸은 '지정 안 함'으로 보인다 */ }
     // 오늘 수업 요약(사용자 지시 2026-11-24): 반·날짜, 전체/출석/결석 인원, 누가 뭘 했는지, 안 한 친구. 체크할 때마다 바로 바뀐다.
-    // "한 것" = 그 날짜에 체크한 진도 차시, 과제 제출, 미션 입력. 결석이 아닌데 아무것도 안 한 학생은 "아직 안 한 친구"에 나온다.
+    // "한 것" = 그 날짜에 체크한 진도 차시, 메모 입력. 결석이 아닌데 아무것도 안 한 학생은 "아직 안 한 친구"에 나온다.
     const summaryEl = document.getElementById('attendSummary');
     const recsByStudent = new Map();
     const kstDay = (ms) => new Date(ms + 9 * 3600 * 1000).toISOString().slice(0, 10);
@@ -2249,27 +2265,26 @@
         const stillChecked = (l) => ((((sd.robot && sd.robot.categories) || {})[l.categoryId] || {}).books || {})[l.textbookId] ? (((sd.robot.categories[l.categoryId] || {}).books || {})[l.textbookId] || []).includes(l.chapterId) : false;
         const chapters = ((sd.robot && sd.robot.doneLog) || []).filter(l => l.at && kstDay(l.at) === attendDate && stillChecked(l)).map(l => l.title || '차시');
         if (chapters.length) items.push('만들고 검사 받음: ' + chapters.map(escapeHtml).join(', '));
-        if (r.assignment === 'submitted') items.push('과제 제출');
-        if ((r.mission || '').trim()) items.push('미션 ' + escapeHtml(r.mission.trim()));
-        // 진도를 체크했으면 "한 친구", 아무 체크도 안 했으면 "안 한 친구", 출석·과제·미션만 체크했으면 "진도 체크 전"(사용자 지시 2026-11-24)
+        if ((r.mission || '').trim()) items.push('메모 ' + escapeHtml(r.mission.trim()));
+        // 진도를 체크했으면 "한 친구", 아무 체크도 안 했으면 "안 한 친구", 메모만 적었으면 "진도 체크 전"(사용자 지시 2026-11-24)
         if (chapters.length) did.push(`<li><b>${escapeHtml(sd.name)}</b> — ${items.join(' · ')}</li>`);
         else if (items.length) otherOnly.push(escapeHtml(sd.name));
         else notYet.push(escapeHtml(sd.name));
       });
-      // 지난주에 진도·과제·미션을 하나도 체크하지 않은 친구(결석이면 그렇게 표시). 지난주에 진도를 나간 친구는 보이지 않는다.
+      // 지난주에 진도·메모를 하나도 적지 않은 친구(결석이면 그렇게 표시). 지난주에 진도를 나간 친구는 보이지 않는다.
       const lastNothing = [];
       sortedStudents.forEach(st => {
         const sd = st.data(), lr = lastRecByStudent[st.id] || {};
         const stillChecked = (l) => (((((sd.robot || {}).categories || {})[l.categoryId] || {}).books || {})[l.textbookId] || []).includes(l.chapterId);
         const doneLast = ((sd.robot && sd.robot.doneLog) || []).some(l => l.at && kstDay(l.at) === lastDate && stillChecked(l));
-        if (!doneLast && lr.assignment !== 'submitted' && !(lr.mission || '').trim()) lastNothing.push(escapeHtml(sd.name) + (lr.attendance === 'absent' ? ' <span class="note">(결석)</span>' : ''));
+        if (!doneLast && !(lr.mission || '').trim()) lastNothing.push(escapeHtml(sd.name) + (lr.attendance === 'absent' ? ' <span class="note">(결석)</span>' : ''));
       });
       const chip = (label, n, color) => `<span style="padding:4px 10px; border:1px solid var(--border); border-radius:999px; background:#fff;">${label} <b style="color:${color};">${n}명</b></span>`;
       summaryEl.innerHTML = `<div style="font-weight:700; margin-bottom:8px;">${escapeHtml(classTitle)} 수업 요약 · ${attendDate} ${weekdayOf(attendDate)}요일</div>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">${chip('전체인원', all, 'inherit')}${chip('출석인원', present, '#15803d')}${chip('결석인원', absent, '#dc2626')}</div>
         <div style="margin-top:10px;"><b>오늘 한 친구 ${did.length}명</b>${did.length ? `<ul style="margin:4px 0 0; padding-left:18px;">${did.join('')}</ul>` : ' <span class="note">아직 없어요</span>'}</div>
-        <div style="margin-top:8px;"><b>안 한 친구 ${notYet.length}명 (아무 체크 없음)</b> ${notYet.length ? notYet.join(', ') : '<span class="note">없어요</span>'}</div>
-        ${otherOnly.length ? `<div style="margin-top:8px;"><b>진도는 아직 (과제·미션만 체크) ${otherOnly.length}명</b> ${otherOnly.join(', ')}</div>` : ''}
+        <div style="margin-top:8px;"><b>안 한 친구 ${notYet.length}명 (진도·메모 없음)</b> ${notYet.length ? notYet.join(', ') : '<span class="note">없어요</span>'}</div>
+        ${otherOnly.length ? `<div style="margin-top:8px;"><b>진도는 아직 (메모만 있음) ${otherOnly.length}명</b> ${otherOnly.join(', ')}</div>` : ''}
         ${lastNothing.length ? `<div style="margin-top:8px; color:#b45309;"><b>지난주(${lastDate})에 아무것도 안 한 친구 ${lastNothing.length}명</b> ${lastNothing.join(', ')}</div>` : ''}
         ${absentNames.length ? `<div style="margin-top:8px;"><b>결석 ${absentNames.length}명 (사유)</b> ${absentNames.join(', ')}</div>` : ''}`;
       summaryEl.hidden = false;
@@ -2279,11 +2294,6 @@
       const d = s.data();
       const rec = recordByStudent[s.id] || {};
       recsByStudent.set(s.id, rec);
-      const mine = projectsByStudent[s.id] || [];
-      const submittedList = mine.filter(p => p.submitted);
-      const waiting = submittedList.filter(p => !fbByProject[p.id]);
-      const designLabel = !mine.length ? '없음' : `제출 ${submittedList.length}` + (waiting.length ? ` · 평가 전 ${waiting.length}` : submittedList.length ? ' · 평가 완료' : '');
-      const designCls = waiting.length ? 'warn' : submittedList.length ? 'on' : 'off';
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td class="num">${escapeHtml(d.number || '')}</td>
@@ -2297,11 +2307,9 @@
           <button type="button" class="ghost" data-absent-open hidden style="margin-top:6px; font-size:12px; padding:2px 8px;"></button>
           <input type="text" data-absent-reason value="${escapeHtml(rec.absentReason || '')}" placeholder="결석 이유 (엔터로 닫기)" maxlength="60" hidden style="margin-top:6px; width:100%; min-width:130px;">
         </td>
-        <td><button type="button" class="pill ${rec.assignment==='submitted'?'on':'off'}" data-assign>${rec.assignment==='submitted'?'제출함':'미제출'}</button></td>
         <td><button type="button" class="ghost" data-progress style="font-size:12px; padding:3px 8px; white-space:nowrap;">${escapeHtml(robotProgressSummary(d.robot))}</button></td>
         <td><button type="button" class="ghost" data-waiting style="font-size:12px; padding:3px 8px; white-space:nowrap; ${waitingList(d.waiting).length ? 'background:#fffbeb; border-color:#f59e0b; color:#b45309; font-weight:700;' : ''}">${escapeHtml(waitingSummary(d.waiting))}</button></td>
-        <td><button type="button" class="pill ${designCls}" data-designs ${mine.length ? '' : 'disabled'}>${designLabel}</button></td>
-        <td><input type="text" value="${escapeHtml(rec.mission || '')}" data-mission placeholder="예: Lv.2 진행중"></td>
+        <td><input type="text" value="${escapeHtml(rec.mission || '')}" data-mission placeholder="메모"></td>
       `;
       const saveRecord = async (patch) => {
         const body = Object.assign({ date: attendDate, studentId: s.id, courseId, updatedAt: Date.now() }, patch);
@@ -2347,16 +2355,6 @@
           saveRecord({ attendance: btn.dataset.status });
         });
       });
-      const assignBtn = tr.querySelector('[data-assign]');
-      assignBtn.addEventListener('click', () => {
-        const next = rec.assignment === 'submitted' ? 'missing' : 'submitted';
-        rec.assignment = next;
-        assignBtn.textContent = next === 'submitted' ? '제출함' : '미제출';
-        assignBtn.className = 'pill ' + (next === 'submitted' ? 'on' : 'off');
-        updateSummary();
-        saveRecord({ assignment: next });
-      });
-      tr.querySelector('[data-designs]').addEventListener('click', () => showDesigns(courseId, d.name, mine, fbByProject));
       const missionInput = tr.querySelector('[data-mission]');
       let missionTimer = null;
       missionInput.addEventListener('input', () => {
@@ -4211,6 +4209,194 @@
     });
   });
 
+  // ---------- 과제 탭: [+ 과제 만들기] → 학교 선택 → 과제 입력. 과제는 학교 달력 문서 data.assignments 에 저장 ----------
+  const assignSchoolSel = document.getElementById('assignSchool');
+  const assignForm = document.getElementById('assignForm');
+  let assignDocs = {};   // 학교 이름 → { id, items }
+  async function openAssignTab(){
+    if (!db || !state.teacherId) return;
+    const snap = await db.collection('courses').where('teacherId', '==', state.teacherId).get();
+    const schools = [...new Set(snap.docs.map(c => c.data().school).filter(Boolean))];
+    const keep = assignSchoolSel.value;
+    assignSchoolSel.innerHTML = '<option value="">학교 선택</option>' + schools.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+    assignSchoolSel.value = ''; assignForm.hidden = true;
+    assignDocs = {};
+    await Promise.all(schools.map(async sc => {
+      const sn = await db.collection('schoolCalendars').where('school', '==', sc).get();
+      const d = sn.docs[0];
+      assignDocs[sc] = { id: d ? d.id : null, items: d && Array.isArray(d.data().assignments) ? d.data().assignments : [] };
+    }));
+    renderAssignments();
+  }
+  // 학교별로 묶고, 그 안에서 날짜별(마감일, 없으면 만든 날)로 묶어 최신 날짜부터 보여 준다.
+  function renderAssignments(){
+    const box = document.getElementById('assignList');
+    const kst = (t) => new Date(t + 9 * 3600000).toISOString().slice(0, 10);
+    const dateOf = (a) => a.due || kst(a.createdAt || Date.now());
+    const schools = Object.keys(assignDocs).filter(sc => assignDocs[sc].items.length);
+    if (!schools.length) { box.innerHTML = '<p class="note">만든 과제가 없어요.</p>'; return; }
+    box.innerHTML = schools.map(sc => {
+      const byDate = {};
+      assignDocs[sc].items.forEach(a => (byDate[dateOf(a)] = byDate[dateOf(a)] || []).push(a));
+      const dates = Object.keys(byDate).sort().reverse();
+      return `<h4 style="font-size:14px; margin:12px 0 4px;">${escapeHtml(sc)}</h4>` + dates.map(dt => `<div class="note" style="margin:8px 0 2px; font-weight:700;">${escapeHtml(dt)}${byDate[dt][0].due ? ' (마감)' : ' (만든 날)'}</div>` + byDate[dt].map(a => `<div class="design-row"><div class="item-main"><span class="item-title">${escapeHtml(a.title)}</span>${a.desc ? `<span class="item-sub">${escapeHtml(a.desc)}</span>` : ''}</div><span><button type="button" class="primary" data-assign-open="${a.id}" data-assign-school="${escapeHtml(sc)}">제출현황</button> <button type="button" class="ghost" data-assign-del="${a.id}" data-assign-school="${escapeHtml(sc)}">삭제</button></span></div>`).join('')).join('');
+    }).join('');
+  }
+  async function saveAssignments(school){
+    const doc = assignDocs[school];
+    if (doc.id) await db.collection('schoolCalendars').doc(doc.id).update({ assignments: doc.items });
+    else { const res = await db.collection('schoolCalendars').add({ createdAt: Date.now(), school, periods: [], closedDates: [], assignments: doc.items }); doc.id = res.id; }
+  }
+  document.getElementById('assignOpenForm').addEventListener('click', () => {
+    const box = document.getElementById('assignCreate');
+    box.hidden = !box.hidden;
+    assignSchoolSel.value = ''; assignForm.hidden = true;   // 열 때마다 학교 선택부터
+  });
+  assignSchoolSel.addEventListener('change', () => { assignForm.hidden = !assignSchoolSel.value; if (!assignForm.hidden) document.getElementById('assignTitle').focus(); });
+  document.getElementById('assignCancel').addEventListener('click', () => { document.getElementById('assignCreate').hidden = true; assignSchoolSel.value = ''; assignForm.hidden = true; document.getElementById('assignMsg').textContent = ''; });
+  document.getElementById('assignAdd').addEventListener('click', async () => {
+    const msg = document.getElementById('assignMsg'), title = document.getElementById('assignTitle').value.trim(), school = assignSchoolSel.value;
+    if (!school) { msg.textContent = '학교를 먼저 선택해 주세요.'; return; }
+    if (!title) { msg.textContent = '과제 제목을 적어 주세요.'; return; }
+    const doc = assignDocs[school] || (assignDocs[school] = { id: null, items: [] });
+    doc.items = doc.items.concat([{ id: 'a' + Date.now(), title, due: document.getElementById('assignDue').value, desc: document.getElementById('assignDesc').value.trim(), createdAt: Date.now() }]);
+    try { await saveAssignments(school); msg.textContent = ''; document.getElementById('assignCreate').hidden = true; assignForm.hidden = true; document.getElementById('assignTitle').value = ''; document.getElementById('assignDesc').value = ''; renderAssignments(); }
+    catch (err) { msg.textContent = '저장하지 못했어요: ' + err.message; }
+  });
+  // 과제를 고르면 그 학교 학생들의 제출현황을 보여 준다. 학생을 누르면 제출한 설계를 설계 화면(확인·평가)에서 연다.
+  async function showAssignStatus(assignId, school){
+    const box = document.getElementById('assignStatus');
+    const a = ((assignDocs[school] || {}).items || []).find(x => x.id === assignId); if (!a) return;
+    box.innerHTML = '<p class="note">불러오는 중...</p>';
+    const cs = await db.collection('courses').where('teacherId', '==', state.teacherId).get();
+    const courses = cs.docs.filter(c => c.data().school === school);
+    const stuLists = await Promise.all(courses.map(c => db.collection('students').where('courseId', '==', c.id).get()));
+    const students = [];
+    stuLists.forEach((sn, i) => sn.docs.forEach(d => students.push({ id: d.id, name: d.data().name || '', number: d.data().number, cls: [courses[i].data().section || courses[i].data().name || ''].filter(Boolean).join('') })));
+    const ps = await db.collection('projects').get();
+    const byStu = {};
+    ps.docs.forEach(d => { const x = d.data(); if (x.assignmentId === assignId && x.submitted) { (byStu[x.studentId] = byStu[x.studentId] || []).push({ id: d.id, x }); } });
+    students.sort((p, q) => (p.cls + '').localeCompare(q.cls + '') || (Number(p.number) || 0) - (Number(q.number) || 0));
+    const done = students.filter(s2 => byStu[s2.id]).length;
+    const when = (t) => t ? new Date(t).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+    box.innerHTML = `<h4 style="font-size:14px; margin-bottom:6px;">${escapeHtml(a.title)} 제출현황 — ${done} / ${students.length}명 제출</h4>` + (students.length ? students.map(s2 => {
+      const subs = byStu[s2.id];
+      if (!subs) return `<div class="design-row"><div class="item-main"><span class="item-title">${escapeHtml(s2.cls)} ${s2.number != null ? escapeHtml(String(s2.number)) + '번 ' : ''}${escapeHtml(s2.name)}</span></div><span class="pill">미제출</span></div>`;
+      const last = subs.sort((p, q) => (q.x.submittedAt || 0) - (p.x.submittedAt || 0))[0];
+      return `<div class="design-row"><div class="item-main"><span class="item-title">${escapeHtml(s2.cls)} ${s2.number != null ? escapeHtml(String(s2.number)) + '번 ' : ''}${escapeHtml(s2.name)}</span><span class="item-sub">${escapeHtml(last.x.name || '')} · ${when(last.x.submittedAt)} 제출</span></div><a class="btn-link primary" href="design.html?review=${last.id}">설계 보기</a></div>`;
+    }).join('') : '<p class="note">이 학교에 등록된 학생이 없어요.</p>');
+  }
+  document.getElementById('assignList').addEventListener('click', async (e) => {
+    const o = e.target.closest('[data-assign-open]'); if (o) { showAssignStatus(o.dataset.assignOpen, o.dataset.assignSchool); return; }
+    const b = e.target.closest('[data-assign-del]'); if (!b) return;
+    const sc = b.dataset.assignSchool, doc = assignDocs[sc];
+    doc.items = doc.items.filter(a => a.id !== b.dataset.assignDel);
+    try { await saveAssignments(sc); } catch (err) { alert(err.message); }
+    renderAssignments();
+    document.getElementById('assignStatus').innerHTML = '';
+  });
+  // ---------- 작품 검사 요청: 학생이 올린 사진·영상에 "통과"나 답변을 남긴다 ----------
+  async function loadWorkChecks(){
+    const box = document.getElementById('workList');
+    const [ws, cs] = await Promise.all([db.collection('workChecks').get(), db.collection('courses').where('teacherId', '==', state.teacherId).get()]);
+    if (ws.error) { box.innerHTML = '<p class="note">불러오지 못했어요. supabase/work_checks.sql 을 실행했는지 확인해 주세요.</p>'; return; }
+    const courseInfo = {}; cs.docs.forEach(c => { courseInfo[c.id] = c.data(); });
+    const ss = await Promise.all(cs.docs.map(c => db.collection('students').where('courseId', '==', c.id).get()));
+    const stu = {}; ss.forEach(sn => sn.docs.forEach(d => { stu[d.id] = d.data(); }));
+    const rows = ws.docs.map(d => ({ id: d.id, d: d.data(), sid: d.row.student_id, cid: d.row.course_id }));
+    const pending = rows.filter(r => r.d.status !== 'passed' && !r.d.reply).length;
+    document.getElementById('workCount').textContent = rows.length ? `(기다리는 ${pending}건 / 전체 ${rows.length}건)` : '';
+    if (!rows.length) { box.innerHTML = '<p class="note">아직 올라온 작품이 없어요.</p>'; return; }
+    const kst = (t) => new Date((t || 0) + 9 * 3600000).toISOString().slice(0, 10);
+    const bySchool = {};
+    rows.forEach(r => { const sc = (courseInfo[r.cid] || {}).school || '학교 미지정'; (bySchool[sc] = bySchool[sc] || []).push(r); });
+    box.innerHTML = Object.keys(bySchool).map(sc => {
+      const byDate = {}; bySchool[sc].forEach(r => (byDate[kst(r.d.createdAt)] = byDate[kst(r.d.createdAt)] || []).push(r));
+      return `<h4 style="font-size:14px; margin:12px 0 4px;">${escapeHtml(sc)}</h4>` + Object.keys(byDate).sort().reverse().map(dt => `<div class="note" style="margin:8px 0 2px; font-weight:700;">${dt}</div>` + byDate[dt].map(r => {
+        const st = stu[r.sid] || {}, c = courseInfo[r.cid] || {};
+        const files = (r.d.files || []).map(f => f.type === 'video' ? `<video src="${escapeHtml(f.url)}" controls preload="metadata" style="max-width:220px; max-height:160px; border-radius:8px;"></video>` : `<a href="${escapeHtml(f.url)}" target="_blank" rel="noopener"><img src="${escapeHtml(f.url)}" style="max-width:160px; max-height:160px; border-radius:8px; object-fit:cover;"></a>`).join(' ');
+        const done = r.d.status === 'passed' ? '<span class="pill">✅ 통과</span>' : (r.d.reply ? '<span class="pill">💬 답변함</span>' : '<span class="pill">검사 대기</span>');
+        return `<div class="design-row" style="display:block;"><div style="display:flex; justify-content:space-between; gap:8px;"><div class="item-main"><span class="item-title">${escapeHtml(c.section || c.name || '')} ${st.number ? escapeHtml(String(st.number)) + '번 ' : ''}${escapeHtml(st.name || '')}</span>${r.d.note ? `<span class="item-sub">${escapeHtml(r.d.note)}</span>` : ''}</div>${done}</div><div style="display:flex; gap:6px; flex-wrap:wrap; margin:8px 0;">${files}</div>${r.d.reply ? `<div class="note" style="white-space:pre-wrap;">내 답변: ${escapeHtml(r.d.reply)}</div>` : ''}<div style="display:flex; gap:6px; flex-wrap:wrap;"><input data-work-reply="${r.id}" placeholder="답변 (선택)" value="" style="flex:1; min-width:140px;"><button type="button" class="primary" data-work-pass="${r.id}">통과</button><button type="button" class="ghost" data-work-send="${r.id}">답변 보내기</button></div></div>`;
+      }).join('')).join('');
+    }).join('');
+  }
+  document.getElementById('workList').addEventListener('click', async (e) => {
+    const pass = e.target.closest('[data-work-pass]'), send = e.target.closest('[data-work-send]');
+    const id = pass ? pass.dataset.workPass : send ? send.dataset.workSend : null; if (!id) return;
+    const reply = document.querySelector(`[data-work-reply="${id}"]`).value.trim();
+    if (send && !reply) { alert('보낼 답변을 적어 주세요.'); return; }
+    try {
+      const patch = { status: pass ? 'passed' : 'replied', repliedAt: Date.now() };
+      if (reply) patch.reply = reply;
+      await db.collection('workChecks').doc(id).update(patch);
+      loadWorkChecks();
+    } catch (err) { alert('저장하지 못했어요: ' + (err.message || err)); }
+  });
+
+  // ---------- 안내 탭: 학교를 고르고 안내를 여러 개 등록한다. 기본 숙지(항상) / 잠깐 전달(마감일까지). 학교 달력 문서 data.notice.items 에 저장 ----------
+  const noticeSel = document.getElementById('noticeSchool');
+  let noticeDocId = null, noticeItems = [];
+  const noticeKst = () => new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
+  async function openNoticeTab(){
+    if (!db || !state.teacherId) return;
+    const snap = await db.collection('courses').where('teacherId', '==', state.teacherId).get();
+    const schools = [...new Set(snap.docs.map(c => c.data().school).filter(Boolean))];
+    const keep = noticeSel.value;
+    noticeSel.innerHTML = '<option value="">학교 선택</option>' + schools.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+    if (schools.includes(keep)) noticeSel.value = keep; else if (schools.length === 1) noticeSel.value = schools[0];
+    loadNotice();
+  }
+  async function loadNotice(){
+    const school = noticeSel.value;
+    document.getElementById('noticeBody').hidden = !school;
+    document.getElementById('noticeForm').hidden = true;
+    if (!school) return;
+    const snap = await db.collection('schoolCalendars').where('school', '==', school).get();
+    noticeDocId = snap.docs.length ? snap.docs[0].id : null;
+    const n = snap.docs.length ? snap.docs[0].data().notice : null;
+    // 예전에 하나만 적던 안내({text})는 기본 숙지 안내 하나로 이어받는다
+    noticeItems = n && Array.isArray(n.items) ? n.items : (n && n.text ? [{ id: 'n0', kind: 'basic', title: '', text: n.text, createdAt: n.updatedAt || 0 }] : []);
+    renderNotices();
+  }
+  function renderNotices(){
+    const box = document.getElementById('noticeList'), today = noticeKst();
+    if (!noticeItems.length) { box.innerHTML = '<p class="note">등록한 안내가 없어요.</p>'; return; }
+    const row = (n) => {
+      const expired = n.kind === 'temp' && n.until && n.until < today;
+      return `<div class="design-row"><div class="item-main"><span class="item-title">${escapeHtml(n.title || '(제목 없음)')} ${expired ? '<span class="pill">기간 끝남</span>' : ''}</span><span class="item-sub" style="white-space:pre-wrap;">${n.createdAt ? escapeHtml(new Date(n.createdAt + 9 * 3600000).toISOString().slice(0, 10)) + ' 등록 · ' : ''}${n.kind === 'temp' ? '잠깐 전달' + (n.until ? ' · ' + escapeHtml(n.until) + '까지' : '') + ' · ' : ''}${escapeHtml(n.text)}</span></div><button type="button" class="ghost" data-notice-del="${n.id}">삭제</button></div>`;
+    };
+    const basic = noticeItems.filter(n => n.kind !== 'temp'), temp = noticeItems.filter(n => n.kind === 'temp').sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    box.innerHTML = (basic.length ? '<h4 style="font-size:14px; margin:4px 0;">기본 숙지</h4>' + basic.map(row).join('') : '') + (temp.length ? '<h4 style="font-size:14px; margin:12px 0 4px;">잠깐 전달</h4>' + temp.map(row).join('') : '');
+  }
+  async function saveNoticeItems(){
+    const school = noticeSel.value;
+    const notice = { items: noticeItems, updatedAt: Date.now() };
+    if (noticeDocId) await db.collection('schoolCalendars').doc(noticeDocId).update({ notice });
+    else { const res = await db.collection('schoolCalendars').add({ createdAt: Date.now(), school, periods: [], closedDates: [], notice }); noticeDocId = res.id; }
+  }
+  noticeSel.addEventListener('change', loadNotice);
+  document.getElementById('noticeOpenForm').addEventListener('click', () => { const f = document.getElementById('noticeForm'); f.hidden = !f.hidden; });
+  document.getElementById('noticeKind').addEventListener('change', (e) => { document.getElementById('noticeUntilRow').hidden = e.target.value !== 'temp'; });
+  document.getElementById('noticeCancel').addEventListener('click', () => { document.getElementById('noticeForm').hidden = true; document.getElementById('noticeMsg').textContent = ''; });
+  document.getElementById('noticeSave').addEventListener('click', async () => {
+    const msg = document.getElementById('noticeMsg'), text = document.getElementById('noticeText').value.trim(), kind = document.getElementById('noticeKind').value;
+    if (!text) { msg.textContent = '안내 내용을 적어 주세요.'; return; }
+    const until = kind === 'temp' ? document.getElementById('noticeUntil').value : '';
+    if (kind === 'temp' && !until) { msg.textContent = '잠깐 전달은 보여 줄 마지막 날짜를 골라 주세요.'; return; }
+    noticeItems = noticeItems.concat([{ id: 'n' + Date.now(), kind, title: document.getElementById('noticeTitle').value.trim(), text, until, createdAt: Date.now() }]);
+    try {
+      await saveNoticeItems();
+      ['noticeTitle', 'noticeText', 'noticeUntil'].forEach(id => { document.getElementById(id).value = ''; });
+      msg.textContent = ''; document.getElementById('noticeForm').hidden = true; renderNotices();
+    } catch (err) { msg.textContent = '저장하지 못했어요: ' + (err.message || err); }
+  });
+  document.getElementById('noticeList').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-notice-del]'); if (!b) return;
+    noticeItems = noticeItems.filter(n => n.id !== b.dataset.noticeDel);
+    try { await saveNoticeItems(); } catch (err) { alert(err.message); }
+    renderNotices();
+  });
+
   // ---------- tabs ----------
   document.querySelectorAll('button.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -4219,6 +4405,10 @@
       document.getElementById('tab-home').hidden = btn.dataset.tab !== 'home';
       document.getElementById('tab-manage').hidden = btn.dataset.tab !== 'manage';
       document.getElementById('tab-attend').hidden = btn.dataset.tab !== 'attend';
+      document.getElementById('tab-notice').hidden = btn.dataset.tab !== 'notice';
+      if (btn.dataset.tab === 'notice') openNoticeTab();
+      document.getElementById('tab-assign').hidden = btn.dataset.tab !== 'assign';
+      if (btn.dataset.tab === 'assign') { openAssignTab(); loadWorkChecks(); }
       document.getElementById('tab-curriculum').hidden = btn.dataset.tab !== 'curriculum';
       document.getElementById('tab-parts').hidden = btn.dataset.tab !== 'parts';
       document.getElementById('tab-textbooks').hidden = btn.dataset.tab !== 'textbooks';

@@ -469,6 +469,7 @@
     <span class="pb-save" id="pbSave"></span>
     <button id="pbSaveBtn" type="button">저장</button>
     <button id="pbLoadBtn" type="button">불러오기</button>
+    <button id="workBtn" type="button">작품 검사 받기</button>
     <button id="submitBtn" class="primary" type="button">과제 제출하기</button>
   </div>
 
@@ -5286,6 +5287,7 @@
   const pbSave = document.getElementById('pbSave');
   const nameInput = document.getElementById('projectNameInput');
   const submitBtn = document.getElementById('submitBtn');
+  const workBtn = document.getElementById('workBtn');
   const pbSaveBtn = document.getElementById('pbSaveBtn');
   const pbLoadBtn = document.getElementById('pbLoadBtn');
   const backLink = document.getElementById('backLink');
@@ -6565,9 +6567,121 @@
     submitBtn.classList.remove('armed');
     submitBtn.textContent = project && project.data.submitted ? '다시 제출하기' : '과제 제출하기';
   }
+
+  // ---------- 작품 검사 받기: 만든 작품의 사진·영상을 올리면 선생님이 "통과" 또는 답변을 남긴다(부모님이 대신 올리는 경우가 많다) ----------
+  const WORK_MAX_FILES = 5, WORK_MAX_MB = 50;
+  // 사진은 올리기 전에 줄여서 저장 용량을 아낀다(긴 변 1600px). 영상은 그대로 올린다.
+  function shrinkImage(file){
+    return new Promise((resolve) => {
+      const img = new Image(), url = URL.createObjectURL(file);
+      img.onload = () => {
+        const k = Math.min(1, 1600 / Math.max(img.width, img.height));
+        const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        c.toBlob(b => resolve(b || file), 'image/jpeg', 0.85);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+      img.src = url;
+    });
+  }
+  async function uploadWorkFile(file, uid){
+    const isVideo = file.type.startsWith('video/');
+    if (!isVideo && !file.type.startsWith('image/')) throw new Error('사진이나 영상만 올릴 수 있어요.');
+    const body = isVideo ? file : await shrinkImage(file);
+    if (body.size > WORK_MAX_MB * 1048576) throw new Error(`파일이 너무 커요(${(body.size / 1048576).toFixed(0)}MB). ${WORK_MAX_MB}MB 이하로 올려 주세요.`);
+    const ext = isVideo ? ((file.name.split('.').pop() || 'mp4').toLowerCase()) : 'jpg';
+    const path = `${uid}/${Date.now()}_${Math.random().toString(36).slice(2, 10)}.${ext}`;
+    const { error } = await db.client.storage.from('student-works').upload(path, body, { contentType: isVideo ? (file.type || 'video/mp4') : 'image/jpeg' });
+    if (error) throw new Error(error.message);
+    return { url: db.client.storage.from('student-works').getPublicUrl(path).data.publicUrl, type: isVideo ? 'video' : 'image', name: file.name };
+  }
+  function workStatusHtml(d){
+    if (d.status === 'passed') return '<span style="color:#15803d; font-weight:700;">✅ 통과</span>' + (d.reply ? `<div style="font-size:13px; white-space:pre-wrap;">${esc(d.reply)}</div>` : '');
+    if (d.reply) return `<span style="color:#b45309; font-weight:700;">💬 선생님 답변</span><div style="font-size:13px; white-space:pre-wrap;">${esc(d.reply)}</div>`;
+    return '<span style="color:#64748b;">검사 기다리는 중</span>';
+  }
+  async function openWorkModal(standalone){
+    const o = document.createElement('div');
+    o.style.cssText = 'position:fixed; inset:0; z-index:9999; background:rgba(15,23,42,.55); display:flex; align-items:center; justify-content:center; padding:16px;';
+    o.innerHTML = `<div style="background:#fff; border-radius:16px; padding:22px; max-width:440px; width:100%; max-height:92vh; overflow:auto; display:grid; gap:10px;">
+      <h3 style="font-size:17px;">작품 검사 받기</h3>
+      <div style="font-size:13px; color:#475569;">만든 작품의 사진이나 영상을 올리면 선생님이 보고 <b>통과</b>나 <b>답변</b>을 남겨 줘요. (최대 ${WORK_MAX_FILES}개, 파일당 ${WORK_MAX_MB}MB)</div>
+      <input id="wkFiles" type="file" accept="image/*,video/*" multiple>
+      <textarea id="wkNote" rows="2" placeholder="선생님께 하고 싶은 말 (선택)" style="width:100%;"></textarea>
+      <div style="display:flex; gap:8px; align-items:center;"><button type="button" class="primary" id="wkSend">올리기</button><button type="button" class="ghost" id="wkClose">${standalone ? '끝내기 (로그아웃)' : '닫기'}</button><span id="wkMsg" style="font-size:13px;"></span></div>
+      <div id="wkList"></div></div>`;
+    document.body.appendChild(o);
+    const g = (id) => o.querySelector('#' + id);
+    const close = () => { if (standalone) { try { sessionStorage.removeItem('ivsWorkOnly'); sessionStorage.removeItem('ivsLandingDone'); } catch (e) {} logout('수고했어요!'); } else o.remove(); };
+    g('wkClose').addEventListener('click', close);
+    o.addEventListener('click', (e) => { if (!standalone && e.target === o) close(); });
+    async function loadList(){
+      const snap = await db.collection('workChecks').get();   // 학생에게는 자기 것만 보인다
+      if (snap.error) { g('wkList').innerHTML = '<div style="font-size:12px; color:#b91c1c;">지난 기록을 불러오지 못했어요.</div>'; return; }
+      const rows = snap.docs.map(d => ({ id: d.id, d: d.data() })).sort((a, b) => (b.d.createdAt || 0) - (a.d.createdAt || 0));
+      g('wkList').innerHTML = rows.length ? '<b style="font-size:14px;">내가 올린 작품</b>' + rows.map(r => `<div style="border:1px solid #e2e8f0; border-radius:10px; padding:10px; margin-top:6px;"><div style="font-size:12px; color:#64748b;">${new Date(r.d.createdAt || 0).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}${r.d.note ? ' · ' + esc(r.d.note) : ''}</div>${workStatusHtml(r.d)}</div>`).join('') : '';
+    }
+    g('wkSend').addEventListener('click', async () => {
+      const files = [...g('wkFiles').files], msg = g('wkMsg');
+      if (!files.length) { msg.textContent = '사진이나 영상을 골라 주세요.'; return; }
+      if (files.length > WORK_MAX_FILES) { msg.textContent = `한 번에 ${WORK_MAX_FILES}개까지 올릴 수 있어요.`; return; }
+      g('wkSend').disabled = true; msg.textContent = '올리는 중... 잠깐만 기다려 주세요.';
+      try {
+        const { data: { session } } = await db.auth.getSession();
+        const uid = session && session.user.id;
+        if (!uid) throw new Error('로그인이 풀렸어요. 다시 로그인해 주세요.');
+        const up = [];
+        for (const f of files) up.push(await uploadWorkFile(f, uid));
+        const res = await db.collection('workChecks').add({ files: up, note: g('wkNote').value.trim(), status: 'pending', createdAt: Date.now() });
+        if (res && res.error) throw res.error;
+        msg.textContent = '✅ 올렸어요! 선생님이 보면 여기에 답이 나와요.';
+        g('wkFiles').value = ''; g('wkNote').value = '';
+        loadList();
+      } catch (err) { console.error(err); msg.textContent = '올리지 못했어요: ' + (err.message || err); }
+      g('wkSend').disabled = false;
+    });
+    loadList();
+  }
+  workBtn.addEventListener('click', () => { if (mode === 'guest') guestToLogin(); else if (mode === 'student') openWorkModal(); });
+
   let submitArmTimer = null;
+  // 학교가 만든 과제(학교 달력 문서 data.assignments)를 보여 주고 어느 과제로 낼지 고르게 한다. 과제가 없으면 예전처럼 바로 제출 확인.
+  async function schoolAssignments(){
+    try {
+      const snap = await db.collection('schoolCalendars').get(); // 학생에게는 자기 학교 문서만 보인다
+      if (snap.error) return [];
+      const doc = snap.docs.find(d => Array.isArray(d.data().assignments) && d.data().assignments.length);
+      return doc ? doc.data().assignments : [];
+    } catch (err) { console.error('[assignments] 확인 실패', err); return []; }
+  }
+  function pickAssignment(list){
+    return new Promise(resolve => {
+      const o = document.createElement('div');
+      o.style.cssText = 'position:fixed; inset:0; z-index:9999; background:rgba(15,23,42,.55); display:flex; align-items:center; justify-content:center; padding:16px;';
+      o.innerHTML = `<div style="background:#fff; border-radius:16px; padding:22px; max-width:420px; width:100%; max-height:90vh; overflow:auto; display:grid; gap:10px;">
+        <h3 style="font-size:17px;">어떤 과제를 낼까요?</h3>
+        ${list.map(a => `<div style="border:1px solid #e2e8f0; border-radius:10px; padding:12px;"><b>${esc(a.title)}</b>${a.due ? `<div style="font-size:12px; color:#64748b;">마감 ${esc(a.due)}</div>` : ''}${a.desc ? `<div style="font-size:13px; margin:6px 0; white-space:pre-wrap;">${esc(a.desc)}</div>` : ''}<button type="button" class="primary" data-pick="${esc(a.id)}" style="margin-top:6px;">이 과제로 제출</button></div>`).join('')}
+        <button type="button" class="ghost" data-pick="">취소</button></div>`;
+      o.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-pick]');
+        if (!b && e.target !== o) return;
+        o.remove(); resolve(b ? (list.find(a => a.id === b.dataset.pick) || null) : null);
+      });
+      document.body.appendChild(o);
+    });
+  }
   submitBtn.addEventListener('click', async () => {
     if (!project || !student || mode !== 'student') return;
+    if (submitBtn.dataset.armed !== '1' && !project.data.assignmentId) {
+      const list = await schoolAssignments();
+      if (list.length) {
+        const a = await pickAssignment(list);
+        if (!a) return;
+        project.data.assignmentId = a.id;
+        project.data.assignmentTitle = a.title;
+      }
+    }
     if (submitBtn.dataset.armed !== '1') {
       submitBtn.dataset.armed = '1';
       submitBtn.classList.add('armed');
@@ -6605,6 +6719,7 @@
     lastSavedKey = projectKey();
     pbStudent.textContent = student.name + (mode === 'teacher' ? ' 선생님' : ' 학생');
     submitBtn.hidden = mode === 'teacher';
+    workBtn.hidden = submitBtn.hidden;
     discardBtn.hidden = false;
     pbSave.textContent = '';
     projectBar.hidden = false;
@@ -6758,6 +6873,7 @@
     pbSave.textContent = '';
     [nameInput, pbSaveBtn, pbLoadBtn].forEach(el => { el.hidden = true; });
     submitBtn.hidden = false;
+    workBtn.hidden = submitBtn.hidden;
     submitBtn.textContent = '과제 제출하기';
     projectBar.hidden = false;
     backLink.textContent = '← 나가기';
@@ -6788,6 +6904,7 @@
     // 아이디·비밀번호·학교가 주소창에 남지 않게 지운다(학생에게 접속 정보를 보이지 않기 위해). 로그인 경로와 상관없이 여기서 한 번에 한다.
     clearGuest();
     try { const keep = new URLSearchParams(location.search); ['sid', 'spin', 'school'].forEach(k => keep.delete(k)); window.history.replaceState(null, '', location.pathname + (keep.toString() ? '?' + keep.toString() : '')); } catch (e) { /* 주소 정리 실패는 무시 */ }
+    if (workOnlyFlag()) { startOverlay.hidden = true; projectBar.hidden = true; openWorkModal(true); return; }
     const allowed = await allowedSubjects();
     if (allowed.includes(SUBJECT)) { openDraft(); notifyFeedback(); return; }
     const explicit = new URLSearchParams(location.search).get('subject');
@@ -6834,6 +6951,7 @@
     pbStudent.textContent = student.name + (mode === 'teacher' ? ' 선생님' : ' 학생');
     pbSave.textContent = '';
     submitBtn.hidden = mode === 'teacher';
+    workBtn.hidden = submitBtn.hidden;
     discardBtn.hidden = false;
     projectBar.hidden = false;
     backLink.textContent = '← 저장하고 나가기';   // 학생·선생님 같은 글자(2026-10-26)
@@ -7061,12 +7179,66 @@
   }
 
   // 같은 탭에서 새로고침한 경우: 아직 로그인되어 있으면 바로 프로젝트 화면으로
+  // ---------- 학교 QR 첫 화면: [조립도 보기] / [작품검사 받기] ----------
+  function workOnlyFlag(){ try { return sessionStorage.getItem('ivsWorkOnly') === '1'; } catch (e) { return false; } }
+  function landingDone(school){ try { return sessionStorage.getItem('ivsLandingDone') === school; } catch (e) { return false; } }
+  function showSchoolLanding(school){
+    mode = 'guest'; accessToken = SUPABASE_KEY; student = null; project = null;
+    [nameInput, pbSaveBtn, pbLoadBtn].forEach(el => { el.hidden = true; });
+    projectBar.hidden = true;
+    startOverlay.hidden = false;
+    startBody.innerHTML = `
+      <h2>${esc(school)}</h2>
+      <div id="lndNotice" hidden style="background:#fff7ed; border:1px solid #fed7aa; border-radius:10px; padding:12px; margin:8px 0; font-size:14px; white-space:pre-wrap;"></div>
+      <p class="note">무엇을 할까요?</p>
+      <button id="lndView" class="primary" type="button" style="width:100%; padding:16px; font-size:16px; margin-top:8px;">🧩 조립도 보기</button>
+      <button id="lndWork" class="primary" type="button" style="width:100%; padding:16px; font-size:16px; margin-top:12px;">📸 작품검사 받기</button>
+      <p class="note" style="margin-top:12px;">작품검사: 만든 작품의 사진·영상을 올리면 선생님이 통과나 답변을 남겨 줘요.</p>`;
+    db.rpc('school_notice', { p_school: school }).then(({ data }) => {
+      const el = startBody.querySelector('#lndNotice'); if (!data || !el) return;
+      const today = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
+      const items = Array.isArray(data.items) ? data.items : (data.text ? [{ kind: 'basic', title: '', text: data.text }] : []);
+      const live = items.filter(n => n.kind !== 'temp' || !n.until || n.until >= today);
+      const ordered = live.filter(n => n.kind === 'temp').sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).concat(live.filter(n => n.kind !== 'temp'));
+      if (!ordered.length) return;
+      // 여러 개면 한 개씩 자동으로 넘어가며(롤링) ◀ ▶ 점으로도 넘겨 볼 수 있다. 만지면 자동 넘김은 멈춘다.
+      const card = (n) => `<div>${n.kind === 'temp' ? '<span style="color:#c2410c; font-weight:700;">📢 </span>' : '<span style="font-weight:700;">📌 </span>'}${n.title ? '<b>' + esc(n.title) + '</b><br>' : ''}${esc(n.text)}${n.createdAt ? '<div style="font-size:11px; color:#94a3b8; margin-top:2px;">' + new Date(n.createdAt + 9 * 3600000).toISOString().slice(0, 10) + ' 안내</div>' : ''}</div>`;
+      el.innerHTML = `<div id="lndCard" style="min-height:64px;">${card(ordered[0])}</div>` + (ordered.length > 1 ? `<div style="display:flex; align-items:center; justify-content:center; gap:10px; margin-top:8px;"><button type="button" id="lndPrev" class="ghost" style="padding:2px 10px;">◀</button><span id="lndDots"></span><button type="button" id="lndNext" class="ghost" style="padding:2px 10px;">▶</button></div>` : '');
+      if (ordered.length > 1) {
+        let idx = 0, timer = null;
+        const show = (k) => {
+          idx = (k + ordered.length) % ordered.length;
+          el.querySelector('#lndCard').innerHTML = card(ordered[idx]);
+          el.querySelector('#lndDots').innerHTML = ordered.map((_, d) => `<span style="display:inline-block; width:8px; height:8px; border-radius:50%; margin:0 3px; background:${d === idx ? '#ea580c' : '#fdba74'};"></span>`).join('');
+        };
+        const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
+        el.querySelector('#lndPrev').addEventListener('click', () => { stop(); show(idx - 1); });
+        el.querySelector('#lndNext').addEventListener('click', () => { stop(); show(idx + 1); });
+        let sx = null;
+        el.addEventListener('touchstart', (e) => { sx = e.touches[0].clientX; stop(); }, { passive: true });
+        el.addEventListener('touchend', (e) => { if (sx !== null && Math.abs(e.changedTouches[0].clientX - sx) > 40) show(idx + (e.changedTouches[0].clientX < sx ? 1 : -1)); sx = null; }, { passive: true });
+        show(0);
+        timer = setInterval(() => { if (!document.body.contains(el)) { stop(); return; } show(idx + 1); }, 4500);
+      }
+      el.hidden = false;
+    }).catch(() => { /* 안내를 못 읽어도 버튼은 쓸 수 있다 */ });
+    startBody.querySelector('#lndView').addEventListener('click', async () => {
+      try { sessionStorage.setItem('ivsLandingDone', school); sessionStorage.removeItem('ivsWorkOnly'); } catch (e) {}
+      await enterAsGuest(school);
+    });
+    startBody.querySelector('#lndWork').addEventListener('click', () => {
+      try { sessionStorage.setItem('ivsWorkOnly', '1'); } catch (e) {}
+      mode = 'student'; accessToken = null;
+      showLoginStep('내 QR 코드를 카메라로 찍거나, 내 아이디와 비밀번호를 넣어 주세요.');
+    });
+  }
+
   (async function boot(){
     checkPartsLabAccess();
     const reviewId = new URLSearchParams(location.search).get('review');
     if (reviewId && await startReview(reviewId)) return;
     // 학교 QR(주소에 school): 어느 기기·계정 상태든 그 학교의 손님으로만 본다. 로그인한 학생·선생님 세션이 남아 있어도 손님 화면이 먼저다.
-    { const p = new URLSearchParams(location.search); if ((p.get('school') || '').trim() && !(p.get('sid') && p.get('spin'))) { await enterAsGuest(guestSchool()); return; } }
+    { const p = new URLSearchParams(location.search); if ((p.get('school') || '').trim() && !(p.get('sid') && p.get('spin'))) { const sc = guestSchool(); if (landingDone(sc) || p.get('subject') && p.get('view') === '1') await enterAsGuest(sc); else showSchoolLanding(sc); return; } }
     const { data: { session } } = await db.auth.getSession();
     if (session && await loadStudent()) { accessToken = session.access_token; await enterAsStudent(); return; }
     if (session) await db.auth.signOut();
