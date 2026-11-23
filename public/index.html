@@ -276,15 +276,16 @@
       </details>
     </div>
     <div class="card">
-      <p class="note">수업을 고르면 오늘 날짜로 학생별 출석·과제·미션을 바로 체크할 수 있습니다.</p>
+      <p class="note">수업을 고르면 학생별 출석·과제·미션을 바로 체크할 수 있습니다. 달력에서 날짜를 누르면 그 날짜의 출석부가 보여요.</p>
       <div class="session-picker">
         <select id="classForAttend"></select>
         <span class="note" id="todayLabel"></span>
       </div>
+      <div id="attendSummary" hidden style="margin:10px 0 8px; font-size:14px; padding:12px 14px; border:1px solid var(--border); border-radius:12px; background:#f8fafc;"></div>
       <div class="table-wrap">
         <table id="attendTable">
           <thead>
-            <tr><th>번호</th><th>이름</th><th>출석</th><th>과제</th><th>설계·평가</th><th>미션(진행 상황)</th></tr>
+            <tr><th>번호</th><th>이름</th><th>출석</th><th>과제</th><th>진도</th><th>대기</th><th>설계·평가</th><th>미션(진행 상황)</th></tr>
           </thead>
           <tbody id="attendBody"></tbody>
         </table>
@@ -299,6 +300,7 @@
       <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
         <button type="button" class="ghost" id="toggleStudentForm" style="font-weight:600;">+ 학생 추가</button>
         <button type="button" class="ghost" id="toggleBulkUpload" style="font-weight:600;">+ 엑셀로 일괄등록</button>
+        <button type="button" class="ghost" id="toggleCredArea" style="font-weight:600;">반 전체 보기</button>
       </div>
       <form class="add-form" id="studentAddForm" hidden style="margin-top:14px; border-top:none; padding-top:0;"></form>
       <div id="bulkUploadArea" hidden style="margin-top:14px;">
@@ -307,7 +309,7 @@
         <input type="file" id="bulkFileInput" accept=".xlsx,.xls,.csv" style="margin:10px 0;">
         <div id="bulkPreview"></div>
       </div>
-      <div id="credArea" style="margin-top:18px;"></div>
+      <div id="credArea" hidden style="margin-top:18px;"></div>
     </div>
   </section>
 
@@ -699,6 +701,7 @@
     if (classForAttend.options.length > 1 && !classForAttend.value) {
       classForAttend.value = classForAttend.options[1].value;
       classForAttend.dispatchEvent(new Event('change'));
+      applyDayFilter();   // 오늘 요일에 수업이 없으면 "수업 없음"으로 바꾼다(달력은 그대로)
     }
     const back = new URLSearchParams(location.search);
     if (back.get('tab') === 'attend' && back.get('course')) {
@@ -730,6 +733,8 @@
 
   // 새로 발급한 비밀번호는 이 화면에서만 보관한다 (서버에는 저장되지 않아 새로고침하면 다시 볼 수 없음 → 재설정)
   const issuedPins = {};
+  let credIssuesCourse = '';
+  let credIssues = [];   // 전체 재설정 뒤 확인이 필요한 학생 목록 [{ name, loginId, note }]
   async function issueAccountsFor(courseId){
     try {
       const { issued } = await studentAccountsApi({ action: 'create', courseId });
@@ -742,6 +747,12 @@
   }
 
   const credArea = document.getElementById('credArea');
+  // 아이디·비밀번호·QR 은 평소에 보이지 않게 두고, [반 전체 보기]를 눌렀을 때만 펼친다(사용자 지시 2026-11-24).
+  const toggleCredBtn = document.getElementById('toggleCredArea');
+  toggleCredBtn.addEventListener('click', () => {
+    credArea.hidden = !credArea.hidden;
+    toggleCredBtn.textContent = credArea.hidden ? '반 전체 보기' : '반 전체 보기 닫기';
+  });
   function armAction(btn, armedText, onConfirm){
     if (btn.dataset.armed === '1') {
       clearTimeout(btn._armTimer);
@@ -779,11 +790,39 @@
   // 학교 하나의 학생 접속 설정: 열어 줄 과목(체크하면 바로 저장) + 그 학교 전용 QR.
   // QR 은 주소 글자를 보여주지 않고 그림만 인쇄한다(학생에게 접속주소를 보이지 않게 — 사용자 지시 2026-11-24).
   // 과목 목록이 아직 저장된 적 없으면 모두 열려 있는 상태로 보여준다(기존 학생이 갑자기 막히지 않게).
+  // 학생 한 명에게만 더 열어줄 과목(학교 허용 과목 외 추가). 체크하면 바로 저장한다.
+  function openStudentSubjectsModal(studentId, name, current){
+    const have = new Set(Array.isArray(current) ? current : []);
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed; inset:0; z-index:60; background:rgba(15,23,42,.45); display:flex; align-items:center; justify-content:center; padding:16px;';
+    overlay.innerHTML = `
+      <div style="background:#fff; border-radius:16px; padding:22px; max-width:420px; width:100%;">
+        <h3 style="font-size:17px; margin-bottom:4px;">${escapeHtml(name || '학생')} 개인 과목</h3>
+        <p class="note" style="margin-bottom:12px;">학교 설정 외에 이 학생만 더 들어갈 수 있는 과목을 체크하세요.</p>
+        <div class="check-group" id="studentSubjChecks">${SUBJECTS.map(x => `<label class="check-chip${have.has(x.k) ? ' checked' : ''}"><input type="checkbox" value="${x.k}" ${have.has(x.k) ? 'checked' : ''}>${x.label}</label>`).join('')}</div>
+        <p class="note" id="studentSubjMsg" style="margin:8px 0 14px; min-height:18px;"></p>
+        <div style="display:flex; justify-content:flex-end;"><button type="button" class="primary" id="studentSubjClose">닫기</button></div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const msgEl = overlay.querySelector('#studentSubjMsg');
+    overlay.querySelectorAll('#studentSubjChecks input').forEach(cb => cb.addEventListener('change', async () => {
+      cb.closest('.check-chip').classList.toggle('checked', cb.checked);
+      const subjects = Array.from(overlay.querySelectorAll('#studentSubjChecks input:checked')).map(x => x.value);
+      msgEl.textContent = '저장 중...';
+      try { await db.collection('students').doc(studentId).update({ subjects }); msgEl.textContent = '저장했어요.'; }
+      catch (err) { msgEl.textContent = '저장하지 못했어요: ' + err.message; }
+    }));
+    const close = () => { overlay.remove(); renderAttendTable(); };
+    overlay.querySelector('#studentSubjClose').addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  }
+
   async function openSchoolSubjectsModal(school){
     const snap = await db.collection('schoolCalendars').where('school', '==', school).get();
     if (snap.error) { alert('학교 설정을 불러오지 못했어요: ' + (snap.error.message || '알 수 없는 오류')); return; }
     let docId = snap.docs.length ? snap.docs[0].id : null;
     const saved = snap.docs.length ? snap.docs[0].data().subjects : null;
+    const savedCode = snap.docs.length ? (snap.docs[0].data().code || '') : '';
     const current = new Set(Array.isArray(saved) ? saved : SUBJECTS.map(s => s.k));
     const overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed; inset:0; z-index:60; background:rgba(15,23,42,.45); display:flex; align-items:center; justify-content:center; padding:16px;';
@@ -793,7 +832,10 @@
     overlay.innerHTML = `
       <div style="background:#fff; border-radius:16px; padding:22px; max-width:420px; width:100%; max-height:90vh; overflow:auto;">
         <h3 style="font-size:17px; margin-bottom:4px;">${escapeHtml(school)} 학생 접속 설정</h3>
-        <p class="note" style="margin-bottom:12px;">체크한 과목만 이 학교 학생이 들어갈 수 있어요. 학생 개인에게만 더 열어주려면 학생 수정에서 설정하세요.</p>
+        <p class="note" style="margin-bottom:12px;">아래 QR 로 들어오면 아이디 없이 체크한 과목의 조립도를 볼 수 있어요. 아이디·비밀번호는 과제를 할 때만 필요하고, 과제는 학생 개인에게 열어준 과목까지 들어갈 수 있어요.</p>
+        <label style="font-size:13px; font-weight:700;">학생 아이디용 학교 영문 약어 (영문·숫자 1~6자)</label>
+        <input id="schoolCodeInput" maxlength="6" value="${escapeHtml(savedCode)}" placeholder="예: cg" autocapitalize="none" spellcheck="false" style="margin:4px 0 2px; width:140px;">
+        <p class="note" style="margin-bottom:12px;">새 학생 계정의 아이디가 약어+학년·반·번호 숫자 6자리(예: cg030412)로 만들어져요. 비워 두면 무작위 아이디예요. 이미 만든 계정은 바뀌지 않아요.</p>
         <div class="check-group" id="schoolSubjChecks">${SUBJECTS.map(s => `<label class="check-chip${current.has(s.k) ? ' checked' : ''}"><input type="checkbox" value="${s.k}" ${current.has(s.k) ? 'checked' : ''}>${s.label}</label>`).join('')}</div>
         <p class="note" id="schoolSubjMsg" style="margin:8px 0 14px; min-height:18px;"></p>
         <div style="text-align:center; margin-bottom:14px;" id="schoolQrBox">${qrImg}</div>
@@ -804,6 +846,18 @@
       </div>`;
     document.body.appendChild(overlay);
     const msgEl = overlay.querySelector('#schoolSubjMsg');
+    const codeInput = overlay.querySelector('#schoolCodeInput');
+    codeInput.addEventListener('change', async () => {
+      const code = codeInput.value.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 6);
+      codeInput.value = code;
+      msgEl.textContent = '저장 중...';
+      try {
+        if (docId) await db.collection('schoolCalendars').doc(docId).update({ code });
+        else { const res = await db.collection('schoolCalendars').add({ createdAt: Date.now(), school, periods: [], closedDates: [], code }); docId = res.id; }
+        msgEl.textContent = '저장했어요.';
+        if (schoolCalDoc && schoolCalDoc.data.school === school) schoolCalDoc.data.code = code;
+      } catch (err) { msgEl.textContent = '저장하지 못했어요: ' + err.message; }
+    });
     overlay.querySelectorAll('#schoolSubjChecks input').forEach(cb => cb.addEventListener('change', async () => {
       cb.closest('.check-chip').classList.toggle('checked', cb.checked);
       const subjects = Array.from(overlay.querySelectorAll('#schoolSubjChecks input:checked')).map(x => x.value);
@@ -912,7 +966,167 @@
     overlay.querySelectorAll('[data-print]').forEach(btn => btn.addEventListener('click', () => printSheet(btn.dataset.print)));
   }
 
+  // 출석부의 진도 칸(사용자 지시 2026-11-24): 학생마다 지정된 로봇·권과 그 진도를 매일 검사한 뒤 체크한다. 학생 정보의 교구(robot) 진도를 그대로 쓴다.
+  // 지금 진도 = 마지막으로 체크한 차시가 속한 로봇·권(체크한 적이 없으면 진도가 있는 첫 로봇·권). 없으면 '지정 안 함'.
+  function robotProgressSummary(robot){
+    if (!robot || !robot.categories) return '지정 안 함';
+    let catId = null, tbId = null;
+    const log = robot.doneLog || [];
+    const last = log[log.length - 1];
+    if (last && last.categoryId && last.textbookId) { catId = last.categoryId; tbId = last.textbookId; }
+    else {
+      for (const c of Object.keys(robot.categories)) {
+        const books = (robot.categories[c] && robot.categories[c].books) || {};
+        const t = Object.keys(books).find(k => (books[k] || []).length);
+        if (t) { catId = c; tbId = t; break; }
+      }
+    }
+    if (!tbId) return '지정 안 함';
+    const cat = robotCategories.find(c => c.id === catId), tb = allTextbooks.find(t => t.id === tbId);
+    const done = (((robot.categories[catId] || {}).books || {})[tbId] || []).length;
+    return `${cat ? cat.name : '로봇'}${tb && tb.volume != null ? ' ' + tb.volume + '권' : ''} · ${done}/${tb ? (tb.chapters || []).length : '?'}`;
+  }
+  // 학생 한 명의 로봇·권·차시 진도 창: 로봇과 권을 고르고 오늘 검사한 차시를 체크한 뒤 [저장]. 새로 체크한 차시는 날짜와 함께 기록에 남는다.
+  async function openStudentProgressModal(studentId, name, robot){
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed; inset:0; z-index:60; background:rgba(15,23,42,.45); display:flex; align-items:center; justify-content:center; padding:16px;';
+    overlay.innerHTML = `<div style="background:#fff; border-radius:16px; padding:22px; max-width:520px; width:100%; max-height:92vh; overflow:auto;">
+      <h3 style="font-size:17px; margin-bottom:4px;">${escapeHtml(name)} 진도</h3>
+      <p class="note" style="margin-bottom:12px;">로봇과 권을 고르고, 검사한 차시를 체크한 뒤 저장하세요.</p>
+      ${robotProgressHtml('pg')}
+      <p class="note" id="studentProgMsg" style="min-height:18px; margin:10px 0;"></p>
+      <div style="display:flex; gap:8px; justify-content:flex-end;">
+        <button type="button" class="ghost" id="studentProgClose">닫기</button>
+        <button type="button" class="primary" id="studentProgSave">저장</button>
+      </div></div>`;
+    // 지금 고른 로봇·권은 파랗게 채우고, 체크한 차시는 초록으로 채워 한눈에 보이게 한다(사용자 지시 2026-11-24).
+    const progStyle = document.createElement('style');
+    progStyle.textContent = `#pg_robot button.cur{background:#2D5BFF !important; border-color:#2D5BFF !important; color:#fff !important; font-weight:700 !important;}
+      #pg_robot .check-chip.checked{background:#16a34a !important; border-color:#16a34a !important; color:#fff !important; font-weight:700;}`;
+    overlay.appendChild(progStyle);
+    document.body.appendChild(overlay);
+    // 체크한 차시는 "그 날짜에 만들고 검사받은 것"이라, 달력에서 고른 날짜로 기록한다(오늘이 아니면 그 날짜 낮 12시).
+    const checkedAt = selectedDate === TODAY_STR ? Date.now() : Date.parse(selectedDate + 'T12:00:00+09:00');
+    await wireRobotProgress('pg', robot, checkedAt);
+    const close = () => { overlay.remove(); renderAttendTable(); };
+    overlay.querySelector('#studentProgClose').addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    overlay.querySelector('#studentProgSave').addEventListener('click', async () => {
+      const msg = overlay.querySelector('#studentProgMsg');
+      msg.textContent = '저장 중...';
+      try { await db.collection('students').doc(studentId).update({ robot: readRobotProgress('pg') }); msg.textContent = '저장했어요.'; setTimeout(close, 400); }
+      catch (err) { msg.textContent = '저장하지 못했어요: ' + err.message; }
+    });
+  }
+
+  // 대기(사용자 지시 2026-11-24): 교구비는 받았는데 아직 진도 때문에 교구를 주지 못한 것을 표시한다. 로봇·권까지만 고르고(차시 없음), 여러 개도 된다.
+  // 저장 모양: waiting = [{ categoryId, textbookId }, ...] (처음에 하나만 저장하던 { categoryId, textbookId } 도 읽을 수 있다)
+  function waitingList(w){
+    if (!w) return [];
+    return (Array.isArray(w) ? w : [w]).filter(x => x && x.textbookId);
+  }
+  function waitingLabel(x){
+    const cat = robotCategories.find(c => c.id === x.categoryId), tb = allTextbooks.find(t => t.id === x.textbookId);
+    return `${cat ? cat.name : '로봇'}${tb && tb.volume != null ? ' ' + tb.volume + '권' : ''}`;
+  }
+  function waitingSummary(w){
+    const list = waitingList(w);
+    return list.length ? list.map(waitingLabel).join(', ') : '없음';
+  }
+  async function openStudentWaitingModal(studentId, name, waiting){
+    if (!robotCategories.length) await loadCategories();
+    if (!allTextbooks.length) await loadTextbooks();
+    const cats = robotCategories.filter(c => c.subject === 'robot');
+    let list = waitingList(waiting).map(x => ({ categoryId: x.categoryId, textbookId: x.textbookId }));
+    let catId = list.length ? list[0].categoryId : null;
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed; inset:0; z-index:60; background:rgba(15,23,42,.45); display:flex; align-items:center; justify-content:center; padding:16px;';
+    overlay.innerHTML = `<div style="background:#fff; border-radius:16px; padding:22px; max-width:520px; width:100%; max-height:92vh; overflow:auto;">
+      <h3 style="font-size:17px; margin-bottom:4px;">${escapeHtml(name)} 대기</h3>
+      <p class="note" style="margin-bottom:12px;">교구비를 받았지만 진도 때문에 아직 주지 못한 로봇과 권을 고르세요. 여러 개도 고를 수 있어요(다시 누르면 빠져요).</p>
+      <div id="wtCats" style="display:flex; gap:6px; flex-wrap:wrap;"></div>
+      <div id="wtVols" style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;"></div>
+      <div id="wtList" style="margin-top:12px; font-size:13px;"></div>
+      <p class="note" id="wtMsg" style="min-height:18px; margin:10px 0;"></p>
+      <div style="display:flex; gap:8px; justify-content:flex-end;">
+        <button type="button" class="ghost" id="wtClear">대기 모두 해제</button>
+        <button type="button" class="ghost" id="wtClose">닫기</button>
+        <button type="button" class="primary" id="wtSave">저장</button>
+      </div></div>`;
+    document.body.appendChild(overlay);
+    const sel = 'background:#2D5BFF; border-color:#2D5BFF; color:#fff; font-weight:700;';
+    const has = (tbId) => list.some(x => x.textbookId === tbId);
+    const paint = () => {
+      overlay.querySelector('#wtCats').innerHTML = cats.map(c => `<button type="button" class="ghost" data-c="${escapeHtml(c.id)}" style="font-size:12px; padding:4px 9px; ${c.id === catId ? 'border-color:#2D5BFF; font-weight:700;' : ''}">${escapeHtml(c.name)}${list.some(x => x.categoryId === c.id) ? ' ✓' : ''}</button>`).join('');
+      const vols = allTextbooks.filter(t => t.category === catId).sort((a, b) => (a.volume || 0) - (b.volume || 0));
+      overlay.querySelector('#wtVols').innerHTML = catId ? (vols.length ? vols.map(t => `<button type="button" class="ghost" data-v="${escapeHtml(t.id)}" style="font-size:12px; padding:4px 9px; ${has(t.id) ? sel : ''}">${t.volume != null ? t.volume + '권' : escapeHtml(t.name)}</button>`).join('') : '<span class="note">등록된 권이 없어요.</span>') : '<span class="note">로봇을 먼저 고르세요.</span>';
+      overlay.querySelector('#wtList').innerHTML = list.length ? `<b>대기 ${list.length}개</b> ` + list.map(waitingLabel).map(escapeHtml).join(', ') : '<span class="note">고른 대기가 없어요.</span>';
+      overlay.querySelectorAll('[data-c]').forEach(b => b.addEventListener('click', () => { catId = b.dataset.c; paint(); }));
+      overlay.querySelectorAll('[data-v]').forEach(b => b.addEventListener('click', () => {
+        const id = b.dataset.v;
+        list = has(id) ? list.filter(x => x.textbookId !== id) : list.concat([{ categoryId: catId, textbookId: id }]);
+        paint();
+      }));
+    };
+    paint();
+    const close = () => { overlay.remove(); renderAttendTable(); };
+    const save = async (value) => {
+      const msg = overlay.querySelector('#wtMsg');
+      msg.textContent = '저장 중...';
+      try { await db.collection('students').doc(studentId).update({ waiting: value }); msg.textContent = '저장했어요.'; setTimeout(close, 300); }
+      catch (err) { msg.textContent = '저장하지 못했어요: ' + err.message; }
+    };
+    overlay.querySelector('#wtClose').addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    overlay.querySelector('#wtSave').addEventListener('click', () => save(list.length ? list : null));
+    overlay.querySelector('#wtClear').addEventListener('click', () => save(null));
+  }
+
+  // 학생 한 명의 로그인 정보 창: 아이디·비밀번호·QR 과 재설정(계정이 없으면 계정 만들기).
+  function openStudentQrModal(studentId){
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed; inset:0; z-index:60; background:rgba(15,23,42,.45); display:flex; align-items:center; justify-content:center; padding:16px;';
+    document.body.appendChild(overlay);
+    const close = () => overlay.remove();
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    const paint = () => {
+      const s = credDocs.find(x => x.id === studentId);
+      if (!s) { close(); return; }
+      const d = s.data(), loginId = s.row.login_id, pin = issuedPins[s.id];
+      overlay.innerHTML = `<div style="background:#fff; border-radius:16px; padding:22px; max-width:380px; width:100%; max-height:92vh; overflow:auto; text-align:center;">
+        <h3 style="font-size:17px; margin-bottom:12px;">${escapeHtml(d.name)} 로그인 정보</h3>
+        ${loginId ? `<p style="margin:4px 0;">아이디 <b>${escapeHtml(loginId)}</b></p>
+          <p style="margin:4px 0;">비밀번호 ${pin ? `<b>${escapeHtml(pin)}</b>` : '<span class="note">●●●●●● (재설정하면 새로 볼 수 있어요)</span>'}</p>
+          <div style="margin:12px 0;">${pin ? loginQrImgTag(loginId, pin, 5) : '<span class="note">(재설정 후 QR이 나와요)</span>'}</div>`
+          : '<p class="note" style="margin:8px 0 14px;">아직 로그인 계정이 없어요.</p>'}
+        <p class="note" id="studentQrMsg" style="min-height:18px; margin-bottom:10px;"></p>
+        <div style="display:flex; gap:8px; justify-content:center;">
+          <button type="button" class="ghost" id="studentQrReset">${loginId ? '재설정' : '계정 만들기'}</button>
+          <button type="button" class="primary" id="studentQrClose">닫기</button>
+        </div></div>`;
+      overlay.querySelector('#studentQrClose').addEventListener('click', close);
+      const btn = overlay.querySelector('#studentQrReset');
+      btn.addEventListener('click', () => {
+        const run = async () => {
+          btn.disabled = true;
+          try {
+            const { issued } = await studentAccountsApi({ action: 'reset', studentId });
+            issued.forEach(i => { issuedPins[i.studentId] = i.pin; });
+          } catch (err) { alert('처리하지 못했어요: ' + err.message); }
+          await renderAttendTable();
+          paint();
+        };
+        if (loginId) armAction(btn, '정말 재설정? (기존 비밀번호·QR은 못 써요)', run); else run();
+      });
+    };
+    paint();
+  }
+
+  // 아이디·비밀번호·QR 은 평소에 보이지 않는다(사용자 지시 2026-11-24). 학생을 골라 [QR] 을 누르면 그 학생 것만 창으로 보여 주고,
+  // 수업 반 전체 보기는 [반 전체 보기] 를 눌렀을 때만 펼친다.
+  let credDocs = [];
   function renderCredentials(studentDocs){
+    credDocs = studentDocs;
     if (!studentDocs.length) { credArea.innerHTML = ''; return; }
     const rows = studentDocs.map(s => {
       const d = s.data();
@@ -924,30 +1138,33 @@
         <td>${loginId ? `<b>${escapeHtml(loginId)}</b>` : '<span class="note">아직 없음</span>'}</td>
         <td>${pin ? `<b>${escapeHtml(pin)}</b>` : (loginId ? '<span class="note">●●●●●●</span>' : '')}</td>
         <td>${pin ? loginQrImgTag(loginId, pin, 3) : (loginId ? '<span class="note">(재설정 후 인쇄)</span>' : '')}</td>
-        <td><button type="button" class="ghost" data-reset="${escapeHtml(s.id)}" style="padding:4px 9px; font-size:12px;">${loginId ? '비밀번호 재설정' : '계정 만들기'}</button></td>
       </tr>`;
     }).join('');
     credArea.innerHTML = `
-      <h3 style="font-size:14px;">학생 로그인 정보</h3>
-      <p class="note">학생은 설계하기 화면에서 아래 아이디와 비밀번호로 로그인하거나, QR코드를 스캔하면 바로 로그인됩니다. 비밀번호와 QR은 만든 직후 이 화면에서만 볼 수 있으니 바로 인쇄하거나 적어두세요. 잊어버리면 재설정해서 새로 받을 수 있습니다.</p>
+      <h3 style="font-size:14px;">반 전체 로그인 정보</h3>
+      <p class="note">비밀번호와 QR은 만들거나 재설정한 직후에만 볼 수 있어요. 새 학기에 명단이 바뀌었으면 전체 재설정을 누르세요(기존 비밀번호·QR은 못 써요). 한 학생만 재설정하려면 출석부에서 그 학생의 [QR] 을 누르세요.</p>
+      ${credIssues.length && credIssuesCourse === classForAttend.value ? `<div style="margin:10px 0; padding:10px 12px; border:1px solid #f59e0b; background:#fffbeb; border-radius:10px;"><b style="font-size:13px;">확인이 필요한 학생 ${credIssues.length}명</b><ul style="margin:6px 0 0; padding-left:18px; font-size:13px;">${credIssues.map(i => `<li>${escapeHtml(i.name || '')}${i.loginId ? ' (' + escapeHtml(i.loginId) + ')' : ''} — ${escapeHtml(i.note)}</li>`).join('')}</ul></div>` : ''}
       <div class="table-wrap"><table>
-        <thead><tr><th>번호</th><th>이름</th><th>아이디</th><th>비밀번호</th><th>QR</th><th></th></tr></thead>
+        <thead><tr><th>번호</th><th>이름</th><th>아이디</th><th>비밀번호</th><th>QR</th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
-      <button type="button" class="ghost" id="printCredBtn" style="margin-top:10px;">로그인 정보 인쇄</button>`;
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+        <button type="button" class="ghost" id="printCredBtn">로그인 정보 인쇄</button>
+        <button type="button" class="ghost" id="resetAllBtn">전체 재설정 (새 학기)</button>
+      </div>`;
 
-    credArea.querySelectorAll('[data-reset]').forEach(btn => {
-      const hasAccount = btn.textContent.indexOf('재설정') >= 0;
-      btn.addEventListener('click', () => {
-        const run = async () => {
-          btn.disabled = true;
-          try {
-            const { issued } = await studentAccountsApi({ action: 'reset', studentId: btn.dataset.reset });
-            issued.forEach(i => { issuedPins[i.studentId] = i.pin; });
-          } catch (err) { alert('처리하지 못했어요: ' + err.message); }
-          renderAttendTable();
-        };
-        if (hasAccount) armAction(btn, '정말 재설정? (기존 비밀번호는 못 써요)', run); else run();
+    document.getElementById('resetAllBtn').addEventListener('click', (e) => {
+      const btn = e.currentTarget;
+      armAction(btn, '정말 전체 재설정? (모든 학생의 기존 비밀번호·QR은 못 써요)', async () => {
+        btn.disabled = true;
+        btn.textContent = '재설정 중...';
+        try {
+          const { issued, issues } = await studentAccountsApi({ action: 'reset_course', courseId: classForAttend.value });
+          issued.forEach(i => { issuedPins[i.studentId] = i.pin; });
+          credIssues = issues || [];
+          credIssuesCourse = classForAttend.value;
+        } catch (err) { alert('처리하지 못했어요: ' + err.message); }
+        renderAttendTable();
       });
     });
 
@@ -1054,7 +1271,7 @@
   // 해서 state.categories = { catId: { books: { textbookId: [chapterId,...] } } } 로 저장한다(권만 있던 구조를
   // 브랜드까지 한 단 더 올림, 사용자 지시 2026-11-23). 브랜드 탭은 로봇 선택 드롭다운이 아니라 권 탭과 같은
   // 탭 버튼 방식이고, 그 브랜드의 등록된 권을 전부 완료했으면 탭 자체를 색칠한다(사용자 지시: "완료한것만 색칠").
-  async function wireRobotProgress(prefix, existing){
+  async function wireRobotProgress(prefix, existing, checkedAtMs){
     const catsEl = document.getElementById(`${prefix}_robot_cats`);
     const volsEl = document.getElementById(`${prefix}_robot_vols`);
     const chEl = document.getElementById(`${prefix}_robot_chapters`);
@@ -1090,7 +1307,7 @@
         const style = complete ? 'background:var(--accent-soft); border-color:var(--accent); color:var(--accent); font-weight:600;'
           : hasProgress ? 'background:var(--late-bg); border-color:var(--late); color:var(--late); font-weight:600;'
           : isCur ? 'border-color:var(--accent); font-weight:600;' : '';
-        return `<button type="button" data-cat="${escapeHtml(c.id)}" class="ghost" style="font-size:12px; padding:4px 9px; ${style}">${escapeHtml(c.name)}${hasProgress ? ' ✓' : ''}</button>`;
+        return `<button type="button" data-cat="${escapeHtml(c.id)}" class="ghost${isCur ? ' cur' : ''}" style="font-size:12px; padding:4px 9px; ${style}">${escapeHtml(c.name)}${hasProgress ? ' ✓' : ''}</button>`;
       }).join('');
       catsEl.querySelectorAll('[data-cat]').forEach(b => b.addEventListener('click', () => selectCat(b.dataset.cat)));
     }
@@ -1106,7 +1323,7 @@
         const style = complete ? 'background:var(--accent-soft); border-color:var(--accent); color:var(--accent); font-weight:600;'
           : hasProgress ? 'background:var(--late-bg); border-color:var(--late); color:var(--late); font-weight:600;'
           : isCur ? 'border-color:var(--accent); font-weight:600;' : '';
-        return `<button type="button" data-vol="${escapeHtml(t.id)}" class="ghost" style="font-size:12px; padding:4px 9px; ${style}">${t.volume != null ? t.volume + '권' : escapeHtml(t.name)}${complete ? ' ✓완료' : done ? ` (${done}/${total})` : ''}</button>`;
+        return `<button type="button" data-vol="${escapeHtml(t.id)}" class="ghost${isCur ? ' cur' : ''}" style="font-size:12px; padding:4px 9px; ${style}">${t.volume != null ? t.volume + '권' : escapeHtml(t.name)}${complete ? ' ✓완료' : done ? ` (${done}/${total})` : ''}</button>`;
       }).join('');
       volsEl.querySelectorAll('[data-vol]').forEach(b => b.addEventListener('click', () => selectVol(b.dataset.vol)));
     }
@@ -1116,10 +1333,19 @@
       allBtn.style.display = chapters.length ? '' : 'none';
       if (!chapters.length) { chEl.innerHTML = '<p class="note" style="margin:4px 0 0;">로봇을 먼저 선택하세요.</p>'; return; }
       const doneIds = catBooks(curCatId)[curTbId] || [];
-      chEl.innerHTML = chapters.map((c, i) => `<label class="check-chip${doneIds.includes(c.id) ? ' checked' : ''}"><input type="checkbox" value="${escapeHtml(c.id)}" ${doneIds.includes(c.id) ? 'checked' : ''}>${i + 1}. ${escapeHtml(c.title || '')}</label>`).join('');
+      // 체크한 차시 옆에 체크한 날짜(월/일)를 작게 붙인다(사용자 지시 2026-11-24). 날짜는 기록(doneLog)의 가장 최근 체크 날짜.
+      const dateOf = (chId) => {
+        for (let k = state.doneLog.length - 1; k >= 0; k--) {
+          const l = state.doneLog[k];
+          if (l.chapterId === chId && l.categoryId === curCatId && l.textbookId === curTbId && l.at) { const d = new Date(l.at + 9 * 3600 * 1000); return (d.getUTCMonth() + 1) + '/' + d.getUTCDate(); }
+        }
+        return '';
+      };
+      chEl.innerHTML = chapters.map((c, i) => { const on = doneIds.includes(c.id), dt = on ? dateOf(c.id) : ''; return `<label class="check-chip${on ? ' checked' : ''}"><input type="checkbox" value="${escapeHtml(c.id)}" ${on ? 'checked' : ''}>${i + 1}. ${escapeHtml(c.title || '')}${dt ? ` <span style="font-weight:400; font-size:11px; opacity:.85;">· ${dt}</span>` : ''}</label>`; }).join('');
       chEl.querySelectorAll('input').forEach(cb => cb.addEventListener('change', () => {
         cb.closest('.check-chip').classList.toggle('checked', cb.checked);
         syncCurrentVol();
+        renderChapters();   // 새로 체크한 차시에 날짜가 바로 붙게 다시 그린다
       }));
     }
     function syncCurrentVol(){
@@ -1130,7 +1356,7 @@
       const tb = allTextbooks.find(t => t.id === curTbId);
       const titleById = {};
       (tb && tb.chapters || []).forEach(c => { titleById[c.id] = c.title || ''; });
-      checked.filter(id => !prev.includes(id)).forEach(id => state.doneLog.push({ categoryId: curCatId, textbookId: curTbId, chapterId: id, title: titleById[id] || '', at: Date.now() }));
+      checked.filter(id => !prev.includes(id)).forEach(id => state.doneLog.push({ categoryId: curCatId, textbookId: curTbId, chapterId: id, title: titleById[id] || '', at: checkedAtMs || Date.now() }));
       catState.books[curTbId] = checked;
       renderVols();
       renderCats();
@@ -1266,6 +1492,7 @@
       return `<select id="${prefix}_${f.k}" ${f.required ? 'required' : ''}><option value="">선택</option>${f.options.map(o => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('')}</select>`;
     }
     if (f.type === 'textarea') return `<textarea id="${prefix}_${f.k}" rows="2" ${f.required ? 'required' : ''}></textarea>`;
+    if (f.type === 'subjectCheck') return `<div class="check-group" id="${prefix}_${f.k}">${SUBJECTS.map(x => `<label class="check-chip"><input type="checkbox" value="${x.k}">${x.label}</label>`).join('')}</div>`;
     if (f.type === 'robotProgress') return robotProgressHtml(prefix);
     if (f.type === 'enrollStory') return enrollStoryHtml(prefix);
     if (f.type === 'toggleText') return toggleTextHtml(prefix, f);
@@ -1274,6 +1501,7 @@
   studentFormEl.innerHTML = `<h3 style="font-size:14px;">학생 추가</h3>` +
     STUDENT_FIELDS.map(f => `<div><label>${f.label}</label>${renderFieldControl(f)}</div>`).join('') +
     `<button type="submit" class="primary">추가</button>`;
+  studentFormEl.querySelectorAll('.check-chip input').forEach(cb => cb.addEventListener('change', () => cb.closest('.check-chip').classList.toggle('checked', cb.checked)));
   wireEnrollStory('sf');
   STUDENT_FIELDS.filter(f => f.type === 'toggleText').forEach(f => wireToggleText('sf', f));
   toggleStudentFormBtn.addEventListener('click', () => { wireRobotProgress('sf'); }, { once: true });
@@ -1286,6 +1514,7 @@
       if (f.type === 'robotProgress') { body[f.k] = readRobotProgress('sf'); return; }
       if (f.type === 'enrollStory') { body[f.k] = readEnrollStory('sf'); return; }
       if (f.type === 'toggleText') { body[f.k] = readToggleText('sf', f); return; }
+      if (f.type === 'subjectCheck') { body[f.k] = Array.from(studentFormEl.querySelectorAll(`#sf_${f.k} input:checked`)).map(cb => cb.value); return; }
       const v = (document.getElementById('sf_' + f.k).value || '').trim();
       if (f.required && !v) ok = false;
       body[f.k] = v;
@@ -1294,6 +1523,7 @@
     await db.collection('students').add(body);
     await issueAccountsFor(classForAttend.value);
     studentFormEl.reset();
+    studentFormEl.querySelectorAll('.check-chip').forEach(c => c.classList.remove('checked'));
     studentFormEl.hidden = true;
     toggleStudentFormBtn.textContent = '+ 학생 추가';
     renderAttendTable();
@@ -1605,9 +1835,10 @@
   const attendEmpty = document.getElementById('attendEmpty');
 
   async function populateAttendClassPicker(){
-    classForAttend.innerHTML = '<option value="">수업 선택</option>';
-    if (!db || !state.teacherId) return;
+    if (!db || !state.teacherId) { classForAttend.innerHTML = '<option value="">수업 선택</option>'; return; }
     const courseSnap = await db.collection('courses').where('teacherId', '==', state.teacherId).get();
+    // 이 함수가 거의 동시에 두 번 불리면 둘 다 목록을 비운 뒤 채워 같은 수업이 겹쳐 보였다. 받은 뒤에 한 번에 비우고 채워서(동기) 겹치지 않게 한다.
+    classForAttend.innerHTML = '<option value="">수업 선택</option>';
     courseSnap.docs.forEach(c => {
       const d = c.data();
       const opt = document.createElement('option');
@@ -1615,13 +1846,50 @@
       opt.dataset.school = d.school || '';
       opt.dataset.term = d.term || '';
       opt.dataset.day = d.day || '';
+      opt.dataset.section = d.section || '';
       opt.textContent = `${d.name} (${[d.school, d.section, d.day ? d.day+'요일' : ''].filter(Boolean).join(' · ')})`;
       classForAttend.appendChild(opt);
     });
+    applyDayFilter();
   }
 
   const TODAY_STR = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10); // 한국 날짜 기준
-  document.getElementById('todayLabel').textContent = `오늘(${TODAY_STR}) 출석`;
+  // 달력에서 날짜를 누르면 그 날짜·요일로 출석부가 바뀐다(사용자 지시 2026-11-24). 처음엔 오늘이다. 그 요일에 수업이 없으면 출석 표 대신 안내만 보인다.
+  const WEEKDAY_NAMES = '일월화수목금토';
+  const weekdayOf = (ds) => WEEKDAY_NAMES[new Date(ds + 'T00:00:00Z').getUTCDay()];
+  let selectedDate = TODAY_STR;
+  let dateChosen = true;   // 항상 그 날짜의 요일 수업만 보인다(청계초가 월요일 수업이면 화요일엔 출석부가 안 보인다 — 사용자 지시 2026-11-24)
+  function updateAttendLabel(){
+    document.getElementById('todayLabel').textContent = `${selectedDate === TODAY_STR ? '오늘' : '선택한 날'}(${selectedDate} ${weekdayOf(selectedDate)}요일) 출석`;
+  }
+  updateAttendLabel();
+  // 고른 날짜의 요일과 같은 요일의 수업만 목록에 보이게 한다. 지금 고른 수업이 그 요일이 아니면 그 요일의 첫 수업으로 옮긴다(옮겼으면 true).
+  let calOptFallback = null;   // 고른 수업이 없을 때(그 요일에 수업이 없을 때)도 달력이 사라지지 않게, 마지막으로 보던 수업의 학교를 기억한다
+  function applyDayFilter(){
+    const wd = weekdayOf(selectedDate);
+    let first = null;
+    Array.from(classForAttend.options).forEach(o => {
+      if (!o.value) return;
+      const match = !dateChosen || (o.dataset.day || '') === wd;
+      o.hidden = !match; o.disabled = !match;
+      if (match && !first) first = o;
+    });
+    const hasCourses = classForAttend.options.length > 1;
+    classForAttend.options[0].textContent = hasCourses && !first ? `수업 없음 (${wd}요일)` : '수업 선택';
+    const cur = classForAttend.selectedOptions[0];
+    if (dateChosen && first && cur && !cur.value) {   // 수업 없음이던 상태에서 수업이 있는 요일을 누르면 그 요일의 첫 수업으로
+      classForAttend.value = first.value;
+      classForAttend.dispatchEvent(new Event('change'));
+      return true;
+    }
+    if (dateChosen && cur && cur.value && cur.dataset.day !== wd) {
+      if (first) classForAttend.value = first.value;
+      else { calOptFallback = cur; classForAttend.value = ''; }   // 그 요일에 수업이 없으면 "수업 없음"으로 보인다
+      classForAttend.dispatchEvent(new Event('change'));
+      return true;
+    }
+    return false;
+  }
 
   classForAttend.addEventListener('change', async () => {
     renderAttendTable();
@@ -1685,7 +1953,9 @@
     return null;
   }
   async function loadSchoolCalendarFor(){
-    const opt = classForAttend.selectedOptions[0];
+    const selOpt0 = classForAttend.selectedOptions[0];
+    if (selOpt0 && selOpt0.value) calOptFallback = selOpt0;
+    const opt = (selOpt0 && selOpt0.value) ? selOpt0 : calOptFallback;
     const school = opt ? opt.dataset.school : '';
     if (!school) { schoolCalCard.hidden = true; schoolCalDoc = null; return; }
     schoolCalCard.hidden = false;
@@ -1726,6 +1996,7 @@
       const closedInfo = closedEntry(dateStr);
       const found = findPeriodForDate(dateStr);
       const isToday = dateStr === TODAY_STR;
+      const isSel = dateStr === selectedDate;
       let label = '';
       if (closedInfo && closedInfo.reason) label = closedInfo.reason;
       else if (found) {
@@ -1737,10 +2008,16 @@
           if (!closedInfo) { const n = sessionNumberFor(found.subterm, dateStr); if (n) label += ` ${n}차`; }
         } else label = found.period.label;
       }
-      return `<div class="cal-day${closedInfo ? ' closed' : ''}" data-date="${dateStr}" style="${isToday ? 'outline:2px solid var(--accent);' : ''}"><span class="dnum">${d}</span>${label ? `<span class="plabel">${escapeHtml(label)}</span>` : ''}</div>`;
+      return `<div class="cal-day${closedInfo ? ' closed' : ''}" data-date="${dateStr}" style="${isSel ? 'outline:2px solid var(--accent); background:#eef2ff;' : isToday ? 'outline:2px dashed var(--accent);' : ''}"><span class="dnum">${d}</span>${label ? `<span class="plabel">${escapeHtml(label)}</span>` : ''}</div>`;
     }).join('');
     schoolCalGrid.innerHTML = weekdayHtml + dayHtml;
-    schoolCalGrid.querySelectorAll('[data-date]').forEach(cell => cell.addEventListener('click', () => { if (document.getElementById('schoolCalSettings').open) toggleClosed(cell.dataset.date); }));
+    schoolCalGrid.querySelectorAll('[data-date]').forEach(cell => cell.addEventListener('click', () => {
+      if (document.getElementById('schoolCalSettings').open) { toggleClosed(cell.dataset.date); return; }
+      selectedDate = cell.dataset.date; dateChosen = true;   // 설정이 접혀 있을 때 날짜를 누르면 그 날짜의 출석을 본다
+      updateAttendLabel();
+      renderSchoolCal();
+      if (!applyDayFilter()) renderAttendTable();
+    }));
     const todayFound = findPeriodForDate(TODAY_STR);
     const todayClosed = closedEntry(TODAY_STR);
     schoolCalTodayNote.textContent = todayClosed
@@ -1910,15 +2187,27 @@
   async function renderAttendTable(){
     const courseId = classForAttend.value;
     if (!db || !courseId) {
-      attendBody.innerHTML = '';
+      const noClassToday = db && dateChosen && classForAttend.options.length > 1;
+      attendBody.innerHTML = noClassToday ? `<tr><td colspan="8" class="note">${selectedDate}은 ${weekdayOf(selectedDate)}요일이에요. 이 요일에는 수업이 없어요.</td></tr>` : '';
       credArea.innerHTML = '';
-      attendEmpty.hidden = false;
+      attendEmpty.hidden = noClassToday ? true : false;
+      document.getElementById('attendSummary').hidden = true;
       return;
     }
     attendEmpty.hidden = true;
     designsPanel.hidden = true;
+    // 날짜를 골랐는데 선택한 수업이 그 요일 수업이 아니면 출석 표 대신 안내를 보인다.
+    const selOpt = classForAttend.selectedOptions[0];
+    if (dateChosen && selOpt && selOpt.dataset.day && selOpt.dataset.day !== weekdayOf(selectedDate)) {
+      attendBody.innerHTML = `<tr><td colspan="8" class="note">${selectedDate}은 ${weekdayOf(selectedDate)}요일이에요. 이 요일에 수업이 있는 반이 없어요(선택한 수업은 ${escapeHtml(selOpt.dataset.day)}요일).</td></tr>`;
+      credArea.innerHTML = '';
+      attendEmpty.hidden = true;
+      document.getElementById('attendSummary').hidden = true;
+      return;
+    }
+    const attendDate = selectedDate;   // 표를 그리는 동안 날짜가 바뀌어도 이 표의 기록은 이 날짜로 저장한다
     const studentsSnap = await db.collection('students').where('courseId', '==', courseId).get();
-    const recordsSnap = await db.collection('records').where('courseId', '==', courseId).where('date', '==', TODAY_STR).get();
+    const recordsSnap = await db.collection('records').where('courseId', '==', courseId).where('date', '==', attendDate).get();
     // 내 수업 학생들의 설계와 평가 (권한 규칙상 담당 선생님만 조회 가능)
     const [projSnap, fbSnap] = await Promise.all([db.collection('projects').get(), db.collection('feedback').get()]);
     const fbByProject = {};
@@ -1930,15 +2219,66 @@
     });
     const recordByStudent = {};
     recordsSnap.docs.forEach(r => { recordByStudent[r.data().studentId] = { id: r.id, ...r.data() }; });
+    // 지난주(7일 전 같은 요일) 기록: 지난주에 아무것도 안 한 친구를 요약에 표시하려고 불러온다(사용자 지시 2026-11-24).
+    const lastDate = new Date(Date.parse(attendDate + 'T00:00:00Z') - 7 * 86400000).toISOString().slice(0, 10);
+    const lastSnap = await db.collection('records').where('courseId', '==', courseId).where('date', '==', lastDate).get();
+    const lastRecByStudent = {};
+    lastSnap.docs.forEach(r => { lastRecByStudent[r.data().studentId] = r.data(); });
 
     attendBody.innerHTML = '';
     const sortedStudents = studentsSnap.docs
       .sort((a,b) => (a.data().number||'').localeCompare(b.data().number||'', undefined, {numeric:true}));
     renderCredentials(sortedStudents);
+    try { if (!robotCategories.length) await loadCategories(); if (!allTextbooks.length) await loadTextbooks(); } catch (e) { /* 못 불러오면 진도 칸은 '지정 안 함'으로 보인다 */ }
+    // 오늘 수업 요약(사용자 지시 2026-11-24): 반·날짜, 전체/출석/결석 인원, 누가 뭘 했는지, 안 한 친구. 체크할 때마다 바로 바뀐다.
+    // "한 것" = 그 날짜에 체크한 진도 차시, 과제 제출, 미션 입력. 결석이 아닌데 아무것도 안 한 학생은 "아직 안 한 친구"에 나온다.
+    const summaryEl = document.getElementById('attendSummary');
+    const recsByStudent = new Map();
+    const kstDay = (ms) => new Date(ms + 9 * 3600 * 1000).toISOString().slice(0, 10);
+    const classTitle = (() => { const o = classForAttend.selectedOptions[0]; return o ? `${o.dataset.school || ''} ${o.dataset.section || ''}`.trim() : ''; })();
+    const updateSummary = () => {
+      const all = sortedStudents.length;
+      let present = 0, absent = 0;
+      recsByStudent.forEach(r => { if (r.attendance === 'present') present++; else if (r.attendance === 'absent') absent++; });
+      const did = [], notYet = [], otherOnly = [], absentNames = [];
+      sortedStudents.forEach(st => {
+        const sd = st.data(), r = recsByStudent.get(st.id) || {};
+        if (r.attendance === 'absent') absentNames.push(escapeHtml(sd.name) + (r.absentReason ? ` <span class="note">(${escapeHtml(r.absentReason)})</span>` : ''));   // 한 친구·안 한 친구는 출석과 상관없다(사용자 지시 2026-11-24)
+        const items = [];
+        // 그날 체크해서 지금도 체크돼 있는 차시만(체크를 풀었으면 뺀다)
+        const stillChecked = (l) => ((((sd.robot && sd.robot.categories) || {})[l.categoryId] || {}).books || {})[l.textbookId] ? (((sd.robot.categories[l.categoryId] || {}).books || {})[l.textbookId] || []).includes(l.chapterId) : false;
+        const chapters = ((sd.robot && sd.robot.doneLog) || []).filter(l => l.at && kstDay(l.at) === attendDate && stillChecked(l)).map(l => l.title || '차시');
+        if (chapters.length) items.push('만들고 검사 받음: ' + chapters.map(escapeHtml).join(', '));
+        if (r.assignment === 'submitted') items.push('과제 제출');
+        if ((r.mission || '').trim()) items.push('미션 ' + escapeHtml(r.mission.trim()));
+        // 진도를 체크했으면 "한 친구", 아무 체크도 안 했으면 "안 한 친구", 출석·과제·미션만 체크했으면 "진도 체크 전"(사용자 지시 2026-11-24)
+        if (chapters.length) did.push(`<li><b>${escapeHtml(sd.name)}</b> — ${items.join(' · ')}</li>`);
+        else if (items.length) otherOnly.push(escapeHtml(sd.name));
+        else notYet.push(escapeHtml(sd.name));
+      });
+      // 지난주에 진도·과제·미션을 하나도 체크하지 않은 친구(결석이면 그렇게 표시). 지난주에 진도를 나간 친구는 보이지 않는다.
+      const lastNothing = [];
+      sortedStudents.forEach(st => {
+        const sd = st.data(), lr = lastRecByStudent[st.id] || {};
+        const stillChecked = (l) => (((((sd.robot || {}).categories || {})[l.categoryId] || {}).books || {})[l.textbookId] || []).includes(l.chapterId);
+        const doneLast = ((sd.robot && sd.robot.doneLog) || []).some(l => l.at && kstDay(l.at) === lastDate && stillChecked(l));
+        if (!doneLast && lr.assignment !== 'submitted' && !(lr.mission || '').trim()) lastNothing.push(escapeHtml(sd.name) + (lr.attendance === 'absent' ? ' <span class="note">(결석)</span>' : ''));
+      });
+      const chip = (label, n, color) => `<span style="padding:4px 10px; border:1px solid var(--border); border-radius:999px; background:#fff;">${label} <b style="color:${color};">${n}명</b></span>`;
+      summaryEl.innerHTML = `<div style="font-weight:700; margin-bottom:8px;">${escapeHtml(classTitle)} 수업 요약 · ${attendDate} ${weekdayOf(attendDate)}요일</div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">${chip('전체인원', all, 'inherit')}${chip('출석인원', present, '#15803d')}${chip('결석인원', absent, '#dc2626')}</div>
+        <div style="margin-top:10px;"><b>오늘 한 친구 ${did.length}명</b>${did.length ? `<ul style="margin:4px 0 0; padding-left:18px;">${did.join('')}</ul>` : ' <span class="note">아직 없어요</span>'}</div>
+        <div style="margin-top:8px;"><b>안 한 친구 ${notYet.length}명 (아무 체크 없음)</b> ${notYet.length ? notYet.join(', ') : '<span class="note">없어요</span>'}</div>
+        ${otherOnly.length ? `<div style="margin-top:8px;"><b>진도는 아직 (과제·미션만 체크) ${otherOnly.length}명</b> ${otherOnly.join(', ')}</div>` : ''}
+        ${lastNothing.length ? `<div style="margin-top:8px; color:#b45309;"><b>지난주(${lastDate})에 아무것도 안 한 친구 ${lastNothing.length}명</b> ${lastNothing.join(', ')}</div>` : ''}
+        ${absentNames.length ? `<div style="margin-top:8px;"><b>결석 ${absentNames.length}명 (사유)</b> ${absentNames.join(', ')}</div>` : ''}`;
+      summaryEl.hidden = false;
+    };
     sortedStudents
       .forEach(s => {
       const d = s.data();
       const rec = recordByStudent[s.id] || {};
+      recsByStudent.set(s.id, rec);
       const mine = projectsByStudent[s.id] || [];
       const submittedList = mine.filter(p => p.submitted);
       const waiting = submittedList.filter(p => !fbByProject[p.id]);
@@ -1947,31 +2287,63 @@
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td class="num">${escapeHtml(d.number || '')}</td>
-        <td>${escapeHtml(d.name)}</td>
+        <td>${escapeHtml(d.name)} <button type="button" class="ghost" data-student-subjects style="font-size:11px; padding:1px 6px; margin-left:4px;">과목</button> <button type="button" class="ghost" data-student-qr style="font-size:11px; padding:1px 6px;">QR</button></td>
         <td>
           <div class="status-btns">
             <button type="button" class="status-btn present ${rec.attendance==='present'?'active':''}" data-status="present">출석</button>
             <button type="button" class="status-btn late ${rec.attendance==='late'?'active':''}" data-status="late">지각</button>
             <button type="button" class="status-btn absent ${rec.attendance==='absent'?'active':''}" data-status="absent">결석</button>
           </div>
+          <button type="button" class="ghost" data-absent-open hidden style="margin-top:6px; font-size:12px; padding:2px 8px;"></button>
+          <input type="text" data-absent-reason value="${escapeHtml(rec.absentReason || '')}" placeholder="결석 이유 (엔터로 닫기)" maxlength="60" hidden style="margin-top:6px; width:100%; min-width:130px;">
         </td>
         <td><button type="button" class="pill ${rec.assignment==='submitted'?'on':'off'}" data-assign>${rec.assignment==='submitted'?'제출함':'미제출'}</button></td>
+        <td><button type="button" class="ghost" data-progress style="font-size:12px; padding:3px 8px; white-space:nowrap;">${escapeHtml(robotProgressSummary(d.robot))}</button></td>
+        <td><button type="button" class="ghost" data-waiting style="font-size:12px; padding:3px 8px; white-space:nowrap; ${waitingList(d.waiting).length ? 'background:#fffbeb; border-color:#f59e0b; color:#b45309; font-weight:700;' : ''}">${escapeHtml(waitingSummary(d.waiting))}</button></td>
         <td><button type="button" class="pill ${designCls}" data-designs ${mine.length ? '' : 'disabled'}>${designLabel}</button></td>
         <td><input type="text" value="${escapeHtml(rec.mission || '')}" data-mission placeholder="예: Lv.2 진행중"></td>
       `;
       const saveRecord = async (patch) => {
-        const body = Object.assign({ date: TODAY_STR, studentId: s.id, courseId, updatedAt: Date.now() }, patch);
+        const body = Object.assign({ date: attendDate, studentId: s.id, courseId, updatedAt: Date.now() }, patch);
         if (rec.id) await db.collection('records').doc(rec.id).update(patch);
         else {
           const ref = await db.collection('records').add(body);
           rec.id = ref.id;
         }
       };
+      tr.querySelector('[data-student-subjects]').addEventListener('click', () => openStudentSubjectsModal(s.id, d.name, d.subjects));
+      tr.querySelector('[data-student-qr]').addEventListener('click', () => openStudentQrModal(s.id));
+      tr.querySelector('[data-progress]').addEventListener('click', () => openStudentProgressModal(s.id, d.name, d.robot));
+      tr.querySelector('[data-waiting]').addEventListener('click', () => openStudentWaitingModal(s.id, d.name, d.waiting));
+      // 결석 이유 칸은 평소 닫혀 있다: 결석이면 "+ 사유 적기"(적었으면 "사유: …") 한 줄만 보이고, 누르면 입력 칸이 열린다. 엔터나 칸 밖을 누르면 다시 닫힌다.
+      const absentInput = tr.querySelector('[data-absent-reason]');
+      const absentOpen = tr.querySelector('[data-absent-open]');
+      let absentTimer = null;
+      const paintAbsent = () => {
+        const isAbsent = rec.attendance === 'absent';
+        absentOpen.hidden = !isAbsent || !absentInput.hidden;
+        absentOpen.textContent = rec.absentReason ? '사유: ' + rec.absentReason : '+ 사유 적기';
+        if (!isAbsent) absentInput.hidden = true;
+      };
+      paintAbsent();
+      const closeAbsentInput = () => { absentInput.hidden = true; paintAbsent(); };
+      absentOpen.addEventListener('click', () => { absentInput.hidden = false; absentOpen.hidden = true; absentInput.focus(); });
+      absentInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); absentInput.blur(); } });
+      absentInput.addEventListener('blur', closeAbsentInput);
+      absentInput.addEventListener('input', () => {
+        rec.absentReason = absentInput.value;
+        updateSummary();
+        clearTimeout(absentTimer);
+        absentTimer = setTimeout(() => saveRecord({ absentReason: absentInput.value }), 500);
+      });
       tr.querySelectorAll('[data-status]').forEach(btn => {
         btn.addEventListener('click', () => {
           tr.querySelectorAll('[data-status]').forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
           rec.attendance = btn.dataset.status;
+          absentInput.hidden = true;
+          paintAbsent();   // 결석일 때만 "+ 사유 적기" 한 줄이 보인다(사용자 지시 2026-11-24)
+          updateSummary();
           saveRecord({ attendance: btn.dataset.status });
         });
       });
@@ -1981,17 +2353,21 @@
         rec.assignment = next;
         assignBtn.textContent = next === 'submitted' ? '제출함' : '미제출';
         assignBtn.className = 'pill ' + (next === 'submitted' ? 'on' : 'off');
+        updateSummary();
         saveRecord({ assignment: next });
       });
       tr.querySelector('[data-designs]').addEventListener('click', () => showDesigns(courseId, d.name, mine, fbByProject));
       const missionInput = tr.querySelector('[data-mission]');
       let missionTimer = null;
       missionInput.addEventListener('input', () => {
+        rec.mission = missionInput.value;
+        updateSummary();
         clearTimeout(missionTimer);
         missionTimer = setTimeout(() => saveRecord({ mission: missionInput.value }), 500);
       });
       attendBody.appendChild(tr);
     });
+    updateSummary();
   }
 
   // ---------- home tab: courses grouped by day, Mon first ----------

@@ -814,6 +814,7 @@
 <script src="/vendor/three.min.js"></script>
 <script src="/vendor/cannon.min.js"></script>
 <script src="/vendor/supabase.min.js"></script>
+<script src="/vendor/jsQR.js"></script>
 <script src="db-shim.js"></script>
 <script src="local-cache.js"></script>
 <script src="design-parts.js"></script>
@@ -6468,7 +6469,7 @@
   };
   const asmExitBtn = document.getElementById('asmExitBtn');
   function refreshExitButtons(){
-    if (!student || (mode !== 'student' && mode !== 'teacher')) return;   // 로그인 전·검토 화면은 그대로 둔다
+    if (mode !== 'guest' && (!student || (mode !== 'student' && mode !== 'teacher'))) return;   // 로그인 전·검토 화면은 그대로 둔다(손님은 조립도 나가기를 쓴다)
     const asm = !!(window.__ivsAssembly && window.__ivsAssembly.isAssemblyScreen && window.__ivsAssembly.isAssemblyScreen());   // 조립도가 있는 차시를 고르면 번호를 누르기 전부터 조립도 화면
     backLink.hidden = asm;
     discardBtn.hidden = asm;
@@ -6496,7 +6497,7 @@
   const brandLogo = document.querySelector('.brand');
   brandLogo.style.cursor = 'pointer';
   brandLogo.addEventListener('click', async () => {
-    if (!student || (mode !== 'student' && mode !== 'teacher')) return;
+    if (mode !== 'guest' && (!student || (mode !== 'student' && mode !== 'teacher'))) return;
     const asm = !!(window.__ivsAssembly && window.__ivsAssembly.isAssemblyScreen && window.__ivsAssembly.isAssemblyScreen());
     if (!await window.__askConfirm(asm ? '조립도를 나갈까요?' : '저장하지 않고 나갈까요?', '나가기')) return;
     if (asm) await doAsmExit();
@@ -6627,6 +6628,8 @@
         <input id="loginPin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="6" required>
         <button id="loginBtn" class="primary" type="submit" style="margin-top:14px; width:100%;">로그인</button>
       </form>
+      <button id="qrPickBtn" class="ghost" type="button" style="margin-top:10px; width:100%;">📷 내 QR 사진으로 로그인</button>
+      <input id="qrPickFile" type="file" accept="image/*" hidden>
       <p class="${message ? 'note' : 'err'}" id="loginMsg" ${message ? '' : 'hidden'} style="margin-top:12px;">${esc(message || '')}</p>
       <p class="note" style="margin-top:16px;"><a href="index.html">선생님 화면으로</a></p>`;
     const form = document.getElementById('loginForm');
@@ -6656,6 +6659,33 @@
         btn.disabled = false;
       }
     });
+    // 폰에 보관한 내 QR 사진(또는 지금 카메라로 찍은 사진)에서 QR 을 읽어 아이디·비밀번호를 채우고 로그인한다.
+    const pickBtn = document.getElementById('qrPickBtn');
+    const pickFile = document.getElementById('qrPickFile');
+    pickBtn.addEventListener('click', () => { pickFile.value = ''; pickFile.click(); });
+    pickFile.addEventListener('change', async () => {
+      const file = pickFile.files && pickFile.files[0];
+      if (!file) return;
+      msgEl.hidden = false; msgEl.className = 'note'; msgEl.textContent = 'QR을 읽는 중이에요...';
+      try {
+        const bmp = await createImageBitmap(file);
+        const scale = Math.min(1, 1400 / Math.max(bmp.width, bmp.height));
+        const cv = document.createElement('canvas');
+        cv.width = Math.max(1, Math.round(bmp.width * scale)); cv.height = Math.max(1, Math.round(bmp.height * scale));
+        const cx = cv.getContext('2d'); cx.drawImage(bmp, 0, 0, cv.width, cv.height);
+        const img = cx.getImageData(0, 0, cv.width, cv.height);
+        const hit = window.jsQR && window.jsQR(img.data, img.width, img.height, { inversionAttempts: 'attemptBoth' });
+        const u = hit && new URL(hit.data, location.href);
+        const sid = u && (u.searchParams.get('sid') || '').trim(), spin = u && (u.searchParams.get('spin') || '').trim();
+        if (!sid || !spin) throw new Error('no qr');
+        document.getElementById('loginId').value = sid;
+        document.getElementById('loginPin').value = spin;
+        form.requestSubmit();
+      } catch (err) {
+        msgEl.className = 'err';
+        msgEl.textContent = '내 QR 코드를 읽지 못했어요. QR이 잘 보이게 다시 찍거나, 아이디와 비밀번호를 넣어주세요.';
+      }
+    });
     const idInput = document.getElementById('loginId');
     if (idInput) idInput.focus();
   }
@@ -6677,22 +6707,87 @@
       return all.filter(k => schoolDoc.data().subjects.includes(k) || own.includes(k));
     } catch (err) { console.error('[subjects] 확인 실패', err); return all; }
   }
-  function showSubjectDenied(allowed){
+  function showSubjectDenied(allowed, guest){
     const overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed; inset:0; z-index:9999; background:rgba(15,23,42,.55); display:flex; align-items:center; justify-content:center; padding:16px;';
-    const goBtns = allowed.map(k => `<a href="design.html?subject=${k}" style="display:block; text-align:center; padding:10px; border-radius:10px; background:#2D5BFF; color:#fff; text-decoration:none; font-weight:700;">${SUBJECT_LABELS[k]} 들어가기</a>`).join('');
+    const gsch = guest ? '&school=' + encodeURIComponent(guestSchool()) : '';
+    const goBtns = allowed.map(k => `<a href="design.html?subject=${k}${gsch}" style="display:block; text-align:center; padding:10px; border-radius:10px; background:#2D5BFF; color:#fff; text-decoration:none; font-weight:700;">${SUBJECT_LABELS[k]} 들어가기</a>`).join('');
     overlay.innerHTML = `<div style="background:#fff; border-radius:16px; padding:24px; max-width:380px; width:100%; display:grid; gap:10px;">
       <h2 style="margin:0; font-size:19px;">${SUBJECT_LABELS[SUBJECT] || SUBJECT} 과목은 열려 있지 않아요</h2>
       <p style="margin:0; color:#555; line-height:1.5;">이 과목은 아직 사용할 수 없어요. 관리자(선생님)에게 문의해 주세요.</p>
       ${goBtns}
-      <button type="button" id="deniedLogout" style="padding:10px; border:0; background:none; color:#64748b; cursor:pointer; font-size:14px;">로그아웃</button>
+      ${guest ? '' : '<button type="button" id="deniedLogout" style="padding:10px; border:0; background:none; color:#64748b; cursor:pointer; font-size:14px;">로그아웃</button>'}
     </div>`;
     document.body.appendChild(overlay);
-    overlay.querySelector('#deniedLogout').addEventListener('click', async () => { await db.auth.signOut(); location.href = 'design.html'; });
+    const lo = overlay.querySelector('#deniedLogout');
+    if (lo) lo.addEventListener('click', async () => { await db.auth.signOut(); location.href = 'design.html'; });
   }
+
+  // ----- 손님(학교 QR, 로그인 없음) -----
+  // 학교 QR(design.html?school=<학교>)로 들어오면 아이디 없이 조립도를 볼 수 있다. 아이디·비밀번호는 과제를 낼 때만 쓴다.
+  // 학교 이름은 이 탭에서만 기억한다(새로고침해도 손님 상태 유지, 로그인하면 지운다).
+  const GUEST_KEY = 'ivsGuestSchool';
+  function guestSchool(){
+    const fromUrl = (new URLSearchParams(location.search).get('school') || '').trim();
+    try { if (fromUrl) sessionStorage.setItem(GUEST_KEY, fromUrl); return fromUrl || sessionStorage.getItem(GUEST_KEY) || ''; } catch (e) { return fromUrl; }
+  }
+  function clearGuest(){ try { sessionStorage.removeItem(GUEST_KEY); } catch (e) { /* 기억 못 해도 무방 */ } }
+  // 그 학교가 열어 둔 과목. 설정이 없거나 읽지 못하면 모든 과목을 연다(막히지 않게).
+  async function guestAllowedSubjects(school){
+    const all = Object.keys(SUBJECT_LABELS);
+    try {
+      const { data, error } = await db.rpc('school_subjects', { p_school: school });
+      if (error || !Array.isArray(data)) return all;
+      return all.filter(k => data.includes(k));
+    } catch (err) { console.error('[guest subjects] 확인 실패', err); return all; }
+  }
+  async function enterAsGuest(school){
+    mode = 'guest';
+    accessToken = SUPABASE_KEY;   // 로그인 없이도 부품·교재를 읽는 열쇠(공개 읽기 정책은 school_guest.sql)
+    student = null;
+    project = null;
+    const allowed = await guestAllowedSubjects(school);
+    if (allowed.includes(SUBJECT)) { openGuest(); return; }
+    const explicit = new URLSearchParams(location.search).get('subject');
+    if (!explicit && allowed.length) { location.replace('design.html?subject=' + allowed[0] + '&school=' + encodeURIComponent(school)); return; }
+    showSubjectDenied(allowed, true);
+  }
+  function openGuest(){
+    restoreParts([]);
+    pbStudent.textContent = '손님 · 조립도 보기';
+    pbSave.textContent = '';
+    [nameInput, pbSaveBtn, pbLoadBtn].forEach(el => { el.hidden = true; });
+    submitBtn.hidden = false;
+    submitBtn.textContent = '과제 제출하기';
+    projectBar.hidden = false;
+    backLink.textContent = '← 나가기';
+    backLink.href = 'design-select.html';
+    startOverlay.hidden = true;
+    refreshExitButtons();
+    setStatus('조립도를 볼 수 있어요. 과제를 내려면 위의 [과제 제출하기]를 누르세요.', null);
+    loadRobotData();
+  }
+  // 손님 → 로그인 화면(과제용)
+  function guestToLogin(){
+    clearGuest();
+    mode = 'student';
+    accessToken = null;
+    [nameInput, pbSaveBtn, pbLoadBtn].forEach(el => { el.hidden = false; });
+    projectBar.hidden = true;
+    backLink.textContent = '← 처음으로';
+    backLink.href = '/';
+    asmExitBtn.hidden = true;
+    startOverlay.hidden = false;
+    showLoginStep('과제를 내려면 내 아이디와 비밀번호를 넣거나, 내 QR 코드를 카메라로 찍어 주세요.');
+  }
+  submitBtn.addEventListener('click', () => { if (mode === 'guest') guestToLogin(); });
   // 로그인한 학생이 지금 과목에 들어갈 수 있으면 설계 화면을 열고, 아니면 막는다.
   // 주소에 subject 가 없던 경우(학교 QR 등)에는 허용된 첫 과목으로 보낸다.
   async function enterAsStudent(){
+    // (이 파일 안에 history 라는 변수가 따로 있어서 반드시 window.history 로 쓴다.)
+    // 아이디·비밀번호·학교가 주소창에 남지 않게 지운다(학생에게 접속 정보를 보이지 않기 위해). 로그인 경로와 상관없이 여기서 한 번에 한다.
+    clearGuest();
+    try { const keep = new URLSearchParams(location.search); ['sid', 'spin', 'school'].forEach(k => keep.delete(k)); window.history.replaceState(null, '', location.pathname + (keep.toString() ? '?' + keep.toString() : '')); } catch (e) { /* 주소 정리 실패는 무시 */ }
     const allowed = await allowedSubjects();
     if (allowed.includes(SUBJECT)) { openDraft(); notifyFeedback(); return; }
     const explicit = new URLSearchParams(location.search).get('subject');
@@ -6956,8 +7051,6 @@
         await db.auth.signOut();
         throw new Error('not a student');
       }
-      // 아이디·비밀번호·학교가 주소창에 남지 않게 지운다(학생에게 접속 정보를 보이지 않기 위해).
-      try { const keep = new URLSearchParams(location.search); ['sid', 'spin', 'school'].forEach(k => keep.delete(k)); history.replaceState(null, '', location.pathname + (keep.toString() ? '?' + keep.toString() : '')); } catch (e) { /* 주소 정리 실패는 무시 */ }
       await enterAsStudent();
       return true;
     } catch (err) {
@@ -6972,12 +7065,18 @@
     checkPartsLabAccess();
     const reviewId = new URLSearchParams(location.search).get('review');
     if (reviewId && await startReview(reviewId)) return;
+    // 학교 QR(주소에 school): 어느 기기·계정 상태든 그 학교의 손님으로만 본다. 로그인한 학생·선생님 세션이 남아 있어도 손님 화면이 먼저다.
+    { const p = new URLSearchParams(location.search); if ((p.get('school') || '').trim() && !(p.get('sid') && p.get('spin'))) { await enterAsGuest(guestSchool()); return; } }
     const { data: { session } } = await db.auth.getSession();
     if (session && await loadStudent()) { accessToken = session.access_token; await enterAsStudent(); return; }
     if (session) await db.auth.signOut();
     if (await startTeacher()) return;
     const autoLoginResult = await tryAutoLogin();
-    if (autoLoginResult !== true) showLoginStep(autoLoginResult === 'skip' ? undefined : autoLoginResult);
+    if (autoLoginResult === true) return;
+    // 학교 QR 로 온 손님: 아이디 없이 그 학교가 연 과목의 조립도를 본다
+    const gs = autoLoginResult === 'skip' ? guestSchool() : '';
+    if (gs) { await enterAsGuest(gs); return; }
+    showLoginStep(autoLoginResult === 'skip' ? undefined : autoLoginResult);
   })();
 })();
 </script>
