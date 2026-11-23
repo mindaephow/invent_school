@@ -6647,8 +6647,7 @@
           await db.auth.signOut();
           throw new Error('not a student');
         }
-        openDraft();
-        notifyFeedback();
+        await enterAsStudent();
       } catch (err) {
         msgEl.hidden = false;
         msgEl.textContent = /not a student/.test(err.message)
@@ -6662,6 +6661,45 @@
   }
 
   // 로그인한 계정의 학생 정보 (권한 규칙상 본인 행만 보인다)
+  // ----- 과목 접근 제한 -----
+  // 학생이 들어갈 수 있는 과목 = 학교 설정(학교 달력 문서 data.subjects) + 학생 개인 추가(학생 행 data.subjects).
+  // 학교 설정이 한 번도 저장되지 않았거나 읽을 수 없으면(SQL 미적용 포함) 모든 과목을 열어 둔다 — 기존 학생이 막히지 않게.
+  const SUBJECT_LABELS = { goldberg: '골드버그', robot: '로봇', aviation: '항공', rocket: '로켓' };
+  async function allowedSubjects(){
+    const all = Object.keys(SUBJECT_LABELS);
+    try {
+      const sSnap = await db.collection('students').get();
+      const own = sSnap.docs[0] && Array.isArray(sSnap.docs[0].data().subjects) ? sSnap.docs[0].data().subjects : [];
+      const cSnap = await db.collection('schoolCalendars').get(); // 학생에게는 자기 학교 문서만 보인다
+      if (cSnap.error) return all;
+      const schoolDoc = cSnap.docs.find(d => Array.isArray(d.data().subjects));
+      if (!schoolDoc) return all;
+      return all.filter(k => schoolDoc.data().subjects.includes(k) || own.includes(k));
+    } catch (err) { console.error('[subjects] 확인 실패', err); return all; }
+  }
+  function showSubjectDenied(allowed){
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed; inset:0; z-index:9999; background:rgba(15,23,42,.55); display:flex; align-items:center; justify-content:center; padding:16px;';
+    const goBtns = allowed.map(k => `<a href="design.html?subject=${k}" style="display:block; text-align:center; padding:10px; border-radius:10px; background:#2D5BFF; color:#fff; text-decoration:none; font-weight:700;">${SUBJECT_LABELS[k]} 들어가기</a>`).join('');
+    overlay.innerHTML = `<div style="background:#fff; border-radius:16px; padding:24px; max-width:380px; width:100%; display:grid; gap:10px;">
+      <h2 style="margin:0; font-size:19px;">${SUBJECT_LABELS[SUBJECT] || SUBJECT} 과목은 열려 있지 않아요</h2>
+      <p style="margin:0; color:#555; line-height:1.5;">이 과목은 아직 사용할 수 없어요. 관리자(선생님)에게 문의해 주세요.</p>
+      ${goBtns}
+      <button type="button" id="deniedLogout" style="padding:10px; border:0; background:none; color:#64748b; cursor:pointer; font-size:14px;">로그아웃</button>
+    </div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#deniedLogout').addEventListener('click', async () => { await db.auth.signOut(); location.href = 'design.html'; });
+  }
+  // 로그인한 학생이 지금 과목에 들어갈 수 있으면 설계 화면을 열고, 아니면 막는다.
+  // 주소에 subject 가 없던 경우(학교 QR 등)에는 허용된 첫 과목으로 보낸다.
+  async function enterAsStudent(){
+    const allowed = await allowedSubjects();
+    if (allowed.includes(SUBJECT)) { openDraft(); notifyFeedback(); return; }
+    const explicit = new URLSearchParams(location.search).get('subject');
+    if (!explicit && allowed.length) { location.replace('design.html?subject=' + allowed[0]); return; }
+    showSubjectDenied(allowed);
+  }
+
   async function loadStudent(){
     const snap = await db.collection('students').get();
     if (!snap.docs.length) return false;
@@ -6918,8 +6956,9 @@
         await db.auth.signOut();
         throw new Error('not a student');
       }
-      openDraft();
-      notifyFeedback();
+      // 아이디·비밀번호·학교가 주소창에 남지 않게 지운다(학생에게 접속 정보를 보이지 않기 위해).
+      try { const keep = new URLSearchParams(location.search); ['sid', 'spin', 'school'].forEach(k => keep.delete(k)); history.replaceState(null, '', location.pathname + (keep.toString() ? '?' + keep.toString() : '')); } catch (e) { /* 주소 정리 실패는 무시 */ }
+      await enterAsStudent();
       return true;
     } catch (err) {
       return /not a student/.test(err.message)
@@ -6934,7 +6973,7 @@
     const reviewId = new URLSearchParams(location.search).get('review');
     if (reviewId && await startReview(reviewId)) return;
     const { data: { session } } = await db.auth.getSession();
-    if (session && await loadStudent()) { accessToken = session.access_token; openDraft(); notifyFeedback(); return; }
+    if (session && await loadStudent()) { accessToken = session.access_token; await enterAsStudent(); return; }
     if (session) await db.auth.signOut();
     if (await startTeacher()) return;
     const autoLoginResult = await tryAutoLogin();
