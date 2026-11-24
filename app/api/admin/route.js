@@ -116,6 +116,7 @@ async function listTeachers(sb) {
 }
 
 const PART_SUBJECTS = ['goldberg', 'robot', 'aviation']
+const TEXTBOOK_SUBJECTS = [...PART_SUBJECTS, 'invention']   // 교재관리에만 있는 과목 "발명"(사용자 2026-11-25)
 
 // 부품 수리실에서 확정한 정확한 치수(외측 팔1/팔2/두께) — 자유 텍스트 size 문자열을 매번 다시 해석하지 않고
 // 이 숫자를 그대로 저장해서 불러올 때마다 항상 똑같이 재현되게 함(사용자 지적: "불러올때마다 달라서 불편해").
@@ -356,7 +357,12 @@ function parseChapters(raw) {
     // 사용자 지시: "파일업로드는 pdf,워드,엑셀,ppt가 되게끔, 여러개 가능" — 차시 하나에 파일 하나만
     // (fileUrl/fileName)이 아니라 여러 개(files 배열)를 붙일 수 있어야 한다.
     const files = parseFileList(c.files)
-    return { id, title, parts, files }
+    // 조립시간(★ 개수)·학습테마 — EQ키즈처럼 교재에 있는 값(사용자 2026-11-25). 없으면 넣지 않는다.
+    const level = typeof c.level === 'string' ? c.level.trim().slice(0, 10) : ''
+    const theme = typeof c.theme === 'string' ? c.theme.trim().slice(0, 60) : ''
+    // 비고(예: "DC모터 1개 사용")·추가모델 차시 표시(sub) — 저장할 때 지워지지 않게 그대로 둔다(사용자 2026-11-25).
+    const note = typeof c.note === 'string' ? c.note.trim().slice(0, 60) : ''
+    return { id, title, parts, files, ...(level ? { level } : {}), ...(theme ? { theme } : {}), ...(note ? { note } : {}), ...(c.sub === true ? { sub: true } : {}) }
   }).filter(Boolean)
 }
 function parseFileList(raw) {
@@ -593,7 +599,7 @@ export async function POST(request) {
       const volumeNum = Number(body.volume)
       const volume = Number.isFinite(volumeNum) && volumeNum > 0 ? Math.round(volumeNum) : null
       if (!name) return json({ error: '교재 이름을 입력해주세요.' }, 400)
-      if (!PART_SUBJECTS.includes(subject)) return json({ error: '과목을 선택해주세요.' }, 400)
+      if (!TEXTBOOK_SUBJECTS.includes(subject)) return json({ error: '과목을 선택해주세요.' }, 400)
       const files = parseFileList(body.files)
       const { error } = await sb.from('ivs_textbooks').insert({ data: { subject, category: category || null, volume, name, files, chapters: [], createdAt: Date.now() } })
       if (error) throw new Error(error.message)

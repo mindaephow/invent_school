@@ -537,7 +537,7 @@
       <p class="note" style="margin-top:8px;">과목(로봇은 카테고리·권까지)을 고르고 교재를 등록하면, 설계 화면의 그 과목·권·차시에 실제 제목·필요 부품이 나타나요.</p>
       <form id="textbookForm" class="add-form" hidden>
         <div class="row2">
-          <div><label>과목</label><select id="textbookSubject" required><option value="robot">로봇</option><option value="goldberg">골드버그</option><option value="aviation">항공</option></select></div>
+          <div><label>과목</label><select id="textbookSubject" required><option value="robot">로봇</option><option value="goldberg">골드버그</option><option value="aviation">항공</option><option value="invention">발명</option></select></div>
           <div id="textbookCategoryWrap"><label>카테고리 (로봇만)</label><select id="textbookCategory"></select></div>
         </div>
         <div id="textbookVolumeWrap"><label>구분 번호 (선택 — 권·회차·단계 등 뭐든 숫자로, 비우면 구분 없음)</label><input id="textbookVolume" type="number" min="1" step="1" placeholder="예: 권이면 1, 3회차면 3"></div>
@@ -551,6 +551,7 @@
         <button type="button" class="current" data-subject-tab="robot">로봇</button>
         <button type="button" data-subject-tab="goldberg">골드버그</button>
         <button type="button" data-subject-tab="aviation">항공</button>
+        <button type="button" data-subject-tab="invention">발명</button>
       </div>
       <div class="crumbs" id="textbookCategoryTabs" hidden style="margin-top:6px;"></div>
       <div class="list" id="textbookListArea" style="margin-top:8px;"></div>
@@ -3356,6 +3357,7 @@
   }
   function fileIcon(name){
     const ext = ((name || '').split('.').pop() || '').toLowerCase();
+    if (/유튜브/.test(name || '')) return '▶️';   // 유튜브 링크(파일이 아니라 주소)
     if (ext === 'pdf') return '📕';
     if (['xlsx', 'xls', 'csv'].includes(ext)) return '📗';
     if (['doc', 'docx'].includes(ext)) return '📘';
@@ -3391,7 +3393,16 @@
   // 다시 그려도 그대로 남아있어서 확실히 동작한다.
   let confirmingDeleteChapterId = null;
   let expandedChapterIds = new Set();
+  // 차시 번호표: 0차시=준비, 추가모델(sub) 차시는 바로 앞 차시 번호에 "-1, -2…"를 붙인다(예: 1-1차시).
+  function chapterLabels(chs){
+    let n = -1, s = 0;
+    return chs.map((c, i) => {
+      if (c.sub && n >= 0) { s++; return n + '-' + s; }
+      n++; s = 0; return String(n);
+    });
+  }
   function chapterRowHtml(tb, c, i){
+    const label = chapterLabels(tb.chapters)[i];
     const partsChips = (c.parts || []).map((p) => {
       const part = allParts.find((x) => x.id === p.partId);
       return `<span class="pill" data-remove-part="${escapeHtml(c.id)}" data-remove-part-id="${escapeHtml(p.partId)}" style="cursor:pointer;" title="눌러서 제거">${escapeHtml(part ? part.name : '(삭제된 부품)')} ×${p.qty} ✕</span>`;
@@ -3404,8 +3415,11 @@
     return `<div class="design-row" style="flex-direction:column; align-items:stretch; gap:6px; margin-bottom:10px; padding:10px; border:1px solid var(--line); border-radius:8px;" data-chapter-id="${escapeHtml(c.id)}">
       <div style="display:flex; align-items:center; gap:6px;">
         <button type="button" class="ghost" data-chapter-fold="1" style="font-size:11px; padding:2px 6px; flex:none;" title="${expanded ? '접기' : '펼치기'}">${expanded ? '▾' : '▸'}</button>
-        <span class="item-sub" style="flex:none; font-weight:700;">${i}차시</span>
+        <span class="item-sub" style="flex:none; font-weight:700;${c.sub ? ' color:#2b6be0;' : ''}">${label}차시</span>
         <input type="text" value="${escapeHtml(c.title)}" data-chapter-title="1" style="flex:1;" placeholder="차시 제목">
+        ${c.level ? `<span class="item-sub" style="flex:none; color:#d33;" title="조립시간">${escapeHtml(c.level)}</span>` : ''}
+        ${c.theme ? `<span class="item-sub" style="flex:none;" title="학습테마">${escapeHtml(c.theme)}</span>` : ''}
+        ${c.note ? `<span class="item-sub" style="flex:none; color:#d33; font-weight:700;" title="비고">${escapeHtml(c.note)}</span>` : ''}
         <button type="button" class="ghost" data-chapter-up="1" ${i === 0 ? 'disabled' : ''}>▲</button>
         <button type="button" class="ghost" data-chapter-down="1" ${i === tb.chapters.length - 1 ? 'disabled' : ''}>▼</button>
         <button type="button" class="ghost${confirmingDeleteChapterId === c.id ? ' danger-armed' : ''}" data-chapter-delete="1">${deleteLabel}</button>
@@ -3490,7 +3504,8 @@
       document.getElementById('quickAddPartSelect').textContent = '부품 선택 ▾';
     }
     renderQuickAddPartPanel();
-    const chapterOptionsHtml = tb.chapters.map((c, i) => `<option value="${escapeHtml(c.id)}">${i}차시${c.title ? ' · ' + escapeHtml(c.title) : ''}</option>`).join('');
+    const chLabels = chapterLabels(tb.chapters);
+    const chapterOptionsHtml = tb.chapters.map((c, i) => `<option value="${escapeHtml(c.id)}">${chLabels[i]}차시${c.title ? ' · ' + escapeHtml(c.title) : ''}</option>`).join('');
     const partChapterSel = document.getElementById('quickAddPartChapter');
     const curPartChapter = partChapterSel.value;
     partChapterSel.innerHTML = chapterOptionsHtml;
