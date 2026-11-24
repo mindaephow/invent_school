@@ -29,7 +29,7 @@ JSON.stringify(br.camState())
 ```
 그다음 `mcp__Claude_Browser__computer` `screenshot` 으로 찍는다. 책 그림 `refs/<이름>/NN.jpg` 와 나란히 보고(링 수 = 화살표 수, 부품 위치·방향·시점), **그 스크린샷 파일 경로**(도구 결과의 `Image: source: …tool-results\….jpg`)를 `record_check.py` 의 캡처로 쓴다(45분 이내·500×350 이상).
 
-## 3. 그림(refs)을 DB 에 올린다 — 만들자마자
+## 3. 그림(refs)을 올린다 — 만들자마자 (`refStore.save` 가 JPEG 파일은 Storage 버킷 `assembly-refs/<id>/<NN>_<idx>.jpg` 에 올리고 표 `ivs_assembly_refs` 에는 경로 `storage:…` 만 적는다. PNG 금지 — `.jpg` 만 올린다. 개발 서버 화면은 저장소 refs 파일을 바로 읽으니 올리는 것은 라이브·다른 PC 용)
 ```bash
 mkdir -p public/_refs_tmp/<이름>      # 저장소 루트에서 — 올린 뒤 지운다(커밋 금지, .gitignore 에 있음)
 cp scripts/assembly-tools/refs/<이름>/index.json scripts/assembly-tools/refs/<이름>/NN*.jpg public/_refs_tmp/<이름>/   # 그 번호 그림 전부(NN·NN_1·NN_2·NN_4 …). 관찰 그림은 obs/ 폴더째: mkdir -p public/_refs_tmp/<이름>/obs && cp scripts/assembly-tools/refs/<이름>/obs/NN_* public/_refs_tmp/<이름>/obs/

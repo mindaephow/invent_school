@@ -1,0 +1,1 @@
+{"global": {"X": [45.9, -30.4], "Y": [-5.6, -54.7], "Z": [43.6, 33.5]}, "fit": {"from": "26_Q.json", "err_px": 2.0, "points": 41, "theta": -0.64, "phi": 0.79, "origin_world": [-90.0, 150.0, 199.5], "mirror": {"by": "check", "other": {"theta": 2.46, "phi": 0.76}}}, "no_rotate": true}
