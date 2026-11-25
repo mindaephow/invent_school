@@ -813,8 +813,13 @@ class Step:
                 if against is not None and host.n.endswith("축") and dir is not None:   # 통과 부품(축)에 끼우는 받는 부품이 다른 부품(against)의 면에 닿을 때까지 밀어 넣는다(부시가 블록 바깥면에 붙는 자리, 2026-11-09). 값은 against 부품의 크기·내 두께에서 계산한다 — 손값 p= 아님(C6)
                     import obb
                     _a = -np.array(dir, float); _a = _a / np.linalg.norm(_a)   # dir = 결합 전에 띄우는 방향(뷰어·guidecheck 와 같다) → 밀어 넣는 방향은 그 반대
-                    _ag = _hw(_host(s.A, against)); _hs = np.array(_ag.conn.get("size") or partlib.get(_ag.n)["size"], float) / 2
-                    _lo = obb.span(obb.corners(_ag.p, _ag.R, _hs), _a)[0]
+                    if isinstance(against, tuple):   # against=(부품, "h구멍id") — 상자 면 대신 그 구멍의 바깥 면(구멍 위치 ± 구멍 길이/2, 띄우는 방향 쪽)에 닿는다(L 브라켓 벽처럼 상자 끝이 구멍 면이 아닌 부품)
+                        _agp = _hw(_host(s.A, against[0])); _agh = _agp.hole(against[1]); _an = np.array(_agh["dir"], float); _an = _an / np.linalg.norm(_an)
+                        if float(np.dot(_an, -_a)) < 0: _an = -_an   # 띄우는 방향(−_a) 쪽 면
+                        _lo = float(np.dot(np.array(_agh["pos"], float) + _an * float(_agh["len"]) / 2, _a))
+                    else:
+                        _ag = _hw(_host(s.A, against)); _hs = np.array(_ag.conn.get("size") or partlib.get(_ag.n)["size"], float) / 2
+                        _lo = obb.span(obb.corners(_ag.p, _ag.R, _hs), _a)[0]
                     _th = float(np.array(tmp.conn.get("size") or partlib.get(n)["size"], float)[int(np.argmax(np.abs(np.array([h for h in tmp.conn["holes"] if h["id"] == pid][0]["dir"], float))))])   # 내 구멍 축(부품 로컬) 방향 두께
                     hole_center = g["pos"] + _a * (_lo - _th / 2 + float(np.dot(myh["pos"], _a)) - float(np.dot(g["pos"], _a)))
                     _thick = _th   # 뷰어 링 = 끝 − 방향×두께/2 가 구멍 중심에 오도록 이 부품의 실제 두께를 알려 준다(바퀴 16 처럼 기본 5 와 다른 부품)

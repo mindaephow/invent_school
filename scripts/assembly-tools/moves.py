@@ -103,7 +103,7 @@ def auto_hover(A, gap=20.0, skip=("리벳",), maxadd=200.0):
             d = _v(q.extra["dir"]); h = _len_along(q, d) + gap; why = "자기 길이 %.0f + %.0f" % (_len_along(q, d), gap)
             qb = _box(q)
             for L in st.parts:   # ② 먼저 끼우는 부품이 같은 길 아래에 있으면 그보다 바깥
-                if L is q or L.extra.get("joinOrder", 1) >= q.extra.get("joinOrder", 1) or L.extra.get("dir") is None: continue
+                if L is q or L.extra.get("joinOrder", 1) >= q.extra.get("joinOrder", 1) or L.extra.get("dir") is None or (L.extra.get("seated") and not L.extra.get("moveGuide")): continue   # seated(책이 이미 끼운 모양, 안 움직이는 축 등 — moveGuide 로 같이 떠오르는 seated 블록은 제외)는 먼저 끼우는 부품이 아니다 — 그 뒤 부시를 바깥으로 밀지 않는다(catapult 11번 부시 둘 hover 25.5/97)
                 if float(np.dot(_v(L.extra["dir"]), d)) < 0.99 or not _foot(_box(L), qb, d): continue
                 hl = L.extra.get("hover") or (hovercheck.HOVER_RECV if L.extra.get("recv") else hovercheck.HOVER)
                 need = float(hl) + _len_along(L, d) + hovercheck.MIN_GAP
@@ -143,3 +143,66 @@ def pegs_into(s, name, R, host, holes, peg_face="+z", hole_face="-y", pegs=None,
     pegs = pegs or ["돌기면 %s %d" % (peg_face, i + 1) for i in range(len(holes))]
     if len(pegs) != len(holes): raise ValueError("돌기 %d개 ↔ 구멍 %d개 — 개수가 같아야 한다" % (len(pegs), len(holes)))
     return s.attach(name, R, {p: (host, _hole(h, hole_face)) for p, h in zip(pegs, holes)}, **extra)
+
+
+# ── 세트 통째 원점 이동 (A4, 2026-11-25) ─────────────────────────────────────────────────────────────
+def recenter_set(A, steps, slot=1, follow=()):
+    """한 창고(slot)의 세트(steps 번호들)가 원점에서 벗어나 만들어졌으면 세트 전체를 같은 만큼 옮긴다 — 숫자는 적지 않고 빌드 때 계산한다(A4).
+    이동량 = −(번호별 '완성 모습 x·z 중심'의 최소와 최대의 가운데). 중심은 violations 의 center 점검과 같은 식(부품 크기·자세 상자, hideMade·hideAt·같은 창고만)이다.
+    옮기는 것: 그 번호들의 부품 p·_base, 부품 extra 의 move·moves·side·poseAt 의 p, marks·faceMarks·holeMarks·settleMarks, 그 번호 kw["moveMade"] 의 p·marks.
+    follow=[번호..] 는 d 계산에는 안 넣고 같은 d 만 적용한다(몸에 합쳐 들어오는 번호, 예: 투석기 21).
+    조립 스크립트 끝(auto_hover 뒤, stepchecks.apply 앞)에서 한 번 부른다. 이미 가운데면(이동량 0) 아무것도 안 바꾼다."""
+    from asmlib import euler_to_R
+    steps = [int(k) for k in steps]; st = A.steps
+    cs = []
+    for k in steps:
+        hide = {int(x) for x in (st[k - 1].kw.get("hideMade") or {}) if str(x).isdigit()}
+        lo = np.array([1e9, 1e9]); hi = np.array([-1e9, -1e9])
+        for j in range(1, k + 1):
+            if j in hide or st[j - 1].kw.get("slot", 1) != st[k - 1].kw.get("slot", 1): continue
+            for pt in st[j - 1].parts:
+                ex = pt.extra or {}; ha = ex.get("hideAt")
+                if ha and (k in [int(x) for x in ha] if isinstance(ha, (list, tuple, set)) else int(ha) <= k): continue
+                sz = (pt.conn or {}).get("size")
+                if not sz: continue
+                pose = pt._base if getattr(pt, "_base", None) else (pt.p, pt.R)
+                mv = [m for m in (ex.get("moves") or ([ex["move"]] if "move" in ex else [])) if int(m["at"]) <= k]
+                if mv: m = max(mv, key=lambda q: int(q["at"])); pose = (m["p"], euler_to_R(m["r"]))
+                sd = ex.get("side")
+                if sd and k < int(sd.get("until") or 0): pose = (sd["p"], euler_to_R(sd["r"]))
+                c = np.array(pose[0], float); h = np.abs(np.array(pose[1], float)) @ (np.array(sz, float) / 2)
+                lo = np.minimum(lo, [c[0] - h[0], c[2] - h[2]]); hi = np.maximum(hi, [c[0] + h[0], c[2] + h[2]])
+        if hi[0] >= lo[0]: cs.append((lo + hi) / 2)
+    if not cs: return np.zeros(3)
+    cs = np.array(cs); mid = (cs.min(axis=0) + cs.max(axis=0)) / 2
+    d = np.array([-mid[0], 0.0, -mid[1]])
+    if float(np.abs(d).max()) < 1e-6: return d
+    r3 = lambda v: [round(float(x), 3) for x in v]
+    mvpt = lambda q: np.array(q, float) + d
+    for k in list(steps) + [int(x) for x in follow if int(x) not in steps]:
+        S = st[k - 1]
+        for pt in S.parts:
+            pt.p = pt.p + d
+            if getattr(pt, "_base", None) is not None: pt._base = (pt._base[0] + d, pt._base[1])
+            ex = pt.extra
+            for key in ("move", "side"):
+                if isinstance(ex.get(key), dict) and "p" in ex[key]: ex[key]["p"] = r3(mvpt(ex[key]["p"]))
+            for m in (ex.get("moves") or []):
+                if "p" in m: m["p"] = r3(mvpt(m["p"]))
+            for pa in (ex.get("poseAt") or {}).values():
+                if "p" in pa: pa["p"] = r3(mvpt(pa["p"]))
+            for key in ("marks", "faceMarks", "holeMarks", "settleMarks"):
+                if isinstance(ex.get(key), list) and ex[key] and not isinstance(ex[key], str):
+                    ex[key] = [r3(mvpt(m)) if hasattr(m, "__len__") and len(m) == 3 and not isinstance(m, dict) else m for m in ex[key]]
+        for b_ in (S.kw.get("bands") or []):   # 고무밴드 점도 같이 옮긴다(follow·steps 번호에 bands 가 있을 때)
+            if isinstance(b_.get("pts"), list): b_["pts"] = [r3(mvpt(q)) for q in b_["pts"]]
+        for e in (S.kw.get("moveMade") or {}).values():
+            if "p" in e: e["p"] = r3(mvpt(e["p"]))
+            if isinstance(e.get("marks"), list): e["marks"] = [r3(mvpt(m)) if hasattr(m, "__len__") and len(m) == 3 else m for m in e["marks"]]
+    return d
+
+
+def center_between(part, host_a, host_b, axis=2):
+    """긴 부품(축)을 두 받는 부품(판 둘) 가운데에 맞춘다 — attach 가 축 한쪽 끝만 구멍에 대 한쪽으로 나오게 놓으므로, 축 가운데의 axis 좌표(0=x 1=y 2=z)를 두 부품 가운데로 옮긴다(계산, 손값 아님)."""
+    p = np.array(part.p, float); p[axis] = 0.5 * (float(host_a.p[axis]) + float(host_b.p[axis])); part.p = p
+    return part

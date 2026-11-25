@@ -1,1 +1,1 @@
-{"global": {"X": [55.0, 47.9], "Y": [-2.6, -55.0], "Z": [-55.0, 26.7]}, "fit": {"from": "16_W.json", "err_px": 0.47, "points": 45, "theta": 0.98, "phi": 0.88, "cols": "+X", "rows": "-Z"}, "rotate_to": "X"}
+{"global": {"X": [52.8, 55.0], "Y": [-8.1, -55.0], "Z": [-55.0, 31.1]}, "fit": {"from": "16_B.json", "err_px": 0.78, "points": 21, "theta": 1.09, "phi": 0.76, "cols": "-Z", "rows": "+X", "fov": 50, "cx": 500.0, "cy": 434.5, "roll": -6.6, "mirror_other": {"theta": -1.95, "phi": 0.7, "err_px": 6.16}}, "rotate_to": "Z"}

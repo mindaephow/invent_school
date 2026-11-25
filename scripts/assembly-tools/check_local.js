@@ -118,6 +118,10 @@ if (process.argv[3]) {
     steps.forEach((s2, k) => (s2.parts || []).forEach((pt, i) => {
       if (k + 1 > step) return;
       if (arriving.some((a) => a.pt === pt)) return;
+      // 그 번호 화면에 안 보이는 부품(다른 창고 slot·hideMade 로 숨긴 번호/부품·hideAt)은 장애물이 아니다(catapult 10·11번: 숨긴 몸을 지난다고 막던 것)
+      { const hm = (st.hideMade || {}); if (Object.prototype.hasOwnProperty.call(hm, String(k + 1)) || Object.prototype.hasOwnProperty.call(hm, `${k + 1}:${i}`)) return;
+        if (s2.slot != null && st.slot != null && s2.slot !== st.slot && !steps.slice(0, step).some((sx) => sx.moveMade && sx.moveMade[`${k + 1}:${i}`])) return;   // 다른 창고 부품(합쳐져 옮겨진 것은 제외)
+        const ha = pt.hideAt; if (ha != null && (Array.isArray(ha) ? ha.map(Number).includes(step) : Number(ha) <= step)) return; }
       prior.push({ pt, ...placedAt(pt, step - 1), k: k + 1, i });
     }));
     arriving.forEach(({ pt, mode, k, i }) => {

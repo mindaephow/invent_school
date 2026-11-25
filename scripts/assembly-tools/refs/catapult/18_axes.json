@@ -1,1 +1,1 @@
-{"global": {"X": [55.0, 25.1], "Y": [-0.3, -55.0], "Z": [-40.3, 55.0]}, "fit": {"from": "18_P3.json", "err_px": 1.23, "points": 45, "theta": 0.53, "phi": 0.66, "cols": "+X", "rows": "-Z"}, "rotate_to": "X", "level": true}
+{"global": {"X": [49.8, 23.3], "Y": [-0.2, -55.0], "Z": [-32.7, 44.2]}, "fit": {"from": "18_P.json", "err_px": 2.07, "points": 10, "theta": 0.53, "phi": 0.65, "origin_world": [0.0, 22.5, 10.0], "mirror": {"by": null, "other": {"theta": -2.8, "phi": 0.53}}}, "no_rotate": true}
