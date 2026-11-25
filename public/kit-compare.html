@@ -179,6 +179,11 @@ const KITS = [
   { name: '메타', tab: '볼트너트', way: '볼트너트', steps: 7, part: '', note: '', d: [] },
   { name: '로보로보', tab: '볼트너트', way: '볼트너트', steps: 7, part: '', note: '', d: [] },
   { name: 'X로보', tab: '볼트너트', way: '볼트너트', steps: 7, part: '', note: '', d: [] },
+  // 블록 탭(사용자 2026-11-25) — EQ로봇 5단계, J로보(스카이로보) 7단계, 나머지 단계 수는 알려 주시는 대로 채운다
+  { name: 'EQ로봇', tab: '블록', way: '블록', steps: 5, stepNote: '5단계는 몬스터과정', part: '', note: '', d: [] },
+  { name: 'MRT로봇', tab: '블록', way: '블록', steps: 0, part: '', note: '', d: [] },
+  { name: '휴나로봇', tab: '블록', way: '블록', steps: 0, part: '', note: '', d: [] },
+  { name: 'J로보', full: 'J로보(스카이로보)', tab: '블록', way: '블록', steps: 7, part: '', note: '', d: [] },
 ];
 // 모델 목록: 부품 DB 교재 차시 제목(ivs_textbooks, 2026-11-18). 준비·창작 차시는 뺐다.
 const MODELS = {
@@ -186,6 +191,8 @@ const MODELS = {
   '메타': { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: [] },   // 모델 목록은 알려 주시는 대로 채운다
   '로보로보': { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: [] },
   'X로보': { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: [] },
+  'EQ로봇': { 1: [], 2: [], 3: [], 4: [], 5: [] },
+  'J로보': { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: [] },
   '프로보 익사이팅': { 1: ['스틱 슝슝이','탭탭','쇼트트랙 볼','턴 타이밍','디비전 게임','피아르','수평 게임','페이스 슛팅','고백점프','슈터','순간의 판단'], 2: ['신호등','빙글빙글','토글 게임','꼬리잡기','스틱 붕붕이','놀라운 기억력','순풍 역풍','손등 치기','망치 게임','좌우 조종','왕복 달리기'], 3: ['턴테이블','도그파이트','무.꽃.피','러닝머신','빙글빙글 막대기','파도타기','창과 방패','위험한 인사','곡예 운전','마인러쉬','정교한 해머'], 4: ['캐치 마그넷','터치 터치','마구 탁구','스피드 터치','두더지 게임','무한 러닝머신','험난한 레이스','헤드 어택','원 터치','블럭 넘기기'] },
   '프로보 말랑코딩': { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] },   // 모델 목록은 알려 주시는 대로 채운다
   '큐보': { 1: ['토끼','양팔저울','풍차','로봇팽이','3륜바이크','축구로봇','오토건','조종형비행기','롤링봇','배틀로봇','꼬마기사','포뮬러원(F1)','강아지로봇'], 2: ['스피드바이크','투석기','드롭체커','사마귀로봇','어보이더','배틀로봇','오토타깃','바이킹','트레일러','볼링머신'], 3: ['배틀바이크','조향자동차','해머배틀','장갑차','미니덤프','석궁봇','빅핸드','집게로봇','오토투석기','큐보바이크'], 4: [] },   // 4단계는 생산중단(DB 에 교재·모델 없음 — 모델 목록은 알려 주시는 대로 채운다)
@@ -200,7 +207,7 @@ const isDisc = (kit, v) => (DISC[kit] || []).includes(String(v));
 MODELS['큐보플러스'] = { 1: MODELS['큐보'][1], 2: MODELS['큐보'][2], 3: MODELS['큐보'][3] };
 const opt = (v, t) => '<option value="' + v + '">' + t + '</option>';
 const $ = id => document.getElementById(id);
-const names = ['큐보', '큐보플러스', '타미주니어', '에이스랩', '프로보 커넥트', '프로보 익사이팅', '프로보 말랑코딩', '프로보 테크닉', '메타', '로보로보', 'X로보'].filter(n => MODELS[n]);   // 표 머리글 순서와 같게
+const names = ['큐보', '큐보플러스', '타미주니어', '에이스랩', '프로보 커넥트', '프로보 익사이팅', '프로보 말랑코딩', '프로보 테크닉', '메타', '로보로보', 'X로보', 'EQ로봇', 'J로보'].filter(n => MODELS[n]);   // 표 머리글 순서와 같게
 const tabOf = n => (KITS.find(k => k.name === n || k.full === n) || {}).tab || '리벳';
 // 만들고 싶은 교구에만 있는 항목(권을 따로 고르지 않는다) — 큐보 4단계는 생산중단, 큐보플러스는 합친 묶음. 모델 목록은 알려 주시는 대로 채운다.
 const GOAL_ONLY = ['큐보 4단계 · 생산중단'];
@@ -363,18 +370,18 @@ $('goalKit').onchange = fillVol; $('goalVol').onchange = fillModel; $('goalModel
 // 큐보+(큐보플러스)는 모든 것이 큐보와 동일(사용자 2026-11-18) — 큐보 값을 그대로 쓴다. 단계는 1~3단계.
 // 단계별(1~3단계) 칸은 비워 둔다(사용자 2026-11-18 "삭제") — 조립방식·특이사항만 큐보와 같다.
 Object.assign(KITS.find(k => k.name === '큐보+'), { way: KITS[0].way, part: KITS[0].part, note: KITS[0].note, blank: true });
-// 맨 위 탭(조립방식): 블록 / 리벳 / 볼트너트 — 탭마다 그 방식의 교구만 표에 보인다. 지금까지 만든 교구는 모두 리벳 탭.
+// 맨 위 탭(조립방식): 블록 / 리벳 / 볼트너트 — 탭마다 그 방식의 교구만 표에 보인다.
 const TABS = ['블록', '리벳', '볼트너트'];
 const td = (cls, t) => '<td class="' + cls + '">' + t + '</td>';
 function renderTable(tab) {
   const ks = KITS.filter(k => (k.tab || '리벳') === tab);
   const tbl = document.getElementById('tbl');
-  document.querySelector('.wrap').style.display = ks.length ? '' : 'none';   // 교구가 없는 탭(블록)은 표를 아예 보이지 않는다
+  document.querySelector('.wrap').style.display = ks.length ? '' : 'none';   // 교구가 없는 탭은 표를 아예 보이지 않는다
   if (!ks.length) { tbl.innerHTML = ''; return; }
   const rows = Math.max(...ks.map(k => k.steps));
   let h = '<thead><tr><th class="rowhead"></th>' + ks.map(k => '<th' + (k.full ? ' title="' + k.full + '"' : '') + '>' + k.name + '</th>').join('') + '</tr></thead><tbody>';
   h += '<tr><th>조립방식</th>' + ks.map(k => k.way ? td('', k.way) : td('todo', '—')).join('') + '</tr>';
-  h += '<tr><th>단계 수</th>' + ks.map(k => k.steps ? td('', '1~' + k.steps + '단계' + (k.disc ? '<br>(' + k.disc.join('·') + '단계는 생산중단)' : '')) : td('todo', '—')).join('') + '</tr>';
+  h += '<tr><th>단계 수</th>' + ks.map(k => k.steps ? td('', '1~' + k.steps + '단계' + (k.disc ? '<br>(' + k.disc.join('·') + '단계는 생산중단)' : '') + (k.stepNote ? '<br>(' + k.stepNote + ')' : '')) : td('todo', '—')).join('') + '</tr>';
   h += '<tr><th>부품특징</th>' + ks.map(k => k.part ? td('', k.part) : td('todo', '—')).join('') + '</tr>';
   h += '<tr><th>특이사항</th>' + ks.map(k => k.note ? td('', k.note) : td('todo', '—')).join('') + '</tr>';
   for (let i = 0; i < rows; i++) {
