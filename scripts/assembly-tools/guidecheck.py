@@ -141,7 +141,7 @@ def run(name, only=None):
                         tips = [np.array(w["pos"]) + sh + np.array(w["dir"]) * w["len"] / 2 * sg for w in (host.world("peg", c) for c in host.conn["pegs"]) for sg in ((1, -1) if host.n.endswith("축") else (1,)) if float(np.dot(w["dir"], u)) * sg > 0.9 or (host.n.endswith("축") and abs(float(np.dot(w["dir"], u))) > 0.9)]   # 축(양 끝을 쓰는 통과 부품, G21)은 어느 끝이든 화살표 꼬리가 될 수 있다 — 부시는 축에 결합만 하고 얼마나 들어가는지는 모른다(사용자 2026-11-08)
                         if not tips or min(float(np.linalg.norm(frm - t)) for t in tips) > 3: bad.append((k, "%s 화살표 꼬리 %s 가 호스트(%s)의 떠 있는 위쪽 돌기 끝에서 3mm 넘게 떨어짐(%s)" % (q.n, np.round(frm, 1).tolist(), host.n, kind)))
                     else:
-                        floating = [h for h, (hu, hhv, hord, hr, _m, _k) in cand if h is not q and not hr and not h.extra.get("carriedByHost") and h.conn and any(min(float(np.linalg.norm(np.array(w["pos"]) + np.array(w["dir"]) * w["len"] / 2 * sg - m)) for sg in (1, -1)) < 3 for w in (h.world("peg", c) for c in h.conn["pegs"]))]
+                        floating = [h for h, (hu, hhv, hord, hr, _m, _k) in cand if h is not q and not hr and h.conn and any(min(float(np.linalg.norm(np.array(w["pos"]) + np.array(w["dir"]) * w["len"] / 2 * sg - m)) for sg in (1, -1)) < 3 for w in (h.world("peg", c) for c in h.conn["pegs"]))]
                         if floating: bad.append((k, "%s 안에 떠 있는 %s 가 있는데 순서(%s)가 그보다 크지 않아 화살표가 리벳 끝이 아니라 제자리 끝 %s 에서 시작한다(G12, %s)" % (q.n, floating[0].n, order, np.round(m, 1).tolist(), kind)))
                     ok = False
                     for hc in q.conn["holes"]:

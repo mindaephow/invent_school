@@ -26,7 +26,7 @@ def check_steps(steps, only=None, dircheck=False):
     for k, s in enumerate(steps, 1):
         if only and k not in only: continue
         P = s.get("parts", [])
-        fast = [p for p in P if p.get("n") in FAST and p.get("dir") and p.get("marks") and p.get("settleDir") is None and not p.get("carriedByHost")]   # carriedByHost: 새 판에 미리 꽂혀 판과 함께 오는 리벳(speedbike 28) — 판보다 가까이 뜰 수 없다
+        fast = [p for p in P if p.get("n") in FAST and p.get("dir") and p.get("marks") and p.get("settleDir") is None]
         recvs = [p for p in P if p.get("recv") and p.get("dir") and p.get("marks") and p.get("n") not in FAST and p.get("settleDir") is None]
         sd = [p for p in P if p.get("settleDir") is not None]
         if sd and any(p.get("n") in FAST or p.get("recv") for p in sd): skipped.append((k, "옆자리 합치기(settleDir) 부품 %d개" % len(sd)))

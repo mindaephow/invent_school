@@ -104,12 +104,18 @@ def auto_hover(A, gap=20.0, skip=("리벳",), maxadd=200.0):
             qb = _box(q)
             for L in st.parts:   # ② 먼저 끼우는 부품이 같은 길 아래에 있으면 그보다 바깥
                 if L is q or L.extra.get("joinOrder", 1) >= q.extra.get("joinOrder", 1) or L.extra.get("dir") is None: continue
-                if abs(float(np.dot(_v(L.extra["dir"]), d))) < 0.99 or not _foot(_box(L), qb, d): continue
+                if float(np.dot(_v(L.extra["dir"]), d)) < 0.99 or not _foot(_box(L), qb, d): continue
                 hl = L.extra.get("hover") or (hovercheck.HOVER_RECV if L.extra.get("recv") else hovercheck.HOVER)
                 need = float(hl) + _len_along(L, d) + hovercheck.MIN_GAP
                 if need > h: h, why = need, "먼저 끼우는 %s(%.0f) 바깥" % (L.n, float(hl))
+            # 끼워질 축: 제자리 상자가 이미 앞 부품 P 와 겹치면 q 가 P 에 꿰이는 것 — 충돌 검사에서 빼고, q 앞면이 P 의 바깥 끝(d 방향)을 넘도록만 띄운다
+            thr = [P for P in prior if _hit(qb, _box(P))]
+            for P in thr:
+                pb = _box(P); far = float(np.sum(np.where(d > 0, pb[1], pb[0]) * d))
+                need = far - float(np.dot(_pose(q)[0], d)) + _len_along(q, d) / 2 + gap
+                if need > h: h, why = need, "끼워질 %s 끝을 넘김" % P.n
             h0 = h   # ③ 띄운 자리가 앞 번호 부품과 겹치면 겹치지 않을 때까지(1mm 씩)
-            while h < h0 + maxadd and any(_hit(_box(q, _pose(q)[0] + d * h * t), _box(P)) for t in (1.0, 0.66, 0.33) for P in prior):
+            while h < h0 + maxadd and any(_hit(_box(q, _pose(q)[0] + d * h * t), _box(P)) for t in (1.0, 0.66, 0.33) for P in prior if P not in thr):
                 h += 1.0
             if h >= h0 + maxadd: h, why = h0, why + " · ⚠ 길이 끝까지 막힘 — 거리가 아니라 띄우는 방향(dir)·결합 순서를 의심(그대로 최소 거리)"
             elif h > h0: why += " · 길 비키기 +%.0f" % (h - h0)

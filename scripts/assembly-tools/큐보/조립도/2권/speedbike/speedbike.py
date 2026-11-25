@@ -37,7 +37,7 @@ from asmlib import *
 _UW = _o.path.join(_d, "refs", "speedbike", "_worked_upto.json")   # 번호를 하나씩 확인하며 만들 때 그 번호까지만 옛 solver 를 돈다(선례: dog.py _UPTO) — 시작 안 한 번호의 부품은 원점에 남는 게 정상(규칙 00-1 ②)
 _UPTO = int(json.load(open(_UW, encoding="utf-8")).get("upto", 0)) if _o.path.exists(_UW) else 0
 
-A = Asm("cubo-2-speedbike", "스피드바이크", "교재 13~19쪽 · 스피드바이크 (1~37단계)", camera={"target": [60, 20, 0], "radius": 380, "theta": 0.9, "phi": 1.0},
+A = Asm("cubo-2-speedbike", "스피드바이크", "교재 13~19쪽 · 스피드바이크 (1~37단계)", camera={"target": [60, 20, 0], "radius": 380, "theta": 2.6, "phi": 0.95},   # 완성 화면 카메라: 책 99.jpg(캐터필러 왼쪽 아래·가까운 바퀴와 빨간 부시 오른쪽 아래·먼 바퀴 왼쪽 뒤·브라켓 뒤쪽 위)와 같게 감독이 화면에서 맞춤 (2026-11-25 사용자 지적 "완성은 책과 구도도 안 맞아")
         listNote="만드는 중 — 단계가 끝나기 전까지 LIST 개수는 안 맞는 것이 정상", guideMode="mates")   # 연결점은 부품에 붙어 있고 결합할 자리일 때만 보인다(맞물림 방식, 사용자 지시 2026-10-04)
 RELOCK = "--relock" in sys.argv   # 잠금 기록을 새로 만들 때(수정 지시는 이번 빌드에서 무시한다)
 if not RELOCK: A.load_fixes("speedbike_fixes.json")   # 관리자 수정 지시(앞 단계 수정 → 뒤 단계가 따라온다). 파일이 없으면 아무 일도 안 한다
@@ -324,10 +324,10 @@ _RR713_leg = RG13 @ R12 @ np.array(P713.R, float)
 for _q in _G13:
     _pp, _RR = _legacy_pose(_q)
     _pf, _Rf = _pre(RG13 @ _pp + _T13, RG13 @ _RR)
-    for _k13 in range(15, 38):
+    for _k13 in range(15, 39):
         _q.extra.setdefault("poseAt", {})[str(_k13)] = {"p": rnd(_pf), "r": R_to_euler(_Rf)}
 _pf, _Rf = _pre(C713, _RR713_leg)
-for _k13 in range(15, 38):
+for _k13 in range(15, 39):
     P713.extra.setdefault("poseAt", {})[str(_k13)] = {"p": rnd(_pf), "r": R_to_euler(_Rf)}
 print("13번 확인: 첫째 조립품 이동", rnd(SH13), "판 옛 세계 자리", rnd(C713), "R_713 와 같은 자세:", bool(np.allclose(_RR713_leg, R_713, atol=1e-6)))
 
@@ -796,8 +796,6 @@ for _q in A.parts:
     if _q.step.index != 28: _q.extra["hover"] = _h28[id(_q)]
     if _q.extra.get("hover") is None: _q.extra.pop("hover", None)
 A.meta["lift"] = _l28
-for _rv, _b2 in zip(RV28, BR1_28):   # 책 28: 리벳은 1열브라켓 기둥 구멍에 미리 꽂힌 채 브라켓과 함께(같은 띄움·같은 순서) 벽으로 온다 — 리벳↔브라켓 안내는 같이 움직여 없고, 화살표는 리벳 돌기 끝 → 벽 구멍만
-    _rv.extra["hover"] = _b2.extra["hover"]; _rv.extra["joinOrder"] = _b2.extra["joinOrder"] = 1; _rv.extra["carriedByHost"] = True
 for _bo in BO28:
     _wb28 = _bo.peg("p1"); _bo.extra["pegDepth"] = round(float(np.array(_bo.extra["dir"], float) @ (np.array(_bo.extra["marks"][0], float) - _wb28["pos"])) + _wb28["len"] / 2, 3)   # 8볼트는 벽·브라켓 두 장을 꿰는 돌기 — 화살표 꼬리가 떠 있는 나사 끝에 오도록(27번과 같은 방식)
 A.steps[27].cam = (-0.61, 1.05, False, None, None, None); A.steps[27].camSrc = "fit"   # composefit→mkfit3d 28_A·28_B(27번 브라켓 리벳·볼트·벽 링 점 10개 ↔ 27번 모델 세계 좌표, fov 35 평균 1.81px 최대 4.03px, roll −2.6°, 둘째 판은 책 28 에서 z +18.95 떨어져 그려져 같이 풂)
@@ -921,31 +919,100 @@ def _wheel_side(mq):
 _a = np.array([0.0, 1.0, 0.0])
 def _Rof(y):
     return np.column_stack([_a, y, np.cross(_a, y)])
+# ── 34 ── 교재 19쪽 34 (재작업 2026-11-25 — 책 배치로 다시: 가까운 쪽 DC모터(M11, 몸 +Z 쪽) 바깥 십자 구멍 cross_back 에 축 1, 그 축에 빨간 부시 2)
+#   책 34: 초록 링 3개 = 모터 십자 구멍 1 + 부시 2(축 위, 카메라 쪽 넓은 면). 화살표(초록 선) 1줄이 부시 2 → 축 → 모터 십자 구멍으로 이어진다.
+#   위치는 결합으로만: 축 p1 → M11 cross_back(attach, 모터는 앞 번호에서 옮겨진 자세라 hostPose=True). 부시는 mv.on_shaft(축 바깥 끝, against = 모터 → 첫 부시).
+#   축 깊이(G21: 축이 길이 방향으로 어디 앉는지는 축에 끼워지는 부품이 정한다): cross_back 은 깊이(len) 없는 막힌 구멍이라 attach 는 축 65 전체를 모터 안에 넣는다(물리적으로 불가능 — 모터 두께 38).
+#   그래서 책 34·35 에서 이 축에 끼워지는 부품(부시 2 + 중간바퀴 1 + 부시 1)의 축 방향 두께 합(부품 DB size)만큼 축을 바깥으로 뺀다 — 축 바깥 끝 = 마지막 부시 바깥 면. ⚠ 근거 약함(읽기 표 판단과정).
+s34 = SKEL[33]; s34.kw.pop("noPart", None)
+s34.note = "[교재 34] 가까운 쪽 DC모터 바깥 십자 구멍에 축을 끼우고, 빨간 부시 2개를 축에 끼워요."
+import violations as _vi34
+_Mp34, _MR34 = (np.array(_v, float) for _v in _vi34._drawn_pose(A, M11, 34))   # 34번 화면이 그리는 모터 자세(스크립트 좌표)
+_hd34 = _MR34 @ np.array([h for h in M11.conn["holes"] if h["id"] == "cross_back"][0]["dir"], float)   # 구멍 방향 = 모터 안쪽
+_px34 = np.cross(_hd34, [0.0, 1.0, 0.0]); _px34 = _px34 if np.linalg.norm(_px34) > 0.5 else np.cross(_hd34, [1.0, 0.0, 0.0])
+_Rax34 = ori(_px34, _hd34)   # 축 돌기 p1(모델 +y)이 모터 안쪽(구멍 방향)을 향한다
+AX34 = s34.attach("축", _Rax34, {"p1": (M11, "cross_back")}, hostPose=True)
+_out34 = np.array(AX34.extra["dir"], float)   # 바깥(띄우는 쪽) = attach 가 정한 dir(돌기 방향의 반대)
+_stk34 = 3 * float(partlib.get("부시")["size"][1]) + float(partlib.get("중간바퀴")["size"][1])   # 이 축에 끼워지는 부품(34 부시 2 + 35 중간바퀴 1·부시 1)의 축 방향 두께 합 — 부품 DB size(구멍 축 = 모델 y)
+AX34.p = np.array(AX34.p, float) + _out34 * _stk34   # G21: 축 바깥 끝 = 끼워지는 부품 묶음 바깥 면 → 모터 안 깊이 = 65 − 합
+AX34.extra["pegDepth"] = round(float(AX34.peg("p1")["len"]) - _stk34, 3)   # 화살표 꼬리 = 떠 있는 축 끝: 모터 안에 들어가는 깊이(축 길이 DB − 위 합) — 손 숫자 아님(31번 12볼트 pegDepth 와 같은 방식)
+BU34 = []
+for _k, _ag in enumerate((M11, None)):
+    BU34.append(mv.on_shaft(s34, "부시", AX34, list(_out34), against=(_ag if _ag is not None else BU34[-1]), hostPose=True))   # 부시: 축 바깥 끝에서 끼워 모터 바깥면(첫째) → 첫째 부시(둘째)에 닿게, 좁은 쪽이 모터 쪽(G5, on_shaft 가 자세를 정함)
+    BU34[-1].extra["joinOrder"] = 2 + _k   # 축(1)보다 나중, 모터 쪽 부시가 먼저(G12)
+_h34 = {id(_q): _q.extra.get("hover") for _q in A.parts}; _l34 = dict(A.meta.get("lift") or {})
+mv.auto_hover(A)   # 결합 전 띄움은 규칙(G1c)으로 계산 — 34번 부품만 반영하고 앞·뒤 번호는 그대로 둔다
+for _q in A.parts:
+    if _q.step.index != 34: _q.extra["hover"] = _h34[id(_q)]
+    if _q.extra.get("hover") is None: _q.extra.pop("hover", None)
+A.meta["lift"] = _l34
+print("34번 축: 모터 M11 cross_back, 바깥 방향", rnd(_out34), "축 바깥으로 뺀 길이(끼워지는 부품 두께 합)", _stk34, "부시 자리", [rnd(_b.p) for _b in BU34])
+
+# ── 35 ── 교재 19쪽 35 (재작업 2026-11-25 — 책 배치로 다시: 34번 축(AX34)의 바깥 끝에 중간바퀴 1(무늬 면 바깥, 허브가 모터 쪽) + 빨간 부시 1(바퀴 바깥))
+#   책 35: 부시 2개는 모터 쪽 축에 이미 끼워져 있고(34번), 검은 중간바퀴가 축 끝으로 다가오며 초록 링은 바퀴 가운데 구멍 1, 바퀴 뒤에서 빨간 부시 1이 바깥에서 따라온다(링 2).
+#   위치는 결합으로만: 중간바퀴 h1 ← 축 p1 바깥 끝(against = 34번 둘째 부시), 부시 h1 ← 축 p1 바깥 끝(against = 중간바퀴). 자세는 면 규칙: 바퀴 허브(구멍 입구 −y)가 모터 쪽, 부시는 G5(좁은 쪽이 바퀴 쪽).
+s35 = SKEL[34]; s35.kw.pop("noPart", None)
+s35.note = "[교재 35] 축 끝에 중간바퀴를 끼우고 빨간 부시 1개로 고정해요."
+WHL35 = mv.on_shaft(s35, "중간바퀴", AX34, list(_out34), R=mv.bush_R([-float(_c) for _c in _out34]), against=BU34[-1], hostPose=True)   # 바퀴 +y(무늬 면)가 바깥, 허브(−y)가 모터 쪽
+WHL35.extra["joinOrder"] = 1
+BU35 = mv.on_shaft(s35, "부시", AX34, list(_out34), against=WHL35, hostPose=True)   # 부시: 좁은 쪽이 바퀴 쪽(G5)
+BU35.extra["joinOrder"] = 2   # 바퀴가 먼저(G12)
+_h35 = {id(_q): _q.extra.get("hover") for _q in A.parts}; _l35 = dict(A.meta.get("lift") or {})
+mv.auto_hover(A)
+for _q in A.parts:
+    if _q.step.index != 35: _q.extra["hover"] = _h35[id(_q)]
+    if _q.extra.get("hover") is None: _q.extra.pop("hover", None)
+A.meta["lift"] = _l35
+print("35번 바퀴·부시 자리", rnd(WHL35.p), rnd(BU35.p))
+
+# ── 36 ── 교재 19쪽 36 (재작업 2026-11-25 — 책 배치로 다시: 반대쪽 DC모터(M4, 몸 −Z 쪽) 바깥 십자 구멍 cross_back 에 축 1, 그 축에 빨간 부시 2 — 34번과 같은 방식을 반대쪽 모터로)
+#   책 36: 초록 링 3개 = 모터 십자 구멍 1 + 부시 2. 위치는 결합으로만: 축 p1 → M4 cross_back(attach, hostPose), 부시는 mv.on_shaft(축 바깥 끝, against = 모터 → 첫 부시).
+#   축 깊이(G21)는 34번과 같다: 이 축에 끼워지는 부품(부시 2 + 37번 중간바퀴 1·부시 1)의 축 방향 두께 합만큼 바깥으로 뺀다(⚠ 근거 약함, 읽기 표 판단과정).
+s36 = SKEL[35]; s36.kw.pop("noPart", None)
+s36.note = "[교재 36] 반대쪽 DC모터 바깥 십자 구멍에 축을 끼우고, 빨간 부시 2개를 축에 끼워요."
+_Mp36, _MR36 = (np.array(_v, float) for _v in _vi34._drawn_pose(A, M4, 36))   # 36번 화면이 그리는 모터 자세(스크립트 좌표)
+_hd36 = _MR36 @ np.array([h for h in M4.conn["holes"] if h["id"] == "cross_back"][0]["dir"], float)   # 구멍 방향 = 모터 안쪽
+_px36 = np.cross(_hd36, [0.0, 1.0, 0.0]); _px36 = _px36 if np.linalg.norm(_px36) > 0.5 else np.cross(_hd36, [1.0, 0.0, 0.0])
+_Rax36 = ori(_px36, _hd36)   # 축 돌기 p1(모델 +y)이 모터 안쪽(구멍 방향)을 향한다
+AX36 = s36.attach("축", _Rax36, {"p1": (M4, "cross_back")}, hostPose=True)
+_out36 = np.array(AX36.extra["dir"], float)   # 바깥 = attach 가 정한 dir(돌기 방향의 반대)
+AX36.p = np.array(AX36.p, float) + _out36 * _stk34   # G21: 34번과 같은 두께 합(부시 3 + 중간바퀴 1)
+AX36.extra["pegDepth"] = round(float(AX36.peg("p1")["len"]) - _stk34, 3)
+BU36 = []
+for _k, _ag in enumerate((M4, None)):
+    BU36.append(mv.on_shaft(s36, "부시", AX36, list(_out36), against=(_ag if _ag is not None else BU36[-1]), hostPose=True))
+    BU36[-1].extra["joinOrder"] = 2 + _k   # 축(1)보다 나중, 모터 쪽 부시가 먼저(G12)
+_h36 = {id(_q): _q.extra.get("hover") for _q in A.parts}; _l36 = dict(A.meta.get("lift") or {})
+mv.auto_hover(A)   # 36번 부품만 반영하고 앞·뒤 번호는 그대로 둔다
+for _q in A.parts:
+    if _q.step.index != 36: _q.extra["hover"] = _h36[id(_q)]
+    if _q.extra.get("hover") is None: _q.extra.pop("hover", None)
+A.meta["lift"] = _l36
+print("36번 축: 모터 M4 cross_back, 바깥 방향", rnd(_out36), "축 바깥으로 뺀 길이", _stk34, "부시 자리", [rnd(_b.p) for _b in BU36])
+
+# ── 37 ── 교재 19쪽 37 (재작업 2026-11-25 — 책 배치로 다시: 36번 축(AX36)의 바깥 끝에 중간바퀴 1(무늬 면 바깥, 허브가 모터 쪽) + 빨간 부시 1(바퀴 바깥), 35번과 같은 방식을 반대쪽 축으로)
+#   위치는 결합으로만: 중간바퀴 h1 ← 축 p1 바깥 끝(against = 36번 둘째 부시), 부시 h1 ← 축 p1 바깥 끝(against = 중간바퀴). 자세는 35번과 같은 면 규칙(바퀴 허브 −y 가 모터 쪽, 부시는 G5).
+s37 = SKEL[36]; s37.kw.pop("noPart", None)
+s37.note = "[교재 37] 축 끝에 중간바퀴를 끼우고 빨간 부시 1개로 고정해요."
+WHL37 = mv.on_shaft(s37, "중간바퀴", AX36, list(_out36), R=mv.bush_R([-float(_c) for _c in _out36]), against=BU36[-1], hostPose=True)
+WHL37.extra["joinOrder"] = 1
+BU37 = mv.on_shaft(s37, "부시", AX36, list(_out36), against=WHL37, hostPose=True)
+BU37.extra["joinOrder"] = 2
+_h37 = {id(_q): _q.extra.get("hover") for _q in A.parts}; _l37 = dict(A.meta.get("lift") or {})
+mv.auto_hover(A)
+for _q in A.parts:
+    if _q.step.index != 37: _q.extra["hover"] = _h37[id(_q)]
+    if _q.extra.get("hover") is None: _q.extra.pop("hover", None)
+A.meta["lift"] = _l37
+print("37번 바퀴·부시 자리", rnd(WHL37.p), rnd(BU37.p))
+
 WH = {}
 _sides = {34: M11, 36: M4}
 for _st, _mq in ((34, M11), (36, M4)):
     _face, _u = _wheel_side(_mq)
     _sa = (SKEL[_st - 1], SKEL[_st])        # (축·부시 단계, 바퀴·부시 단계)
     _sa[0].kw.pop("noPart", None); _sa[1].kw.pop("noPart", None)
-    _sa[0].note = "[교재 %d] 모터 바깥 십자 구멍에 축을 끼우고, 빨간 부시 2개를 축에 끼워요." % _st
     _sa[1].note = "[교재 %d] 축 끝에 중간바퀴를 끼우고 빨간 부시 1개로 고정해요." % (_st + 1)
-    _pp, _RR = _pre(_face + _u * 15.0, _Rof(-_u))   # 축 돌기(+y)가 모터 안쪽(−u)을 향한다
-    _ax = _sa[0].place("축", _RR, tuple(_pp), dir=list(rnd(_RS.T @ _u)))
-    _ax.extra["loose"] = True; _ax.extra["noMarkCheck"] = True; _ax.extra["marks"] = [rnd(_pre(_face))]
-    _bs = []
-    for _k, _o in enumerate((2.55, 7.65)):
-        _pp, _RR = _pre(_face + _u * _o, _Rof(-_u))
-        _b = _sa[0].place("부시", _RR, tuple(_pp), dir=list(rnd(_RS.T @ _u)))
-        _b.extra["loose"] = True; _b.extra["noMarkCheck"] = True; _b.extra["marks"] = [rnd(_pre(_face + _u * (_o + 40 + 25 * _k - 40 + 0.0)))] if False else [rnd(_pre(_face + _u * 17.0))]
-        _bs.append(_b)
-    _pp, _RR = _pre(_face + _u * 26.2, _Rof(_u))   # 중간바퀴 실측(2026-10-11): 바깥 면(바퀴 무늬·돌기 +y)이 바깥, 깊은 허브(−y)가 모터 쪽 — 허브 바닥이 부시 바깥(10.2)에서 시작해 바퀴 가운데 26.2
-    _wh = _sa[1].place("중간바퀴", _RR, tuple(_pp), dir=list(rnd(_RS.T @ _u)))
-    _wh.extra["joinOrder"] = 1
-    _wh.extra["loose"] = True; _wh.extra["noMarkCheck"] = True; _wh.extra["marks"] = [rnd(_pre(_face + _u * 40.0))]
-    _pp, _RR = _pre(_face + _u * 44.8, _Rof(-_u))
-    _b3 = _sa[1].place("부시", _RR, tuple(_pp), dir=list(rnd(_RS.T @ _u)))
-    _b3.extra["joinOrder"] = 2
-    _b3.extra["loose"] = True; _b3.extra["noMarkCheck"] = True; _b3.extra["marks"] = [rnd(_pre(_face + _u * 47.5))]
     WH[_st] = (_face, _u)
     print("%d~%d번 바퀴 쪽: 모터 바깥면 z=%.2f, 바깥 방향 %s" % (_st, _st + 1, float(_face[2]), [round(float(v), 1) for v in _u]))
 for _k in (34, 35): A.steps[_k - 1].cam = (0.9, 0.95, False, None, None, None); A.steps[_k - 1].camSrc = "eye"
@@ -1060,7 +1127,7 @@ if _UPTO >= 8:   # 옛 solver — 8번을 시작할 때 이 블록을 새로 놓
         _lo, _hi = np.min(_pts, axis=0), np.max(_pts, axis=0)
         A.steps[_k - 1].cam = (A.steps[_k - 1].cam[0], A.steps[_k - 1].cam[1], False, [rnd(_lo), rnd(_hi)], None, None)
 # 바닥에 닿거나 바닥선 위로 겹쳐 보이는 부품을 전부 띄운다(관리자 지시 2026-10-10 "바닥아래 내려가있는것들도 다 올려") — 번호마다 가장 낮은 점이 12mm 이상 위에 오게 화면 전체를 올린다
-_FLOOR_UP = {1: 11.0, 2: 11.0, 8: 11.5, 38: 11.0, **{_k: 23.0 for _k in range(15, 38)}}
+_FLOOR_UP = {1: 11.0, 2: 11.0, 8: 11.5, **{_k: 23.0 for _k in range(15, 39)}}
 for _k, _v in _FLOOR_UP.items(): A.meta["lift"][str(_k)] = _v
 for _k in range(1, 15): A.steps[_k - 1].camSrc = "eye"   # 책 1~4번 그림에서 읽은 방향(긴 쪽 가로·칸1 왼쪽·가까운 줄 아래, 오른쪽 끝이 약간 가까움)으로 정한 값 — 화면에서 책 그림과 나란히 확인한 뒤에만 유지
 # 바닥 방향선(기준선): 원점(0,0,0)에는 항상 있고, 단계가 원점에서 150mm 넘게 떨어진 자리에서 만들어지면 그 조립 자리(cam.axes)에도 그린다(안내서 기본 규칙, 관리자 지시 2026-10-10 "바닥에 방향축이 기본 아닌가")

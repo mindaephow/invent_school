@@ -5274,7 +5274,8 @@
       }
       const categories = (rows || [])
         .map(r => ({ id: r.id, name: r.data && r.data.name, volumes: r.data && r.data.volumes }))
-        .filter(c => c.name && Number.isInteger(c.volumes) && c.volumes > 0);
+        .filter(c => c.name && Number.isInteger(c.volumes) && c.volumes > 0)
+        .filter(c => c.name !== '공개수업');   // 공개수업 자료는 조립도가 없다 — 조립도 분류 목록에서 뺀다(사용자 2026-11-25)
       if (categories.length && window.__refreshRobotPicker) window.__refreshRobotPicker(categories);
     } catch (err) { /* 못 불러오면 기본값(design-robot-categories.js) 그대로 둔다 */ }
   }
