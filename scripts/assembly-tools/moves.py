@@ -91,6 +91,7 @@ def _foot(a, b, d):   # 띄우는 방향에 수직인 면에서 두 상자가 �
 
 def auto_hover(A, gap=20.0, skip=("리벳",), maxadd=200.0):
     out = []; mine = set()   # mine: 이 함수가 띄움을 정한 부품만 바닥 조정(④) 대상
+    byk0 = {"%d:%d" % (s2.index, i): q for s2 in A.steps for i, q in enumerate(s2.parts)}
     for st in A.steps:
         hide = {str(k) for k in (st.kw.get("hideMade") or {})}; slot = st.kw.get("slot")   # 그 번호 화면에 보이는 앞 부품만 장애물 — 같은 창고, 숨기지 않은 번호
         prior = [q for s2 in A.steps if s2.index < st.index and str(s2.index) not in hide and s2.kw.get("slot") == slot
@@ -109,11 +110,19 @@ def auto_hover(A, gap=20.0, skip=("리벳",), maxadd=200.0):
                 need = float(hl) + _len_along(L, d) + hovercheck.MIN_GAP
                 if need > h: h, why = need, "먼저 끼우는 %s(%.0f) 바깥" % (L.n, float(hl))
             # 끼워질 축: 제자리 상자가 이미 앞 부품 P 와 겹치면 q 가 P 에 꿰이는 것 — 충돌 검사에서 빼고, q 앞면이 P 의 바깥 끝(d 방향)을 넘도록만 띄운다
-            thr = [P for P in prior if _hit(qb, _box(P))]
+            thr = [P for P in prior + [L for L in st.parts if L is not q and L.extra.get("seated") and L.extra.get("dir") is not None] if _hit(qb, _box(P))]   # 같은 번호에서 책이 이미 끼운(seated) 축도 끼워질 축이다 — 부시는 그 축 끝 바깥으로 띄운다(catapult 4번 바깥 부시, 31번 바퀴와 같다)
             for P in thr:
                 pb = _box(P); far = float(np.sum(np.where(d > 0, pb[1], pb[0]) * d))
                 need = far - float(np.dot(_pose(q)[0], d)) + _len_along(q, d) / 2 + gap
                 if need > h: h, why = need, "끼워질 %s 끝을 넘김" % P.n
+            for mk, m in (st.kw.get("moveMade") or {}).items():   # 같은 번호에서 합쳐 들어오는 묶음(move_made)은 띄운 채 시작한다 — 제자리 상자가 q 와 겹치면(q 가 그 묶음에 꿰이는 것) q 는 묶음이 뜬 자리의 바깥 끝을 넘도록 띄운다(catapult 30번 T축이 큰기어 안에 이미 든 모양으로 시작하던 것)
+                if mk not in byk0 or float(np.dot(_v(m.get("dir") or [0, 1, 0]), d)) < 0.99: continue
+                from asmlib import euler_to_R
+                pt_ = byk0[mk]; ch_ = np.abs(euler_to_R(m["r"])) @ (_size(pt_) / 2); cc_ = np.asarray(m["p"], float)
+                if not _hit(qb, (cc_ - ch_, cc_ + ch_)): continue
+                far = float(np.sum(np.where(d > 0, cc_ + ch_, cc_ - ch_) * d)) + float(m.get("hover") or 0)
+                need = far - float(np.dot(_pose(q)[0], d)) + _len_along(q, d) / 2 + gap
+                if need > h: h, why = need, "합쳐 들어오는 %s 가 뜬 자리의 바깥 끝을 넘김" % pt_.n
             h0 = h   # ③ 띄운 자리가 앞 번호 부품과 겹치면 겹치지 않을 때까지(1mm 씩)
             while h < h0 + maxadd and any(_hit(_box(q, _pose(q)[0] + d * h * t), _box(P)) for t in (1.0, 0.66, 0.33) for P in prior if P not in thr):
                 h += 1.0

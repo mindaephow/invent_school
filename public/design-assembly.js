@@ -481,9 +481,12 @@
       if (st.bands) {
         if ((st.bandsHideAt || []).indexOf(n) >= 0) return [];
         const xf = window.IVS_MATES.xformAt(def, n);   // 부품처럼 줄도 xform(전체 이동·회전)을 같이 받는다 — 안 그러면 31번처럼 부품만 올라가고 줄이 제자리에 남는다
-        const mv = (v) => { if (!xf) return v; const w = mvec(xf.m, v); return [w[0] + xf.t[0], w[1] + xf.t[1], w[2] + xf.t[2]]; };
+        const lf = (def.lift && Number(def.lift[n])) || 0;   // 번호 lift(화면 전체 올림, 부품·안내와 같이) — 줄도 같이 올린다(안 그러면 31번부터 부품만 올라가고 고무줄이 아래에 남는다)
+        const mv0 = (v) => { if (!xf) return v; const w = mvec(xf.m, v); return [w[0] + xf.t[0], w[1] + xf.t[1], w[2] + xf.t[2]]; };
+        const mv = (v) => { const w = mv0(v); return lf ? [w[0], w[1] + lf, w[2]] : w; };
+        const xfE = lf ? { t: [xf ? xf.t[0] : 0, (xf ? xf.t[1] : 0) + lf, xf ? xf.t[2] : 0] } : xf;   // elasticPts 는 xf.t 만 쓴다
         const hel = ((def.hinges || []).find((h) => h.elastic) || {}).elastic;
-        return st.bands.map((b) => Object.assign({}, b, { pts: (b.tight && hel && hingeActive ? elasticPts(hel, hingeAng.arm, xf) : (b.pts || []).map(mv)) }));
+        return st.bands.map((b) => Object.assign({}, b, { pts: (b.tight && hel && hingeActive ? elasticPts(hel, hingeAng.arm, xfE) : (b.pts || []).map(mv)) }));
       }
       if (st.bandsEnd) return [];
     }
