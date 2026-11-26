@@ -822,8 +822,9 @@ class Step:
                         _lo = obb.span(obb.corners(_ag.p, _ag.R, _hs), _a)[0]
                     _th = float(np.array(tmp.conn.get("size") or partlib.get(n)["size"], float)[int(np.argmax(np.abs(np.array([h for h in tmp.conn["holes"] if h["id"] == pid][0]["dir"], float))))])   # 내 구멍 축(부품 로컬) 방향 두께
                     hole_center = g["pos"] + _a * (_lo - _th / 2 + float(np.dot(myh["pos"], _a)) - float(np.dot(g["pos"], _a)))
-                    _thick = _th   # 뷰어 링 = 끝 − 방향×두께/2 가 구멍 중심에 오도록 이 부품의 실제 두께를 알려 준다(바퀴 16 처럼 기본 5 와 다른 부품)
-                    _face.append(rnd(hole_center - _a * min(_th / 2, float(myh.get('len') or _th) / 2 + 2.5)))   # 끝은 구멍 길이 안쪽(guidecheck: 구멍 반길이+3 이내)으로, 링 오차는 1.5 이내가 되게   # 화살표 끝(faceMarks): 뷰어 링 = 끝 − 방향×두께/2 가 구멍 중심에 오도록(guidecheck G23). 꼬리(marks)는 고정된 돌기 끝(축 끝)   # 몸통 가운데가 면에서 두께/2 떨어지게(구멍 위치 어긋남 myh.pos 보정)
+                    _f = min(_th / 2, float(myh.get('len') or _th) / 2 + 2.5)   # 끝은 구멍 길이 안쪽으로 줄이면 링 계산용 두께도 같이 줄인다(링 = 끝 − 방향×두께/2 → 구멍 중심, f=_th/2 인 부품은 변화 없음)
+                    _thick = 2 * _f   # 뷰어 링 = 끝 − 방향×두께/2 가 구멍 중심에 오도록 이 부품의 실제 두께를 알려 준다(바퀴 16 처럼 기본 5 와 다른 부품)
+                    _face.append(rnd(hole_center - _a * _f))   # 끝은 구멍 길이 안쪽(guidecheck: 구멍 반길이+3 이내)으로, 링 오차는 1.5 이내가 되게   # 화살표 끝(faceMarks): 뷰어 링 = 끝 − 방향×두께/2 가 구멍 중심에 오도록(guidecheck G23). 꼬리(marks)는 고정된 돌기 끝(축 끝)   # 몸통 가운데가 면에서 두께/2 떨어지게(구멍 위치 어긋남 myh.pos 보정)
                 else:
                     hole_center = base + d * myh["len"] / 2 if g["len"] >= myh["len"] else g["pos"] + d * (myh["len"] - g["len"]) / 2
                 if host.n == "리벳":   # 리벳으로 프레임과 프레임을 잇는 곳은 두 프레임이 딱 붙는다(사용자 기본 규칙 2026-10-24): 받는 판의 면이 리벳 가운데(= 먼저 꽂은 쪽 프레임 면)에 닿게 한다 — 돌기 밑동 기준(위)으로 놓으면 1.5mm 뜬다
