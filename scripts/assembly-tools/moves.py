@@ -67,6 +67,12 @@ def on_shaft(s, name, shaft, end, R=None, against=None, hole="h1", peg="p1", **e
     if against is not None: extra["against"] = against
     return s.recv(name, R, {hole: (shaft, peg)}, dir=[float(x) for x in _v(end)], **extra)
 
+def slide_end(pt, d, goal, end="+"):
+    """축·T축 pt 를 길이 방향 d(단위 벡터·'+z' 같은 이름)으로만 옮겨, d 쪽 끝(end="+")이나 반대 끝(end="-")의 d 좌표가 goal 이 되게 한다(G21: 끼워지는 부품이 정한 자리에 끝을 맞춤).
+    pt.p 의 d 에 수직인 성분은 그대로라 기어·판·블록 구멍을 지나는 줄은 변하지 않는다. 손 좌표 없이 goal(부시 바깥 면 같은 계산값)만 받는다. 돌려주는 값 = 옮긴 거리(mm)."""
+    d = _v(d); half = _len_along(pt, d) / 2.0; cur = float(np.dot(pt.p, d)) + (half if end == "+" else -half)
+    mvd = float(goal) - cur; pt.p = np.asarray(pt.p, float) + d * mvd; return mvd
+
 def plate_on(s, name, R, links, face="-y", **extra):
     """판 name 을 여러 부품의 돌기 위에 얹는다(판 ← 블록·모터·메인보드 돌기, 결합 장면 4·5·10위).
     links = [(돌기 가진 부품, 돌기 id, 판 구멍 (열, 줄) 또는 id), …] — 첫 쌍으로 위치를 정하고 나머지는 검사."""

@@ -473,11 +473,16 @@ def collect(name):
                 for i, pt in enumerate(A.steps[j - 1].parts):
                     _ha = (pt.extra or {}).get("hideAt")
                     if _ha and (k in [int(x) for x in _ha] if isinstance(_ha, (list, tuple, set)) else int(_ha) <= k): continue   # hideAt 은 숨길 번호 목록(한 개면 그 번호부터)
+                    _key = "%d:%d" % (j, i)
+                    if _key in {str(x) for x in (_st[k - 1].get("hideMade") or {})}: continue   # 부품 키("만든번호:순서")로 숨긴 부품은 화면에 안 보인다 — 센 번호만 거르던 것을 화면과 같게(드롭체커 21번)
                     sz = (pt.conn or {}).get("size")
                     if not sz: continue
                     pose = pt._base if getattr(pt, "_base", None) else (pt.p, pt.R)   # 나중에 옮겨진 부품은 처음 놓인 자세부터(move·moves 가 번호별로 덮는다)
                     mv = [m for m in ((pt.extra or {}).get("moves") or ([pt.extra["move"]] if "move" in (pt.extra or {}) else [])) if int(m["at"]) <= k]
                     if mv: m = max(mv, key=lambda q: int(q["at"])); pose = (m["p"], _al.euler_to_R(m["r"]))
+                    for _jj in range(k, 0, -1):   # move_made 로 옮긴 부품은 가장 나중(k 이하) 이동 자세로 잰다 — 화면이 그 자리에 그린다(moveMade 는 번호 데이터에만 있어 위 moves 가 못 읽었다)
+                        _mmv = (_st[_jj - 1].get("moveMade") or {}).get(_key)
+                        if _mmv and _mmv.get("p") is not None and _mmv.get("r") is not None: pose = (_mmv["p"], _al.euler_to_R(_mmv["r"])); break
                     sd = (pt.extra or {}).get("side")
                     if sd and k < int(sd.get("until") or 0): pose = (sd["p"], _al.euler_to_R(sd["r"]))   # 옆자리에서 따로 조립하는 번호(합쳐지는 번호 전)는 화면이 그리는 옆자리 자세로 잰다
                     _xf = xform_at(A.meta, k); _Rp = np.array(pose[1], float); c = np.array(pose[0], float)

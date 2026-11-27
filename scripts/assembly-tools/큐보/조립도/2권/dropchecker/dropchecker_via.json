@@ -126,5 +126,53 @@
    "book_only": true,
    "what": "감독: 17번 책: 둘째 벌 합치기"
   }
+ ],
+ "17": [
+  {
+   "step": 18,
+   "image": "18.jpg",
+   "book_only": true,
+   "what": "감독: 18번 책: 15프레임 한 장 더·리벳·볼트"
+  }
+ ],
+ "18": [
+  {
+   "step": 19,
+   "image": "19.jpg",
+   "book_only": true,
+   "what": "감독: 19번 책: IR센서"
+  }
+ ],
+ "19": [
+  {
+   "step": 20,
+   "image": "20.jpg",
+   "book_only": true,
+   "what": "감독: 20번 책: 둘째 135도 조립 합치기"
+  }
+ ],
+ "20": [
+  {
+   "step": 21,
+   "image": "21.jpg",
+   "book_only": true,
+   "what": "감독: 21번 책: 두 유닛 합치기"
+  }
+ ],
+ "21": [
+  {
+   "step": 22,
+   "image": "22.jpg",
+   "book_only": true,
+   "what": "감독: 22번 책: 둘째 바퀴 축·부시"
+  }
+ ],
+ "22": [
+  {
+   "step": 23,
+   "image": "23.jpg",
+   "book_only": true,
+   "what": "감독: 23번 책: 둘째 캐터필러 바퀴"
+  }
  ]
 }
