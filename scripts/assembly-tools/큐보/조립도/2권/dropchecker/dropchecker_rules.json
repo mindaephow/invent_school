@@ -6,5 +6,7 @@
  "orient_check": true,
  "placecheck": true,
  "rulecheck": true,
- "mate_marks": true
+ "mate_marks": true,
+ "parts_sum": true,
+ "img_db": true
 }

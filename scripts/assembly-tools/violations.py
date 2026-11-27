@@ -105,7 +105,7 @@ def occupied_holes(A, k, lat=1.5, ov=0.5):
     for h in allp:
         if not h.n.endswith("프레임"): continue   # 프레임 구멍만(블록 구멍은 양쪽에서 돌기가 들어가는 것이 정상)
         for hc in h.conn.get("holes", []):
-            hp, hd = wr(h, hc); hd = hd / (np.linalg.norm(hd) or 1.0); hl = float(hc.get("len") or 0) or 5.0
+            hp, hd = wr(h, hc); hd = hd / (np.linalg.norm(hd) or 1.0); hl = float(hc.get("len") or 0) or 5.0   # hl = 구멍 깊이 전체 — 구멍 pos 는 가운데라 겹침 범위는 ±hl/2 (±hl 로 읽으면 쌓인 15프레임 두 장을 한 구멍으로 봄, dropchecker 9번 2026-11-27)
             ins = []
             for q, pid, pos, d, ln in pegs:
                 if q is h: continue
@@ -113,7 +113,7 @@ def occupied_holes(A, k, lat=1.5, ov=0.5):
                 w = pos - hp; t0 = float(np.dot(w, hd)); lt = np.linalg.norm(w - t0 * hd)
                 if lt > lat: continue
                 _hf = float(np.dot(d, hd)) * ln / 2; a, b = sorted((t0 - _hf, t0 + _hf))   # 돌기 pos 는 길이의 가운데(K3) → 구간은 pos ± len/2
-                if q.n not in _SHAFTY and not q.n.endswith("볼트") and q.n != "너트" and min(b, hl) - max(a, -hl) > ov: ins.append((q, pid))   # 축·모터·볼트·너트 돌기는 구멍 안 결합이 정상이라 뺀다(볼트가 프레임 여러 장을 지나 너트로 조임 — 5_부품사전 64·71·72·75행, asmlib.recv 와 같은 이름 판정)
+                if q.n not in _SHAFTY and not q.n.endswith("볼트") and q.n != "너트" and min(b, hl / 2) - max(a, -hl / 2) > ov: ins.append((q, pid))   # 축·모터·볼트·너트 돌기는 구멍 안 결합이 정상이라 뺀다(볼트가 프레임 여러 장을 지나 너트로 조임 — 5_부품사전 64·71·72·75행, asmlib.recv 와 같은 이름 판정)
             if len({id(q) for q, _ in ins}) >= 2:
                 mine = sorted({cur[id(q)] for q, _ in ins if id(q) in cur})
                 if not mine: continue

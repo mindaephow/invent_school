@@ -50,7 +50,7 @@ JSON.stringify(out)
 ```bash
 rm -rf public/_refs_tmp/<이름>; rmdir public/_refs_tmp 2>/dev/null     # 올린 뒤 지운다
 ```
-확인: MCP `get_rows` table `ivs_assembly_refs` select `step,idx,note` filter `{"assembly_id":"cubo-2-dropchecker","step":"26"}` order_by `idx` (이 표엔 `created_at` 이 없어서 order_by 를 안 주면 오류), 화면 새로고침 후 번호의 `🖼N` 버튼 숫자. 삭제는 MCP `delete_row`(id 는 `select id` 로 먼저 읽는다) — 사용자 확인 뒤에만.
+확인: MCP `get_rows` table `ivs_assembly_refs` select `step,idx,note` filter `{"assembly_id":"cubo-2-dropchecker","step":"26"}` order_by `idx` (이 표엔 `created_at` 이 없어서 order_by 를 안 주면 오류), 화면 새로고침 후 번호의 `🖼N` 버튼 숫자. 삭제는 MCP `delete_row`(id 는 `select id` 로 먼저 읽는다). 번호를 다시 만들며 로컬 index 에서 뺀 옛 그림(`dbimgcheck` 'DB 에만 있음')은 묻지 않고 그 자리에서 지운다(사용자 2026-11-27).
 
 **3-1. 올린 뒤에는 화면을 `navigate` 로 새로 불러와 🖼 배지로 확인한다(규칙 I1·J2).** 번호 버튼 옆 🖼N 배지는 차시를 열 때 읽으므로 그 번호를 눌러 배지 숫자(그림 장수)가 올린 장수와 같은지 본다. 안 뜨면 올린 것이 아니다.
 
