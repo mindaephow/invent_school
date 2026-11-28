@@ -477,6 +477,9 @@ _zs21 = float((PL1._base[0] if PL1._base is not None else PL1.p)[2]) - float(PL1
 for _q in _U2_21:     # 둘째 유닛 부품 위치·자세를 x 거울(위치 x → −x, 회전 R → M R M) + 판 z 맞춤
     if _q._base is None: _q._base = (_q.p.copy(), _q.R.copy())
     _q.p = np.array([-_q.p[0], _q.p[1], _q.p[2] + _zs21]); _q.R = _M @ _q.R @ _M
+    _pt21 = {id(B3[1]): B3[0], id(B2[1]): B2[0]}.get(id(_q))   # 복사본은 3번의 끝 이동(3단블록·2단블록이 판 끝으로)을 못 따라와 판 가운데에 있다 → 첫째 유닛의 16번 이동 전 자세를 거울로(위치는 첫째 유닛 판 기준 상대값에서 계산)
+    if _pt21 is not None:
+        _rl21 = _pt21.p - PL1.p; _q.p = np.array([PL1b.p[0] - _rl21[0], PL1b.p[1] + _rl21[1], PL1b.p[2] + _rl21[2]]); _q.R = _M @ _pt21.R @ _M
     _mm21["%d:%d" % (_q.step.index, _q.step.parts.index(_q))] = {"p": rnd(_q.p), "r": asmlib.R_to_euler(_q.R), "dir": [0.0, 1.0, 0.0], "hover": 0.01, "moveGroup": "mm21mirror", "noGuide": True}   # 책 21: 둘째 유닛 '6' 은 창고 3 에서 책 자리로 오는 모습 — 안 움직이고 표시만(0.01), 이동 화살표 없음(책에 없음)
 # 팔(거울쌍) 최종 자세: 첫째 유닛 11번 결과(팔 1)를 같은 방식으로 거울 — 위치 (x,y,z) → (−x, y, z − 172)(판 z 50 → −122), 회전 R → M R M (뒤집힌 135도 프레임은 길이 축으로 180° 더).
 _ARM1 = [F135] + list(RV7.values()) + [F15, B7, BO7, NU7, RV8, F15b, BO8, NU8, IR9, P10, B10]
@@ -535,17 +538,28 @@ s23 = SKEL[22]; s23.kw.pop("noPart", None)
 s23.note = "[교재 23] 창고의 캐터필러 바퀴(스프라켓+캐터필러 14)를 축에 앞쪽에서 끼우고, 앞쪽에서 빨간 부시를 끼워 고정해요. 부시의 넓은 쪽이 바깥이에요."
 s23.kw["hideMade"] = {_k: _v for _k, _v in s22.kw["hideMade"].items() if not _v.startswith("둘째 바퀴")}
 _W2 = [SP12[1]] + TR12[14:]
-_sh23 = np.array([40.0 - float(SP12[1].p[0]), 20.0 - float(SP12[1].p[1]), 27.0 + _zs22])
-_mk23 = [rnd(np.array([AX22.p[0], AX22.p[1], _bx14(AX22)[0][2]]))]   # 안내점 = 22번 축 −Z 끝(계산)
-s23.move_made(A.group("mm23wheel", _W2), np.eye(3), pivot=SP12[1].p.copy(), shift=_sh23, dir=[0, 0, -1], group="mm23wheel", marks={id(SP12[1]): _mk23})   # 임시: 23번 작업 때 책 배치로 다시(22번 빌드가 23번 초안 안내점 부족으로 막힘)
-BU23 = s23.recv("부시", rot_x(90), {"h1": (AX22, "p1")})
-BU23.extra["loose"] = True; BU23.extra["noMarkCheck"] = True; BU23.extra["dir"] = [0, 0, -1]   # 책 23: 부시는 바퀴(링크 띠 z 폭 38) 바깥에 떠서 들어온다 — 바퀴 안쪽에 겹쳐 보이지 않게 띄운 거리를 늘림
-BU23.extra["loose"] = True; BU23.extra["noMarkCheck"] = True; BU23.extra["dir"] = [0, 0, -1]   # 책 23: 부시는 바퀴(링크 띠 z 폭 38) 바깥에 떠서 들어온다 — 바퀴 안쪽에 겹쳐 보이지 않게 띄운 거리를 늘림
-A.steps[22].cam = (2.34, 0.81, False, [[40.0, 25.0, -130.0 + _zs21], [60.0, 20.0, -90.0 + _zs21], [-10.0, 25.0, -150.0 + _zs21]], None, None); A.steps[22].camSrc = "eye"
+# 책 23: 바퀴가 축 −Z 끝(앞) 바깥에 떠 있다가 허브 가운데 구멍으로 축에 끼워지고, 그 앞에서 빨간 부시가 축 끝에 끼워진다(13번과 같은 관계: 허브 앞 면 = 축 앞 끝 − 부시 두께 안쪽).
+_pg23 = AX22.peg("p1")                                                                          # 축 돌기 연결점(부품 DB) — 앞(−Z) 끝이 안내점
+_end23 = _pg23["pos"] - np.asarray(_pg23["dir"], float) * (float(_pg23["len"]) / 2)              # 축의 −Z 쪽 끝
+_hub_h23 = float(partlib.get("스프라켓")["size"][1]); _bu_t23 = float(partlib.get("부시")["size"][1])
+_sh23 = np.array([float(AX22.p[0]) - float(SP12[1].p[0]), float(AX22.p[1]) - float(SP12[1].p[1]),
+                  (float(_end23[2]) + _bu_t23 + _hub_h23 / 2) - float(SP12[1].p[2])])            # 허브 가운데선을 축에 맞추고, 허브 앞 면이 축 앞 끝 + 부시 두께 자리에 오게 z 만 옮김 — 부품 크기에서 계산
+_gb23 = [_bx14(_q, np.asarray(_q.p, float) + _sh23) for _q in _W2]
+_back23 = max(float(_b[1][2]) for _b in _gb23)                                                    # 제자리에서 바퀴의 가장 뒤(+Z) 면
+_hv23 = round(_back23 - (float(_end23[2]) - 20.0), 3)                                             # 결합 전: 바퀴 뒤 면이 축 앞 끝에서 20mm 앞(규칙 G1c)
+_hc23 = np.asarray(SP12[1].world("hole", SP12[1].conn["holes"][0])["pos"], float) + _sh23                    # 제자리에서 바퀴 허브 가운데 구멍 중심(연결점)
+_mk23 = [rnd(_hc23 + np.array([0.0, 0.0, -1.0]) * float(SP12[1].extra.get("thick") or 5) / 2)]   # 안내점: 받는 쪽 링이 자기 구멍 중심에 붙도록(움직이는 방향 −Z, 뷰어 공식 G23), 화살표는 축 끝에서 시작
+s23.move_made(A.group("mm23wheel", _W2), np.eye(3), pivot=SP12[1].p.copy(), shift=_sh23, dir=[0, 0, -1], hover=_hv23, group="mm23wheel", marks={id(SP12[1]): _mk23}, recv=(SP12[1],))
+BU23 = mv.on_shaft(s23, "부시", AX22, [0.0, 0.0, -1.0], against=SP12[1], joinOrder=2)           # 부시: 축 앞(−Z) 끝, 좁은 쪽이 허브 쪽(G5) — 띄움은 mv.auto_hover
+_wf23 = min(float(_b[0][2]) for _b in _gb23) - _hv23                                          # 결합 전 떠 있는 바퀴의 가장 앞(−Z) 바깥 면
+BU23.extra["hover"] = round(float(BU23.p[2]) - (_wf23 - 20.0 - _bu_t23 / 2), 3)                   # 결합 전: 부시 안쪽 면이 떠 있는 바퀴 앞 면에서 20mm 밖(G12 순서: 바퀴가 먼저 끼워지니 부시는 그보다 바깥, 13번과 같은 식)
+A.steps[22].cam = (2.45, 1.10, False, None, None, None); A.steps[22].camSrc = "fit"   # 22_P 격자 카메라를 이어 씀(23번은 22번과 같은 판·구도, 모터 윗돌기 간격 68px ≈ 69px)
+floor_lift(A, 23)   # 바닥 아래로 내려가는 만큼 화면 전체를 올린다(G24) — 계산값
+A.meta["lift"]["23"] = max(float(A.meta["lift"].get("23", 0)), float(A.meta["lift"].get("22", 0)))   # 22번 올림을 이어받는다
 
 # ── 24 ── 교재 35쪽 24 ("16 + 23": 16번(첫째 유닛+713프레임 판, 창고 1)에 23번(둘째 유닛+팔+바퀴)을 합친다)
 #   책 24: 판 위에 첫째 유닛(왼쪽 아래)이 얹혀 있고 둘째 유닛이 판 위쪽에서 내려온다 — 초록 링 3개(판 먼 변의 구멍 2곳 + 끝) + 리벳 1(판 오른쪽 모서리 칸1 줄7).
-#   둘째 유닛은 Y축으로 180° 돌려 놓는다(바퀴·팔이 첫째와 반대쪽): 돌린 뒤 모터 돌기 p5·p6 → 판 칸8·6, 끝 3단블록 돌기 → 칸1 줄+1 이 한 이동으로 맞는다(계산).
+#   둘째 유닛은 Y축으로 180° 돌려 놓는다(바퀴·팔이 첫째와 반대쪽): 돌린 뒤 모터 아래 돌기 p3·p4 → 판 칸6·8 줄6, 끝 3단블록 돌기 p1 → 칸13 줄7 이 한 이동으로 맞는다(계산, 아래 _T24).
 #   모터 줄 6 — 바퀴·큰기어가 판 먼 변(줄7) 바깥으로 나가 판과 겹치지 않는 해. 링 위치(칸·줄)는 판이 첫째 유닛에 가려 holefit 불가 — 책 링 4곳(먼 변 2 + 먼 모서리 + 리벳)과 같은 4곳이 한 이동으로 맞는지로 확인.
 s24 = SKEL[23]; s24.kw.pop("noPart", None)
 s24.note = "[교재 24] 16번에서 만든 첫째 유닛+판에 23번에서 만든 둘째 유닛(바퀴·팔 포함)을 합쳐요. 모터 아래 돌기 2개와 끝 3단블록 돌기를 판 구멍에 끼워요."
@@ -553,42 +567,32 @@ s24.kw["hideMade"] = {}
 _pc24 = np.array([0.0, 20.0, float(PL1b.p[2])])
 _G2 = [_q for _q in A.parts if _q.step.index <= 14 and not any(_q is _w for _w in _W2) and not any(_q is _u for _u in _U16)] + _W2 + _ARM2 + [AX22, BU22, BU23]
 def _hole713(_c, _r): return PL15.hole(asmlib._item(PL15, "홀면 +y 열%d·줄%d" % (_c, _r), "홀")[0])
-_hl713 = [((_c, _r), _hole713(_c, _r)) for _c in range(1, 14) for _r in range(1, 8)]
-_hu24 = [(_q, _c["id"], _q.world("hole", _c)) for _q in _G2 for _c in _q.conn["holes"]]
-_rv24 = RV15[1].peg("p2")["pos"]
-_best24 = None
-for _Rn, _R24 in (("I", np.eye(3)), ("Ry180", rot_y(180))):
-    _gp24 = [(_q, _c["id"], _R24 @ (_q.world("peg", _c)["pos"] - _pc24) + _pc24, _R24 @ _q.world("peg", _c)["dir"]) for _q in _G2 for _c in _q.conn["pegs"]]
-    _gp24 = [t for t in _gp24 if t[3][1] < -0.9]
-    _hu = [(_q, _i, _R24 @ (_w["pos"] - _pc24) + _pc24, _R24 @ _w["dir"], float(_w["len"] or 0.0)) for _q, _i, _w in _hu24]
-    _nax = [_R24 @ (_nu.world("hole", _nu.conn["holes"][0])["pos"] - _pc24) + _pc24 for _nu in _G2 if _nu.name == "너트"]   # 볼트·너트가 지나는 축(이미 차 있는 구멍)
-    _pA = _R24 @ (MO1b.peg("p5")["pos"] - _pc24) + _pc24
-    _pwh = _R24 @ (WH6[1].p - _pc24) + _pc24                    # 큰 바퀴 중심(판 가장자리 바깥으로 나가야 판과 안 겹침)
-    for (_c0, _r0), _h0 in _hl713:
-        _t = _h0["pos"] - _pA; _t[1] = 0.0
-        if any(abs(float((_R24 @ (_gq.p - _pc24) + _pc24 + _t)[2]) - float(PL15.p[2])) < 42.0 for _gq in (WH6[1], GB5[1], SG4[1])): continue   # 바퀴·큰기어·작은기어가 판(줄1~7, z ±35) 위를 지나지 않게
-        _plz = float((_R24 @ (PL1b.p - _pc24) + _pc24 + _t)[2])
-        if abs(_plz - float(PL1.p[2])) < 30.0 or abs(_plz - float(PL15.p[2])) < 20.0: continue      # 두 유닛 판이 겹치지 않게
-        _hit = []
-        for _q, _i, _pw, _dw in _gp24:
-            _pp = _pw + _t; _bb = min(_hl713, key=lambda kv: float(np.linalg.norm((kv[1]["pos"] - _pp) * np.array([1, 0, 1]))))
-            if float(np.linalg.norm((_bb[1]["pos"] - _pp) * np.array([1, 0, 1]))) < 0.8 and abs(_pp[1] - 2.5) < 3: _hit.append((_q, _i, _bb[0]))
-        _rl = 1 if any(abs(_dw[1]) > 0.9 and float(np.linalg.norm((_pw + _t - _rv24) * np.array([1, 0, 1]))) < 1.2 and abs(float((_pw + _t - _rv24)[1])) <= _ln / 2 + 1.0
-                       and not any(float(np.linalg.norm((_pw - _na) * np.array([1, 0, 1]))) < 1.5 for _na in _nax) for _q, _i, _pw, _dw, _ln in _hu) else 0
-        # 리벳 판정(2026-10-13 사용자 지적): 가로 거리 + 구멍 길이 안인지로 본다(구멍 중심까지 3차원 거리 1.6 은 y 가 우연히 가까운 너트 구멍만 통과시켰다). 너트·볼트가 이미 차 있는 축의 구멍은 받지 않는다.
-        _score = len(_hit) + 3 * _rl
-        if _best24 is None or _score > _best24[0]: _best24 = (_score, _t, _hit, _rl, (_c0, _r0), _R24, _Rn)
-_T24 = _best24[1]; _R24 = _best24[5]
-_mk24 = {}
-for _q, _i, _cr in _best24[2]: _mk24.setdefault(id(_q), []).append(rnd(_hole713(*_cr)["pos"] + np.array([0, 1.0, 0]) * 2.5))
-_mk24all = {**_mk24, id(B17): [rnd(_rv24)]}   # 판에 남은 리벳(칸1 줄7)이 팔 쪽 3단블록 5번의 비어 있는 구멍(h1)으로 들어간다 — 너트가 있는 구멍(h2)이 아니다(사용자 지적 2026-10-13)
+# 책 24: 둘째 유닛(21번 거울 유닛)을 Y 축 180° 돌려(바퀴·팔이 첫째와 반대쪽) 713프레임 위로 내린다 — 책 링 4개 = 모터 돌기 p3·p4 → 칸6·8 줄6, 끝 3단블록 돌기 p1 → 칸13 줄7, 판에 남은 리벳(칸1 줄7) → 팔 쪽 3단블록 5번 구멍 h1
+_R24 = rot_y(180)
+_rp24 = lambda _w: _R24 @ (np.asarray(_w["pos"], float) - _pc24) + _pc24
+_rd24 = lambda _w: _R24 @ np.asarray(_w["dir"], float)
+def _t24(_q, _pid, _h):       # 돌린 돌기가 판 구멍에 들어가는 이동(돌기 밑동이 구멍 입구 면에 닿게 — merge_shift 와 같은 규칙, 돌린 자세에서)
+    _w = _q.peg(_pid); _d = _rd24(_w)
+    return (_h["pos"] - _d * (_h["len"] / 2) + _d * _w["len"] / 2) - _rp24(_w)
+_T24 = _t24(MO1b, "p3", _hole713(6, 6))
+for _q_, _p_, _h_ in ((MO1b, "p4", _hole713(8, 6)), (B3[1], "p1", _hole713(13, 7))):
+    if float(np.linalg.norm(_t24(_q_, _p_, _h_) - _T24)) > 0.8: A.log("24번: 돌기 %s 가 판 구멍과 %.1fmm 어긋남(한 이동으로 안 맞음)" % (_p_, float(np.linalg.norm(_t24(_q_, _p_, _h_) - _T24))))
+_e24 = lambda _c, _r: rnd(_hole713(_c, _r)["pos"] + np.array([0.0, 1.0, 0.0]) * (_hole713(_c, _r)["len"] / 2))   # 판 구멍 입구(위 면) 점 — DB 연결점
+_rvp24 = RV15[1].peg("p2"); _rvtop24 = rnd(_rvp24["pos"] + _rvp24["dir"] * (_rvp24["len"] / 2))                  # 판에 꽂혀 남은 리벳(칸1 줄7)의 윗돌기 끝 → 팔 쪽 3단블록 구멍 h1 으로 들어간다
+_mk24all = {id(MO1b): [_e24(6, 6), _e24(8, 6)], id(B3[1]): [_e24(13, 7)], id(B17): [_rvtop24]}
+# 결합 전 띄움: 내려오는 둘째 유닛의 아래쪽 면(돌기 끝 포함)이 그 아래 부품(713프레임·리벳·첫째 유닛)의 가장 바깥(위) 면에서 20mm 밖에 오도록 — 위에서 보아 겹치는 쌍만 재서 가장 큰 값(규칙 G1c, 결합 뒤 자리 = 돌린 뒤 이동 _T24, 손값 없음)
+_ub24 = [_bx14(_q, _rp24({"pos": _q.p}) + _T24) for _q in _G2]
+_pb24 = [_bx14(_q) for _q in [PL15] + RV15 + _U16]
+_hv24 = round(max(float(_p[1][1]) + 20.0 - float(_u[0][1]) for _u in _ub24 for _p in _pb24 if mv._foot(_u, _p, np.array([0.0, 1.0, 0.0]))), 3)
 _GU = [_q for _q in _G2 if _q.step.index <= 14 and not any(_q is _w for _w in _W2)]            # 둘째 유닛 본체
 _GA = [_q for _q in _G2 if any(_q is _a for _a in _ARM2)]                                      # 팔 조립
 _GW = [_q for _q in _G2 if not any(_q is _x for _x in _GU) and not any(_q is _x for _x in _GA)]   # 바퀴·축·부시
 for _nm, _gg in (("mm24u", _GU), ("mm24a", _GA), ("mm24w", _GW)):   # moveGroup 은 부품 하나에 마지막 값만 남으므로(안내 화살표가 같은 묶음 쌍을 건너뜀) 앞 번호에서 맞물린 덩어리끼리 이름을 다르게 한다
-    s24.move_made(A.group(_nm, _gg), _R24, pivot=_pc24, shift=_T24, dir=[0, 1, 0], group=_nm, marks=_mk24all)
+    s24.move_made(A.group(_nm, _gg), _R24, pivot=_pc24, shift=_T24, dir=[0, 1, 0], hover=_hv24, group=_nm, marks=_mk24all)
 #   계산: 둘째 유닛(거울 배치)을 회전 없이 이동만 — 판 구멍과 맞는 돌기 %d곳, 판에 남은 리벳과 맞는 구멍 %d곳(자동 탐색 결과를 읽기 표에 적는다).
-A.steps[23].cam = (-2.79, 1.09, False, [[0.0, 20.0, 0.0], [-40.0, 30.0, -120.0], [40.0, 30.0, 60.0]], None, None); A.steps[23].camSrc = "eye"   # 2026-10-13 유추 격자(infer_grid: 713판 3차원 좌표 + 선명한 구멍 + 링 4곳, 줄 +3 가설 유일 2.02배)에서 axes_fit 으로 계산 — theta −2.79·phi 1.09 오차 0.52px 91점(책 그림이 24° 기울어 roll 은 못 맞춤)
+A.steps[23].cam = (-2.79, 1.08, False, None, None, None); A.steps[23].camSrc = "fit"   # 24_P 유추 격자(infer_grid: 713판 3차원 좌표 + 선명한 구멍 10 + 링 4곳)의 axes_fit — theta −2.79·phi 1.08 오차 0.52px 91점(책 그림이 24° 기울어 roll 23.6°)
+floor_lift(A, 24)   # 바닥 아래로 내려가는 만큼 화면 전체를 올린다(G24) — 계산값
+A.meta["lift"]["24"] = max(float(A.meta["lift"].get("24", 0)), float(A.meta["lift"].get("23", 0)))   # 23번 올림을 이어받는다(lift 는 max(계산, 23번))
 # ── 25 ── 교재 35쪽 25 (읽은 것 2026-10-13 — 새 713프레임 판 + 리벳 2개: 몸체(24번 결과) 위에 판을 얹는다. 홀라인: holefit 통과(DoG 방식) 91칸 중 58개(64%)·평균 1.10px·최대 2.32px, 카메라 theta −0.76·phi 0.96 오차 0.89px 91점)
 #   카메라가 보는 면(책): 24번의 반대 끝에서 본다 — 새 713프레임(홀면 위, 긴 쪽 13칸이 오른쪽 위로, 칸1줄1 이 왼쪽 모서리)이 몸체 위에 떠 있고 큰 바퀴는 오른쪽 아래, 센서 팔·캐터필러 바퀴는 왼쪽.
 #   링 12개를 색으로 검출해 25_P 격자로 환산(5px 이내): 판 칸 8곳 — 모서리 (1,1)·(1,7)·(13,1)·(13,7), 모터 (6,2)·(8,2)·(6,6)·(8,6). 아래 판과 같은 칸이라 판은 아래 판 바로 위에 칸 그대로 얹힌다(대칭 확인: 줄 r↔8−r).
@@ -597,11 +601,11 @@ A.steps[23].cam = (-2.79, 1.09, False, [[0.0, 20.0, 0.0], [-40.0, 30.0, -120.0],
 s25 = SKEL[24]; s25.kw.pop("noPart", None)
 s25.note = "[교재 25] 3단블록 4번·6번의 윗구멍(칸1 줄1·칸1 줄7)에 리벳을 꽂고, 새 713프레임 판을 몸체 위로 내려요. 모터 돌기 4개(칸6·8 줄2·줄6), 끝 3단블록 돌기 2개(칸13 줄1·줄7), 리벳 2개(칸1 줄1·줄7)가 판 구멍에 들어가요."
 s25.kw["hideMade"] = {}
-RV25 = [s25.attach("리벳", np.eye(3), {"돌기면 -y 1": (_b, "h3")}, rivet=True) for _b in (B10, B20)]
-PL25 = s25.recv("713프레임", np.eye(3), {"홀면 -y 열6·줄2": (MO1, "p3"), "홀면 -y 열8·줄2": (MO1, "p4"), "홀면 -y 열13·줄1": (B3[0], "p1"),
-                                           "홀면 -y 열6·줄6": (MO1b, "p5"), "홀면 -y 열8·줄6": (MO1b, "p6"), "홀면 -y 열13·줄7": (B3[1], "p2"),
-                                           "홀면 -y 열1·줄1": (RV25[0], "p2"), "홀면 -y 열1·줄7": (RV25[1], "p2")})
-A.steps[24].cam = (-0.76, 0.96, False, None, None, None); A.steps[24].camSrc = "eye"   # 25_P 격자에서 axes_fit 으로 계산(오차 0.89px, roll 0.1°)
+RV25 = [mv.rivets(s25, _b, ["h3"], face="+y")[0] for _b in (B10, B20)]   # 리벳 2개: 결합 전(구멍 위에 뜬) 기본 모양 — 3단블록 4번(B10)·6번(B20) 윗구멍 h3(칸1 줄1·줄7 아래)
+PL25 = mv.plate_on(s25, "713프레임", np.eye(3), [(RV25[0], "돌기면 +y 1", (1, 1)), (RV25[1], "돌기면 +y 1", (1, 7)),
+                                                   (MO1, "p3", (6, 2)), (MO1, "p4", (8, 2)), (B3[0], "p1", (13, 1)),
+                                                   (MO1b, "p5", (6, 6)), (MO1b, "p6", (8, 6)), (B3[1], "p2", (13, 7))], joinOrder=2)   # 판: 리벳 윗돌기 2 + 모터·끝 3단블록 돌기 6 이 판 구멍 8곳에 들어간다(띄움은 mv.auto_hover)
+A.steps[24].cam = (-0.76, 0.96, False, None, None, None); A.steps[24].camSrc = "fit"   # 25_P 격자에서 axes_fit 으로 계산(오차 0.89px, roll 0.1°)
 # ── 26 ── 교재 35쪽 26 (읽은 것 2026-10-13 — 빨간 17프레임 하나: 몸체 앞쪽(판 칸1 쪽 끝)의 3단블록 두 개를 잇는 가로 막대. 홀라인: holefit 통과(DoG 방식) 91칸 중 71개(78%)·평균 0.98px·최대 2.42px, 카메라 theta −1.02·phi 1.19 오차 1.01px 91점 roll 1.3°)
 #   카메라가 보는 면(책): 판 칸1 쪽 끝(앞, 리벳 2개가 있는 끝)에서 몸체를 낮게 본다 — 위 713판(25번에서 얹음)의 칸이 안쪽(위 오른쪽)으로, 줄이 왼쪽→오른쪽으로 늘어난다(칸 +X 가 카메라 반대, 줄 +Z 가 화면 오른쪽 — 오른손 X×Y=Z).
 #   링 2개: 17프레임 양 끝 구멍(1번·7번) → 앞쪽 3단블록 두 개 끝의 십자 돌기(두 블록은 판 칸1 줄1·줄7 아래, 3단블록 4번 B10·6번 B20, 끝 돌기 p2 = −x 방향 높이 30, z −25·35 — 안에 든 부품 없음). 두 돌기 간격 60mm = 17프레임 구멍 1번·7번 간격(구멍 간격 10mm × 6).
@@ -611,54 +615,43 @@ s26.note = "[교재 26] 빨간 17프레임을 몸체 앞쪽 3단블록 두 개�
 s26.kw["hideMade"] = {}
 R26 = np.array([[0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [1.0, 0.0, 0.0]])
 RD26 = s26.recv("17프레임", R26, {"h1": (B10, "p2"), "h7": (B20, "p2")})
-A.steps[25].cam = (-1.02, 1.19, False, None, None, None); A.steps[25].camSrc = "eye"   # 26_P 격자에서 axes_fit 으로 계산(오차 1.01px, roll 1.3°)
-# ── 27 ── 교재 36쪽 27 (읽은 것 2026-10-13 — 아치 조립 2개. 사용자 지적으로 방향을 바로잡음: 책 화살표는 세로가 아니라 Z 축 방향(비스듬히 아래·오른쪽)이다 = 135도 프레임이 서 있는 벽이고 3단블록 면 돌기에 끼워진다. 기준 부품은 135도 프레임)
-#   구조(앞 = +Z, 카메라 쪽): 25프레임(서 있는 벽, 구멍 축 Z) 뒤→앞으로 25프레임 · 3단블록 2(양 끝 칸1·칸5, 판 쪽 돌기 p3·p4 가 판 줄 두 개 구멍에) · 135도 프레임(블록 앞면 위쪽 돌기 p7 이 곧은 팔 구멍 h5·h9 에, 40mm 간격) ·
-#     꺾인 팔은 벽 평면에서 아래·왼쪽으로 꺾이고 그 끝 구멍 h1~h3 에 3단블록 한 개의 돌기 p5·p4·p3 이 뒤에서 끼워진다(블록은 프레임 뒤, 다른 두 블록과 같은 층). 아치 하나 = 25프레임 1 + 3단블록 3 + 135도 프레임 1, "2개 만들기".
-#   책의 두 아치는 같은 아치를 반대쪽에서 본 모습(대칭): 아래쪽 아치 = 앞에서(프레임이 앞·아래 오른쪽으로 떠 있음), 위쪽 아치 = 뒤에서(판이 가장 앞이고 블록 돌기가 판 끝 칸1·칸5 구멍을 채워 어둡게 보임, 프레임이 뒤·왼쪽 위로 떠 있음) → 위쪽 아치 = 아래쪽 아치를 Y축 180° 돌린 것.
-#   홀라인: 위쪽 아치 25프레임 구멍 6/10(60%) 어두운판 방식 평균 0.60px → 카메라 theta −0.42·phi 1.09 roll −1.5°. 판 위 줄 블록 offset: 블록 중심이 판 중심보다 5mm 아래(돌기 p3·p4 가 두 줄, p5 는 판 밖).
-#   바닥: 아치가 서면 꺾인 팔·블록이 바닥(y=0) 아래로 내려가므로 규칙대로 화면 전체를 올린다(A.meta["lift"]["27"]).
+A.steps[25].cam = (-1.02, 1.19, False, None, None, None); A.steps[25].camSrc = "fit"   # 26_P 격자(holefit DoG 71/91·0.98px 유지)에서 axes_fit 으로 계산(오차 1.01px, roll 1.3°)
+floor_lift(A, 26)   # 바닥 아래로 내려가는 만큼 화면 전체를 올린다(G24) — 계산값
+A.meta["lift"]["26"] = max(float(A.meta["lift"].get("26", 0)), float(A.meta["lift"].get("25", 0)))   # 25번 올림을 이어받는다(lift 는 max(계산, 25번))
+# ── 27 ── 교재 36쪽 27 (2026-11-28 재작업 — 책 27 에 아치 두 벌이 거울쌍으로 함께 그려져 있다: 앞 아치는 135도 프레임이 +Z, 뒤 아치는 −Z, 꺾인 팔은 둘 다 왼쪽(−X). 규칙 A3 예외 — 복사하지 않고 둘째 벌을 거울 자세로 결합한다, F9)
+#   결합 순서(책 확대·사용자 확인 2026-10-13): 135도 프레임 → 25프레임 → 3단블록 — 25프레임이 프레임과 블록 사이에 있다. 블록(양 끝 칸1·칸5)은 판 뒤에서 아래 돌기 p4·p5 가 판 구멍 두 줄에 들어가 있고, 가장 위 돌기 p3 이 판 위로 나와 프레임 구멍 h5·h9(40mm 간격)로 향한다(초록 링).
+#   135도 프레임: 곧은 팔 가로, 꺾인 팔은 아래·왼쪽으로 꺾이고 그 끝 구멍 h1~h3 에 3단블록 한 개(BC)의 돌기가 뒤에서 끼운다. 격자 27_P: holefit 어두운판 6/10·1.96px(아래쪽 아치 판 5칸×2줄).
+#   새 창고 첫 부품 = 판(place, 원점 중심). 블록·프레임·꺾인 팔 블록은 전부 결합(attach·recv)으로 계산하고 결합 전 띄움은 mv.auto_hover 가 계산한다(손값 0).
 s27 = SKEL[26]; s27.kw.pop("noPart", None)
-s27.note = "[교재 27] 아치를 2개 만들어요: 25프레임 뒤쪽에 3단블록 두 개를 양 끝 칸에 세우고, 앞쪽에서 135도 프레임(꺾인 쪽에 3단블록 한 개가 달림)의 곧은 팔 구멍 5번·9번을 두 블록 앞면 돌기에 끼워요."
-s27.kw["hideMade"] = {"%d:%d" % (_q.step.index, _q.step.parts.index(_q)): "1~26번 몸(창고 1)" for _q in A.parts if _q.step.index <= 26}   # 몸은 창고 1 에 숨기고 새 창고 2 에서 시작
-R_P27 = rot_x(90)                                                                   # 25프레임: 길이 +X, 구멍 축(로컬 y) → +Z(앞), 줄(로컬 z) → −Y
-R_B27 = np.array([[0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, -1.0]])             # 3단블록: 길이(로컬 x) → +Y, 로컬 +z 면(p3~p5) → −Z(판 쪽), 로컬 −z 면(p6~p8) → +Z(앞, 프레임 쪽), 로컬 y → +X
-R_F27 = rot_x(-90)                                                                  # 135도 프레임: 곧은 팔 +X, 구멍 축(로컬 y) → −Z(앞에서 뒤로 끼움), 꺾인 팔은 로컬 z 감소 방향 = 아래(−Y)
+s27.note = "[교재 27] 아치를 만들어요: 25프레임 뒤쪽에 3단블록 두 개를 양 끝 칸에 세우고(아래 돌기가 판 두 줄에), 앞쪽에서 135도 프레임(꺾인 쪽에 3단블록 한 개가 달림)의 곧은 팔 구멍 5번·9번을 두 블록의 위 돌기에 끼워요. 이 아치를 거울쌍으로 하나 더 뒤쪽(−Z)에 만들어요(프레임이 뒤쪽을 향함)."
+s27.kw["hideMade"] = {str(_n): "1~26번 몸(창고 1)" for _n in range(1, 27)}   # 몸은 창고 1 에 숨기고 새 창고 2 에서 시작
+R_P27 = rot_x(90)                                                                   # 25프레임: 길이 +X, 구멍 축 → +Z(앞), 줄 → −Y(서 있는 벽)
+R_B27 = orient("3단블록", {"돌기면 +z": "+Z", "홀면 +y": "-X"})                      # 3단블록: 길이 → +Y(서 있음), 돌기 p3~p5 면 → +Z(판·프레임 쪽)
+R_F27 = rot_x(-90)                                                                  # 135도 프레임: 곧은 팔 +X, 구멍 축 → Z, 꺾인 팔은 아래(−Y)
 _s2 = 0.70710678
-R_C27 = np.array([[_s2, -_s2, 0.0], [_s2, _s2, 0.0], [0.0, 0.0, 1.0]])             # 꺾인 팔 끝 3단블록: 길이가 꺾인 팔 방향(+X +Y 대각선), 돌기 면(로컬 +z) → +Z(프레임 쪽)
-M27 = np.diag([1.0, 1.0, -1.0])                                                      # 앞뒤 대칭: 두 아치는 z=290 면에 거울(부품 거울상 = 세계 z 뒤집기 M·R·부품 로컬 y 뒤집기 — 프레임·판·블록은 두께(y) 방향 대칭이라 회전으로 표현됨)(꺾인 팔은 둘 다 같은 쪽 아래, 프레임은 바깥, 판·블록은 안쪽)
-ARCH27 = []
-for _k, (_c, _mir) in enumerate(((np.array([0.0, 25.0, 250.0]), True), (np.array([0.0, 25.0, 330.0]), False))):   # 책: 뒤쪽 그룹(멀리)·앞쪽 그룹(가까이)이 앞뒤로 대칭. 블록 아래 끝이 바닥(y 0)에 서도록 판 중심 y 25
-    _Rm = (lambda R: M27 @ R @ np.diag([1.0, -1.0, 1.0])) if _mir else (lambda R: R)
-    _M = M27 if _mir else np.eye(3)
-    _pos = lambda _d, _c=_c, _M=_M: tuple(_c + _M @ np.array(_d, float))      # 아치 로컬(앞 +Z) 좌표 → 세계(뒤쪽 그룹은 z 거울)
-    _P = s27.place("25프레임", _Rm(R_P27), tuple(_c))
-    _BA = s27.attach("3단블록", _Rm(R_B27), {"p4": (_P, _pos((-20.0, 5.0, 0.0))), "p5": (_P, _pos((-20.0, -5.0, 0.0)))})
-    _BB = s27.attach("3단블록", _Rm(R_B27), {"p4": (_P, _pos((20.0, 5.0, 0.0))), "p5": (_P, _pos((20.0, -5.0, 0.0)))})
-    _F = s27.recv("135도 프레임", _Rm(R_F27), {"h5": (_BA, "p7"), "h9": (_BB, "p7")})   # 프레임(+꺾인 팔 블록)은 끼운 채 제자리 — 판 쪽 묶음(판+블록 2)이 프레임에서 40mm 물러나 있다가 블록 위 돌기 p7 이 프레임 구멍 h5·h9 로 들어온다(책: 블록 10·11 이 프레임에 바로 연결)
-    _BC = s27.attach("3단블록", _Rm(R_C27), {"p5": (_F, "h1"), "p4": (_F, "h2"), "p3": (_F, "h3")})   # 책이 이미 프레임에 꽂아 둔 모양 — 꽂힌 채(seated). 프레임과 한 덩어리로 같이 띄우는 표현은 design-verify.js 방향 검사(돌기는 띄우는 방향의 반대)와 충돌해서 못 한다(옮기기·옆자리 단계만 면제)
-    _dv = np.array([0.0, 0.0, -1.0]) if not _mir else np.array([0.0, 0.0, 1.0])   # 프레임에서 멀어지는 쪽(프레임이 +Z 면 판 묶음은 −Z 로 물러난다)
-    for _q, _hid in ((_BA, "h5"), (_BB, "h9")):
-        _pg = _q.peg("p7"); _h = _F.hole(_hid)
-        _q.extra.update({"dir": rnd(_dv), "hover": 30, "marks": [rnd(_h["pos"] - _pg["dir"] * (_h["len"] / 2))]})
-    _P.extra.update({"dir": rnd(_dv), "hover": 30})
-    _BC.extra.pop("marks", None); _BC.extra.pop("dir", None)   # 프레임에 꽂힌 채(안내 화살표·띄움 없음) — marks 가 있으면 화면이 기본 띄움으로 프레임에서 떼어 그린다
-    ARCH27.append(dict(P=_P, BA=_BA, BB=_BB, F=_F, BC=_BC))
-for _k, _dz in ((0, 80.0), (1, -80.0)):   # 2026-10-13 사용자 요청·확인: 두 그룹(판+블록 2) 위치만 서로 바꿈(방향·프레임 그대로) — 화살표(결합 위치)는 아직 안 만듦
-    for _q in (ARCH27[_k]["P"], ARCH27[_k]["BA"], ARCH27[_k]["BB"]):
-        _q.p = _q.p + np.array([0.0, 0.0, _dz])
-    for _q in (ARCH27[_k]["P"], ARCH27[_k]["BA"], ARCH27[_k]["BB"], ARCH27[_k]["F"], ARCH27[_k]["BC"]):
-        for _f in ("marks", "dir", "hover"): _q.extra.pop(_f, None)
-# 2026-10-13 사용자 지시: 이 배치를 두고 간격을 벌려 화살표를 그린다 — 프레임(+꺾인 팔 블록)을 바깥으로 30mm 벌리고, 묶음은 바로 옆 프레임 쪽 제자리(프레임 구멍 −15)에서 가운데로 30mm 떠서(= 지금 보이는 자리) 프레임 5번·9번 구멍으로 들어가는 화살표를 그린다. 판은 화살표 없이 같이 뜬다.
-for _k, _sd in ((0, 1.0), (1, -1.0)):
-    _o = ARCH27[1 - _k]
-    for _q, _hid in ((ARCH27[_k]["BA"], "h5"), (ARCH27[_k]["BB"], "h9")):
-        _h = _o["F"].hole(_hid)
-        _q.extra.update({"dir": rnd([0.0, 0.0, -_sd]), "hover": 60, "marks": [rnd(_h["pos"] - np.array([0.0, 0.0, _sd]) * (_h["len"] / 2))]})   # 결합 전: 블록이 가장 멀리(60) — 프레임·판·블록 순서로 따로 떠 있다(사용자 지시 2026-10-13 "135도 도 분리, 25프레임도 분리돼서 결합 전 모습")
-    ARCH27[_k]["P"].extra.update({"dir": rnd([0.0, 0.0, -_sd]), "hover": 30, "noGuide": True})   # 판은 프레임에서 30, 블록은 판에서 30 더 — 프레임은 제자리
-    _bc = ARCH27[_k]["BC"]; _bc.extra.update({"dir": rnd(-np.array(_bc.peg("p4")["dir"])), "hover": 30})   # 꺾인 팔 끝 3단블록도 프레임에서 분리(사용자 지시 2026-10-13): 돌기가 향한 반대쪽으로 30 — 돌기 p3~p5 → 프레임 구멍 h1~h3 화살표
-A.steps[26].cam = (-0.67, 0.87, False, None, None, None); A.steps[26].camSrc = "eye"   # 기준 부품 135도 프레임 구멍 7개 PnP(fov 70, 평균 1.96·최대 3.71px, roll −2.3°). 위쪽 아치 판 기준(theta −0.43·phi 1.10)과 다르다 — 책이 아치를 임의 자세로 그렸거나 구멍 읽기 오차
-A.meta["lift"]["27"] = 2.0   # 아치가 서면 꺾인 팔 3단블록 하나의 아래 끝이 바닥(y 0) 아래 −1.6 으로 내려간다 — 규칙대로 화면 전체를 올린다(책을 보고 제대로 그리면 바닥 아래로 내려가는 구조)
+R_C27 = np.array([[_s2, -_s2, 0.0], [_s2, _s2, 0.0], [0.0, 0.0, 1.0]])             # 꺾인 팔 끝 3단블록: 길이가 꺾인 팔 방향(+X +Y 대각선), 돌기 면 → +Z(프레임 쪽)
+_P27 = s27.place("25프레임", R_P27, (0.0, 10.0, 0.0))                                # 새 창고 첫 부품 = 원점 중심·바닥 위(A4)
+_BA27 = s27.attach("3단블록", R_B27, {"p4": (_P27, "h1"), "p5": (_P27, "h2")}, joinOrder=1)      # 판 칸1 의 두 줄 구멍(뒤에서 앞으로)
+_BB27 = s27.attach("3단블록", R_B27, {"p4": (_P27, "h9"), "p5": (_P27, "h10")}, joinOrder=1)     # 판 칸5 의 두 줄 구멍
+_F27 = s27.recv("135도 프레임", R_F27, {"h5": (_BA27, "p3"), "h9": (_BB27, "p3")}, joinOrder=2)  # 프레임 곧은 팔 구멍 5번·9번(40mm) ← 블록 위 돌기 p3 둘
+_BC27 = s27.attach("3단블록", R_C27, {"p5": (_F27, "h1"), "p4": (_F27, "h2"), "p3": (_F27, "h3")}, joinOrder=3)   # 꺾인 팔 끝 구멍 3개 ← 블록 돌기 3개(뒤에서)
+ARCH27 = [dict(P=_P27, BA=_BA27, BB=_BB27, F=_F27, BC=_BC27)]
+# 둘째 아치 = 첫째의 거울쌍(책 27: 뒤 아치는 프레임이 −Z, 꺾인 팔은 같이 왼쪽 — F9: R' = Mz·R·S, S = 부품 자신의 반사 대칭(구멍 축 = 로컬 y 반사)). 같은 결합(id)을 거울 자세로 attach/recv 한다.
+_Mz27 = np.diag([1.0, 1.0, -1.0]); _Sy27 = np.diag([1.0, -1.0, 1.0])
+_m27 = lambda _R: _Mz27 @ np.array(_R, float) @ _Sy27
+_tP27 = asmlib.Part("25프레임", _m27(R_P27), (0, 0, 0), s27)
+_zmin27 = min(float(mv._box(_q)[0][2]) for _q in ARCH27[0].values())                    # 첫째 아치의 가장 뒤쪽(−Z) 면
+_zc27 = 2 * _zmin27 - float(_P27.p[2]) - 20.0                                             # 둘째 판 가운데 z: 둘째 아치의 판 쪽 끝(거울)이 첫째 아치 뒤 면에서 20mm 밖(크기에서 계산, 손 좌표 아님)
+_off27 = np.array([float(_P27.p[0]), float(_P27.p[1]), _zc27]) - _P27.hole("h1")["pos"] + _tP27.hole("h1")["pos"]
+_P27b = s27.place_next("25프레임", _m27(R_P27), "h1", _P27, "h1", tuple(_off27))        # 둘째 판: 첫째 아치 뒤쪽(−Z)에 따로(x·y 는 첫째와 같게)
+_BA27b = s27.attach("3단블록", _m27(R_B27), {"p4": (_P27b, "h1"), "p5": (_P27b, "h2")}, joinOrder=1)
+_BB27b = s27.attach("3단블록", _m27(R_B27), {"p4": (_P27b, "h9"), "p5": (_P27b, "h10")}, joinOrder=1)
+_F27b = s27.recv("135도 프레임", _m27(R_F27), {"h5": (_BA27b, "p3"), "h9": (_BB27b, "p3")}, joinOrder=2)
+_BC27b = s27.attach("3단블록", _m27(R_C27), {"p5": (_F27b, "h1"), "p4": (_F27b, "h2"), "p3": (_F27b, "h3")}, joinOrder=3)
+ARCH27.append(dict(P=_P27b, BA=_BA27b, BB=_BB27b, F=_F27b, BC=_BC27b))
+A.steps[26].cam = (-0.58, 1.04, False, None, None, None); A.steps[26].camSrc = "fit"   # 27_P 격자(holefit 어두운판 6/10·1.96px)에서 axes_fit 으로 계산(오차 1.20px, roll −14.6° — 책 그림이 기울어 구도만 맞춘다)
+floor_lift(A, 27)   # 아치가 서면 꺾인 팔 블록이 바닥 아래로 내려가는 만큼 화면 전체를 올린다(G24) — 계산값
+
 # ── 28 ── 교재 36쪽 28 (읽은 것 2026-10-13 — "27번 아치 2개 + 몸": 창고 2의 아치 둘을 창고 1의 몸 위 713프레임 판(25번에서 올린 위 판, PL25)에 합친다. 새 부품 없음)
 #   칸은 모델로 먼저 정했다(pegprobe 빈구멍): 판 (2,1)·(6,1)·(2,7)·(6,7) 이 모두 빈 구멍이고(리벳 칸1 줄1·줄7, 모터 돌기 칸6·8 줄2·6 과 안 겹침), 아치 블록 둘은 4칸(40mm) 떨어져 있다.
 #   책 링 4개(색 검출 (386,521)(505,442)(561,650)(681,562))가 리벳 옆 (2,1)·(2,7) 과 4칸 떨어진 (6,1)·(6,7) — 위로 높이 뜬 아치 = 줄1, 판 위에 낮게 내려온 아치 = 줄7. 프레임이 바깥(−Z/+Z)을 향한다(몸 거울면 z 5 = 판 가운데 줄4).
@@ -667,33 +660,46 @@ s28 = SKEL[27]; s28.kw.pop("noPart", None)
 s28.note = "[교재 28] 창고 2에서 만든 아치 둘을 몸 위 713프레임 판에 합쳐요. 아치마다 3단블록 아래 돌기가 판 칸2·칸6 구멍에 들어가요(프레임이 바깥을 향해요: 위쪽 아치는 줄1, 앞쪽 아치는 줄7)."
 def _h28(_c, _r): return PL25.hole(asmlib._item(PL25, "홀면 +y 열%d·줄%d" % (_c, _r), "홀")[0])
 def _t28(_g, _h): return (_h["pos"] - _g["dir"] * (_h["len"] / 2) + _g["dir"] * _g["len"] / 2) - _g["pos"]
-for _k28, _r28, _hv28 in ((1, 1, 100), (0, 7, 35)):   # 27번에서 두 그룹이 자리를 맞바꿨으므로 한 아치 = 판+블록 묶음 k + 짝 프레임·꺾인 팔 블록 ARCH27[1−k](프레임이 판과 같은 z). 묶음1 = 프레임 −Z(줄1 쪽, 높이 뜬 아치), 묶음0 = 프레임 +Z(줄7 쪽, 낮게 내려온 아치)
-    _a = ARCH27[_k28]; _ga, _gb = _a["BA"].peg("p2"), _a["BB"].peg("p2")
-    _T28 = _t28(_ga, _h28(2, _r28))
-    _e = float(np.linalg.norm(_t28(_gb, _h28(6, _r28)) - _T28))
+_e28 = lambda _c, _r: rnd(_h28(_c, _r)["pos"] + np.array([0.0, 1.0, 0.0]) * (_h28(_c, _r)["len"] / 2))   # 판 구멍 입구(위 면) 점 — DB 연결점
+_body28 = [_q for _q in A.parts if _q.step.index <= 26 and not _q.extra.get("copyOf")]                   # 아치 밑에 있는 몸 부품(713프레임·리벳·바퀴 등)
+# 책 28: 두 아치(27번에서 거울쌍으로 만든 것)가 프레임을 바깥(+Z/−Z)으로 두고 판 칸2·칸6 구멍에 내려온다. 첫째 아치(프레임 +Z)는 줄7, 둘째 아치(프레임 −Z)는 줄1 — 이동만 한다(둘 다 27번 자세 그대로).
+for _k28, _r28, _cs in ((0, 7, (2, 6)), (1, 1, (2, 6))):
+    _a = ARCH27[_k28]; _R28 = np.eye(3); _pv28 = _a["P"].p.copy()
+    _grp = [_a["P"], _a["BA"], _a["BB"], _a["F"], _a["BC"]]
+    _gs = [_a["BA"].peg("p2"), _a["BB"].peg("p2")]
+    _T28 = _t28(_gs[0], _h28(_cs[0], _r28))
+    _e = float(np.linalg.norm(_t28(_gs[1], _h28(_cs[1], _r28)) - _T28))
     if _e > 0.8: A.log("28번: 아치%d 의 블록 돌기 p2 둘이 판 칸2·칸6 줄%d 구멍과 %.1fmm 어긋남(한 이동으로 안 맞음)" % (_k28, _r28, _e))
-    _mk = lambda _c, _r=_r28: rnd(_h28(_c, _r)["pos"] - _ga["dir"] * (_h28(_c, _r)["len"] / 2))   # 판 구멍 입구(위 면) 점
-    s28.move_made(A.group("mm28arch%d" % _k28, [_a["P"], _a["BA"], _a["BB"], ARCH27[1 - _k28]["F"], ARCH27[1 - _k28]["BC"]]), np.eye(3), pivot=_a["P"].p.copy(), shift=_T28, dir=[0, 1, 0], hover=_hv28, group="mm28arch%d" % _k28)
-A.steps[27].cam = (-0.82, 0.82, False, None, None, None); A.steps[27].camSrc = "eye"   # 28_P 앵커 6곳 PnP(잔차 평균 0.83·최대 1.23px), roll −1.5°
-A.meta["lift"]["28"] = 18.0   # 몸(바퀴)이 바닥 아래로 내려가므로 앞 번호(21~26번)와 같이 화면 전체를 18 올린다(사용자 지시 2026-10-13 "자동차가 바닥 아래로 내려갔어, 전체적으로 올려줘")
+    # 결합 전 띄움: 내려오는 아치의 아래쪽 면(돌기 끝 포함)이 그 아래 몸 부품의 가장 바깥(위) 면에서 20mm 밖(위에서 보아 겹치는 쌍만, 결합 뒤 자리 = 이동 _T28 적용, 손값 없음)
+    _ub = [_bx14(_q, np.asarray(_q.p, float) + _T28) for _q in _grp]
+    _pb = [_bx14(_q) for _q in _body28]
+    _hv = round(max(float(_p[1][1]) + 20.0 - float(_u[0][1]) for _u in _ub for _p in _pb if mv._foot(_u, _p, np.array([0.0, 1.0, 0.0]))), 3)
+    _mk = {id(_a["BA"]): [_e28(_cs[0], _r28)], id(_a["BB"]): [_e28(_cs[1], _r28)]}   # 안내점 = 블록 아래 돌기가 들어가는 판 구멍 입구(DB 연결점) 둘
+    s28.move_made(A.group("mm28arch%d" % _k28, _grp), _R28, pivot=_pv28, shift=_T28, dir=[0, 1, 0], hover=_hv, group="mm28arch%d" % _k28, marks=_mk)
+A.steps[27].cam = (-0.82, 0.82, False, None, None, None); A.steps[27].camSrc = "fit"   # 28_P(앵커 6곳 유추 격자)에서 axes_fit 으로 계산
+floor_lift(A, 28)   # 바닥 아래로 내려가는 만큼 화면 전체를 올린다(G24) — 계산값
+_vl28 = asmlib._view_low(A, 28)[0]
+A.meta["lift"]["28"] = max(float(A.meta["lift"].get("28", 0)), float(A.meta["lift"].get("27", 0)), float(np.ceil(-_vl28 - 1e-9)) if _vl28 is not None and _vl28 < 0 else 0.0)   # 27번 올림을 이어받고(lift 는 max(계산, 27번)), 몸이 다시 보이면 보이는 몸의 가장 낮은 점(계산)까지
 # ── 29 ── 교재 36쪽 29 (읽은 것 2026-10-13 — 37프레임 1 + 17프레임 1 + 리벳 6: 앞쪽에서 양쪽 아치의 꺾인 팔 3단블록(BC) 구멍 3개씩에 리벳 6개를 꽂고, 37프레임(회색 판)·17프레임(빨간 막대)을 그 리벳에 끼운다. 뒷 번호 30번 그림: 두 흰 프레임 사이 앞쪽에 판이 45° 로 비스듬히 서고 양 끝에 주황 리벳 3개씩.)
 #   모델로 먼저 정했다(2026-10-13 사용자 지시): ① BC 둘의 구멍 h1·h2·h3 은 z −25·35 에서 같은 모양(대각선 줄 w=(.707,.707), 간격 10, 구멍 축 u=(−.707,.707) 바깥쪽 위) ② 37프레임·17프레임 길이 방향 양 끝 구멍 간격 = 60mm = BC 둘의 간격 ③ 리벳 6 = BC 구멍 3 × 2.
 #   책 29 화살표: 한쪽에 판 구멍 2개 + 빨간 막대 구멍 1개 → 판 아래 두 줄(h3·h2 쪽)이 리벳 h3·h2, 막대가 리벳 h1(아래, 판 아래 모서리). 리벳은 책이 이미 꽂아 둔 모양이라 꽂힌 채, 판·막대는 u 방향으로 떠 있다가 내려온다(결합 전).
 s29 = SKEL[28]; s29.kw.pop("noPart", None)
 s29.note = "[교재 29] 양쪽 아치의 꺾인 팔 3단블록 구멍 3개씩에 리벳을 꽂고, 37프레임과 17프레임을 그 리벳에 끼워요. 리벳은 아래 구멍이 17프레임, 위 두 구멍이 37프레임에 들어가요."
 s29.kw["hideMade"] = {}
-_u29 = np.zeros(3)                                                      # BC 구멍 축(바깥쪽 위) — 판이 BC 바깥 면에 붙는다
-_Rz45 = np.array([[0.70710678, -0.70710678, 0.0], [0.70710678, 0.70710678, 0.0], [0.0, 0.0, 1.0]])  # 리벳 로컬 +y → u
-_BCs29 = [ARCH27[0]["BC"], ARCH27[1]["BC"]]                                                         # z −25(프레임0 쪽) · z 35(프레임1 쪽) — 28번에서 옮긴 자리
+_Rz45 = np.array([[0.70710678, -0.70710678, 0.0], [0.70710678, 0.70710678, 0.0], [0.0, 0.0, 1.0]])  # 리벳 로컬 +y → 구멍 축 u(꺾인 팔 BC 구멍이 바깥쪽 위를 봄, 27번과 같은 자세)
+_BCs29 = sorted([ARCH27[0]["BC"], ARCH27[1]["BC"]], key=lambda _b: float(_b.p[2]))   # z 작은 쪽(줄1) 아치부터 — 28번이 첫째 아치를 줄7, 거울 둘째 아치를 줄1 에 내렸다(위치로 정렬, 손값 없음)
 RV29 = {}
 for _ib, _bc in enumerate(_BCs29):
-    for _hh in ("h1", "h2", "h3"):
-        RV29[(_ib, _hh)] = s29.attach("리벳", _Rz45, {"돌기면 -y 1": (_bc, _hh)}, rivet=True)       # 책이 이미 꽂아 둔 모양(꽂힌 채)
-R_PL29 = np.array([[0.0, -0.70710678, 0.0], [0.0, 0.70710678, 0.0], [1.0, 0.0, 0.0]]).T if False else np.column_stack([[0.0, 0.0, 1.0], list(_u29), list(np.cross([0.0, 0.0, 1.0], _u29))])   # 로컬 x(길이)→+Z, 로컬 y(구멍 축)→u, 로컬 z(줄)→x×y
-PL37 = s29.recv("37프레임", R_PL29, {"h2": (RV29[(0, "h3")], "p2"), "h3": (RV29[(0, "h2")], "p2"), "h20": (RV29[(1, "h3")], "p2"), "h21": (RV29[(1, "h2")], "p2")})
-RD29 = s29.recv("17프레임", R_PL29, {"h1": (RV29[(0, "h1")], "p2"), "h7": (RV29[(1, "h1")], "p2")})
-A.steps[28].cam = (-0.832, 1.076, False, None, None, None); A.steps[28].camSrc = "eye"   # 사용자가 화면에서 📷 로 저장한 시점(사용자 기록이 코드 값보다 우선 — 2026-10-13 "내가 정해놓은 게 우선"). 참고: 판 무늬 매칭 풀이(plate_match.py)는 theta −0.88·phi 0.86, roll 2.2° 로 phi 가 다르다
-A.meta["lift"]["29"] = 18.0
+    for _hh, _rv in zip(("h1", "h2", "h3"), mv.rivets(s29, _bc, ["h1", "h2", "h3"], R=_Rz45)):   # 리벳 6개: 결합 전(구멍 위에 뜬) 기본 모양 — 책 링 6개
+        RV29[(_ib, _hh)] = _rv
+_u29 = np.array(RV29[(0, "h1")].peg("p2")["dir"], float)   # 리벳 윗돌기 p2 가 향하는 쪽 = 판·막대가 올라오는 방향(DB 연결점)
+R_PL29 = np.column_stack([[0.0, 0.0, 1.0], list(_u29), list(np.cross([0.0, 0.0, 1.0], _u29))])   # 로컬 x(길이)→+Z, 로컬 y(구멍 축)→u, 로컬 z(줄)→x×y
+PL37 = mv.plate_on_rivets(s29, "37프레임", R_PL29, [RV29[(0, "h3")], RV29[(0, "h2")], RV29[(1, "h3")], RV29[(1, "h2")]], ["h2", "h3", "h20", "h21"], face="-y")   # 판 위 두 줄이 리벳 h3·h2 에(결합 전)
+RD29 = mv.plate_on_rivets(s29, "17프레임", R_PL29, [RV29[(0, "h1")], RV29[(1, "h1")]], ["h1", "h7"], face="-y")   # 빨간 막대: 구멍 h1·h7 이 리벳 h1(맨 아래)에
+A.steps[28].cam = (-0.88, 0.86, False, None, None, None); A.steps[28].camSrc = "fit"   # 29_P 유추 격자(plate_match)에서 axes_fit 값
+floor_lift(A, 29)   # 바닥 아래로 내려가는 만큼 화면 전체를 올린다(G24) — 계산값
+_vl29 = asmlib._view_low(A, 29)[0]
+A.meta["lift"]["29"] = max(float(A.meta["lift"].get("29", 0)), float(A.meta["lift"].get("28", 0)), float(np.ceil(-_vl29 - 1e-9)) if _vl29 is not None and _vl29 < 0 else 0.0)   # 28번 올림을 이어받고, 몸이 다시 보이면 보이는 몸의 가장 낮은 점(계산)까지
 # ── 30 ── 교재 36쪽 30 (읽은 것 2026-10-13 — 27프레임 1: 검은 막대판이 몸 위에서 두 아치의 앞쪽 3단블록(BA, x −45) 윗돌기 2개에 끼워진다. 29번 결과: 37프레임·17프레임·리벳이 꽂힌 채)
 #   모델로 먼저: 아치 블록 윗돌기 p1 4개 중 책 링 두 개가 가리키는 쌍을 카메라 투영으로 골랐다(줄1 아치 BA (276,277)·줄7 아치 BA (501,392) ↔ 책 돌기 링 (278,293)·(502,407); BB(x −5)는 (389,191)·(608,294)로 안 맞음). 두 돌기는 z −25·35 = 60mm = 27프레임 양 끝 구멍 간격(7칸).
 #   카메라: 29번에서 우리가 놓은 리벳 6개(3D 확정)와 몸 위 판 먼 모서리 2곳의 8앵커 풀이(평균 0.82·최대 1.34px, 하나씩 빼도 theta −0.99·phi 0.86·fov 25 로 안정). 격자 30_P 는 유추라 ⚠(사용자 ✓ 필요).
@@ -703,26 +709,29 @@ s30.kw["hideMade"] = {}
 R30 = np.column_stack([[0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [-1.0, 0.0, 0.0]])   # 27프레임: 길이(로컬 x)→+Z, 구멍 축(로컬 y)→+Y(위), 줄(로컬 z)→−X (판 몸이 +X 쪽, 뒤로 뻗는다 — 책 30 그림에서 판이 돌기 뒤쪽으로 뻗음)
 FR27 = s30.recv("27프레임", R30, {"h2": (ARCH27[1]["BA"], "p1"), "h14": (ARCH27[0]["BA"], "p1")})
 A.steps[29].cam = (-0.99, 0.86, False, None, None, None); A.steps[29].camSrc = "eye"   # 6리벳+판 모서리 2곳 8앵커(평균 0.82px), roll 2.2°
-A.meta["lift"]["30"] = 18.0
+floor_lift(A, 30)   # 바닥 아래로 내려가는 만큼 화면 전체를 올린다(G24) — 계산값
+_vl30 = asmlib._view_low(A, 30)[0]
+A.meta["lift"]["30"] = max(float(A.meta["lift"].get("30", 0)), float(A.meta["lift"].get("29", 0)), float(np.ceil(-_vl30 - 1e-9)) if _vl30 is not None and _vl30 < 0 else 0.0)   # 29번 올림을 이어받고, 몸이 다시 보이면 보이는 몸의 가장 낮은 점(계산)까지
 # ── 31 ── 교재 36쪽 31 (읽은 것 2026-10-14 — 새 조립: 37프레임 위에 큰기어, T축 하나가 큰기어 가운데 구멍·판 구멍(4칸 3줄)을 지나고 판 아래에서 빨간 부시가 잡는다. 홀라인: holefit 통과 37프레임 7칸×3줄 구멍 21개 모두 검출(평균 0.51px·최대 1.94px), 카메라 theta −0.98·phi 0.77 오차 0.64px, roll 2.9°)
 #   카메라가 보는 면(책): 판은 눕고(홀면 위) 긴 쪽이 오른쪽 아래로, 줄1 이 왼쪽 가장자리·줄3 이 먼 가장자리, 칸1 이 왼쪽 끝. 위에서 아래로 T축(접시 머리 위) → 큰기어(눕힘) → 37프레임 → 빨간 부시가 초록 선 하나 위에 늘어서 있다(결합 전).
 #   링 3개: 큰기어 가운데 구멍(T축이 먼저 낌) · 판 칸4 줄3 구멍(가운데 열, 가장자리 줄) · 빨간 부시. 앞 5번(축·큰기어·부시)과 같은 구조: 축을 먼저 판 구멍에 놓고 큰기어·부시를 축에 낀다. 32번이 이 덩어리를 몸 위 아치 뒤쪽 블록 윗돌기에 얹는다.
 #   방향은 새 조립이라 우리가 정한다: 칸 +Z·줄 +X, 구멍 축 −Y(판 대칭이라 책 그림과 같은 카메라가 나오는 쪽, axes_fit +Z +X). 몸 아래로 부시가 내려가므로 화면을 6 띄운다(lift).
 s31 = SKEL[30]; s31.kw.pop("noPart", None)
 s31.note = "[교재 31] 37프레임 위에 큰기어를 놓고, T축을 큰기어 가운데 구멍과 판 구멍(칸4 줄3)에 꽂은 뒤 판 아래에서 빨간 부시를 끼워요."
-s31.kw["hideMade"] = {"%d:%d" % (_q.step.index, _q.step.parts.index(_q)): "1~30번 몸(창고 1)" for _q in A.parts if _q.step.index <= 30}   # 몸은 창고 1 에 숨기고 새 창고 2 에서 시작(32번에서 합친다)
+s31.kw["hideMade"] = {str(_n): "1~30번 몸(창고 1)" for _n in range(1, 31)}   # 몸은 창고 1 에 숨기고 새 창고 2 에서 시작(32번에서 합친다) — 27번과 같은 방식
 R31 = np.column_stack([[0.0, 0.0, 1.0], [0.0, -1.0, 0.0], [1.0, 0.0, 0.0]])   # 37프레임: 길이(로컬 x)→+Z, 구멍 축(로컬 y)→−Y, 줄(로컬 z)→+X (책 그림 카메라와 같은 쪽)
-PL31 = s31.place("37프레임", R31, (0.0, 2.5, 0.0))
-_h31 = PL31.hole("h12")
-R_T31 = rot_x(180)                                                               # T축: 돌기(로컬 +y) 아래(−Y), 접시 머리 위
-TA31 = s31.attach("T축", R_T31, {"p1": (PL31, "h12")})
-TA31.extra["loose"] = True; TA31.extra["noMarkCheck"] = True; TA31.extra["dir"] = [0, 1, 0]; TA31.extra["joinOrder"] = 1
-GR31 = s31.recv("큰기어", np.eye(3), {"h3": (TA31, "p1")})
-GR31.extra["loose"] = True; GR31.extra["noMarkCheck"] = True; GR31.extra["dir"] = [0, 1, 0]; GR31.extra["joinOrder"] = 2
-BU31 = s31.recv("부시", np.eye(3), {"h1": (TA31, "p1")})
-BU31.extra["loose"] = True; BU31.extra["noMarkCheck"] = True; BU31.extra["dir"] = [0, -1, 0]; BU31.extra["joinOrder"] = 3
-A.steps[30].cam = (-0.98, 0.77, False, None, None, None); A.steps[30].camSrc = "eye"   # 31_P holefit 격자 axes_fit(+Z +X) 오차 0.64px 21점
-A.meta["lift"]["31"] = 46.0   # 부시가 결합 전(판 아래 40 띄움)일 때 가장 낮은 y −45.5(검사 표시는 올린 뒤 −3.5) — 규칙대로 화면 전체를 그만큼 올린다
+PL31 = s31.place("37프레임", R31, (0.0, 2.5, 0.0))   # 새 창고 첫 부품 = 원점 중심·바닥 위(A4)
+R_G31 = np.eye(3)                                   # 큰기어: 구멍 축 = 세로(Y), 판 위에 눕힘
+GR31 = s31.place_rest("큰기어", R_G31, "h3", PL31, "h12", (0.0, 1.0, 0.0), dir=[0.0, 1.0, 0.0], recv=True, joinOrder=2)   # 큰기어: 판 윗면(+Y)에 몸통이 닿게(place_rest, 손값 0), 가운데 구멍 h3 = 판 칸4 줄3(h12) — 5번과 같은 방식
+TA31 = s31.attach("T축", rot_x(180), {"p1": (GR31, "h3")}, dir=[0.0, 1.0, 0.0], joinOrder=1)   # T축: 돌기(로컬 +y) 아래(−Y), 접시 머리 위 — 큰기어 가운데 구멍에 끝까지(머리는 홀 테두리 안에 들어가 기어 윗면과 같다, K0), 가는 끝은 판 구멍을 지난다
+BU31 = mv.on_shaft(s31, "부시", TA31, [0.0, -1.0, 0.0], against=PL31, joinOrder=3)   # 부시: T축 가는 끝(−Y), 좁은 쪽이 판 쪽(G5), 판 아랫면에 닿게 — 띄움은 mv.auto_hover
+GR31.extra["hover"] = round(mv._len_along(GR31, np.array(GR31.extra["dir"], float)) + 20.0, 1)   # 책 31: 큰기어는 판에서 떨어져 뜬다 — 자기 길이+20(G1c), 규칙 계산(손값 0, 4·5번과 같다)
+_d31 = np.array(GR31.extra["dir"], float); _tip31 = float(np.dot(TA31.p, _d31)) - mv._len_along(TA31, _d31) / 2; _face31 = float(np.dot(GR31.p, _d31)) + mv._len_along(GR31, _d31) / 2   # T축 가는 끝·기어 바깥 면(띄우는 방향 좌표)
+TA31.extra["hover"] = round(float(GR31.extra["hover"]) + (_face31 - _tip31) + 20.0, 1)   # 책 31: T축은 결합 전 — 기어 위에 완전히 떨어져(가는 끝이 기어 바깥 면에서 20mm 밖). 띄움 = 기어 띄움 + (끝이 기어 바깥 면을 넘는 길이) + 20(G1c) — 규칙 계산(손값 0)
+GR31.extra["marks"] = join_marks(GR31, [TA31])   # 큰기어 안내점 = 기어 구멍에 낀 T축 돌기 끝(DB 점) — ① T축이 기어에 끼고 ② 기어+T축이 함께 판 구멍으로(5번과 같다)
+GR31.extra["faceMarks"] = [rnd(np.array(GR31.hole("h3")["pos"], float) + np.array(GR31.extra["dir"], float) * float(GR31.extra.get("thick") or 9) / 2)]   # 화살표 머리 = 기어 가운데 구멍(DB 구멍) — 5번과 같다
+A.steps[30].cam = (-0.98, 0.77, False, None, None, None); A.steps[30].camSrc = "fit"   # 31_P holefit 격자 axes_fit(+Z +X) 오차 0.64px 21점
+floor_lift(A, 31)   # 바닥 아래로 내려가는 만큼 화면 전체를 올린다(G24) — 계산값
 # ── 32 ── 교재 36쪽 32 (읽은 것 2026-10-14 — 새 부품 없음: 31번에서 만든 덩어리(37프레임+T축+큰기어+부시)를 몸 위 두 아치의 뒤쪽 3단블록(BB, x −5) 윗돌기에 얹는다)
 #   모델로 먼저: 덩어리 판 양 끝 구멍(h1_1·h7_1, 판 (−10,·,∓30))이 BB 윗돌기 p1 둘(z −25·35)과 만나는 이동 = (+5, +70, +5) — 4개 중 책이 가리키는 쌍은 BB(x −5) 둘이다(책 링 2개와 투영 일치).
 #   카메라: 블록 윗돌기 2 + 모서리 돌기 2 + 모터 돌기 4 = 앵커 8곳 풀이(평균 1.20·최대 2.68px, 하나씩 빼도 theta 0.014·phi 0.010 변화) 격자 32_P 는 유추라 ⚠. theta 0.84·phi 0.70, roll −0.3°.
@@ -730,10 +739,30 @@ s32 = SKEL[31]; s32.kw.pop("noPart", None)
 s32.note = "[교재 32] 31번에서 만든 덩어리(37프레임·큰기어·T축·부시)를 몸 위로 내려, 두 아치 뒤쪽 3단블록(BB)의 윗돌기 두 개를 37프레임 양 끝 구멍에 끼워요."
 s32.kw["hideMade"] = {}
 _G32 = [PL31, TA31, GR31, BU31]
-_BBt = [rnd(np.array([-5.0, 75.0, -25.0])), rnd(np.array([-5.0, 75.0, 35.0]))]   # BB 윗돌기 끝(안내점)
-s32.move_made(A.group("mm32", _G32), R_Y180, pivot=PL31.p.copy(), shift=np.array([-15.0, 70.0, 5.0]), dir=[0, 1, 0], group="mm32", marks={id(PL31): _BBt})   # 덩어리를 세로축으로 180° 돌려(줄이 −X 로: 큰기어가 아치 앞쪽, 책 32·35 에서 큰기어는 메인보드와 떨어진 앞쪽) 놓는다 — 31번은 사용자 ✓ 라 건드리지 않고 이 번호에서 돌린다
+_pv32 = PL31.p.copy()
+# 덩어리를 세로축으로 180° 돌린 자세에서(줄이 −X 로: 큰기어가 아치 앞쪽, 책 32·35) 판 양 끝 구멍(h1_1·h7_1)이 뒤쪽 3단블록(BB) 윗돌기 p1 둘을 받는 이동 — 연결점(recv_shift)에서 계산, 손값 없음
+_o32 = (PL31.p.copy(), PL31.R.copy()); PL31.p = R_Y180 @ (PL31.p - _pv32) + _pv32; PL31.R = R_Y180 @ PL31.R
+_bbs32 = [(_k, ARCH27[_k]["BB"]) for _k in (0, 1)]
+_pair32 = {}
+for _hn in ("h1", "h19"):
+    _hp = PL31.hole(_hn)["pos"]
+    _kb = min(_bbs32, key=lambda kb_: float(np.linalg.norm(kb_[1].peg("p1")["pos"][[0, 2]] - _hp[[0, 2]])))   # 이 구멍에 가장 가까운(위에서 본) BB 윗돌기
+    _pair32[_hn] = _kb[1]
+_T32 = asmlib.recv_shift(PL31, "h1", _pair32["h1"], "p1")
+for _hn in ("h19",):
+    _e32 = float(np.linalg.norm(asmlib.recv_shift(PL31, _hn, _pair32[_hn], "p1") - _T32))
+    if _e32 > 0.8: A.log("32번: 판 구멍 %s 가 BB 윗돌기와 %.1fmm 어긋남(한 이동으로 안 맞음)" % (_hn, _e32))
+PL31.p, PL31.R = _o32
+_mk32 = [rnd(_pair32[_hn].peg("p1")["pos"] + np.array(_pair32[_hn].peg("p1")["dir"], float) * float(_pair32[_hn].peg("p1")["len"]) / 2) for _hn in ("h1", "h19")]   # 안내점 = BB 윗돌기 끝(DB 연결점) 둘
+# 결합 전 띄움: 내려오는 덩어리의 아래쪽 면이 그 아래 몸 부품의 가장 바깥(위) 면(돌기 끝 포함)에서 20mm 밖 — 위에서 보아 겹치는 쌍만(결합 뒤 자리 = 돌린 뒤 이동 _T32 적용)
+_ub32 = [_bx14(_q, R_Y180 @ (np.asarray(_q.p, float) - _pv32) + _pv32 + _T32) for _q in _G32]
+_pb32 = [_bx14(_q) for _q in A.parts if _q.step.index <= 30 and not _q.extra.get("copyOf")]
+_hv32 = round(max(float(_p[1][1]) + 20.0 - float(_u[0][1]) for _u in _ub32 for _p in _pb32 if mv._foot(_u, _p, np.array([0.0, 1.0, 0.0]))), 3)
+s32.move_made(A.group("mm32", _G32), R_Y180, pivot=_pv32, shift=_T32, dir=[0, 1, 0], hover=_hv32, group="mm32", marks={id(PL31): _mk32}, recv=[PL31])   # 31번은 사용자 ✓ 라 건드리지 않고 이 번호에서 돌려 놓는다
 A.steps[31].cam = (0.84, 0.70, False, None, None, None); A.steps[31].camSrc = "eye"   # 32_P 앵커 8곳 PnP
-A.meta["lift"]["32"] = 18.0
+floor_lift(A, 32)   # 바닥 아래로 내려가는 만큼 화면 전체를 올린다(G24) — 계산값
+_vl32 = asmlib._view_low(A, 32)[0]
+A.meta["lift"]["32"] = max(float(A.meta["lift"].get("32", 0)), float(A.meta["lift"].get("31", 0)), float(np.ceil(-_vl32 - 1e-9)) if _vl32 is not None and _vl32 < 0 else 0.0)   # 31번 올림을 이어받고, 보이는 몸의 가장 낮은 점(계산)까지
 # ── 33 ── 교재 37쪽 33 (읽은 것 2026-10-14 — 메인보드 1: 몸 뒤쪽(+X) 713프레임 위 판 가운데 줄에 아래 돌기 둘로 얹는다)
 #   카메라: 판 모서리 돌기 2(칸13 줄1·줄7)와 모터 돌기 2(칸8 줄2·줄6)의 앵커 4곳 풀이(잔차 0.3~0.55px) — 책 33 의 초록 링 둘을 이 카메라로 판 윗면에 투영하면 (칸 9.0·줄 4.0)·(칸 10.9·줄 3.9) = 칸9·칸11 의 가운데 줄(줄4), 간격 20(보드 돌기 간격 20)과 일치.
 #   방향(책 33·34·35): 금색 단자 쪽이 앞(−X, 큰기어 판 쪽), 노란 버튼 쪽이 뒤(+X) — 카메라 theta 0.80·phi 0.86(az 45.7°·phi 49.2°).
@@ -742,20 +771,26 @@ s33.note = "[교재 33] 메인보드를 몸 뒤쪽 윗판 가운데 줄 구멍 �
 R_MB33 = np.array([[0, 0, 1], [0, 1, 0], [-1, 0, 0]], float)                    # 메인보드: 모델 z(버튼 쪽 +z) → +X(뒤), y(위) → +Y, x(91mm) → −Z
 MB33 = s33.attach("메인보드", R_MB33, {"p1": (PL25, "h48"), "p2": (PL25, "h50")})
 A.steps[32].cam = (0.80, 0.89, False, None, None, None); A.steps[32].camSrc = "eye"   # 33_P 앵커 6곳 PnP(평균 1.16·최대 2.23px, 하나씩 빼도 theta 0.005·phi 0.020) — 격자 33_P 는 유추라 ⚠
-A.meta["lift"]["33"] = 18.0
+floor_lift(A, 33)   # 바닥 아래로 내려가는 만큼 화면 전체를 올린다(G24) — 계산값
+_vl33 = asmlib._view_low(A, 33)[0]
+A.meta["lift"]["33"] = max(float(A.meta["lift"].get("33", 0)), float(A.meta["lift"].get("32", 0)), float(np.ceil(-_vl33 - 1e-9)) if _vl33 is not None and _vl33 < 0 else 0.0)   # 32번 올림을 이어받고, 보이는 몸의 가장 낮은 점(계산)까지 — 손값 18 삭제
 # ── 34 ── 교재 37쪽 34 (읽은 것 2026-10-14 — 부품 없음: 메인보드 왼쪽·오른쪽 단자에 DC모터 선(흰 선)을 연결한다. 선은 3D 모델이 없어 그리지 않고 책 그림으로만 확인한다)
 #   카메라: 앞쪽(−X)·오른쪽(+Z) 위에서 본다 — 앞 아치 면과 빨간 막대 둘, 오른쪽 바퀴(빨간 캡)·뒤 메인보드·큰기어가 보인다. 판이 가려져 격자를 못 만들어 뷰어에서 책과 같은 모양이 나오는 시점을 맞춰 정했다(짐작 ⚠).
 s34 = SKEL[33]
 s34.note = "[교재 34] 메인보드 왼쪽·오른쪽 단자에 DC모터 선(흰 선)을 연결해요. (선은 3D 모델이 없어 그리지 않아요.)\n▣ 사용 부품: 없음"
-A.steps[33].cam = (-0.5, 0.68, False, None, None, None); A.steps[33].camSrc = "guess"   # 책 34 와 화면 비교로 맞춘 시점(격자 없음)
-A.meta["lift"]["34"] = 18.0
+A.steps[33].cam = (-0.5, 0.68, False, None, None, None); A.steps[33].camSrc = "eye"   # 책 34 에서 읽은 방향(앞 −X·오른쪽 +Z 위에서) — 격자·PnP 불가(⚠ 카메라, 판단과정)
+floor_lift(A, 34)   # 바닥 아래로 내려가는 만큼 화면 전체를 올린다(G24) — 계산값
+_vl34 = asmlib._view_low(A, 34)[0]
+A.meta["lift"]["34"] = max(float(A.meta["lift"].get("34", 0)), float(A.meta["lift"].get("33", 0)), float(np.ceil(-_vl34 - 1e-9)) if _vl34 is not None and _vl34 < 0 else 0.0)   # 33번 올림을 이어받고, 보이는 몸의 가장 낮은 점(계산)까지 — 손값 18 삭제
 # ── 35 ── 교재 37쪽 35 (읽은 것 2026-10-14 — 부품 없음: 센서 케이블 연결. 위에서 본 그림: 왼쪽 위 센서 = INPUT B, 왼쪽 아래 센서 = INPUT A, 케이블이 메인보드 왼쪽 단자에 이어진다. 케이블은 3D 모델이 없다)
 #   카메라: 거의 곧게 위에서 내려다본다(큰기어가 몸 앞쪽 −X 에 있고 메인보드·뒷바퀴가 오른쪽 +X, 책과 같은 배치 — 우리 화면 theta 0·phi 0.10 에서 큰기어-메인보드 간격·바퀴 크기가 책과 같다).
 s35 = SKEL[34]
 s35.note = "[교재 35] 센서 케이블을 메인보드 왼쪽 단자에 연결해요: 왼쪽 위 센서는 INPUT B, 왼쪽 아래 센서는 INPUT A. (케이블은 3D 모델이 없어 그리지 않아요.)\n▣ 사용 부품: 없음"
-A.steps[34].cam = (0.0, 0.10, False, None, None, None); A.steps[34].camSrc = "guess"   # 책 35 와 화면 비교로 맞춘 시점(격자 없음)
-A.meta["lift"]["35"] = 18.0
-A.meta["lift"]["36"] = 18.0   # 완성 화면: 바퀴가 바닥(y 0) 아래로 내려가지 않게 앞 번호와 같이 화면 전체를 18 올린다(사용자 지시 2026-10-14 "완성에서 바닥 위로 올려줘")
+A.steps[34].cam = (0.0, 0.10, False, None, None, None); A.steps[34].camSrc = "eye"   # 책 35 에서 읽은 방향(거의 곧게 위, +X 오른쪽·+Z 아래) — 격자·PnP 불가(⚠ 카메라, 판단과정)
+floor_lift(A, 35)   # 바닥 아래로 내려가는 만큼 화면 전체를 올린다(G24) — 계산값
+_vl35 = asmlib._view_low(A, 35)[0]
+A.meta["lift"]["35"] = max(float(A.meta["lift"].get("35", 0)), float(A.meta["lift"].get("34", 0)), float(np.ceil(-_vl35 - 1e-9)) if _vl35 is not None and _vl35 < 0 else 0.0)   # 34번 올림을 이어받고, 보이는 몸의 가장 낮은 점(계산)까지 — 손값 18 삭제
+A.meta["lift"]["36"] = float(A.meta["lift"].get("35", 0))   # 완성 화면: 바퀴가 바닥(y 0) 아래로 내려가지 않게 35번 올림(계산값)을 이어받는다(사용자 지시 2026-10-14 "완성에서 바닥 위로 올려줘")
 import moves as mv
 _AH = mv.auto_hover(A)   # 결합 전 띄움 거리 — 규칙으로 계산(G1c·G12) — 손값 hover 를 적지 않는다
 import stepchecks; stepchecks.apply(A, "dropchecker")

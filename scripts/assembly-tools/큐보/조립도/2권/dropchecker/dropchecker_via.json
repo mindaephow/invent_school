@@ -174,5 +174,93 @@
    "book_only": true,
    "what": "감독: 23번 책: 둘째 캐터필러 바퀴"
   }
+ ],
+ "23": [
+  {
+   "step": 24,
+   "image": "24.jpg",
+   "book_only": true,
+   "what": "감독: 24번 책: 713프레임 위로 합치기"
+  }
+ ],
+ "24": [
+  {
+   "step": 25,
+   "image": "25.jpg",
+   "book_only": true,
+   "what": "감독: 25번 책: 아치 프레임"
+  }
+ ],
+ "25": [
+  {
+   "step": 26,
+   "image": "26.jpg",
+   "book_only": true,
+   "what": "감독: 26번 책: 둘째 713프레임 위 부품"
+  }
+ ],
+ "26": [
+  {
+   "step": 27,
+   "image": "27.jpg",
+   "book_only": true,
+   "what": "감독: 27번 책: 아치 블록"
+  }
+ ],
+ "27": [
+  {
+   "step": 28,
+   "image": "28.jpg",
+   "book_only": true,
+   "what": "감독: 28번 책: 두 아치가 판 줄1·줄7 칸2·칸6에 내려옴"
+  }
+ ],
+ "28": [
+  {
+   "step": 29,
+   "image": "29.jpg",
+   "book_only": true,
+   "what": "감독: 29번 책: 양쪽 꺾인 팔 블록에 리벳·37프레임·17프레임"
+  }
+ ],
+ "29": [
+  {
+   "step": 30,
+   "image": "30.jpg",
+   "book_only": true,
+   "what": "감독: 30번 책: 두 흰 프레임 사이 앞쪽 판 45°·양 끝 주황 리벳 3개씩"
+  }
+ ],
+ "30": [
+  {
+   "step": 31,
+   "image": "31.jpg",
+   "book_only": true,
+   "what": "감독: 31번 책: 다음 부품(31번 그림) 확인"
+  }
+ ],
+ "31": [
+  {
+   "step": 32,
+   "image": "32.jpg",
+   "book_only": true,
+   "what": "감독: 32번 책: 31번 조립을 몸에 합침"
+  }
+ ],
+ "32": [
+  {
+   "step": 33,
+   "image": "33.jpg",
+   "book_only": true,
+   "what": "감독: 33번 책: 메인보드 등 마지막 부품"
+  }
+ ],
+ "33": [
+  {
+   "step": 34,
+   "image": "34.jpg",
+   "book_only": true,
+   "what": "감독: 34번 책 확인"
+  }
  ]
 }
